@@ -309,6 +309,43 @@ Covers `POST /videos/<id>/switch-style` and the `PATCH` rules for a style Auto p
 
 Trap: the dashboard re-sends the style picker's value on every approval, so a rule that cleared the
 pick on any `visual_style` write would erase every Auto pick at its first approval.
+### `test_formula_pick.py`
+
+Covers `POST /videos/<id>/switch-formula`, `POST /videos/<id>/switch-opening`, `formula_choice` on
+`PATCH` and on the two creation routes, `default_formula_id` on `POST /projects`, and the
+`auto_experimental_formulas` setting
+([How a formula is picked](../08-scripting-and-voice.md#how-a-formula-is-picked)).
+
+- The formula switch moves the video to `TOPIC_APPROVED`, swaps the pick and the runner-up, makes
+  the new pick the person's choice and adds a human comment. A second switch goes back, and an
+  experimental runner-up needs no setting.
+- The opening switch marks the chosen opening as the one in use, clears its note, sets `hook_type`,
+  moves the video to `TOPIC_APPROVED` and adds a human comment that quotes the opening. It keeps a
+  held pick and clears `formula_id`, so the old script cannot move on before a rewrite. A video scripted before formulas were picked can use it and gets its script's formula
+  as the pick, and one whose formula this version lacks is refused.
+- Each switch is refused away from `SCRIPT_READY` and for an archived or unknown video. The formula
+  switch is refused with no pick, no runner-up or a runner-up that the installed version does not
+  have. The
+  opening switch is refused for the opening already in use, an index outside the stored openings
+  or of the wrong type, and a script with no stored openings. A refusal changes nothing.
+- A move back to `TOPIC_PROPOSED` empties the pick and keeps the person's choice. A script revision
+  keeps the pick. A style switch empties the pick, and so does a script written through `PATCH`.
+- `formula_choice` is writable at `TOPIC_PROPOSED` only, takes `""` for Auto and an experimental
+  formula with the setting off, and refuses a value that is no formula.
+- `default_formula_id` is stored, is reset by an edit that leaves it out, must be a formula when it
+  changes, and a stored one that was dropped does not block another edit. It seeds every new video
+  whatever its strategy, a formula sent with the video wins over it, and a default that is no
+  formula seeds nothing. A New Video submission takes its own pick, or the Manual Videos domain's
+  default.
+- The setting defaults to off and takes a boolean. `GET /script-formulas` says which formulas are
+  experimental.
+
+Both switches are refused on a video on `auto` with no style pick, which a switch would send back
+to have its style picked again.
+
+Trap: neither switch edits the stored script. A new formula or a new first sentence over the old
+body would be a script nobody wrote, so both send the video back to be rewritten.
+
 ### `test_script_record.py`
 
 Covers a script's record over HTTP
@@ -380,6 +417,52 @@ rows of the video modal.
 Trap: a voice's model can be edited in Settings after voicing, so reading the roster names a model
 the audio was not made with. The ledger is ignored from `TOPIC_PROPOSED` through `VOICING`: a
 revision may have switched the voice, and the old row would pair the new voice with the old model.
+
+A video spoken in two voices reports the model of the video's own voice, read from the ledger rows
+tagged with it, and lists the other voices of its segments in `other_voices`. A changed install
+default still reports the voiced model, and a video whose own voice spoke no line reports the
+current setting.
+
+### `test_voice_speed.py`
+
+Covers a voice's speed in `POST /settings` and in voice previews
+([Speed](../08-scripting-and-voice.md#speed)).
+
+- A speed on a model that honours it is saved, a speed of 1.0 is never stored, and a roster without
+  a speed round-trips unchanged.
+- A speed on `eleven_v3` or `eleven_v4`, out of range, or off the 0.05 step is a `400`.
+- A preview at 1.0 sends no speed and keeps the cache key previews had before speeds. A changed
+  speed makes a new preview. A speed in the body on a model that ignores it is refused before any
+  call, and a stored speed is dropped when the body names such a model.
+
+Trap: older versions read a roster with any key they do not know as empty. Keeping `speed` out of
+a roster nobody changed is what lets a rollback still read it.
+
+### `test_segment_voices.py`
+
+Covers a voice per segment on the API
+([A segment's voice](../05-http-api.md#a-segments-voice)).
+
+- `segment_voices` gives a segment a voice, gives it back with `""` or the video's voice, and keeps
+  the spoken words and the beat. A body with other keys, an unknown segment or an unknown voice is
+  a `400`. Any status but `SCRIPT_READY` is a `409`.
+- A voice that cannot speak the segment's markup is a `409`, and a script written between the read
+  and the write is not overwritten.
+- `segment_voice_conflicts` lists, per segment, the voices that cannot speak it, at `SCRIPT_READY`
+  only. A change of the video's voice ignores segments with their own voice.
+- Approval to `VOICING` refuses a segment voice whose model was edited or that left the roster, with
+  or without a voice in the body. A two-voice script whose markup fits each voice approves, as the
+  negative control.
+
+### `test_review_voices.py`
+
+Covers the review prompt's note on a narration in more than one voice
+([The prompt's guard clauses](../21-ai-review.md#the-prompts-guard-clauses)).
+
+- One voice adds nothing, so a one-voice prompt is unchanged. Two voices are named and called
+  intended.
+- `render_results.py::_narration_voices` lists the video's voice, then each other voice its segments
+  name, and a voice off the roster by its id.
 
 ### `test_mascots_api.py`
 

@@ -1,0 +1,427 @@
+{
+ "_about": "The fixed topic set formula routing is checked against. Topics no install owns. expect: the right formula(s), best first; ok: also acceptable; style: the video's visual style, when the case has one; angle, angle_kind: the topic's angle, as research files it; a case without them is a topic with no angle. experimental: true = the case is routed with the setting auto_experimental_formulas on, and may expect an experimental formula. A new formula's change adds its topics here. Read by tubematic_core/tests/test_formula_routing.py and scripts/eval_formula_routing.py.",
+ "cases": [
+  {
+   "title": "How noise-cancelling headphones make quiet by adding sound",
+   "brief": "The headphones play extra sound into your ears and you hear less. Microphones on the outside sample the noise around you, a chip produces the same wave turned upside down, and the speaker plays it so the two cancel. It works best on a steady low hum such as an engine and worst on sudden sounds such as a clap.",
+   "expect": [
+    "paradox-mechanism-reframe"
+   ],
+   "ok": [
+    "follow-the-flow"
+   ]
+  },
+  {
+   "title": "How a touchscreen knows it is your finger",
+   "brief": "A phone screen reacts to the lightest touch of a fingertip and ignores a plastic pen pressed hard. The glass carries a grid of transparent conductors holding a small charge; a finger conducts, so it draws a little of that charge away at one crossing of the grid, and the controller reads which crossing lost charge. That is why ordinary gloves fail and why a drop of water confuses it.",
+   "expect": [
+    "paradox-mechanism-reframe"
+   ],
+   "ok": [
+    "follow-the-flow"
+   ],
+   "style": "under_the_hood",
+   "angle": "A screen that ignores a pen pressed hard reacts to the lightest touch of a finger.",
+   "angle_kind": "paradox"
+  },
+  {
+   "title": "Why airlines sell more tickets than the plane has seats",
+   "brief": "An airline may sell 105 tickets for a plane with 100 seats, and on most flights nobody is left behind. Airlines predict from past flights how many passengers will not turn up on each route, and an empty seat earns nothing once the door closes. When the guess is wrong they pay a volunteer to take a later flight, which costs less than flying seats empty all year.",
+   "expect": [
+    "paradox-mechanism-reframe"
+   ],
+   "ok": [
+    "why-dont-they-just"
+   ]
+  },
+  {
+   "title": "Why 0.1 plus 0.2 is not 0.3 on a computer",
+   "brief": "Type 0.1 + 0.2 into almost any programming language and the answer is 0.30000000000000004. The machine stores numbers in binary with 64 bits, and one tenth has no finite binary expansion, just as one third has none in decimal. Both inputs are already rounded, and the sum of two rounded values lands on a neighbour of 0.3. Money code uses whole cents or decimal types for this reason.",
+   "expect": [
+    "broken-expectation"
+   ],
+   "ok": [
+    "why-dont-they-just"
+   ],
+   "style": "terminal_doc",
+   "angle": "Typing 0.1 + 0.2 into almost any language gives 0.30000000000000004.",
+   "angle_kind": "broken_expectation"
+  },
+  {
+   "title": "You emptied the bin and the file is still there",
+   "brief": "You delete a file, empty the bin, and the computer reports the space as free. A recovery tool can still bring the file back. Deleting removes the entry that says where the file is and marks its blocks as free; the contents stay on the disk until something else is written over them. That is why a drive is wiped, not just emptied, before it is sold.",
+   "expect": [
+    "broken-expectation"
+   ],
+   "ok": [
+    "myth-break-model",
+    "paradox-mechanism-reframe"
+   ],
+   "note": "Both fit: the bin reports the space free (a tool's report that looks wrong) and the file survives (a thing the viewer owns behaving impossibly)."
+  },
+  {
+   "title": "The upload said it worked and the page did not change",
+   "brief": "You upload a new version of a web page, the server reports success, and your browser still shows the old one. The browser kept its own copy and was told it could reuse it for a set time, so it never asked the server again. A forced reload fetches the new page. Sites avoid the problem by putting a version in each file's name.",
+   "expect": [
+    "broken-expectation"
+   ],
+   "ok": [
+    "follow-the-flow"
+   ]
+  },
+  {
+   "title": "What happens when you tap a contactless card",
+   "brief": "A contactless card has no battery. The reader's radio field powers a coil in the card from a few centimetres away. The chip wakes, the reader and the card exchange a handful of messages, and the card produces a one-time code from a key that never leaves the chip. The terminal sends it to the bank, which checks it and answers. The exchange with the card takes well under half a second.",
+   "expect": [
+    "follow-the-flow"
+   ],
+   "ok": [
+    "paradox-mechanism-reframe"
+   ],
+   "style": "system_flow",
+   "angle": "A card with no battery wakes, answers and signs a payment in under half a second.",
+   "angle_kind": "process"
+  },
+  {
+   "title": "What happens between pressing Enter and a web page appearing",
+   "brief": "The browser asks a resolver for the site's address, opens a connection to that address, agrees on encryption keys with the server, sends a request for the page, receives it in pieces, and then fetches the images, styles and scripts the page names before drawing it. Each step waits for the one before it.",
+   "expect": [
+    "follow-the-flow"
+   ],
+   "ok": [],
+   "style": "system_flow"
+  },
+  {
+   "title": "How a vaccine teaches the body to fight a virus it has never met",
+   "brief": "A vaccine puts a harmless piece of a virus, or the instructions to make one, into the body. Cells at the site show that piece on their surface. Immune cells that happen to fit it multiply, some produce antibodies, and some stay behind as memory cells. When the real virus arrives later, those memory cells respond in days and not weeks.",
+   "expect": [
+    "follow-the-flow"
+   ],
+   "ok": [
+    "paradox-mechanism-reframe"
+   ]
+  },
+  {
+   "title": "Private browsing does not hide you",
+   "brief": "Many people believe a private or incognito window makes them anonymous. It only stops the browser saving history, cookies and form entries on that device once the window closes. The websites visited, the network operator, an employer or school network and the internet provider still see the traffic, and logging in to an account identifies the visitor at once. Browser makers say so on the window's first screen.",
+   "expect": [
+    "myth-break-model"
+   ],
+   "ok": [
+    "broken-expectation"
+   ],
+   "angle": "Most people think an incognito window makes them anonymous; it only forgets the history on that device.",
+   "angle_kind": "myth"
+  },
+  {
+   "title": "You do not use only ten percent of your brain",
+   "brief": "The claim that people use a tenth of their brain is widely believed. Brain scans show activity across nearly every region over the course of a day, including during sleep. Damage to almost any area has an effect. The brain is about two percent of the body's weight and uses about a fifth of its energy, which an organ that was nine tenths idle would not.",
+   "expect": [
+    "myth-break-model"
+   ],
+   "ok": []
+  },
+  {
+   "title": "Charging your phone overnight does not ruin the battery",
+   "brief": "Many people unplug their phone at 100 percent because they were told overnight charging wears the battery out. A modern phone stops drawing charge when it is full. What ages a lithium-ion cell is heat and long hours held at full charge, which is why phones now offer a setting that waits at 80 percent and finishes shortly before the owner usually wakes.",
+   "expect": [
+    "myth-break-model"
+   ],
+   "ok": [
+    "paradox-mechanism-reframe"
+   ]
+  },
+  {
+   "title": "Why websites do not store your password",
+   "brief": "A well-built site cannot tell you your password, only reset it. It stores a hash: the output of a one-way function, combined with a random salt unique to each account, so equal passwords do not produce equal records. At login it hashes what you typed and compares. Slow hash functions are used so that someone who steals the table can test only a few guesses per second per account.",
+   "expect": [
+    "why-dont-they-just"
+   ],
+   "ok": [
+    "follow-the-flow",
+    "paradox-mechanism-reframe"
+   ],
+   "note": "A site that checks a password it cannot read is also a paradox the viewer has met.",
+   "angle": "A site that cannot tell you your password is doing it right, and deliberately slows itself down.",
+   "angle_kind": "design_question"
+  },
+  {
+   "title": "Why the calendar needs a leap day",
+   "brief": "Adding a day to February every four years looks like a patch. The Earth takes about 365.2422 days to go round the Sun, so a calendar of 365 days drifts against the seasons by about 24 days a century. The rule is a leap year every four years, except century years, unless the century year divides by 400: 1900 was not a leap year and 2000 was.",
+   "expect": [
+    "why-dont-they-just"
+   ],
+   "ok": [
+    "paradox-mechanism-reframe",
+    "test-case"
+   ]
+  },
+  {
+   "title": "Why a website cannot just vouch for itself",
+   "brief": "Every secure site pays or asks a certificate authority to sign its certificate, which looks like a needless middleman. A certificate a site signs for itself proves only that someone holds a key, not who they are. A browser trusts a site because a third party it already trusts checked who controls the domain, and browsers ship with a list of about a hundred and fifty such authorities.",
+   "expect": [
+    "why-dont-they-just"
+   ],
+   "ok": [
+    "follow-the-flow"
+   ]
+  },
+  {
+   "title": "The typo that took down part of the internet in 2017",
+   "brief": "On 28 February 2017 an engineer at Amazon Web Services, working on a slow billing system for the S3 storage service in the US-East-1 region, ran a routine command to remove a small number of servers. One argument was entered incorrectly and a much larger set was removed, including the servers behind the index of every stored object. S3 in the region was unavailable for about four hours, and the company's own status dashboard could not show the outage because it depended on S3.",
+   "expect": [
+    "incident-file"
+   ],
+   "ok": [
+    "scene-story"
+   ],
+   "angle": "One mistyped argument in a routine command took S3 down for four hours, status page included.",
+   "angle_kind": "incident"
+  },
+  {
+   "title": "The update that crashed 8.5 million computers in one morning",
+   "brief": "On 19 July 2024 the security company CrowdStrike sent a faulty content update to its Falcon software on Windows. Machines that received it crashed and could not restart. Microsoft estimated 8.5 million devices were affected; airlines, banks and hospitals stopped work. The update was withdrawn after 78 minutes, but each crashed machine had to be started in safe mode and fixed by hand.",
+   "expect": [
+    "incident-file"
+   ],
+   "ok": [
+    "anomaly-file",
+    "result-then-rewind"
+   ]
+  },
+  {
+   "title": "The Mars probe lost to a unit mix-up",
+   "brief": "On 23 September 1999 NASA's Mars Climate Orbiter fired its engine to enter orbit and was never heard from again. One team's software reported thruster impulse in pound-force seconds; the navigation software read the figures as newton seconds. Months of small errors put the probe about 57 kilometres above Mars when the plan was 226, low enough to be destroyed in the atmosphere.",
+   "expect": [
+    "incident-file"
+   ],
+   "ok": [
+    "anomaly-file",
+    "result-then-rewind"
+   ]
+  },
+  {
+   "title": "The man who turned pudding into a million air miles",
+   "brief": "In 1999 a food company ran a promotion: buy ten of its products and get 500 airline miles, doubled for early entries. David Phillips, a civil engineer in California, found pudding cups at 25 cents each that carried the same barcode value. He bought 12,150 cups for about 3,140 dollars, gave the pudding to food charities whose volunteers removed the barcodes, and received 1,253,000 miles.",
+   "expect": [
+    "scheme-machine"
+   ],
+   "ok": [
+    "scene-story"
+   ],
+   "angle": "Cups of pudding at 25 cents each turned into 1,253,000 airline miles, through a charity that peeled the barcodes.",
+   "angle_kind": "scheme"
+  },
+  {
+   "title": "The scheme that gave Ponzi his name",
+   "brief": "In 1920 in Boston, Charles Ponzi promised investors a 50 percent return in 45 days from trading international postal reply coupons. The coupon trade could never have covered it. He paid early investors with the money of later ones, which brought more investors, and took in about 15 million dollars in eight months before a newspaper investigation ended it that August.",
+   "expect": [
+    "scheme-machine"
+   ],
+   "ok": [
+    "scene-story",
+    "incident-file",
+    "result-then-rewind"
+   ]
+  },
+  {
+   "title": "How a card skimmer at a fuel pump empties an account",
+   "brief": "A thin reader is fitted over or inside the card slot of a fuel pump and copies the magnetic stripe of every card used. A hidden camera or a false keypad records the PIN. The thief collects the device, writes the copied stripes onto blank cards and withdraws cash, then moves to the next pump. Chip cards defeat the copy because the chip produces a different code for every payment.",
+   "expect": [
+    "scheme-machine"
+   ],
+   "ok": [
+    "follow-the-flow",
+    "normal-world-exploit"
+   ]
+  },
+  {
+   "title": "The 72-second radio signal nobody has explained",
+   "brief": "On 15 August 1977 the Big Ear radio telescope in Ohio recorded a narrow-band signal near 1420 megahertz, the frequency of hydrogen, lasting the full 72 seconds the telescope could observe one point of the sky. Days later the astronomer Jerry Ehman circled the printout's code, 6EQUJ5, and wrote 'Wow!' beside it. Repeated searches of the same spot have found nothing, and a 2017 proposal that comets caused it was disputed.",
+   "expect": [
+    "anomaly-file"
+   ],
+   "ok": [
+    "scene-story"
+   ],
+   "angle": "A telescope recorded 72 seconds of a narrow signal at hydrogen's frequency, and the same spot has been silent since.",
+   "angle_kind": "anomaly"
+  },
+  {
+   "title": "The star that dimmed in a way no planet could explain",
+   "brief": "In 2015 volunteers reading data from the Kepler space telescope flagged a star, KIC 8462852, whose light dropped by up to 22 percent at irregular intervals. A planet crossing a star dims it by about one percent, on a regular schedule. Explanations offered included a swarm of comets and, in the press, structures built by aliens. Later observations found the dimming was stronger in blue light than in red, which points to fine dust.",
+   "expect": [
+    "anomaly-file"
+   ],
+   "ok": []
+  },
+  {
+   "title": "The mail server that could not send email more than 500 miles",
+   "brief": "A university's system administrator was told the department could not send email to anywhere more than about 500 miles away. He tested it and it was true. A software downgrade had left the mail server with a connection timeout close to zero, about three milliseconds in practice, and in three milliseconds a signal travels a little over 500 miles. Servers farther away could not answer in time.",
+   "expect": [
+    "anomaly-file"
+   ],
+   "ok": [
+    "incident-file",
+    "broken-expectation"
+   ]
+  },
+  {
+   "title": "The night one officer decided not to report a nuclear attack",
+   "brief": "Shortly after midnight on 26 September 1983, the Soviet early-warning system reported one American missile launch, then four more. The duty officer, a lieutenant colonel named Stanislav Petrov, had minutes to report an attack. He judged it a false alarm: a real first strike would involve hundreds of missiles, the system was new, and ground radar showed nothing. He was right; the satellites had mistaken sunlight on high clouds for missile exhaust.",
+   "expect": [
+    "scene-story"
+   ],
+   "ok": [
+    "incident-file",
+    "anomaly-file"
+   ],
+   "angle": "One duty officer had minutes to report five incoming missiles, and judged them a false alarm.",
+   "angle_kind": "scene"
+  },
+  {
+   "title": "The flight attendant who fell ten kilometres and lived",
+   "brief": "On 26 January 1972 a Yugoslav airliner broke apart over Czechoslovakia at about 10,160 metres. Vesna Vulović, a flight attendant aged 22 who was on the flight because of a rota mix-up, was found alive in the wreckage, pinned by a food trolley inside a section of fuselage that had landed on a snowy slope. She was the only survivor and holds the record for the highest fall survived without a parachute.",
+   "expect": [
+    "scene-story"
+   ],
+   "ok": [
+    "anomaly-file"
+   ],
+   "style": "storybook_atlas"
+  },
+  {
+   "title": "The doctor who drank bacteria to prove a point",
+   "brief": "In 1984 the Australian doctor Barry Marshall could not persuade other doctors that stomach ulcers were caused by a bacterium and not by stress. He drank a culture of Helicobacter pylori himself. Within days he had gastritis, the bacterium was found in his stomach, and antibiotics cured him. He and Robin Warren received the Nobel Prize in 2005.",
+   "expect": [
+    "scene-story"
+   ],
+   "ok": [
+    "myth-break-model"
+   ]
+  },
+  {
+   "title": "From a kilobyte to a zettabyte",
+   "brief": "Data sizes climb by a factor of a thousand at each step. A kilobyte holds about half a page of plain text. A megabyte holds a short novel. A gigabyte holds roughly an hour of standard-definition video. A terabyte holds about 250,000 photos. A petabyte is a thousand terabytes, an exabyte a thousand petabytes, and a zettabyte a thousand exabytes; the world's stored data passed one zettabyte around 2010.",
+   "expect": [
+    "escalating-ladder"
+   ],
+   "ok": [],
+   "style": "whiteboard",
+   "angle": "Every step from a kilobyte up is a thousand times the last, until the world's data passes a zettabyte.",
+   "angle_kind": "measure"
+  },
+  {
+   "title": "How long a password lasts, one character at a time",
+   "brief": "At ten billion guesses a second, every six-letter lowercase password is tried in under a second and every eight-letter one in about twenty seconds. Eight characters of mixed case and digits take about six hours. Twelve take about ten thousand years. Each added character multiplies the work by the size of the alphabet.",
+   "expect": [
+    "escalating-ladder"
+   ],
+   "ok": [
+    "myth-break-model"
+   ]
+  },
+  {
+   "title": "How deep the ocean goes",
+   "brief": "A recreational diver stops at about 40 metres. Sunlight is gone by 200 metres and the water is fully dark by 1,000. The wreck of the Titanic lies at about 3,800 metres. The deepest known point, the Challenger Deep in the Mariana Trench, is about 10,935 metres down, deeper than Mount Everest is tall.",
+   "expect": [
+    "escalating-ladder"
+   ],
+   "ok": [
+    "contender-champion"
+   ]
+  },
+  {
+   "title": "How one line of text logs in without a password",
+   "brief": "A login page builds a database query from what the visitor types. Typed normally, a name and a password are looked up and matched. If the page puts the typed text straight into the query, a visitor can type a fragment of query language in the name box that makes the password check always true, and is logged in as the first account in the table, often the administrator. Sites prevent it by sending the typed text separately from the query.",
+   "expect": [
+    "normal-world-exploit"
+   ],
+   "ok": [
+    "follow-the-flow",
+    "scheme-machine"
+   ],
+   "experimental": true
+  },
+  {
+   "title": "The first transatlantic cable worked for three weeks",
+   "brief": "In August 1858 the first telegraph cable across the Atlantic was completed between Ireland and Newfoundland. Signals were so weak that a message of 98 words from Queen Victoria took around 16 hours to send. The project's electrician, Wildman Whitehouse, tried to force stronger signals through by applying about 2,000 volts, which destroyed the cable's insulation. It went silent after three weeks; a lasting cable was not laid until 1866.",
+   "expect": [
+    "result-then-rewind"
+   ],
+   "ok": [
+    "scene-story",
+    "incident-file"
+   ],
+   "experimental": true
+  },
+  {
+   "title": "Three checks before you click a link in an email",
+   "brief": "Phishing was the most reported kind of complaint in the FBI Internet Crime Complaint Center's 2023 report, with nearly 300,000 reports, and one click on the wrong link can hand over an account. Three checks catch most of it: hover over the link to see where it really goes, because the visible text and the destination can differ; read the sender's domain letter by letter, because look-alike domains swap one character; and treat a deadline of a few hours as a warning sign, because real organisations rarely demand action that fast. The last one sounds wrong to most people, because urgency feels like proof the message matters.",
+   "expect": [
+    "stake-first-list"
+   ],
+   "ok": [
+    "myth-break-model"
+   ],
+   "experimental": true,
+   "note": "A three-item list with a stake. A list of five or more that must all be covered does not fit this formula."
+  },
+  {
+   "title": "Researchers read passwords from the sound of typing",
+   "brief": "Treat this as news from this week. Researchers trained a model on the sound of one laptop's keys and then identified what was typed from a recording made by a phone on the same desk, with 95 percent accuracy. It worked over a video call too, at 93 percent. The catch is in the paper: the model has to be trained on that model of keyboard, and typing style and background noise lower the figure.",
+   "expect": [
+    "news-take"
+   ],
+   "ok": [
+    "normal-world-exploit",
+    "paradox-mechanism-reframe"
+   ],
+   "experimental": true
+  },
+  {
+   "title": "Why we still do not have fusion power",
+   "brief": "Fusing hydrogen releases millions of times more energy per kilogram than burning coal, and the fuel can be taken from seawater. The Sun does it with gravity. On Earth the fuel has to be held at over a hundred million degrees without touching anything, and until 2022 no experiment had produced more energy from the fuel than the lasers put into it. Several large projects and private companies are trying to turn that into a power plant.",
+   "expect": [
+    "prize-and-barrier"
+   ],
+   "ok": [
+    "why-dont-they-just"
+   ],
+   "experimental": true
+  },
+  {
+   "title": "Why flamingos stand on one leg",
+   "brief": "A flamingo sleeps standing on one leg for hours. The joint arrangement of its leg lets it balance with almost no muscular effort: in a 2017 study even dead flamingos stayed upright on one leg and fell over on two. Tucking the other leg into the feathers may also save heat, since the birds stand in water.",
+   "expect": [
+    "strange-sight"
+   ],
+   "ok": [
+    "paradox-mechanism-reframe"
+   ],
+   "experimental": true
+  },
+  {
+   "title": "Is a tomato a fruit or a vegetable",
+   "brief": "In botany a fruit is the part of a plant that develops from the flower and holds the seeds, which makes a tomato a fruit, along with cucumbers and peppers. In the kitchen a vegetable is what is cooked in savoury dishes. In 1893 the United States Supreme Court, in Nix v. Hedden, ruled the tomato a vegetable for the purposes of an import tariff, on the ground of how people use it.",
+   "expect": [
+    "test-case"
+   ],
+   "ok": [
+    "myth-break-model"
+   ],
+   "experimental": true
+  },
+  {
+   "title": "Which country has the most time zones",
+   "brief": "Russia spans eleven time zones, and the United States has eleven when its territories are counted. France has twelve, more than any other country, because of its overseas territories from French Polynesia to New Caledonia, although mainland France sits in one.",
+   "expect": [
+    "contender-champion"
+   ],
+   "ok": [
+    "escalating-ladder"
+   ],
+   "experimental": true
+  }
+ ]
+}

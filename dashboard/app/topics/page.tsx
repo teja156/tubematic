@@ -17,6 +17,8 @@ import { useVisualStyles } from "@/components/VisualStylesProvider";
 import { SaveStatus } from "@/components/SaveStatus";
 import { ToastStack, useToasts } from "@/components/Toast";
 import { responseError, useSaveStatus, useSerialQueue, type SaveState } from "@/lib/saveStatus";
+import { formulaOptions, type ScriptFormulaNames } from "@/lib/scriptFormulas";
+import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
 
 const ALL_MODES: Array<{ key: string; label: string; accent: string; desc: string }> = [
   { key: "curriculum", label: "Curriculum",  accent: "var(--indigo)", desc: "Enumerate sub-topics from seed domains" },
@@ -127,6 +129,24 @@ function DomainProfileSelect({ testId, value, profiles, onChange }: {
   );
 }
 
+// ── Default formula picker ──────────────────────────────────────────────────
+
+function DomainFormulaSelect({ testId, value, names, onChange }: {
+  testId: string; value: string; names: ScriptFormulaNames | null; onChange: (next: string) => void;
+}) {
+  return (
+    <select
+      data-testid={testId}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      title="The script formula every new video in this domain is written in. Auto picks one for each video from its topic."
+      style={pickerStyle}
+    >
+      {formulaOptions(names, value).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
+}
+
 // ── Topic cap ───────────────────────────────────────────────────────────────
 
 // Bounds on a domain's topic_cap (TMDEV-153). Keep in sync with
@@ -141,9 +161,11 @@ const MAX_TOPIC_CAP = 750;
 const MAX_DOMAIN_DESCRIPTION_CHARS = 2000;
 
 // Commits on blur or Enter, like Settings' number fields, so typing "300" is
-// one save rather than three. An entry outside the bounds reverts.
-function DomainCapInput({ testId, value, onCommit }: {
+// one save rather than three. An entry outside the bounds is kept, with the
+// reason on the domain's line, so it can be corrected.
+function DomainCapInput({ testId, value, onCommit, onInvalid }: {
   testId: string; value: number; onCommit: (next: number) => Promise<boolean>;
+  onInvalid: (message: string) => void;
 }) {
   const [local, setLocal] = useState(String(value));
   useEffect(() => { setLocal(String(value)); }, [value]);
@@ -156,7 +178,7 @@ function DomainCapInput({ testId, value, onCommit }: {
       const revert = () => setLocal(String(value));
       if (n !== value) onCommit(n).then((saved) => { if (!saved) revert(); }, revert);
     } else {
-      setLocal(String(value));
+      onInvalid(`topic cap must be a whole number from ${MIN_TOPIC_CAP} to ${MAX_TOPIC_CAP}`);
     }
   }
   return (
@@ -192,8 +214,11 @@ function DomainField({ label, flex, children }: {
 // A group of related defaults with the one sentence that says which videos
 // they reach. The seven defaults do not all apply to the same videos (the
 // style and profile start curriculum videos only), and a bare row of pickers
-// gave no place to say so.
-function DomainGroup({ title, accent, note, flex = "1 1 220px", children }: {
+// gave no place to say so. The bases are what each group needs for its
+// pickers to show their longest usual value ("Automatic (dealt by weight)",
+// "Use install default") in full: where three groups do not fit on one line,
+// the Agent group wraps onto its own line instead of cutting text short.
+function DomainGroup({ title, accent, note, flex = "1.1 1 360px", children }: {
   title: string; accent?: boolean; note: string; flex?: string; children: React.ReactNode;
 }) {
   return (
@@ -207,7 +232,7 @@ function DomainGroup({ title, accent, note, flex = "1 1 220px", children }: {
   );
 }
 
-type DefaultControl = "style" | "voice" | "profile" | "mascot" | "agent" | "agent-model" | "agent-effort";
+type DefaultControl = "style" | "voice" | "profile" | "formula" | "mascot" | "agent" | "agent-model" | "agent-effort";
 
 // The Look, Narration and Agent groups: the same controls on a domain's row,
 // where each change is saved at once, and in the add-domain form. One
@@ -250,8 +275,8 @@ function DomainDefaults({ values, onChange, testId, lists, canIllustrate, gpu }:
         </div>
       </DomainGroup>
 
-      <DomainGroup title="Narration"
-                   note="The voice starts every new video. The profile starts curriculum videos.">
+      <DomainGroup title="Narration" flex="1.5 1 540px"
+                   note="The voice and the formula start every new video. The profile starts curriculum videos.">
         <div style={{ display: "flex", gap: 8 }}>
           <DomainField label="Default voice" flex="1 1 0">
             <DomainVoiceSelect testId={testId("voice")} value={values.default_voice_id}
@@ -263,10 +288,15 @@ function DomainDefaults({ values, onChange, testId, lists, canIllustrate, gpu }:
                                  profiles={lists.profiles}
                                  onChange={(next) => onChange({ default_script_profile_id: next })} />
           </DomainField>
+          <DomainField label="Formula" flex="1 1 0">
+            <DomainFormulaSelect testId={testId("formula")} value={values.default_formula_id}
+                                 names={lists.formulaNames}
+                                 onChange={(next) => onChange({ default_formula_id: next })} />
+          </DomainField>
         </div>
       </DomainGroup>
 
-      <DomainGroup title="Agent" accent flex="1.4 1 300px"
+      <DomainGroup title="Agent" accent flex="1.6 1 600px"
                    note="New videos in this domain start on this agent. Automatic deals one by weight. You can still change it on each video.">
         <div style={{ display: "flex", gap: 8 }}>
           <DomainField label="Agent" flex="1.3 1 0">
@@ -327,7 +357,7 @@ const badgeStyle = {
 // status. The defaults themselves sit in a panel under the line, opened by
 // "Edit defaults". Seven pickers and a cap on the line itself left no room
 // for the name, and nowhere to say which videos each default applies to.
-function DomainRow({ project, videoCounts, status, onToggle, onSave, lists, canIllustrate, gpu }: {
+function DomainRow({ project, videoCounts, status, onToggle, onSave, onInvalid, lists, canIllustrate, gpu }: {
   project: Project;
   videoCounts: Record<string, number>;
   /** How the last change to this domain went: shown on the line itself, so a
@@ -336,6 +366,8 @@ function DomainRow({ project, videoCounts, status, onToggle, onSave, lists, canI
   onToggle: (id: string, next: ProjectStatus) => void;
   /** Resolves to whether the change was stored. */
   onSave: (id: string, patch: Partial<Project>) => Promise<boolean>;
+  /** An entry refused before it is sent, shown like a refused save. */
+  onInvalid: (id: string, message: string) => void;
   lists: DomainLists;
   canIllustrate: boolean;
   gpu: GpuStatus | null;
@@ -536,6 +568,7 @@ function DomainRow({ project, videoCounts, status, onToggle, onSave, lists, canI
                   testId={`domain-cap-${project.id}`}
                   value={project.topic_cap ?? 100}
                   onCommit={(next) => onSave(project.id, { topic_cap: next })}
+                  onInvalid={(message) => onInvalid(project.id, message)}
                 />
                 <span data-testid={`domain-topic-count-${project.id}`} style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--dim)", whiteSpace: "nowrap" }}>
                   {project.topic_count ?? 0} filed
@@ -808,6 +841,7 @@ const SAVED_FIELD: Record<string, string> = {
   default_visual_style: "style",
   default_voice_id: "default voice",
   default_script_profile_id: "script profile",
+  default_formula_id: "formula",
   default_mascot_id: "mascot",
   default_agent_id: "agent",
   default_agent_model: "agent's model",
@@ -875,7 +909,8 @@ export default function TopicsPage() {
   // agent then shows by its id, and only Automatic can be picked.
   const [agents, setAgents] = useState<Agent[] | undefined>(undefined);
   const visualStyles = useVisualStyles();
-  const lists: DomainLists = { styles: visualStyles, voices, profiles, mascots, agents };
+  const formulaNames = useScriptFormulaNames(true);
+  const lists: DomainLists = { styles: visualStyles, voices, profiles, mascots, agents, formulaNames };
 
   async function loadAll() {
     const [projRes, vidRes, stratRes, miningRes] = await Promise.all([
@@ -1156,7 +1191,7 @@ export default function TopicsPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 24 }}>
           {seedDomains.map((p) => (
-            <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onSave={saveDomain} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
+            <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
           ))}
         </div>
       )}
@@ -1169,7 +1204,7 @@ export default function TopicsPage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {otherDomains.map((p) => (
-              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onSave={saveDomain} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
+              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
             ))}
           </div>
         </section>

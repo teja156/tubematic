@@ -49,6 +49,11 @@ export interface ScriptSegment {
   visual: string;
   /** The formula beat this segment belongs to, when the writer labelled it. */
   beat?: string;
+  /** A roster voice that speaks this segment instead of the video's voice
+   *  (TMDEV-216). Absent means the video's voice. Dropped on write when equal
+   *  to the video's voice, but a later change of the video's voice can make
+   *  it equal, which reads the same as absent. */
+  voice_id?: string;
 }
 
 /** One of the three openings the writer drafted for a script. `kept` marks
@@ -73,6 +78,9 @@ export interface Voice {
    *  install-wide model: the model, and so the markup a script may use,
    *  follows the voice. */
   model_id: string;
+  /** ElevenLabs speed (TMDEV-216). Absent means 1.0; only models in
+   *  SPEED_MODELS honour it, and the API refuses it on any other. */
+  speed?: number;
 }
 
 export interface VoiceInfo {
@@ -86,6 +94,9 @@ export interface VoiceInfo {
    *  before usage was recorded. "" when neither is known. */
   model_id: string;
   model_voiced: boolean;
+  /** The other voices this video's segments name (TMDEV-216), in script
+   *  order; name and model are "" for one no longer on the roster. */
+  other_voices?: { voice_id: string; name: string; model_id: string }[];
 }
 
 export interface Comment {
@@ -159,6 +170,18 @@ export interface Video {
   hook_type?: string;
   hook_alternatives?: ScriptHook[] | null;
   script_warnings?: ScriptWarning[] | null;
+  /** The formula decision made before the script. formula_choice: the
+   *  formula a person chose for the video ('' = Auto), settable at the topic.
+   *  formula_pick: the formula the script is written in ('' = not decided
+   *  yet, which every video scripted before 2.2.0 also reads as); the
+   *  person's choice when there is one, else Auto's. formula_runner_up: the
+   *  one that came second, offered as a switch at Script Ready.
+   *  formula_reason: one sentence on why. Optional for the same reason as
+   *  tts_text. */
+  formula_choice?: string;
+  formula_pick?: string;
+  formula_runner_up?: string;
+  formula_reason?: string;
   /** The video's last successful render (TMDEV-206): the renderer's id and
    *  its name at the time ('' = no render recorded, which every video
    *  rendered before 2.2.0 reads as), whether it rendered on the GPU (1/0),
@@ -211,6 +234,10 @@ export interface Video {
    *  refuses such a voice with a 409, so a picker that disables these can
    *  never disagree with the server. Empty for an unscripted video. */
   voice_conflicts?: Record<string, string>;
+  /** Per segment id, the roster voices that cannot speak that segment's
+   *  markup, with the reason (TMDEV-216): what the Script tab's segment
+   *  picker greys out. Only at SCRIPT_READY, on single-video responses. */
+  segment_voice_conflicts?: Record<string, Record<string, string>>;
   /** The voice and model for the modal's read-only rows (TMDEV-147). Only on
    *  single-video responses (GET/PATCH /videos/<id>), never in a list. */
   voice_info?: VoiceInfo;
@@ -250,6 +277,10 @@ export interface Project {
   default_agent_model?: string;
   /** One of AGENT_EFFORTS; '' means the agent's own level. Needs no agent. */
   default_agent_effort?: string;
+  /** The script formula every new video filed into this domain is written
+   *  in, whatever its sourcing mode; '' = Auto. Changing it never touches
+   *  videos already filed. */
+  default_formula_id?: string;
   /** How many topics the domain may ever hold, 25–750 (100 by default). */
   topic_cap?: number;
   /** Every video ever filed into the domain, archived and rejected included —
@@ -346,6 +377,9 @@ export interface Settings {
   /** Burn the "Made with tubematic.ai" mark into every render. Human-only:
    *  nothing in scene-config.json can switch it. */
   watermark_enabled: boolean;
+  /** Whether Auto may pick a script formula marked experimental. Off by
+   *  default. Optional: an older API does not send it. */
+  auto_experimental_formulas?: boolean;
   /** The mascot new videos start with unless their domain says otherwise;
    *  '' = none. Optional: an older API does not send it. */
   default_mascot_id?: string;
@@ -531,6 +565,9 @@ export interface PatchVideoBody {
   agent_model?: string;
   agent_effort?: string;
   visual_style?: VisualStyle;
+  /** Per segment id, a roster voice_id or "" for the video's voice
+   *  (TMDEV-216). Sent on its own, only at SCRIPT_READY. */
+  segment_voices?: Record<string, string>;
   onlyIfCurrentStatus?: VideoStatus;
 }
 

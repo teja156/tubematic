@@ -2,6 +2,7 @@
   "id": "anomaly-file",
   "order": 80,
   "family": "story",
+  "experimental": false,
   "label": "Anomaly File",
   "line": "State the rule, show the one case that breaks it, say why that should be impossible, then investigate: how it worked, the new evidence, the answer with numbers, and one detail that still does not fit.",
   "best_for": [
@@ -14,6 +15,16 @@
   "avoid_for": [
     "anything without a real anomaly",
     "a case whose answer is common knowledge"
+  ],
+  "signals": [
+    "the evidence contradicted what was expected",
+    "the record or the reading is real and documented",
+    "there was a wrong suspect before the answer",
+    "part of it is still open, or was open for a long time"
+  ],
+  "styles": [
+    "system_flow",
+    "storybook_atlas"
   ],
   "words": [
     150,
@@ -48,19 +59,22 @@
       "name": "New evidence",
       "from": 40,
       "to": 55,
-      "job": "Dated: when it was found, and what was unexpected."
+      "job": "Dated: when it was found, and what was unexpected.",
+      "role": "reopen"
     },
     {
       "name": "Answer",
       "from": 55,
       "to": 80,
-      "job": "The hypothesis as a question, then yes, with the mechanism and two numbers."
+      "job": "The hypothesis as a question, then yes, with the mechanism and two numbers.",
+      "role": "payoff"
     },
     {
       "name": "Reopen",
       "from": 80,
       "to": 95,
-      "job": "One piece of evidence still does not fit."
+      "job": "One piece of evidence still does not fit.",
+      "role": "reopen"
     },
     {
       "name": "Close",
@@ -85,6 +99,7 @@
   ],
   "holds": "Stacked questions: the first answer lands at about three fifths and a new question opens before the viewer can leave. The dated new evidence re-opens the middle; an answer with numbers that seems to close the case comes before the reopen.",
   "ending": "An open question, stated plainly, or the current theory in one sentence. It must be a real open question.",
+  "first_frame": "The rule and the exception side by side, with the odd one marked.",
   "pitfalls": [
     "Inventing the detail that does not fit: the reopen must be true",
     "Skipping the rule, so the break means nothing"

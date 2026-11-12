@@ -120,6 +120,16 @@ Leave `subtitles` out: the style fills in its own captions. If `get_video` has a
 track as the mascot skill describes and keep the mascot out of the diagram band (27% to 69% of the
 height): the bottom band or beside the headline.
 
+## The opening and the beats
+
+`get_timeline` gives each segment a `beat` and a `role`, and the result a `first_frame` (the formula's line on what the first frame shows, `""` when the video has no formula). The first segment's role is `opening`. A `turn` or `reopen` segment needs a visible change on its first word, the `payoff` segment the video's strongest picture, and a segment with role `""` only its own brief. `get_video`'s `style.picture` says how this style does each; in short:
+
+- Opening: board 1 has a `node` event at frame 0 for the component the first sentence names. A node at frame 0 is drawn half grown on the first frame, so the video never opens on the headline alone.
+- Turn or re-opening: a new board on its first word, or a `focus` with a `packet` or `fault` on that word.
+- Payoff: the board that shows the whole answer, the path lit end to end, the focus on the component the answer names. Nothing after it but that board.
+
+`validate_job` returns warnings (advisory, never blocking) when board 1 has no node by frame 3 or when a `turn`, `reopen` or `payoff` segment has no board, node, edge, packet, focus or fault (a chip alone does not count) starting within about 0.4 s of its first word. Fix what is a real miss; say in the handback why any warning stands.
+
 ## Step 5 — write, validate, submit
 
 1. `write_scene_config(video_id, config)` with `totalFrames` and `fps` from the timeline, `"canvas":

@@ -70,6 +70,13 @@ function mockApi({
     if (u.endsWith("/script-profiles")) {
       return ok([profile({}), profile({ id: "p2", name: "Building", status: "GENERATING" })]);
     }
+    if (u.endsWith("/script-formulas")) {
+      return ok({
+        formulas: [{ id: "scene-story", label: "Scene Story", experimental: false },
+                   { id: "news-take", label: "News Take", experimental: true }],
+        hook_types: [],
+      });
+    }
     return ok({});
   });
 }
@@ -205,6 +212,7 @@ describe("NewVideoPage", () => {
       agent_model: "",
       agent_effort: "",
       script_profile_id: "",
+      formula_choice: "",
       visual_style: "auto",
       voice_id: "",
     }));
@@ -243,9 +251,23 @@ describe("NewVideoPage", () => {
       agent_model: "opus",
       agent_effort: "max",
       script_profile_id: "p1",
+      formula_choice: "",
       visual_style: "illustrated",
       voice_id: "o2",
     }));
+  });
+
+  it("offers Auto and every formula, and sends the one picked", async () => {
+    const spy = mockApi();
+    await ready();
+    const select = screen.getByLabelText("Formula") as HTMLSelectElement;
+    await waitFor(() => expect([...select.options].map((o) => o.textContent)).toEqual(
+      ["Auto", "Scene Story", "News Take (experimental)"]));
+    expect(select.value).toBe("");
+    fill();
+    fireEvent.change(select, { target: { value: "news-take" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+    await waitFor(() => expect(posted(spy).formula_choice).toBe("news-take"));
   });
 
   it("disables the model picker under Automatic", async () => {

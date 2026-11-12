@@ -244,7 +244,13 @@ Covers what `update_video` records with a script: `formula_id`, `hooks` and the 
   A rewrite with a new record replaces it.
 - A fault inside the checks does not stop the write.
 - The closing sentence is compared with the 30 newest other scripts of the same domain, and with
-  none when the video has no domain.
+  none when the video has no domain. The opening is compared with the same scripts, and the kept
+  opening's type with the domain's previous two videos.
+- On a video with a `formula_pick`, a script recorded under another formula is refused and nothing
+  is written. With no pick a person's choice binds the same way, and a choice of a formula this
+  version lacks does not. With neither, any formula id is taken. New words with no record are
+  refused beside a pick or a choice and accepted with neither, and a pronunciation fix is not
+  checked against the pick.
 - A `beat` label on a segment must be a short non-empty string.
 
 Trap: a warning must never refuse a write, and a script with no record must be accepted. An agent
@@ -295,6 +301,34 @@ Covers per-voice models at the MCP server
 Trap: an explicit `voice_id=""` beside a script means the install default, and the resolved voice
 is still written on the video. Otherwise a later change of the default would swap the model under
 a written script.
+
+### `test_voice_segments.py`
+
+Covers a voice per segment and a voice's speed in `generate_voice` and `update_video`
+([A voice per segment](../08-scripting-and-voice.md#a-voice-per-segment)).
+
+- A one-voice script is one request with the payload it had before speeds and segment voices: no
+  `speed` at 1.0 and no context fields. A voice with a speed sends it.
+- A script with a second voice is voiced in runs, in play order, each with its voice's id and model,
+  and `credits` is their sum. Each run's ledger row carries its voice, and `tts_text` holds every
+  run.
+- A run carries its neighbours' words as `previous_text` and `next_text`, except on `eleven_v3`,
+  which refuses them.
+- Words after a join are offset by the length of the runs before, and the segments' frame spans
+  stay in play order.
+- A markup problem in a later run, a segment voice that left the roster, or no `ffmpeg` spends
+  nothing. A failed later run keeps the credits already spent, writes no file and leaves the video
+  at `VOICING`.
+- `update_video` keeps a segment's voice, drops one equal to the video's, refuses one off the roster,
+  and checks each segment's markup against its own voice. The roster reader keeps a valid speed.
+- A pronunciation fix that resends the same words without any `voice_id` keeps the stored voices,
+  and a rewrite with new words and no `voice_id` gives every line to the video's voice.
+- The real join, when an `ffmpeg` is found on the host, measures each run and keeps the total
+  length. It is skipped otherwise; the MCP image has `ffmpeg`.
+
+Trap: the offset is each run's decoded length and never its last alignment time, which on
+`eleven_v4` can run past the audio. The fake ElevenLabs reply encodes its length in the audio bytes
+so the fake join can return it.
 
 ### `test_pronunciation_rules.py`
 
@@ -481,6 +515,9 @@ must be derived again ([Revising an existing video](../10-scene-authoring.md#rev
 Covers `get_timeline`, the agent's read of `timeline.json`.
 
 - It returns segments, and words on request. A video from before segments returns an empty list.
+- Each segment carries its beat and its role. A beat split over two segments owes its change once,
+  where it starts, and the formula's `first_frame` comes back with the segments. A video whose
+  formula is not known keeps its beat labels and has no role past the opening.
 - An unknown video, a missing file, malformed JSON and a `video_id` shaped like a path are errors.
 
 ### `test_subtitles.py`
@@ -716,6 +753,53 @@ call reserves no picture slot and reaches no paid endpoint.
 
 Trap: a reservation that lapses sooner than the slowest call gives that call's slot to a parallel
 one, and both are billed.
+### `test_choose_script_formula.py`
+
+Covers `choose_script_formula`, `get_video`'s `formula_routing`, the domain's default formula in
+`create_video` and `upsert_project`, and the write that gives a pick back
+([How a formula is picked](../08-scripting-and-voice.md#how-a-formula-is-picked)).
+
+- A pick is recorded with its runner-up and its reason on one line. A bad formula, runner-up or
+  reason is refused and nothing is written.
+- The style is decided first at `TOPIC_APPROVED`: a video still on `auto` with no style pick is
+  refused there, and a video Auto gave mixed scenes is accepted. In a revision a video scripted
+  before picks existed gets a formula whatever its style.
+- The pick is made once at `TOPIC_APPROVED` and is refused at every status but `TOPIC_APPROVED` and
+  `REVISION_REQUESTED`. In a revision the agent may pick again on a video with no person's choice.
+- A status change between the row read and the `UPDATE` leaves the video untouched. While the tool
+  reads the setting and the domain's history, another writer is locked out.
+- An experimental formula or runner-up is refused while the setting is off and accepted once it is
+  on. The candidates carry `available`, `suits_style` and `recent`, and only a video at
+  `TOPIC_APPROVED` with no pick or at `REVISION_REQUESTED` gets them. A revision whose pick is a
+  person's choice gets none.
+- `recent` is the domain's previous two videos, newest first, counting a video by its recorded
+  formula or else its pick, and rows filed in the same second by insertion order. A formula among
+  them is refused without `repeat_reason` and accepted with it, and the reason is stored. Another domain's videos and a video with no domain have no
+  history.
+- A person's choice becomes the pick, with the agent's formula as the runner-up and "Auto would
+  have picked" in the reason. It holds for an experimental formula with the setting off, is exempt
+  from rotation (also when the agent names the same recent formula), is written as the pick in a
+  revision of a video that had none, and is not replaced in a revision. A choice of a formula that the installed
+  version does not have reads as Auto.
+- A move back to `TOPIC_PROPOSED`, guarded or not, empties the pick and keeps the person's choice.
+  A script revision keeps the pick.
+- A move to `SCRIPT_READY`, guarded or not, is refused while the stored script's formula is not
+  the pick, including a pick with no record. A move to `VOICING` or `VOICE_READY` after a re-pick
+  in a revision is refused the same way, with a refusal that sends the new script to a person.
+- A pick of a formula the installed version lacks counts as none: the video is offered the
+  candidates and picked for again, and a script write is not bound to it. A rewritten script and a script from before picks pass.
+- Only a formula marked recent stores the repeat note. Recent counts the pick ahead of a switched
+  script's record, and leaves out a topic sent back or rejected.
+- The domain's default formula seeds every new video whatever its strategy. A default that is no
+  formula seeds nothing, a new default must be a formula, an omitted one is left alone, and a
+  stored one that was dropped does not block another edit.
+
+Trap: the `formula` argument is the agent's own best formula on every call. A tool that took the
+person's choice as the argument would lose what Auto would have picked, which the dashboard offers
+as the switch.
+
+Trap: rotation is enforced by the tool. Left to the skill's prose, a model that skipped the step
+would give a domain the same structure every time, with nothing recording that it did.
 
 ### `test_choose_visual_style.py`
 
@@ -785,7 +869,8 @@ text audit's per-region sampling ([Whiteboard](../10-scene-authoring.md#whiteboa
   from the TypeScript source, and both sides answer the shared cases in
   `fixtures/whiteboard_contract.json`. The pack's doodle list equals the doodles `doodles.ts` draws.
   Rounding follows JavaScript's `Math.round`.
-- The skill's worked example passes.
+- The skill's worked example passes. It opens on a doodle at frame 0, which may sit before the first
+  word and is scheduled from `TIMING.openLead` frames before frame 0 (shared case `schedule_open`).
 - Each refusal names its region, item and cause: a region count outside 2 to 6, an unknown layout,
   slot or doodle, a used slot, text that does not fit or uses a character the font lacks, an item
   off a word, out of order or before the camera arrives, a mark or arrow on a missing or later item,
@@ -866,6 +951,27 @@ Trap: `npx` runs `tsc` as a child of its own, so killing `npx` alone leaves `tsc
 call `validate_job` again after a timeout, and those leftover processes once filled a host's memory.
 The timeout test fails if the kill reaches `npx` only.
 
+### `test_picture_checks.py`
+
+Covers `mcp/picture_checks.py` and its place in `validate_job`
+([Picture warnings](../10-scene-authoring.md#picture-warnings)).
+
+- Each data-driven style's worked example is read as its style and opens on a subject, and the
+  same example with its opening pushed late, its subject removed or its words first is warned once.
+- A segment owes its beat's role once, where the beat starts, and a beat label matches whatever its
+  case and spacing. Segments with no beat, or a video with no formula, owe nothing past the opening
+  and get no beat warnings. A Cartoon 3D config gets none either.
+- A System Flow node entering by `TIMING.openWithin` opens the video; one frame later is warned.
+- A mixed-scenes video that cuts on every beat is quiet. A turn or payoff inside a running scene is
+  warned with its time, segment, beat and first words. A cut `CHANGE_LEAD` frames before the word
+  or `CHANGE_WINDOW` after it counts, one frame further does not.
+- Every style reports its cuts as changes; a System Flow chip alone does not count, and a
+  Whiteboard doodle counts when the marker starts it. Malformed data is skipped, never raised.
+- `validate_job` adds these warnings after the text audit's.
+
+Trap: the quiet cases matter as much as the warnings. Each skill's example is what the agent copies,
+and a warning on a sound video teaches the agent to ignore the list.
+
 ### `test_text_audit.py`
 
 Covers `mcp/text_audit.py`, the decision layer of the text-layout audit
@@ -879,6 +985,12 @@ Covers `mcp/text_audit.py`, the decision layer of the text-layout audit
   own stdout.
 - Every failure of the subprocess returns a warning and does not raise. A timeout kills the
   process group, and staged files are removed.
+- The frame-0 pass is added for a mixed-scenes video only, outside the pinned sampling plan. It warns
+  when frame 0 shows only text or a backdrop (a full-frame fill or SVG rect, a faint or tiny
+  picture) and when nothing moves by frame 6. A picture already moving, something arriving or
+  fading, and a canvas are quiet. The shapes of one SVG count as one picture, so a stick figure is a
+  subject, and a filled card holding only text is a title card. A line drawing on counts as moving,
+  and the warning names the scene on frame 0. Its frames skip the text checks.
 
 Trap: every threshold lives in this module, because it is the only layer the tests reach. The
 browser probe and its driver need a browser, so a threshold moved into the probe leaves the

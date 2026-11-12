@@ -249,13 +249,14 @@ def _parse_voices(raw: str | None) -> list:
     if not isinstance(parsed, list) or len(parsed) > MAX_VOICES:
         return []
     for entry in parsed:
-        if not isinstance(entry, dict) or set(entry) != {"name", "voice_id", "model_id"}:
+        # Shape, model and an optional speed (TMDEV-216): the rules all three
+        # roster readers share. Onboarding never asks for a speed, but keeps
+        # one a person set on the dashboard.
+        if _voice_models.roster_entry_error(entry):
             return []
         if not isinstance(entry["name"], str) or not entry["name"].strip():
             return []
         if not isinstance(entry["voice_id"], str) or not entry["voice_id"].strip():
-            return []
-        if entry["model_id"] not in DICTIONARY_COMPATIBLE_MODELS:
             return []
     return parsed
 

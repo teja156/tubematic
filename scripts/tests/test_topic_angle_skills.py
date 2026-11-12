@@ -148,20 +148,30 @@ def test_a_topic_revision_can_rewrite_the_angle():
 
 # --- the script writer ---------------------------------------------------
 
-def test_the_script_writer_reads_the_angle_and_its_formula():
+def test_the_script_writer_reads_the_angle_and_builds_its_openings_on_it():
+    # The formula is picked before the script (the formula router reads
+    # angle_formula); the writer reads the angle for its openings.
     text = _skill("tubematic-script-writing-skill")
     step1 = text[text.index("## Step 1"):text.index("## Step 2")]
     assert "`angle`" in step1 and "`angle_formula`" in step1
-    step3 = text[text.index("## Step 3"):text.index("<!-- formula-table:start")]
-    assert "`angle_formula`" in step3
     openings = text[text.index("### Three openings, then one"):text.index("### Segments")]
     assert "angle" in openings
 
 
-def test_the_script_writer_still_works_without_an_angle():
-    text = _skill("tubematic-script-writing-skill")
-    step3 = text[text.index("## Step 3"):text.index("<!-- formula-table:start")]
-    assert "no angle" in step3
+def test_the_formula_router_reads_the_angle_and_still_works_without_one():
+    text = _skill("tubematic-formula-routing")
+    step1 = text[text.index("## Step 1"):text.index("## Step 2")]
+    assert "`angle_kind`" in step1 and "`angle_formula`" in step1
+    assert "no angle" in step1 and "from the topic alone" in step1
+    step3 = text[text.index("## Step 3"):text.index("## Step 4")]
+    assert "`angle_formula`" in step3
+
+
+def test_a_rewritten_angle_sends_a_script_revision_through_the_router():
+    text = _skill("tubematic-operator")
+    row = next(line for line in text.splitlines() if "**Script revision**" in line)
+    assert row.index("rewrite the angle first") < row.index("tubematic-formula-routing")
+    assert "the angle was rewritten for this revision" in row
 
 
 # --- a person's own topic ------------------------------------------------

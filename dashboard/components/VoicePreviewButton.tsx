@@ -14,18 +14,21 @@ import { videoToStreamUrl } from "@/lib/utils";
 // given, names the model to preview instead — the Settings page passes the
 // row's current pick so an unsaved model change can be heard before saving.
 // The server keys its cache on the model, so a changed model is a fresh
-// sample on the next play.
+// sample on the next play. speed works the same way (TMDEV-216): the Settings
+// page passes the row's speed, and the server's cache key includes it.
 
 type PreviewState = "idle" | "loading" | "ready" | "playing" | "error";
 
 export function VoicePreviewButton({
   voiceId,
   modelId,
+  speed,
   disabled,
   style,
 }: {
   voiceId: string;
   modelId?: string;
+  speed?: number;
   disabled?: boolean;
   style?: React.CSSProperties;
 }) {
@@ -56,7 +59,7 @@ export function VoicePreviewButton({
     audioRef.current?.pause();
     setUrl(null);
     setState("idle");
-  }, [voiceId, modelId]);
+  }, [voiceId, modelId, speed]);
 
   const isDisabled = disabled || !voiceId || state === "loading";
 
@@ -80,7 +83,8 @@ export function VoicePreviewButton({
         // The proxy refuses a body without a JSON Content-Type (TMDEV-156).
         ...(modelId ? {
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model_id: modelId }),
+          body: JSON.stringify(speed === undefined ? { model_id: modelId }
+                                                   : { model_id: modelId, speed }),
         } : {}),
       });
       const data = await r.json();

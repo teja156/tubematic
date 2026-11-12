@@ -56,6 +56,54 @@ const DICTIONARY_COMPATIBLE_MODELS = [
   "eleven_turbo_v2",
 ];
 
+// Models that honour a voice's speed (TMDEV-216, probed): eleven_v3 and
+// eleven_v4 ignore it, so the API refuses a speed there and the picker is
+// disabled. Keep in sync with tubematic_core/voice_models.py SPEED_MODELS.
+const SPEED_MODELS = [
+  "eleven_multilingual_v2",
+  "eleven_flash_v2_5",
+  "eleven_turbo_v2_5",
+  "eleven_flash_v2",
+  "eleven_turbo_v2",
+];
+
+// 0.70 to 1.20 in steps of 0.05: ElevenLabs' range, on the step the API takes.
+const SPEED_OPTIONS = Array.from({ length: 11 }, (_, i) => Math.round((0.7 + i * 0.05) * 100) / 100);
+
+// A roster entry as the API stores it: no speed at 1.0, and none on a model
+// that ignores it.
+function withSpeed(voice: Voice): Voice {
+  const { speed, ...rest } = voice;
+  return speed !== undefined && speed !== 1 && SPEED_MODELS.includes(voice.model_id)
+    ? { ...rest, speed } : rest;
+}
+
+function SpeedSelect({ testId, model, speed, onChange, inputStyle }: {
+  testId: string;
+  model: string;
+  speed: number;
+  onChange: (speed: number) => void;
+  inputStyle: React.CSSProperties;
+}) {
+  const allowed = SPEED_MODELS.includes(model);
+  return (
+    <select
+      data-testid={testId}
+      aria-label="Speed"
+      value={allowed ? speed.toFixed(2) : "1.00"}
+      disabled={!allowed}
+      onChange={(e) => onChange(Number(e.target.value))}
+      title={allowed ? "How fast this voice speaks. 1.00 is ElevenLabs' normal pace."
+                     : `${model} ignores speed, so it stays at 1.00.`}
+      style={{ ...inputStyle, width: 82 }}
+    >
+      {SPEED_OPTIONS.map((v) => (
+        <option key={v} value={v.toFixed(2)}>{v.toFixed(2)}x</option>
+      ))}
+    </select>
+  );
+}
+
 // The image-model catalog; OpenAI is the only image provider (TMDEV-165).
 // Keep in sync with renderer/api/pipeline.py, mcp/server.py and
 // onboard/config.py. Every model must support transparent backgrounds:
@@ -1431,6 +1479,30 @@ function SettingsBody() {
         onSame={() => statuses.clear("user_preferences")}
         onSave={(text) => { void save({ user_preferences: text }, "user_preferences"); }}
       />
+      <Row
+        label="Experimental formulas"
+        note="Let Auto pick script formulas marked experimental. Off, Auto chooses among the core formulas only, and an experimental one is used only where you choose it yourself: as a domain's formula on Topics, or for one video at Topic Proposed. Applies to the next video picked for."
+      >
+        <SaveStatus status={statuses.get("auto_experimental_formulas")} testId="status-toggle-experimental-formulas" />
+        <button
+          data-testid="toggle-experimental-formulas"
+          onClick={() => choose("auto_experimental_formulas", !val("auto_experimental_formulas"))}
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            padding: "7px 16px",
+            border: `1px solid ${val("auto_experimental_formulas") ? "var(--green)" : "var(--border)"}`,
+            background: val("auto_experimental_formulas") ? "rgba(74,222,128,0.1)" : "var(--panel)",
+            color: val("auto_experimental_formulas") ? "var(--green)" : "var(--mute)",
+            cursor: "pointer",
+            transition: "all .15s",
+          }}
+        >
+          {val("auto_experimental_formulas") ? "ON" : "OFF"}
+        </button>
+      </Row>
         </TabsContent>
 
         <TabsContent value="costs">
@@ -1587,6 +1659,13 @@ function VoiceRow({
           <option key={m} value={m}>{m}</option>
         ))}
       </select>
+      <SpeedSelect
+        testId={`voice-speed-${index}`}
+        model={voice.model_id}
+        speed={voice.speed ?? 1}
+        onChange={(speed) => onCommit({ speed })}
+        inputStyle={inputStyle}
+      />
       <label
         data-testid={`voice-default-${index}`}
         style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--mono)", fontSize: 11, color: "var(--ink-2)", cursor: "pointer" }}
@@ -1594,7 +1673,8 @@ function VoiceRow({
         <input type="radio" checked={isDefault} onChange={onSetDefault} />
         default
       </label>
-      <VoicePreviewButton voiceId={voice.voice_id} modelId={voice.model_id} />
+      <VoicePreviewButton voiceId={voice.voice_id} modelId={voice.model_id}
+                          speed={SPEED_MODELS.includes(voice.model_id) ? (voice.speed ?? 1) : 1} />
       <button
         data-testid={`voice-remove-${index}`}
         onClick={onRemove}
@@ -1623,13 +1703,14 @@ function VoicesEditor({
   const [newName, setNewName] = useState("");
   const [newId, setNewId] = useState("");
   const [newModel, setNewModel] = useState(DICTIONARY_COMPATIBLE_MODELS[0]);
+  const [newSpeed, setNewSpeed] = useState(1);
 
   function commitRow(index: number, patch: Partial<Voice>) {
     // A new voice id on the default voice moves the default with it, or the
     // default would point at an id no longer in the roster and read as none.
     const wasDefault = voices[index].voice_id === defaultVoiceId;
     const nextDefault = wasDefault && patch.voice_id ? patch.voice_id : defaultVoiceId;
-    onSave(voices.map((v, i) => (i === index ? { ...v, ...patch } : v)), nextDefault);
+    onSave(voices.map((v, i) => (i === index ? withSpeed({ ...v, ...patch }) : v)), nextDefault);
   }
 
   function removeRow(index: number) {
@@ -1645,11 +1726,13 @@ function VoicesEditor({
     if (!newName.trim() || !newId.trim() || voices.length >= MAX_VOICES) return;
     // The row empties only once the voice is stored: refused, what you typed
     // (a long ElevenLabs id) is still there to correct.
-    void onSave([...voices, { name: newName.trim(), voice_id: newId.trim(), model_id: newModel }],
+    void onSave([...voices, withSpeed({ name: newName.trim(), voice_id: newId.trim(),
+                                        model_id: newModel, speed: newSpeed })],
                 defaultVoiceId).then((ok) => {
       if (!ok) return;
       setNewName("");
       setNewId("");
+      setNewSpeed(1);
     });
   }
 
@@ -1696,6 +1779,13 @@ function VoicesEditor({
               <option key={m} value={m}>{m}</option>
             ))}
           </select>
+          <SpeedSelect
+            testId="voice-add-speed"
+            model={newModel}
+            speed={newSpeed}
+            onChange={setNewSpeed}
+            inputStyle={inputStyle}
+          />
           <button
             data-testid="voice-add"
             onClick={addVoice}

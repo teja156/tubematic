@@ -1,4 +1,4 @@
-"""Advisory checks on a script's words (TMDEV-211).
+"""Advisory checks on a script's words (TMDEV-211, TMDEV-213).
 
 `check` reads a script as plain spoken text and returns a list of warnings.
 A warning never refuses a write and never changes a status: the script write
@@ -25,15 +25,18 @@ BAND_SLACK = 0.05
 TURN_WINDOW = (0.25, 0.80)
 # Scripts shorter than this have no middle to turn in.
 TURN_MIN_WORDS = 60
-# Share of the publish title's content words found in the first sentence at
-# which the sentence counts as reading the title back.
+# Share of the publish title's content words found in the first sentence (or
+# of the first sentence's in the title) at which the two count as repeating.
 TITLE_OVERLAP = 0.8
-# A title with fewer content words than this cannot be "repeated" meaningfully.
+# A title (or a sentence) with fewer content words than this cannot be
+# "repeated" meaningfully.
 TITLE_MIN_WORDS = 3
 # How many of the domain's earlier scripts the closing sentence is compared with.
 RECENT_SCRIPTS = 30
 # How many opening words of the closing sentence make it "the same closing".
 CLOSING_WORDS = 3
+# How many opening words of the first sentence make it "the same opening".
+OPENING_WORDS = 3
 
 _A = r"(?:'|’)"  # an apostrophe, straight or curly
 
@@ -140,12 +143,21 @@ def closing_opening(text: str) -> tuple:
     return tuple(head) if len(head) == CLOSING_WORDS else ()
 
 
+def opening_words(text: str) -> tuple:
+    """The first words of a script's first sentence, or () when that sentence
+    has fewer than OPENING_WORDS words."""
+    sents = sentences(text)
+    head = words(sents[0])[:OPENING_WORDS] if sents else []
+    return tuple(head) if len(head) == OPENING_WORDS else ()
+
+
 def _warn(warn_id: str, message: str) -> dict:
     return {"id": warn_id, "message": message}
 
 
 def check(script: str, *, publish_title: str = "", formula_id: str = "", kept_hook: str = "",
-          recent_scripts=()) -> list[dict]:
+          recent_scripts=(), hook_type: str = "", recent_hook_types=(),
+          beats=()) -> list[dict]:
     """Warnings for one script, as [{"id", "message"}], in a fixed order.
 
     script: the spoken text, markup already removed.
@@ -154,6 +166,10 @@ def check(script: str, *, publish_title: str = "", formula_id: str = "", kept_ho
     kept_hook: the text of the opening the writer kept, markup removed, or "".
     recent_scripts: spoken texts of the same domain's earlier scripts, newest
         first; only the first RECENT_SCRIPTS are read.
+    hook_type: the type of the opening the writer kept, or "".
+    recent_hook_types: the kept opening types of the domain's previous videos,
+        newest first; only the first tformulas.ROTATION_WINDOW are read.
+    beats: each segment's beat label, in order ("" for none).
     """
     sents = sentences(script)
     out = []
@@ -171,17 +187,45 @@ def check(script: str, *, publish_title: str = "", formula_id: str = "", kept_ho
         out.append(_warn("hook_mismatch",
                          "The opening marked as used is not how the script begins: the first "
                          "segment starts with other words."))
+    names = {tformulas.beat_key(n) for n in tformulas.beat_names(formula_id)}
+    unknown = sorted({b for b in beats or () if isinstance(b, str) and b.strip()
+                      and tformulas.beat_key(b) not in names}) if names else []
+    if unknown:
+        out.append(_warn("beat_unknown",
+                         "These segment beats are not beats of the formula: "
+                         + ", ".join(f'"{b}"' for b in unknown)
+                         + ". Label each segment with a beat name from the formula's reference "
+                           "file, or the scene author cannot tell where the picture must change."))
     if _GREETING.search(first_two):
         out.append(_warn("greeting_opener",
                          "The script opens on a greeting or an agenda line. Open on the act, "
                          "the anomaly or the paradox itself."))
+    # Either way round: the sentence reads the title back, or the title copies
+    # a short opening sentence. Both leave the viewer reading the same words twice.
     title = [w for w in words(publish_title) if w not in _STOPWORDS]
-    if len(title) >= TITLE_MIN_WORDS:
-        first = set(words(sents[0]))
-        if sum(w in first for w in title) / len(title) >= TITLE_OVERLAP:
-            out.append(_warn("title_repeat",
-                             "The first sentence repeats the publish title. The title asks; "
-                             "the first sentence should continue from where it stops."))
+    opening = [w for w in words(sents[0]) if w not in _STOPWORDS]
+    title_set, opening_set = set(title), set(opening)
+    if ((len(title) >= TITLE_MIN_WORDS
+         and sum(w in opening_set for w in title) / len(title) >= TITLE_OVERLAP)
+            or (len(opening) >= TITLE_MIN_WORDS
+                and sum(w in title_set for w in opening) / len(opening) >= TITLE_OVERLAP)):
+        out.append(_warn("title_repeat",
+                         "The first sentence repeats the publish title. The title and the opening "
+                         "are a pair: the title states the question or the stake, and the first "
+                         "sentence continues from where it stops."))
+    start = opening_words(script)
+    if start:
+        same = sum(opening_words(s) == start for s in list(recent_scripts)[:RECENT_SCRIPTS])
+        if same:
+            out.append(_warn("opening_repeat",
+                             f"The script opens with \"{' '.join(start)}\", like {same} of this "
+                             "domain's recent scripts."))
+    if hook_type and hook_type in list(recent_hook_types)[:tformulas.ROTATION_WINDOW]:
+        out.append(_warn("hook_type_repeat",
+                         f"The opening is a {tformulas.HOOK_TYPES.get(hook_type, hook_type)} "
+                         "opening, like one of this domain's previous "
+                         f"{tformulas.ROTATION_WINDOW} videos. Vary the type of opening from "
+                         "video to video where another type fits the topic honestly."))
     if _RUNUP.search(script):
         out.append(_warn("staged_runup",
                          "A staged run-up (\"Here's the thing\", \"Here's the catch\") announces "

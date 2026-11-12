@@ -69,7 +69,7 @@ REFERENCES_NOTE = """
 ---
 
 The skill tells you to read one file from its `formulas/` folder. You have no tools, so every
-file in that folder follows. Use only the one for the formula you choose.
+file in that folder follows. Use only the one for this video's formula.
 
 """
 
@@ -105,6 +105,11 @@ def build_prompt(topic: dict) -> str:
         "script": None, "script_segments": None, "formula_id": "", "hook_alternatives": [],
         "script_warnings": [], "visual_style": "auto",
         "style": {"id": "auto", "label": "Auto", "script": ""},
+        # The formula is picked before the script. The current skill writes in
+        # this pick; a skill from before picks existed ignores it and chooses.
+        "formula_routing": {"decided": True, "pick": topic["formula"], "runner_up": "",
+                            "reason": "", "choice": "", "candidates": [],
+                            "recent": {"formulas": [], "hook_types": []}},
         "elevenlabs_model_id": "eleven_multilingual_v2", "pronunciation_mode": "respell",
     }
     status = {"pronunciation_lexicon": [], "user_preferences": ""}

@@ -1384,6 +1384,7 @@ def test_the_elevenlabs_model_sets_match_the_dashboard_copy():
     assert _models(dash_src, "PHONEME_COMPATIBLE_MODELS") == pipeline.PHONEME_COMPATIBLE_MODELS
     assert _models(dash_src, "IPA_COMPATIBLE_MODELS") == pipeline.IPA_COMPATIBLE_MODELS
     assert _models(dash_src, "DICTIONARY_COMPATIBLE_MODELS") == pipeline.DICTIONARY_COMPATIBLE_MODELS
+    assert _models(dash_src, "SPEED_MODELS") == pipeline.tvoice.SPEED_MODELS
 
 
 def test_the_api_uses_the_shared_model_sets():
@@ -2666,7 +2667,7 @@ def test_user_preferences_with_a_nul_are_rejected(client, db_path):
 
 def test_agent_model_is_no_longer_a_settings_key(client):
     assert "agent_model" not in pipeline.SETTINGS_SPEC
-    assert len(pipeline.SETTINGS_SPEC) == 44
+    assert len(pipeline.SETTINGS_SPEC) == 45
     assert "agent_model" not in json.loads(client.get("/settings").data)
 
 

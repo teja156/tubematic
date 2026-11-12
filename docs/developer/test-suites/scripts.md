@@ -736,6 +736,41 @@ Covers the `tubematic-style-routing` skill
 Trap: a skill that named styles would prefer the ones it knew about, and a new pack would need an
 edit to be picked. The candidates are data for that reason.
 
+### `test_formula_routing_skill.py`
+
+Covers the `tubematic-formula-routing` skill
+([How a formula is picked](../08-scripting-and-voice.md#how-a-formula-is-picked)).
+
+- The skill is loadable by an unattended run and names no formula id or label except its two
+  fallbacks, which are formulas that are not experimental, one for an explanation and one for a
+  story.
+- It reads every field `routing_candidates` gives a candidate, and calls `choose_script_formula`
+  with its real arguments, reason limit and result keys.
+- It names the rotation window the server enforces, routes around a person's choice with the
+  agent's own best formula, covers every refusal the tool makes, and uses the topic's angle only
+  when there is one.
+- The operator runs it after style routing and before the script-writing skill at
+  `TOPIC_APPROVED`, and names it on a script revision. A revision runs it for a video with no
+  formula, and a person's choice is kept with a comment saying so. A pick in a revision is for a
+  script revision only and always goes back to a person. Rotation is skipped beside a person's
+  choice. The uninstaller and the skills README know it.
+
+Trap: a skill that named formulas would prefer the ones it knew about, and a new formula would need
+an edit to be picked. The candidates are data for that reason.
+
+### `test_eval_formula_routing.py`
+
+Covers the plumbing of `scripts/eval_formula_routing.py` ([Formula routing](formula-routing.md)). No
+model is called.
+
+- The prompt carries the video as `get_video` returns it at `TOPIC_APPROVED`, with its style
+  decided, the style's script text and every candidate. A topic is routed with experimental
+  formulas only when it says so, and a topic with no style is a video on mixed scenes.
+- The answer is the last JSON object in the reply that names a formula, and the style eval's own
+  answer key still works.
+- The report counts best, acceptable and failed picks overall and by formula, and lists the wrong
+  ones. Every topic in the set builds a prompt.
+
 ### `test_eval_style_routing.py`
 
 Covers the plumbing of `scripts/eval_style_routing.py` ([Style routing](style-routing.md)). No model
@@ -759,7 +794,9 @@ Covers what the agent is told about a [topic's angle](../02-pipeline.md#topic-an
   no install's domains.
 - The operator skill fills a missing angle before the style and the script, leaves an approved
   angle alone, and lets a topic revision rewrite it.
-- The script-writing skill reads the angle and `angle_formula`, and still works with no angle.
+- The formula router reads the angle and `angle_formula`, and still works with no angle. The
+  script-writing skill reads the angle and builds its openings on it. An angle rewritten in a
+  script revision sends the video through the router again.
 - The Claude and OpenCode copies of `/tubematic-submit-new-job` are the same file. The command
   passes an angle and does not refuse a topic for lacking one.
 
@@ -771,8 +808,9 @@ would make every research run file nothing while the run still ended normally.
 Covers the `tubematic-script-writing-skill` skill and `scripts/gen_formula_references.py`
 ([Formulas](../08-scripting-and-voice.md#formulas)).
 
-- The skill's `formulas/` files and the table in its `SKILL.md` equal what the generator renders
-  from the formula data, and `--check` reports an edited file and a stray one.
+- The skill's `formulas/` files equal what the generator renders from the formula data, and
+  `--check` reports an edited file and a stray one. The skill holds no table for choosing a
+  formula.
 - The hand-off names `update_video`'s real arguments, reads `warnings`, allows one extra write, and
   says what to do when an older tool server refuses the new arguments.
 - The authority order is fixed policy, the style's script text, the formula, the profile. The
@@ -784,8 +822,14 @@ Covers the `tubematic-script-writing-skill` skill and `scripts/gen_formula_refer
 - The formula's reference file and the style's script text decide how the payoff rules are met.
   The length starts from the lower half of the band, and a length the style's script text gives
   wins over the band.
-- A changed style or topic means choosing the formula again, and a style that asks for names may
-  name its people.
+- The skill writes in `formula_routing.pick` and does not choose a formula. It covers a video with
+  no pick (the router has not run, a script from before picks existed, a revision with no formula
+  at all, an older tool server) and says a changed style or topic drops the pick.
+- The openings step prefers a type the domain's previous two videos did not use, and starts from
+  the opening a person switched to, word for word, only while that comment is the newest and no
+  script has been written since. Opening warnings on that opening stay, and the fallback for an
+  older tool server applies only to an unknown argument, never to a refused formula.
+- A style that asks for names may name its people.
 - The user guide's formula table names every formula.
 
 Trap: an instruction that survives beside its replacement is followed whenever the agent reads it
@@ -796,8 +840,9 @@ last, so the removed phrases are pinned as absent.
 Covers the plumbing of `scripts/eval_script_writing.py` ([Script writing](script-writing.md)). No
 model is called.
 
-- The topic set is well formed. The prompt carries the video as the skill reads it at
-  `TOPIC_APPROVED`, with no profile and no preferences.
+- The topic set is well formed, and each topic's formula is one that is not experimental. The
+  prompt carries the video as the skill reads it at `TOPIC_APPROVED`, with no profile, no
+  preferences and the topic's formula as the pick.
 - The new side carries every formula file. The old side is read from git at the given ref.
 - The answer is the last JSON object in the reply that holds a script. A script is scored on its
   spoken words, with its record when it has one.

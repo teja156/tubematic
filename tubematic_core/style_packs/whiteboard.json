@@ -25,6 +25,12 @@
     "maxWords": 3
   },
   "script": "Every beat's `visual` is a **board** brief: what gets written or drawn for this step (the keyword, the number or formula, the simple object, such as a coin, a padlock or a bicycle) and how it connects to the last step. The video is one whiteboard throughout, so a role is a simple doodle or a written word, never a figure.\n\nThe narration is a teacher at a board. Work the idea out one step per sentence, in two to six steps, each building on the last: the setup, the first step, the next, the result. Say the numbers and the formula out loud as they are built (\"one hundred times one point one is one hundred and ten\"), since the marker writes them as you say them. Start each new step with a new sentence, because the camera moves to a fresh part of the board there. End on one closing sentence that names the whole idea in a few words: the video pulls back to show the whole board on it. A named person or place is written on the board or drawn as a simple doodle with a label. Never write a beat that needs a photograph: this style has none.",
+  "picture": {
+    "opening": "Region 1 is drawing from frame 0: its first item is a doodle at frame 0 that draws the first sentence's subject. Never a blank board, and never words alone.",
+    "turn": "A camera glide to a new region on the first word of a turn or a re-opening, or a doodle or arrow drawn in the current region at that moment.",
+    "payoff": "The region the answer lives in gets the biggest doodle and the region's highlight.",
+    "ending": "This style ends on its recap: after the payoff region the camera pulls back to the whole board at recapFrame and the region numbers pop in. Nothing after the recap."
+  },
   "routing": {
     "best_for": [
       "step-by-step reasoning and derivations",

@@ -279,6 +279,61 @@ test.describe("VideoModal", () => {
     }
   });
 
+  // A voice per segment (TMDEV-216). Segments are written only by the agent's
+  // update_video, and the test stack runs no agent, so they are seeded in the
+  // API container. What a unit test cannot show: the real conflicts the API
+  // computes, and the segment_voices PATCH landing in the database.
+  test("Script tab: a segment's voice is picked from the roster and saved", async ({ page }) => {
+    await setSettings({
+      elevenlabs_voices: [
+        { name: "Narrator", voice_id: `${uid}-n`, model_id: "eleven_v4" },
+        { name: "Skeptic", voice_id: `${uid}-s`, model_id: "eleven_multilingual_v2" },
+      ],
+      elevenlabs_voice_id: `${uid}-n`,
+    });
+    try {
+      const video = await createVideo({ topic: `[${uid}] Segment voices` });
+      await patchVideo(video.id, { status: "SCRIPT_READY", script: "So here. Wait, really?" });
+      const repoRoot = path.resolve(__dirname, "../../../..");
+      execSync(
+        `docker compose -f "${path.join(repoRoot, "docker-compose.test.yml")}" exec -T tubematic-api-test python3 -`,
+        {
+          cwd: repoRoot,
+          input: [
+            "import json, sqlite3",
+            "segs = [{'id': 's1', 'voice': 'So [pause] here.', 'visual': ''},",
+            "        {'id': 's2', 'voice': 'Wait, really?', 'visual': ''}]",
+            "con = sqlite3.connect('/data/tubematic.db')",
+            "con.execute('UPDATE videos SET script_segments = ? WHERE id = ?', "
+              + `(json.dumps(segs), '${video.id}'))`,
+            "con.commit()",
+          ].join("\n"),
+          stdio: ["pipe", "inherit", "inherit"],
+        },
+      );
+
+      await page.goto("/");
+      const card = page.getByTestId(`kanban-card-${video.id}`);
+      await expect(card).toBeVisible({ timeout: 10_000 });
+      await card.click();
+      const modal = page.getByTestId("video-modal");
+
+      // [pause] is v3/v4 markup, which the Skeptic's model cannot speak.
+      const s1 = modal.getByTestId("segment-voice-s1");
+      await expect(s1).toBeVisible({ timeout: 10_000 });
+      await expect(s1.locator(`option[value="${uid}-s"]`)).toHaveJSProperty("disabled", true);
+
+      await modal.getByTestId("segment-voice-s2").selectOption(`${uid}-s`);
+      await expect.poll(async () => {
+        const v = await getVideo(video.id) as unknown as { script_segments: { voice_id?: string }[] };
+        return v.script_segments[1].voice_id;
+      }).toBe(`${uid}-s`);
+      await expect(modal.getByTestId("segment-voice-s2")).toHaveValue(`${uid}-s`);
+    } finally {
+      await setSettings({ elevenlabs_voices: [], elevenlabs_voice_id: "" });
+    }
+  });
+
   // Auto's style pick (TMDEV-203). Only the agent's choose_visual_style writes
   // a pick, and the test stack runs no agent, so the row is seeded in the API
   // container the way stream.spec.ts seeds its files.
@@ -316,6 +371,106 @@ test.describe("VideoModal", () => {
     const after = await getVideo(video.id) as unknown as Record<string, unknown>;
     expect(after.visual_style).toBe("stick");
     expect(after.style_runner_up).toBe("system_flow");
+  });
+
+  // The script formula (TMDEV-213). Only the agent's choose_script_formula
+  // writes a pick, so the row is seeded in the API container like the style
+  // pick above. What only a real browser against the real API shows: the
+  // labels from GET /script-formulas, and each switch landing in the database.
+  function seedFormula(videoId: string, sql: string, params: string) {
+    const repoRoot = path.resolve(__dirname, "../../../..");
+    execSync(
+      `docker compose -f "${path.join(repoRoot, "docker-compose.test.yml")}" exec -T tubematic-api-test python3 -`,
+      {
+        cwd: repoRoot,
+        input: [
+          "import json, sqlite3",
+          "hooks = [{'type': 'problem', 'text': 'You renamed one file.', 'kept': True, 'note': ''},",
+          "         {'type': 'question', 'text': 'Why does the log stop?', 'kept': False, 'note': ''},",
+          "         {'type': 'myth', 'text': 'A rename is recorded.', 'kept': False, 'note': 'overclaims'}]",
+          "con = sqlite3.connect('/data/tubematic.db')",
+          `con.execute("UPDATE videos SET ${sql} WHERE id = '${videoId}'", ${params})`,
+          "con.commit()",
+        ].join("\n"),
+        stdio: ["pipe", "inherit", "inherit"],
+      },
+    );
+  }
+
+  test("Switch to the runner-up formula sends the video back to scripting in that formula", async ({ page }) => {
+    const video = await createVideo({ topic: `[${uid}] Switch formula` });
+    await patchVideo(video.id, { status: "SCRIPT_READY", script: "# Hello world" });
+    seedFormula(video.id,
+      "visual_style = 'system_flow', formula_pick = 'follow-the-flow', formula_runner_up = 'scene-story', "
+        + "formula_reason = 'A request moves through fixed stages.', formula_id = 'follow-the-flow'",
+      "()");
+
+    await page.goto("/");
+    const card = page.getByTestId(`kanban-card-${video.id}`);
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.click();
+    const modal = page.getByTestId("video-modal");
+    await expect(modal.getByTestId("video-formula")).toHaveText("Auto — Follow the Flow");
+    await expect(modal.getByTestId("formula-pick-reason")).toContainText("A request moves through fixed stages.");
+    await expect(modal.getByTestId("formula-pick-reason")).toContainText("Runner-up: Scene Story");
+
+    page.once("dialog", (d) => d.accept());
+    await modal.getByRole("button", { name: "Switch to Scene Story" }).click();
+    await expect.poll(async () => (await getVideo(video.id)).status, { timeout: 10_000 }).toBe("TOPIC_APPROVED");
+    const after = await getVideo(video.id) as unknown as Record<string, unknown>;
+    expect(after.formula_pick).toBe("scene-story");
+    expect(after.formula_runner_up).toBe("follow-the-flow");
+    expect(after.formula_choice).toBe("scene-story");
+  });
+
+  test("Use this opening sends the video back to scripting with that opening in use", async ({ page }) => {
+    const video = await createVideo({ topic: `[${uid}] Switch opening` });
+    await patchVideo(video.id, { status: "SCRIPT_READY", script: "You renamed one file. It stops." });
+    seedFormula(video.id,
+      "visual_style = 'system_flow', formula_id = 'broken-expectation', "
+        + "formula_pick = 'broken-expectation', hook_type = 'problem', hook_alternatives = ?",
+      "(json.dumps(hooks),)");
+
+    await page.goto("/");
+    const card = page.getByTestId(`kanban-card-${video.id}`);
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.click();
+    const modal = page.getByTestId("video-modal");
+    await expect(modal.getByTestId("script-hook-0")).toHaveAttribute("data-kept", "true");
+    await expect(modal.getByTestId("use-opening-0")).toHaveCount(0);
+
+    page.once("dialog", (d) => d.accept());
+    await modal.getByTestId("use-opening-1").click();
+    await expect.poll(async () => (await getVideo(video.id)).status, { timeout: 10_000 }).toBe("TOPIC_APPROVED");
+    const after = await getVideo(video.id) as unknown as {
+      hook_type: string; hook_alternatives: { kept: boolean }[]; formula_pick: string;
+      comments: { author: string; content: string }[];
+    };
+    expect(after.hook_type).toBe("question");
+    expect(after.hook_alternatives.map((h) => h.kept)).toEqual([false, true, false]);
+    expect(after.formula_pick).toBe("broken-expectation");
+    expect(after.comments.at(-1)?.content).toContain("Opening switched to the Question one");
+  });
+
+  test("a formula chosen at the topic goes with the approval", async ({ page }) => {
+    const video = await createVideo({ topic: `[${uid}] Choose formula` });
+
+    await page.goto("/");
+    const card = page.getByTestId(`kanban-card-${video.id}`);
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.click();
+    const modal = page.getByTestId("video-modal");
+    const select = modal.getByTestId("video-modal-formula-select");
+    await expect(select).toHaveValue("");
+    // The list is the real one: the core formulas, then the experimental ones marked.
+    await expect(select.locator("option", { hasText: "Scene Story" })).toHaveCount(1);
+    await expect(select.locator("option", { hasText: "News Take (experimental)" })).toHaveCount(1);
+    await select.selectOption("news-take");
+    await modal.getByRole("button", { name: "Approve Topic" }).click();
+    await expect.poll(async () => (await getVideo(video.id)).status, { timeout: 10_000 }).toBe("TOPIC_APPROVED");
+    const after = await getVideo(video.id) as unknown as Record<string, unknown>;
+    expect(after.formula_choice).toBe("news-take");
+    expect(after.formula_pick).toBe("");    // the agent makes the pick; the test stack has none
   });
 
   // What the agent records with a script (TMDEV-211). Only update_video

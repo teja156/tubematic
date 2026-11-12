@@ -137,7 +137,7 @@ The panel on the right holds:
 - the buttons and pickers for the video's current status,
 - links to the live posts, under **Published to**,
 - the video's details: how the topic was found, its score, its angle score, its script profile,
-  visual style, voice and agent,
+  visual style, voice, any other voices its script uses, and agent,
 - the **Cost** panel,
 - the AI review's findings, if AI review ran.
 
@@ -152,7 +152,7 @@ To save the video, use the player's own menu, or take the file from
 
 Creates a video from a topic you type.
 
-![The New Video page with a title, a topic and a visual style chosen](../images/new-video.png)
+![The New Video page with a title, a topic, a formula and a visual style chosen](../images/new-video.png)
 
 | Field | Notes |
 |---|---|
@@ -160,7 +160,7 @@ Creates a video from a topic you type.
 | **Topic** | Required. The full brief the agent writes the script from |
 | **Angle** | Optional. One sentence, up to 300 characters, saying what the opening will use, and its kind. Leave it empty and the agent finds one. See [The angle](03-using-tubematic.md#the-angle) |
 | **Agent**, **Model**, **Effort** | Optional. **Automatic** lets Tubematic choose the agent by share. It reads **Domain default** when the Manual Videos domain has an agent of its own |
-| **Script profile**, **Visual style**, **Voice** | Optional |
+| **Script profile**, **Formula**, **Visual style**, **Voice** | Optional. **Formula** on **Auto** lets the agent pick the script's structure for the topic |
 | **Automatically approve topic** | Ticked by default, so the agent starts on the script. Untick it to review the topic on the Pipeline page first |
 
 The video is filed under a domain called **Manual Videos** and has no score. After you submit, the
@@ -188,7 +188,7 @@ curriculum seed also has a **Pause topic generation** button.
 | Group | Sets |
 |---|---|
 | Look | The visual style and the mascot |
-| Narration | The voice and the script profile |
+| Narration | The voice, the script profile and the formula |
 | Agent | The agent, its model and its effort |
 | Limits | The topic cap |
 
@@ -267,11 +267,13 @@ Pickers beside the buttons set how the next stage is done.
 
 | Status | Pickers |
 |---|---|
-| Topic Proposed | Script profile, visual style, mascot, voice, agent, model, effort |
+| Topic Proposed | Script profile, visual style, mascot, voice, agent, model, effort. The video's window also has the formula |
 | Script Ready | Voice, agent, model, effort |
 | Video Ready | Agent, model, effort. These apply when you request a revision |
 
-- The script profile, visual style and mascot are fixed once you approve the topic.
+- The script profile, visual style, mascot and formula are fixed once you approve the topic. At
+  Script Ready you can still switch to the runner-up style or formula, which has the script
+  rewritten (see [Script formulas](03-using-tubematic.md#changing-the-formula-at-script-ready)).
 - You can change the voice at Topic Proposed and at Script Ready. At Script Ready, a voice whose
   model cannot speak the script is greyed out. Each voice is labelled with its model. The **▶**
   button beside the picker plays a sample.

@@ -19,11 +19,11 @@ import { PublishDialog } from "@/components/PublishDialog";
 import { PublicationFigures } from "@/components/PublicationFigures";
 import { useTimeZone } from "@/components/TimeZoneProvider";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
-import { shownVoice, topicVoicePayload, voiceConflict, voiceLabel, voiceMissing } from "@/lib/voices";
+import { segmentVoiceConflict, shownVoice, topicVoicePayload, voiceConflict, voiceLabel, voiceMissing } from "@/lib/voices";
 import { LogList } from "@/components/LogList";
 import { CostBreakdown } from "@/components/CostBreakdown";
 import { formatDateTime, formatScheduled } from "@/lib/datetime";
-import { canDelete, canMarkPublished, canRetryPublish, isAgentStuck, markPublished, retryAgent } from "@/lib/videoStatus";
+import { canDelete, canMarkPublished, canRetryPublish, isAgentStuck, markPublished, patchVideo, retryAgent } from "@/lib/videoStatus";
 import { platformLabel } from "@/lib/platforms";
 import {
   AGENT_EFFORTS, type AgentPicks, agentChanged, agentLabel, agentOptions, agentPicksPayload,
@@ -36,6 +36,8 @@ import { formatRenderDuration } from "@/lib/renderers";
 import { approvalMascot, showMascotPicker, styleTakesMascot } from "@/lib/mascots";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
 import { ScriptRecord } from "@/components/ScriptRecord";
+import { formulaLabel, formulaOptions, hasFormula, hasScriptRecord, videoFormulaLabel } from "@/lib/scriptFormulas";
+import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
 import { TopicAngle } from "@/components/TopicAngle";
 import { angleScoreLabel } from "@/lib/angles";
 
@@ -342,6 +344,11 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   const visualStyles = useVisualStyles();
   const { timeZone, label: tzLabel } = useTimeZone();
   const [video, setVideo] = useState<Video | null>(null);
+  // Formula names for the picker at the topic and for the labels after it.
+  // Not asked for on a video that has no formula anywhere: a script written
+  // before formulas existed shows nothing extra and costs no request.
+  const formulaNames = useScriptFormulaNames(
+    !!video && (video.status === "TOPIC_PROPOSED" || hasFormula(video) || hasScriptRecord(video)));
   const [reviseOpen, setReviseOpen] = useState(false);
   // null = untouched, like the agent picks below; the shown voice is derived
   // (see lib/voices.ts), so it follows the roster even when that answers late.
@@ -350,6 +357,10 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   // own generic style. So the picker shows whenever there is at least one
   // profile, and always carries the none option.
   const [selectedProfile, setSelectedProfile] = useState("");
+  // The formula a person chooses for the video at the topic; "" = Auto. Sent
+  // with the approval only when it differs from what the video holds, so a
+  // held formula a later version dropped is never re-sent and refused.
+  const [selectedFormula, setSelectedFormula] = useState("");
   // Frozen after TOPIC_PROPOSED alongside the profile and the model.
   const [selectedStyle, setSelectedStyle] = useState<Video["visual_style"]>("auto");
   const [selectedMascot, setSelectedMascot] = useState("");
@@ -387,8 +398,12 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   // saved or cancelled, since the approval does not carry the draft.
   const [angleEditorOpen, setAngleEditorOpen] = useState(false);
   const [switchStyleError, setSwitchStyleError] = useState("");
+  const [switchingFormula, setSwitchingFormula] = useState(false);
+  const [switchFormulaError, setSwitchFormulaError] = useState("");
   const [retryingAgent, setRetryingAgent] = useState(false);
   const [retryAgentError, setRetryAgentError] = useState("");
+  const [segmentVoiceSaving, setSegmentVoiceSaving] = useState<string | null>(null);
+  const [segmentVoiceError, setSegmentVoiceError] = useState("");
   // Where this video actually went (TMDEV-83). Replaces videos.youtube_url as
   // the read path — one TEXT column cannot hold four platform URLs.
   const [publications, setPublications] = useState<VideoPublication[]>([]);
@@ -467,7 +482,10 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     if (!seed) { setVideo(null); return; }
     setVideo(seed);
     setPickedVoice(null);
+    setSegmentVoiceError("");
     setSelectedProfile(seed.script_profile_id ?? "");
+    setSelectedFormula(seed.formula_choice ?? "");
+    setSwitchFormulaError("");
     setSelectedStyle(seed.visual_style ?? "auto");
     setSelectedMascot(seed.mascot_id ?? "");
     // Seeded from the inbox row's picks when its Revise opened this modal,
@@ -715,6 +733,26 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   const publishedCount = publications.filter((p) => p.status === "PUBLISHED").length;
   const stuck = isAgentStuck(video);
 
+  // A segment's own voice (TMDEV-216): picked on the Script tab at Script
+  // Ready when the roster has a second voice. One PATCH per change; the API
+  // refuses a voice that cannot speak the segment's markup.
+  const segmentPickerShown = !archived && video.status === "SCRIPT_READY" && voices.length >= 2;
+  const videoVoiceId = video.effective_voice_id ?? "";
+  const voiceName = (id: string) => voices.find((v) => v.voice_id === id)?.name ?? id;
+  const handleSegmentVoice = async (segmentId: string, voiceId: string) => {
+    if (segmentVoiceSaving) return;
+    setSegmentVoiceSaving(segmentId);
+    setSegmentVoiceError("");
+    try {
+      await patchVideo(video.id, { segment_voices: { [segmentId]: voiceId } });
+      refreshVideo(video.id);
+    } catch (e) {
+      setSegmentVoiceError(e instanceof Error ? e.message : "Changing the segment's voice failed.");
+    } finally {
+      setSegmentVoiceSaving(null);
+    }
+  };
+
   // Retry agent (TMDEV-129): clears the stuck flag so the scheduled agent
   // picks the video up again on its next pass. The status is left alone.
   const handleRetryAgent = async () => {
@@ -827,6 +865,54 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
       setSwitchStyleError("Switching the style failed.");
     } finally {
       setSwitchingStyle(false);
+    }
+  };
+
+  // Switch to the formula that came second. The formula is picked before the
+  // script; at Script Ready, before the script is approved, the runner-up can
+  // be taken instead. The video goes back to its agent to rewrite the script.
+  const formulaRunnerUp = video.formula_runner_up ?? "";
+  const formulaSwitchable = !archived && video.status === "SCRIPT_READY"
+    && (video.formula_pick ?? "") !== "" && formulaRunnerUp !== "";
+  const handleSwitchFormula = async () => {
+    if (switchingFormula) return;
+    const to = formulaLabel(formulaRunnerUp, formulaNames);
+    if (!window.confirm(`Switch this video to ${to}? The script is discarded and the agent rewrites it in ${to}.`)) return;
+    setSwitchingFormula(true);
+    setSwitchFormulaError("");
+    try {
+      const res = await fetch(`/api/proxy/videos/${video.id}/switch-formula`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const body = await res.json().catch(() => ({}));
+      // The modal stays mounted between videos: an answer for one that is no
+      // longer on screen must not show under another video's button.
+      if (!res.ok && shownVideoId.current === video.id) {
+        setSwitchFormulaError(body.error ?? "Switching the formula failed.");
+      }
+      refreshVideo(video.id);
+    } catch {
+      if (shownVideoId.current === video.id) setSwitchFormulaError("Switching the formula failed.");
+    } finally {
+      setSwitchingFormula(false);
+    }
+  };
+  // Have the script rewritten from another of its drafted openings. Resolves
+  // to an error message, or "" when the video went back to its agent.
+  const handleSwitchOpening = async (index: number): Promise<string> => {
+    try {
+      const res = await fetch(`/api/proxy/videos/${video.id}/switch-opening`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ index }),
+      });
+      const body = await res.json().catch(() => ({}));
+      refreshVideo(video.id);
+      return res.ok ? "" : (body.error ?? "Switching the opening failed.");
+    } catch {
+      return "Switching the opening failed.";
     }
   };
 
@@ -983,7 +1069,18 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                 {/* Script */}
                 {video.script && (
                   <TabsContent value="script" className="mt-0 flex-1 overflow-y-auto" style={{ padding: "24px 28px" }}>
-                    <ScriptRecord video={video} />
+                    <ScriptRecord
+                      key={video.id}
+                      video={video}
+                      names={formulaNames}
+                      onSwitchOpening={!archived && video.status === "SCRIPT_READY" ? handleSwitchOpening : undefined}
+                    />
+                    {segmentVoiceError && (
+                      <div data-testid="segment-voice-error" role="alert"
+                           style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--red)", margin: "8px 0" }}>
+                        {segmentVoiceError}
+                      </div>
+                    )}
                     {video.script_segments && video.script_segments.length > 0 ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                         {video.script_segments.map((seg, i) => (
@@ -1009,6 +1106,43 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                                 }}
                               >
                                 {seg.beat}
+                              </div>
+                            ) : null}
+                            {segmentPickerShown ? (
+                              <select
+                                data-testid={`segment-voice-${seg.id}`}
+                                aria-label={`Voice for segment ${seg.id}`}
+                                value={seg.voice_id && seg.voice_id !== videoVoiceId ? seg.voice_id : ""}
+                                disabled={segmentVoiceSaving !== null}
+                                onChange={(e) => handleSegmentVoice(seg.id, e.target.value)}
+                                style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--ink-2)", background: "transparent", border: "1px solid var(--border)", padding: "2px 6px", marginBottom: 6 }}
+                              >
+                                <option value=""
+                                        disabled={!!seg.voice_id && seg.voice_id !== videoVoiceId
+                                                  && !!segmentVoiceConflict(video, seg.id, videoVoiceId)}
+                                        title={segmentVoiceConflict(video, seg.id, videoVoiceId) || undefined}>
+                                  Video voice ({voiceName(videoVoiceId)})
+                                </option>
+                                {seg.voice_id && seg.voice_id !== videoVoiceId
+                                  && !voices.some((v) => v.voice_id === seg.voice_id) && (
+                                  <option value={seg.voice_id} disabled>{seg.voice_id} (not in roster)</option>
+                                )}
+                                {voices.filter((v) => v.voice_id !== videoVoiceId).map((v) => {
+                                  const conflict = segmentVoiceConflict(video, seg.id, v.voice_id);
+                                  return (
+                                    <option key={v.voice_id} value={v.voice_id} disabled={!!conflict}
+                                            title={conflict || undefined}>
+                                      {voiceLabel(v)}{conflict ? " (can't speak this segment)" : ""}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            ) : seg.voice_id && seg.voice_id !== videoVoiceId ? (
+                              <div
+                                data-testid={`segment-voice-name-${seg.id}`}
+                                style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--dim)", marginBottom: 6 }}
+                              >
+                                Voice: {voiceName(seg.voice_id)}
                               </div>
                             ) : null}
                             <p
@@ -1377,6 +1511,19 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                           </select>
                         </PickerField>
                       )}
+                      <PickerField label="Formula">
+                        <select
+                          data-testid="video-modal-formula-select"
+                          value={selectedFormula}
+                          onChange={(e) => setSelectedFormula(e.target.value)}
+                          title="The structure the script is written in. Auto picks one from the topic."
+                          className="w-full rounded border border-[#2a2a42] bg-[#131325] px-3 py-2 text-sm text-[#f0f0ff]"
+                        >
+                          {formulaOptions(formulaNames, selectedFormula).map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      </PickerField>
                       {voicePickers}
                       {agentPickers}
                       {angleEditorOpen && (
@@ -1384,7 +1531,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                           Save or cancel the angle on the Topic tab first.
                         </div>
                       )}
-                      <ActionBtn fullWidth variant="primary" disabled={angleEditorOpen} onClick={() => { onAction(video.id, "approve-topic", video, { script_profile_id: selectedProfile, visual_style: selectedStyle, ...(showMascotPicker(mascots, video.mascot_id ?? "") ? { mascot_id: approvalMascot(selectedStyle, selectedMascot, visualStyles) } : {}), ...topicVoicePayload(pickedVoice), ...topicApprovalPayload(video, agentList, picks) }); onClose(); }}>
+                      <ActionBtn fullWidth variant="primary" disabled={angleEditorOpen} onClick={() => { onAction(video.id, "approve-topic", video, { script_profile_id: selectedProfile, visual_style: selectedStyle, ...(selectedFormula !== (video.formula_choice ?? "") ? { formula_choice: selectedFormula } : {}), ...(showMascotPicker(mascots, video.mascot_id ?? "") ? { mascot_id: approvalMascot(selectedStyle, selectedMascot, visualStyles) } : {}), ...topicVoicePayload(pickedVoice), ...topicApprovalPayload(video, agentList, picks) }); onClose(); }}>
                         Approve Topic
                       </ActionBtn>
                       <ActionBtn fullWidth variant="danger" onClick={() => { onAction(video.id, "reject-topic", video); onClose(); }}>
@@ -1589,6 +1736,47 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                         ? (profileName || video.script_profile_id)
                         : <span style={{ color: "var(--dim)" }}>None — generic style</span>}
                     />
+                    {/* Left out for a video past its script that has no formula
+                        anywhere: it was scripted before formulas existed, and
+                        "not yet chosen" would be untrue of it. */}
+                    {(hasFormula(video) || video.status === "TOPIC_APPROVED") && (
+                      <MetaRow
+                        label="Formula"
+                        value={<span data-testid="video-formula">{videoFormulaLabel(video, formulaNames)}</span>}
+                      />
+                    )}
+                    {(video.formula_pick ?? "") !== "" && (
+                      <MetaRow
+                        label="Why this formula"
+                        value={
+                          <span data-testid="formula-pick-reason">
+                            {video.formula_reason || "—"}
+                            {formulaRunnerUp && (
+                              <span style={{ display: "block", color: "var(--dim)", marginTop: 4 }}>
+                                Runner-up: {formulaLabel(formulaRunnerUp, formulaNames)}
+                              </span>
+                            )}
+                          </span>
+                        }
+                      />
+                    )}
+                    {formulaSwitchable && (
+                      <div data-testid="switch-formula" style={{ padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
+                        <ActionBtn
+                          fullWidth
+                          variant="ghost"
+                          disabled={switchingFormula}
+                          onClick={handleSwitchFormula}
+                        >
+                          {switchingFormula ? "Switching…" : `Switch to ${formulaLabel(formulaRunnerUp, formulaNames)}`}
+                        </ActionBtn>
+                        {switchFormulaError && (
+                          <p data-testid="switch-formula-error" className="font-mono text-[11px] text-amber-400">
+                            {switchFormulaError}
+                          </p>
+                        )}
+                      </div>
+                    )}
                     {/* The agent group has live pickers at every checkpoint
                         of a non-archived video, so it is read-only here only
                         where no picker is shown. */}
@@ -1664,6 +1852,14 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                           ? video.voice_info.model_id
                           : <span>{video.voice_info.model_id} <span style={{ color: "var(--dim)" }}>(current setting)</span></span>}
                     />
+                    {video.voice_info.other_voices && video.voice_info.other_voices.length > 0 && (
+                      <MetaRow
+                        label="Other voices"
+                        value={video.voice_info.other_voices
+                          .map((o) => (o.name ? `${o.name} · ${o.model_id}` : `${o.voice_id} (not in roster)`))
+                          .join(", ")}
+                      />
+                    )}
                   </>
                 )}
                 {/* The last successful render: '' on every video rendered

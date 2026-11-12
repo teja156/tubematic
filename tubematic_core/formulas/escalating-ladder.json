@@ -2,6 +2,7 @@
   "id": "escalating-ladder",
   "order": 100,
   "family": "ladder",
+  "experimental": false,
   "label": "Escalating Ladder",
   "line": "Name a measure and both ends, then climb: each step is a label, a number and a picture the viewer knows, joined to the last by a comparison, with the strangest step last.",
   "best_for": [
@@ -15,6 +16,17 @@
   "avoid_for": [
     "steps that are only bigger numbers with nothing to compare them to",
     "a measure so subjective the steps could be reordered"
+  ],
+  "signals": [
+    "one measure orders everything in it",
+    "each step can be compared with something the viewer knows",
+    "the last step is far beyond the first",
+    "the steps could not be reordered"
+  ],
+  "styles": [
+    "system_flow",
+    "whiteboard",
+    "bean_explainer"
   ],
   "words": [
     110,
@@ -37,13 +49,15 @@
       "name": "Leave the frame",
       "from": 55,
       "to": 70,
-      "job": "Go past where the viewer thought it ended, or speak their objection. For a what-if: the law that should stop it, then set it aside."
+      "job": "Go past where the viewer thought it ended, or speak their objection. For a what-if: the law that should stop it, then set it aside.",
+      "role": "turn"
     },
     {
       "name": "Top step",
       "from": 70,
       "to": 92,
-      "job": "The thing the title named, or the most extreme case."
+      "job": "The thing the title named, or the most extreme case.",
+      "role": "payoff"
     },
     {
       "name": "Twist or stop",
@@ -72,6 +86,7 @@
   ],
   "holds": "Escalation is the engine: every transition is a comparison with the step before. A running score is a progress bar. The strongest re-opening comes where the ladder leaves the frame the viewer expected. A long what-if ladder earns its length only by re-opening the question every few steps.",
   "ending": "The top step's number, or a twist on what the top is. Stop there.",
+  "first_frame": "Both ends of the scale, or the bottom step with its anchor object and the empty ladder above it.",
   "pitfalls": [
     "The surprise spent in the first sentence",
     "Steps of equal weight",

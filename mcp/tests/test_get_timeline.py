@@ -74,9 +74,10 @@ def test_get_timeline_success_segments_only(job_db):
         "video_id": "vid_ok",
         "total_frames": 300,
         "fps": 30,
+        "first_frame": "",
         "segments": [
-            {"id": "seg-1", "startFrame": 0, "endFrame": 150},
-            {"id": "seg-2", "startFrame": 150, "endFrame": 300},
+            {"id": "seg-1", "startFrame": 0, "endFrame": 150, "beat": "", "role": "opening"},
+            {"id": "seg-2", "startFrame": 150, "endFrame": 300, "beat": "", "role": ""},
         ],
     }
     assert "words" not in result
@@ -140,3 +141,59 @@ def test_get_timeline_video_id_traversal_rejected(job_db):
     result = server.get_timeline("../../etc")
 
     assert "not a valid video id" in result["error"]
+
+
+def _script(video_id, segments, formula_id):
+    with server._conn() as con:
+        con.execute("UPDATE videos SET script_segments = ?, formula_id = ? WHERE id = ?",
+                    (json.dumps(segments), formula_id, video_id))
+
+
+def test_each_segment_carries_its_beat_and_what_it_owes_the_picture(job_db):
+    """TMDEV-215: the scene author puts a visible change on a turn and a
+    re-opening and the strongest picture on the payoff, so it has to know
+    which segment is which. A beat split over two segments owes its change
+    once, where the beat starts."""
+    job_db("vid_beats")
+    tl = _timeline(total_frames=600)
+    tl["segments"] = [{"id": f"seg-{i}", "startFrame": i * 100, "endFrame": i * 100 + 100}
+                      for i in range(6)]
+    _write_timeline("vid_beats", tl)
+    beats = ["The symptom", "Wrong suspect 1", "Turn", "Mechanism", "Mechanism", "Root cause"]
+    _script("vid_beats", [{"id": f"seg-{i}", "voice": "x", "visual": "y", "beat": b}
+                          for i, b in enumerate(beats)], "broken-expectation")
+
+    result = server.get_timeline("vid_beats")
+
+    assert [(s["beat"], s["role"]) for s in result["segments"]] == [
+        ("The symptom", "opening"), ("Wrong suspect 1", "reopen"), ("Turn", "turn"),
+        ("Mechanism", ""), ("Mechanism", ""), ("Root cause", "payoff")]
+    assert result["first_frame"].startswith("The failure happening")
+
+
+def test_a_video_with_no_formula_has_beats_but_no_roles(job_db):
+    """A script written before formulas, or under a formula a later version
+    dropped: the labels pass through, nothing owes a change."""
+    job_db("vid_noformula")
+    _write_timeline("vid_noformula", _timeline())
+    _script("vid_noformula", [{"id": "seg-1", "voice": "a", "visual": "b", "beat": "Turn"},
+                              {"id": "seg-2", "voice": "c", "visual": "d", "beat": "Root cause"}],
+            "retired-formula")
+
+    result = server.get_timeline("vid_noformula")
+
+    assert [(s["beat"], s["role"]) for s in result["segments"]] == [
+        ("Turn", "opening"), ("Root cause", "")]
+    assert result["first_frame"] == ""
+
+
+def test_an_unreadable_stored_segment_leaves_the_spans_unlabelled(job_db):
+    job_db("vid_odd")
+    tl = _timeline()
+    tl["segments"][1]["id"] = ["not", "hashable"]
+    _write_timeline("vid_odd", tl)
+    _script("vid_odd", [{"id": "seg-1", "voice": "a", "visual": "b", "beat": "Turn"}], "broken-expectation")
+
+    result = server.get_timeline("vid_odd")
+
+    assert [s["role"] for s in result["segments"]] == ["", ""]

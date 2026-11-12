@@ -1,4 +1,4 @@
-"""The script warnings (TMDEV-211): each check fires on the script it is for
+"""The script warnings (TMDEV-211, TMDEV-213): each check fires on the script it is for
 and stays quiet on a clean one.
 
 The quiet half matters as much as the firing half. The warnings are shown to
@@ -13,6 +13,7 @@ import pytest
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
+from tubematic_core import formulas as tf
 from tubematic_core import script_checks as sc  # noqa: E402
 
 FORMULA = "broken-expectation"  # 130 to 200 words
@@ -180,6 +181,30 @@ def test_a_first_sentence_that_reads_the_title_back_is_flagged():
 def test_a_first_sentence_that_shares_a_few_title_words_is_not():
     # "renamed" and "file" are in both; that is continuing the title.
     assert "title_repeat" not in ids()
+
+
+def test_a_title_that_copies_a_short_opening_is_flagged():
+    # The other way round: every word of the opening is in a longer title.
+    script = "Git forgets renamed files. " + CLEAN
+    assert "title_repeat" in ids(script, publish_title="Git forgets renamed files, and the log stops "
+                                 "at today", kept_hook="")
+
+
+def test_an_opening_that_continues_a_long_title_is_not_flagged():
+    assert "title_repeat" not in ids(publish_title="Git loses a renamed file: where the history goes")
+
+
+def test_a_segment_beat_the_formula_does_not_have_is_flagged():
+    # The scene author finds the turn and the payoff by beat name; a label the
+    # formula does not have hides them.
+    names = list(tf.beat_names(FORMULA))
+    assert "beat_unknown" not in ids(beats=names + ["", names[0].upper() + "  "])
+    found = sc.check(CLEAN, publish_title=TITLE, formula_id=FORMULA, kept_hook=HOOK,
+                     beats=[names[0], "The twist", "The twist"])
+    warn = next(w for w in found if w["id"] == "beat_unknown")
+    assert '"The twist"' in warn["message"] and warn["message"].count("The twist") == 1
+    # no formula on record: nothing to compare against
+    assert "beat_unknown" not in ids(formula_id="", beats=["anything"])
 
 
 def test_a_short_title_cannot_be_repeated():
@@ -392,3 +417,54 @@ def test_a_turn_near_either_end_does_not(position):
     tokens[int(200 * position)] = "but"
     assert "no_turn" in ids(" ".join(tokens) + ".", formula_id="", kept_hook="",
                             publish_title="")
+
+
+# --- openings that repeat across a domain -----------------------------------
+
+def test_an_opening_that_starts_like_the_domains_recent_scripts_is_flagged():
+    recent = ["You renamed one branch by mistake. Then the remote disagreed.",
+              "A different start entirely. And an ending."]
+    out = sc.check(CLEAN, publish_title=TITLE, formula_id=FORMULA, kept_hook=HOOK,
+                   recent_scripts=recent)
+    assert [w["id"] for w in out] == ["opening_repeat"]
+    assert '"you renamed one"' in out[0]["message"] and "like 1 of" in out[0]["message"]
+
+
+def test_a_different_opening_is_not_a_repeat():
+    assert "opening_repeat" not in ids(recent_scripts=["Your renamed file is gone. Or so it looks."])
+
+
+def test_only_the_newest_thirty_openings_are_compared():
+    filler = [f"Filler number {i} starts here. And ends." for i in range(sc.RECENT_SCRIPTS)]
+    old = ["You renamed one thing. Long ago."]
+    assert "opening_repeat" not in ids(recent_scripts=filler + old)
+    assert "opening_repeat" in ids(recent_scripts=filler[:-1] + old)
+
+
+def test_a_two_word_first_sentence_is_never_a_repeat():
+    script = "It vanished. " + " ".join(sc.sentences(CLEAN)[1:])
+    assert "opening_repeat" not in ids(script, kept_hook="It vanished.",
+                                       recent_scripts=["It vanished. Then it came back."])
+
+
+@pytest.mark.parametrize("recent, flagged", [
+    (["problem"], True),
+    (["myth", "problem"], True),
+    (["myth", "question"], False),
+    (["myth", "question", "problem"], False),   # the third video back is outside the window
+    ([], False),
+])
+def test_an_opening_type_the_domain_just_used_is_flagged(recent, flagged):
+    out = ids(hook_type="problem", recent_hook_types=recent)
+    assert ("hook_type_repeat" in out) == flagged
+
+
+def test_the_opening_type_warning_names_the_type_by_its_label():
+    out = sc.check(CLEAN, publish_title=TITLE, formula_id=FORMULA, kept_hook=HOOK,
+                   hook_type="problem", recent_hook_types=["problem"])
+    assert [w["id"] for w in out] == ["hook_type_repeat"]
+    assert "The viewer's problem" in out[0]["message"]
+
+
+def test_no_recorded_opening_type_is_never_a_repeat():
+    assert "hook_type_repeat" not in ids(hook_type="", recent_hook_types=["", "problem"])

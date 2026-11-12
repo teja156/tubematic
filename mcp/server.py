@@ -110,6 +110,7 @@ import mascot_sheets  # renders a mascot's model sheets (a Node script on softwa
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
 import terminal_preview  # renders a Terminal Doc video's own moves for the agent to look at
+import picture_checks  # the first-frame and beat-change warnings (TMDEV-215), pure like text_audit
 
 DB_FILE      = Path(os.getenv("TUBEMATIC_DB", str(DATA_ROOT / "data" / "tubematic.db")))
 JOBS_DIR     = Path(os.getenv("TUBEMATIC_JOBS_DIR", str(DATA_ROOT / "jobs")))
@@ -312,7 +313,9 @@ DEFAULT_AGENT_EFFORT = "high"
 # Keep in sync: renderer/api/pipeline.py's ACTIONABLE_STATUSES,
 # TOPIC_ONLY_FIELDS and AGENT_CHECKPOINT_FIELDS. Pinned by a cross-copy test.
 HUMAN_CHECKPOINT_STATUSES = ("TOPIC_PROPOSED", "SCRIPT_READY", "VIDEO_READY")
-TOPIC_ONLY_FIELDS = ("script_profile_id", "visual_style", "mascot_id")
+# formula_choice is a person's choice of formula (TMDEV-213). No tool here
+# writes it; it is in the list because the list is one with the API's.
+TOPIC_ONLY_FIELDS = ("script_profile_id", "visual_style", "mascot_id", "formula_choice")
 AGENT_CHECKPOINT_FIELDS = ("agent_id", "agent_model", "agent_effort")
 # Where update_video may write a topic's angle (TMDEV-214): at the topic, on a
 # revision, and at TOPIC_APPROVED only while the video has none (the fill the
@@ -1101,10 +1104,9 @@ def _get_voices() -> list[dict]:
     if not isinstance(parsed, list) or len(parsed) > MAX_VOICES:
         return []
     for entry in parsed:
-        if not isinstance(entry, dict) or set(entry) != {"name", "voice_id", "model_id"}:
-            return []
-        if not isinstance(entry["model_id"], str) \
-                or entry["model_id"] not in DICTIONARY_COMPATIBLE_MODELS:
+        # Shape, model and an optional speed (TMDEV-216): the rules all three
+        # roster readers share, in tubematic_core.voice_models.
+        if tvoice.roster_entry_error(entry):
             return []
         if not isinstance(entry["name"], str) or not entry["name"].strip():
             return []
@@ -1314,6 +1316,22 @@ def get_video(video_id: str) -> dict:
     this install and this video can have it now (available,
     unavailable_reason). domain is {name, description} of the video's domain.
     Record a decision with choose_visual_style.
+
+    formula_routing: the script formula decision, made once at TOPIC_APPROVED
+    after the style and before the script by the tubematic-formula-routing
+    skill: {decided, pick, runner_up, reason, choice, candidates, recent}.
+    pick is the formula the script is written in ("" until decided); the
+    script's formula_id must equal it. choice is the formula a person chose
+    for this video ("" = Auto): it becomes the pick whatever Auto prefers.
+    candidates lists every formula with what a router scores by (best_for,
+    also_for, avoid_for, signals, words), suits_style (the formula names this
+    video's visual style), recent (it is the formula of one of the domain's
+    previous two videos) and available / unavailable_reason (an experimental
+    formula is off for Auto until the setting auto_experimental_formulas is
+    on). candidates is [] otherwise. Only a video at TOPIC_APPROVED with no pick, or at
+    REVISION_REQUESTED (unless its pick is a person's choice), gets the list. recent is {formulas, hook_types}: the formulas and the kept
+    opening types of the domain's previous two videos, newest first. Record a
+    decision with choose_script_formula.
     """
     _init_db()
     with _conn() as con:
@@ -1336,6 +1354,7 @@ def get_video(video_id: str) -> dict:
     video["style"] = tvs.agent_view(video.get("visual_style") or "")
     video["style_routing"] = _style_routing(video)
     video["angle_formula"] = tangles.formula_for(video.get("angle_kind"))
+    video["formula_routing"] = _formula_routing(video)
     return video
 
 
@@ -1358,6 +1377,117 @@ def _style_routing(video: dict) -> dict:
         "candidates": tvs.routing_candidates(bool(_openai_key()), _gpu_probe_status(),
                                              bool(video.get("mascot_id"))),
         "domain": domain,
+    }
+
+
+def _experimental_formulas_allowed() -> bool:
+    """The setting that lets Auto pick an experimental formula."""
+    return _get_setting("auto_experimental_formulas", "false").strip().lower() == "true"
+
+
+def _recent_domain_formulas(project_id, video_id: str) -> dict:
+    """What the domain's most recently filed other videos were written in,
+    newest first (by filing time, then insertion order for a tie):
+    {"formulas": [...], "hook_types": [...]}, each at most
+    tformulas.ROTATION_WINDOW long. A video counts once it has a formula (the
+    one recorded with its script, else the one picked for it) or a kept
+    opening type: the pick ahead of the stored script's formula, which a
+    switch leaves behind. A topic back at TOPIC_PROPOSED or rejected does not
+    count: its old script is not what the audience will see. The rotation
+    rule and the opening-type warning read this."""
+    out = {"formulas": [], "hook_types": []}
+    if not project_id:
+        return out
+    with _conn() as con:
+        out["formulas"] = [r[0] for r in con.execute(
+            "SELECT COALESCE(NULLIF(formula_pick, ''), formula_id) FROM videos "
+            "WHERE project_id = ? AND id != ? AND status NOT IN ('TOPIC_PROPOSED', 'TOPIC_REJECTED') "
+            "AND COALESCE(NULLIF(formula_pick, ''), formula_id, '') != '' "
+            "ORDER BY created_at DESC, rowid DESC LIMIT ?",
+            (project_id, video_id, tformulas.ROTATION_WINDOW))]
+        out["hook_types"] = [r[0] for r in con.execute(
+            "SELECT hook_type FROM videos WHERE project_id = ? AND id != ? "
+            "AND status NOT IN ('TOPIC_PROPOSED', 'TOPIC_REJECTED') "
+            "AND COALESCE(hook_type, '') != '' ORDER BY created_at DESC, rowid DESC LIMIT ?",
+            (project_id, video_id, tformulas.ROTATION_WINDOW))]
+    return out
+
+
+# A stored script that is not recorded under the formula picked for the video:
+# a formula switch leaves another formula on it, an opening switch clears its
+# record, and both stay so until the script is rewritten.
+# A pick of a formula this version does not have counts as none here too, or
+# a revision could never satisfy it (no tool accepts that formula).
+_STALE_SCRIPT_SQL = (
+    "formula_pick IN (" + ", ".join("'" + fid.replace("'", "''") + "'"
+                                    for fid in tformulas.FORMULAS) + ") "
+    "AND COALESCE(formula_id, '') != formula_pick")
+
+
+# Statuses a video reaches only with a script settled in its formula: the
+# script checkpoint, the paid voicing (a pronunciation revision goes there
+# straight from REVISION_REQUESTED), and the scene stage a revision returns to.
+_SETTLED_SCRIPT_STATUSES = ("SCRIPT_READY", "VOICING", "VOICE_READY")
+
+
+def _stale_script_error(con, video_id: str, new_status: str) -> dict:
+    row = con.execute("SELECT formula_pick FROM videos WHERE id = ?", (video_id,)).fetchone()
+    pick = row["formula_pick"]
+    if new_status != "SCRIPT_READY":
+        # A new formula is a new script: it goes to a person and is voiced
+        # again. Rewriting and going straight on would put the new words over
+        # the old voice, or voice a script nobody approved.
+        return {"error": f"The stored script is not recorded as written in {pick!r}, the formula "
+                         f"picked for this video, so it cannot go to {new_status}. A new formula "
+                         "is a new script: rewrite it with update_video, "
+                         f"formula_id={pick!r} and the hooks, then move the video to "
+                         "SCRIPT_READY for a person to approve."}
+    return {"error": f"The stored script is not recorded as written in {pick!r}, the formula "
+                     "picked for this video (a person switched the formula or the opening, or "
+                     "the script was never recorded). Rewrite the script with update_video, "
+                     f"formula_id={pick!r} and the hooks, before moving the video on."}
+
+
+def _live_formula(formula_id) -> str:
+    """formula_id when this version has that formula, else "". A pick or a
+    choice of a formula a later version dropped is treated as none, so the
+    video is picked for again rather than bound to a formula no tool accepts."""
+    formula_id = (formula_id or "").strip()
+    return formula_id if formula_id in tformulas.FORMULAS else ""
+
+
+def _person_formula_choice(row) -> str:
+    """A video's formula_choice when it still names a formula, else "" (Auto):
+    a choice of a formula a later version dropped is no choice."""
+    choice = (row["formula_choice"] or "").strip()
+    return choice if choice in tformulas.FORMULAS else ""
+
+
+def _formula_routing(video: dict) -> dict:
+    """get_video's formula_routing: the formula decision so far and, while it
+    can still be made, the candidates."""
+    pick = _live_formula(video.get("formula_pick"))
+    choice = _person_formula_choice(video)
+    recent = _recent_domain_formulas(video.get("project_id"), video["id"])
+    candidates = []
+    # Eighteen formulas with their routing text are several thousand tokens,
+    # so only a session that can pick is sent them: at TOPIC_APPROVED before
+    # the pick, and in a revision (which may re-pick, or pick for a video
+    # scripted before picks existed).
+    status = video.get("status")
+    if ((status == "TOPIC_APPROVED" and not pick)
+            or (status == "REVISION_REQUESTED" and not (pick and choice))):
+        candidates = tformulas.routing_candidates(
+            (video.get("visual_style") or "").strip(), _experimental_formulas_allowed(),
+            recent["formulas"], choice)
+    return {
+        "decided": bool(pick),
+        "pick": pick,
+        "runner_up": video.get("formula_runner_up") or "",
+        "reason": video.get("formula_reason") or "",
+        "choice": choice,
+        "candidates": candidates,
+        "recent": recent,
     }
 
 
@@ -1797,7 +1927,8 @@ def create_video(
     with _conn() as con:
         row = con.execute(
             "SELECT name, status, default_visual_style, default_voice_id, "
-            "default_script_profile_id, default_mascot_id FROM projects WHERE id = ?", (project_id,)
+            "default_script_profile_id, default_mascot_id, default_formula_id "
+            "FROM projects WHERE id = ?", (project_id,)
         ).fetchone()
         if not row:
             return {"error": f"Project '{project_id}' not found."}
@@ -1839,6 +1970,13 @@ def create_video(
         if not tmascots.no_mascot_error(visual_style) and _gpu_probe_status() == "working":
             mascot_id = tmascots.resolve_default(
                 con, row["default_mascot_id"] or "", _get_setting("default_mascot_id", ""))
+        # The domain's default formula seeds EVERY video, like the voice
+        # (TMDEV-213): it is the person's choice for the domain, and the pick
+        # made before the script takes it. One that is no formula any more
+        # seeds nothing. Keep in sync: renderer/api/pipeline.py's create_video.
+        formula_choice = (row["default_formula_id"] or "").strip()
+        if formula_choice not in tformulas.FORMULAS:
+            formula_choice = ""
         # The domain's agent, model and effort seed EVERY video too, whatever
         # the strategy (TMDEV-207); a domain on Automatic is dealt by weight.
         # Keep in sync: renderer/api/pipeline.py's create_video.
@@ -1850,12 +1988,13 @@ def create_video(
             f"""INSERT INTO videos
                (id, project_id, topic, strategy, producibility_score, title,
                 status, voice_id, agent_id, agent_model, agent_effort, visual_style,
-                script_profile_id, mascot_id, angle, angle_kind, angle_score, created_at, updated_at)
-               SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                script_profile_id, mascot_id, formula_choice, angle, angle_kind, angle_score,
+                created_at, updated_at)
+               SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                WHERE {_DOMAIN_OPEN_GUARD}""",
             (video_id, project_id, topic, strategy, producibility_score, title, voice_id,
              agent_id, agent_model, agent_effort, visual_style, script_profile_id, mascot_id,
-             angle, angle_kind, angle_score, now, now, strategy, project_id),
+             formula_choice, angle, angle_kind, angle_score, now, now, strategy, project_id),
         )
         if cur.rowcount == 0:
             return {"error": _closed_domain_error(con, project_id)
@@ -1864,6 +2003,7 @@ def create_video(
               "agent_id": agent_id, "agent_model": agent_model, "agent_effort": agent_effort,
               "visual_style": visual_style, "voice_id": voice_id,
               "script_profile_id": script_profile_id, "mascot_id": mascot_id,
+              "formula_choice": formula_choice,
               "angle": angle, "angle_kind": angle_kind, "angle_score": angle_score}
     if title_warning:
         result["warning"] = title_warning
@@ -1934,8 +2074,11 @@ def set_video_status(
                 "detail": f"{new_status} is set only by a human on the dashboard. "
                           f"{HUMAN_ONLY_STATUSES[new_status]}"}
     # Back to the topic (a topic revision): an Auto style pick goes back to
-    # Auto with it. Keep in sync: renderer/api/pipeline.py's patch_video.
-    reset_sql = (", " + tvs.AUTO_PICK_RESET_SET) if new_status == "TOPIC_PROPOSED" else ""
+    # Auto with it, and the formula picked for the old topic is dropped, to be
+    # picked again once the topic is approved. Keep in sync:
+    # renderer/api/pipeline.py's patch_video.
+    reset_sql = ((", " + tvs.AUTO_PICK_RESET_SET + ", " + tformulas.PICK_RESET_SET)
+                 if new_status == "TOPIC_PROPOSED" else "")
     _init_db()
     with _conn() as con:
         row = con.execute(
@@ -1967,6 +2110,15 @@ def set_video_status(
         if approving:
             mascot_sql = (f" AND (status != 'TOPIC_PROPOSED' OR (NOT {tmascots.cartoon_mascot_clash_sql()}"
                           f" AND {tmascots.holds_pickable_sql()}))")
+        # A switch at Script Ready changes the pick and sends the video back
+        # with the old script still stored. Handing it to a person again
+        # before the rewrite would show one formula over a script in another,
+        # and approving it buys the voice. Repeated in the UPDATE's WHERE.
+        if new_status in _SETTLED_SCRIPT_STATUSES:
+            if con.execute(f"SELECT 1 FROM videos WHERE id = ? AND {_STALE_SCRIPT_SQL}",
+                           (video_id,)).fetchone():
+                return _stale_script_error(con, video_id, new_status)
+            mascot_sql += f" AND NOT ({_STALE_SCRIPT_SQL})"
         # The only_if guard is enforced in the UPDATE's own WHERE clause (not
         # a separate SELECT-then-compare) so the check-and-set is atomic —
         # closes the TOCTOU window a double-invocation could otherwise race.
@@ -2001,6 +2153,10 @@ def set_video_status(
             if cur.rowcount == 0:
                 fresh = con.execute(
                     "SELECT archived_at FROM videos WHERE id = ?", (video_id,)).fetchone()
+                if new_status in _SETTLED_SCRIPT_STATUSES and con.execute(
+                        f"SELECT 1 FROM videos WHERE id = ? AND {_STALE_SCRIPT_SQL}",
+                        (video_id,)).fetchone():
+                    return _stale_script_error(con, video_id, new_status)
                 if fresh and not fresh["archived_at"]:
                     mascot_err = _approval_mascot_error(con, video_id)
                     if mascot_err:
@@ -2485,7 +2641,7 @@ def _kept_hook_text(hooks) -> str:
 
 
 def _script_warnings(script: str, publish_title: str, formula_id: str, hooks: list,
-                     project_id, video_id: str) -> list:
+                     project_id, video_id: str, beats=()) -> list:
     """The advisory checks' findings for a script about to be stored.
 
     Never raises: the checks are advice, so a fault in one must not stop the
@@ -2495,7 +2651,10 @@ def _script_warnings(script: str, publish_title: str, formula_id: str, hooks: li
         return tchecks.check(
             script, publish_title=publish_title, formula_id=formula_id,
             kept_hook=_kept_hook_text(hooks),
-            recent_scripts=_recent_domain_scripts(project_id, video_id))
+            recent_scripts=_recent_domain_scripts(project_id, video_id),
+            hook_type=next((h.get("type", "") for h in hooks or [] if h.get("kept")), ""),
+            recent_hook_types=_recent_domain_formulas(project_id, video_id)["hook_types"],
+            beats=beats)
     except Exception:  # noqa: BLE001 - advisory path, see the docstring
         log.exception("script checks failed for %s; the script is stored without warnings",
                       video_id)
@@ -2555,8 +2714,13 @@ def update_video(
 
     formula_id, hooks: what the script was built on, recorded with it. Pass
     both together, in the call that writes script_segments, and only there.
-    formula_id is the formula the script follows, an id from the
-    script-writing skill's table. hooks is the three openings you drafted, as
+    formula_id is the formula the script follows: get_video's
+    formula_routing.pick. A formula_id other than a recorded pick is refused,
+    since the pick is what the person sees at Script Ready; with no pick on
+    record, a formula a person chose (formula_routing.choice) binds the same
+    way, and a video with neither (scripted before picks existed) takes any
+    formula id.
+    hooks is the three openings you drafted, as
     [{"type", "text", "kept", "note"}]: type is a hook type from the formula's
     reference file and the three must differ, text is the opening's spoken
     words, kept is true on the one the script uses (exactly one), and note
@@ -2596,6 +2760,11 @@ def update_video(
     roster, or "" to fall back to the install default. Use this at the
     SCRIPT_READY checkpoint when a human picks (or changes) which voice to
     use before approving — set it before calling set_video_status → VOICING.
+    A segment of script_segments may carry its own "voice_id" (a roster
+    voice_id) to be spoken by that voice instead of the video's; one equal to
+    the video's voice is dropped. Each segment's markup must suit the model of
+    the voice that speaks it (get_pipeline_status's elevenlabs_voices gives
+    each voice's model_id and pronunciation_mode).
     Each voice has its own ElevenLabs model, and a script's markup is written
     for its voice's model, so a voice whose model cannot speak the stored
     script is refused with the reason — keep the voice, or request a revision.
@@ -2730,7 +2899,8 @@ def update_video(
         if voice_id not in roster_ids:
             return {"error": f"voice_id {voice_id!r} is not in elevenlabs_voices"}
     if script_segments is not None:
-        err = _validate_script_segments(script_segments)
+        err = (_validate_script_segments(script_segments)
+               or tvoice.segment_voice_error(script_segments, _get_voices()))
         if err:
             return {"error": err}
     # The angle is one write: the sentence and its kind together, the score
@@ -2806,22 +2976,58 @@ def update_video(
     # A voice change alone is checked against the stored script instead.
     pin_voice = None
     voice_exempt = False
+    bound = ""
     if script_segments is not None or script is not None or voice_id is not None:
         with _conn() as con:
-            vrow = con.execute("SELECT status, voice_id, script, script_segments, project_id "
-                               "FROM videos WHERE id = ?", (video_id,)).fetchone()
+            vrow = con.execute("SELECT status, voice_id, script, script_segments, project_id, "
+                               "formula_pick, formula_choice FROM videos WHERE id = ?",
+                               (video_id,)).fetchone()
         if vrow is None:
             return {"error": f"Video not found: {video_id}"}
+        # The script follows the formula picked for it (TMDEV-213). Checked
+        # here and not in the UPDATE: a pick changes only by a switch or a
+        # return to the topic, and both send the video back to be rewritten.
+        # With no pick on record, a person's choice still binds: a writer
+        # that skipped the pick (an older skill) must not replace it.
+        bound = _live_formula(vrow["formula_pick"]) or _person_formula_choice(vrow)
+        if formula_id is not None and bound and formula_id != bound:
+            return {"error": f"formula_id {formula_id!r} is not this video's formula. The script "
+                             f"is to be written in {bound!r} (get_video's formula_routing: the "
+                             "pick, or the formula a person chose): write it in that formula "
+                             "and record it."}
         stored_voice = vrow["voice_id"] or ""
         if script_segments is not None or script is not None:
             target = _resolve_voice(voice_id if voice_id is not None else stored_voice)
             if script_segments is not None:
-                model_id = target["model_id"] if target else ELEVENLABS_MODEL_ID
-                label = target["name"] if target else ""
+                # A pronunciation fix resends the same words. One that leaves
+                # out every segment's voice_id keeps the voices stored by
+                # segment id, so a second voice's lines are not moved to the
+                # video's voice on the paid re-voice that follows (TMDEV-216).
+                stored_segs = (json.loads(vrow["script_segments"])
+                               if vrow["script_segments"] else [])
+
+                def _words(segs):
+                    return " ".join(_strip_non_spoken(_join_segment_voice(segs)).split())
+
+                if (stored_segs
+                        and not any(isinstance(s, dict) and "voice_id" in s for s in script_segments)
+                        and any(tvoice.segment_voice_id(s) for s in stored_segs)
+                        and _words(script_segments) == _words(stored_segs)):
+                    kept = {str(s.get("id")): tvoice.segment_voice_id(s) for s in stored_segs}
+                    script_segments = [{**s, "voice_id": kept[str(s.get("id"))]}
+                                       if kept.get(str(s.get("id"))) else s
+                                       for s in script_segments]
+                # A segment may name its own voice (TMDEV-216). One equal to
+                # the video's voice is dropped, so a stored voice_id always
+                # means another voice; then every segment's markup is checked
+                # against the model of the voice that speaks it.
+                script_segments = tvoice.normalize_segment_voices(
+                    script_segments, target["voice_id"] if target else "")
+                video_voice = target or {"voice_id": "", "name": "",
+                                         "model_id": ELEVENLABS_MODEL_ID}
                 joined = _join_segment_voice(script_segments)
-                err = (_check_pause_markup_model(joined, model_id, label)
-                       or _check_ipa_model(joined, model_id, label)
-                       or _check_phoneme_model(joined, model_id, label)
+                err = (tvoice.script_markup_conflict(script_segments, "", video_voice,
+                                                     _get_voices())
                        or _check_markup_values(joined))
                 if err:
                     return {"error": err}
@@ -2847,7 +3053,9 @@ def update_video(
             # to it below, as patch_video binds its own.
             voice_exempt = vrow["status"] == "TOPIC_PROPOSED"
             if target and not voice_exempt:
-                err = tvoice.markup_conflict(
+                # Only the segments the video's voice speaks: a segment with
+                # its own voice (TMDEV-216) does not change with it.
+                err = tvoice.video_voice_conflict(
                     segs, vrow["script"] or "", target["model_id"], voice_label=target["name"])
                 if err:
                     return {"error": f"This script can't be voiced with that voice: {err} "
@@ -2871,6 +3079,15 @@ def update_video(
             return " ".join(_strip_non_spoken(text or "").split())
 
         if formula_id is not None or words_of(script) != words_of(vrow["script"]):
+            # New words on a video whose formula is decided must say they are
+            # in it. Without this, a write that sends no record would clear
+            # it and slip past the Script Ready check, leaving the dashboard
+            # naming one formula over a script in another. A pronunciation
+            # fix keeps the words and is not affected.
+            if formula_id is None and bound:
+                return {"error": f"This video's script is written in {bound!r} (get_video's "
+                                 "formula_routing). A script write that changes the words must "
+                                 f"carry formula_id={bound!r} and the three openings as hooks."}
             if formula_id is not None:
                 record_formula, record_hooks = formula_id, _stored_hooks(hooks)
             else:
@@ -2878,7 +3095,9 @@ def update_video(
                 record_sets += [("formula_id = ?", ""), ("hook_type = ?", ""),
                                 ("hook_alternatives = ?", "")]
             warnings = _script_warnings(spoken or "", publish_title or "", record_formula,
-                                        record_hooks, vrow["project_id"], video_id)
+                                        record_hooks, vrow["project_id"], video_id,
+                                        beats=[s.get("beat") or "" for s in script_segments or []
+                                               if isinstance(s, dict)])
             record_sets.append(("script_warnings = ?", json.dumps(warnings)))
 
     if title is not None and len(title) > VIDEO_TITLE_MAX_LEN:
@@ -3345,6 +3564,143 @@ def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str =
 
 
 @mcp.tool
+def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: str = "",
+                          repeat_reason: str = "") -> dict:
+    """Record the script formula for a video, before its script is written.
+
+    Call this from the tubematic-formula-routing skill, once, at
+    TOPIC_APPROVED, after the visual style is decided
+    (get_video().style_routing.decided is true) and while
+    get_video().formula_routing.decided is false. The script is then written
+    in the returned formula_pick, and update_video refuses another formula_id.
+
+    formula: the id of the candidate you judge best for this topic, from
+    get_video().formula_routing.candidates. Always your own best choice, also
+    when a person chose a formula for the video (formula_routing.choice): the
+    person's choice is what the script is written in, and yours is recorded
+    beside it as what Auto would have picked.
+
+    reason: one sentence, at most 300 characters, saying why your formula
+    fits this topic. A person reads it on the dashboard beside the choice.
+
+    runner_up: the candidate that came second, or "" when nothing else fit.
+    The dashboard offers it as a one-click switch at SCRIPT_READY.
+
+    repeat_reason: leave it "" unless your formula is marked recent (it is
+    the formula of one of the domain's previous two videos). A recent formula
+    is refused without it; pass one sentence on why no other candidate fits
+    this topic.
+
+    formula and runner_up must be available (candidates[].available): an
+    experimental formula is refused while the setting
+    auto_experimental_formulas is off. repeat_reason is not needed when a
+    person chose the formula. At REVISION_REQUESTED the tool may be called
+    again when the person's comment asks for a different structure, on a
+    video with no person's choice, and it replaces the pick; and on a video
+    scripted before formulas were picked (formula_routing.pick and the stored
+    formula_id both ""), to give it one. Returns formula_pick (the formula to write in), formula_runner_up,
+    chosen_by ("auto" or "person"), the formula's label and word band, and
+    reference: the file to read in the script-writing skill's directory.
+    """
+    formula = (formula or "").strip()
+    runner_up = (runner_up or "").strip()
+    reason = " ".join((reason or "").split())
+    repeat_reason = " ".join((repeat_reason or "").split())
+    ids = list(tformulas.FORMULAS)
+    if formula not in tformulas.FORMULAS:
+        return {"error": f"Invalid formula {formula!r}. Must be one of: {', '.join(ids)}"}
+    if runner_up and runner_up not in tformulas.FORMULAS:
+        return {"error": f"Invalid runner_up {runner_up!r}. Must be one of: {', '.join(ids)}, "
+                         "or \"\" for none"}
+    if runner_up == formula:
+        return {"error": "runner_up must be a different formula from formula, or \"\" for none"}
+    if not reason:
+        return {"error": "reason is required: one sentence on why this formula fits this topic"}
+    for name, text in (("reason", reason), ("repeat_reason", repeat_reason)):
+        if len(text) > tformulas.REASON_MAX_CHARS:
+            return {"error": f"{name} is {len(text)} characters; the limit is "
+                             f"{tformulas.REASON_MAX_CHARS} (one sentence)"}
+    _init_db()
+    with _conn() as con:
+        row = con.execute(
+            "SELECT status, visual_style, style_pick, formula_choice, formula_pick, project_id, "
+            "archived_at FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    if row["archived_at"]:
+        return _archived_error(video_id, row["archived_at"])
+    style = (row["visual_style"] or "").strip() or DEFAULT_VISUAL_STYLE
+    # At TOPIC_APPROVED the style is picked first, in the same session. A
+    # revision is past that point: a video scripted before Auto picked styles
+    # can be on "auto" with no style pick, and its formula is picked for the
+    # style it has.
+    if (row["status"] == "TOPIC_APPROVED" and style == DEFAULT_VISUAL_STYLE
+            and not row["style_pick"]):
+        return {"error": "This video's visual style is not decided yet "
+                         "(get_video().style_routing.decided is false). Pick the style first "
+                         "with choose_visual_style: the formula is chosen for the style."}
+    choice = _person_formula_choice(row)
+    held_raw = row["formula_pick"] or ""
+    held = _live_formula(held_raw)
+    if row["status"] == "TOPIC_APPROVED":
+        if held:
+            return {"error": f"The formula {held!r} is already picked for this video; the choice "
+                             "is made once. Write the script in it."}
+    elif row["status"] == "REVISION_REQUESTED":
+        if choice and held:
+            return {"error": f"A person chose the formula {choice!r} for this video, so it is "
+                             "not replaced in a revision. Rewrite the script in it, and say in "
+                             "your comment that the person's formula was kept."}
+    else:
+        return {"error": "A formula is picked at TOPIC_APPROVED, before the script; this video "
+                         f"is at {row['status']}"}
+    with _conn() as con:
+        # The write lock first, then the setting and the domain's recent
+        # formulas: neither can change between this check and the write. The
+        # row checks above are repeated in the UPDATE's WHERE.
+        con.execute("BEGIN IMMEDIATE")
+        candidates = {c["id"]: c for c in tformulas.routing_candidates(
+            style, _experimental_formulas_allowed(),
+            _recent_domain_formulas(row["project_id"], video_id)["formulas"], choice)}
+        for role, fid in (("formula", formula), ("runner_up", runner_up)):
+            if fid and not candidates[fid]["available"]:
+                return {"error": f"{role} {fid!r} ({candidates[fid]['label']}) is not available: "
+                                 f"{candidates[fid]['unavailable_reason']}. Pick another candidate."}
+        # Rotation is about what Auto writes. With a person's choice the
+        # agent's formula is only a runner-up, so it is never refused here.
+        if not choice and candidates[formula]["recent"] and not repeat_reason:
+            return {"error": f"{candidates[formula]['label']} is the formula of one of this "
+                             f"domain's previous {tformulas.ROTATION_WINDOW} videos. Pick "
+                             "another candidate, or, when no other candidate fits this topic, "
+                             "call again with repeat_reason: one sentence saying why."}
+        if choice:
+            pick = choice
+            if formula != choice:
+                runner, stored = formula, (f"Auto would have picked "
+                                           f"{candidates[formula]['label']}: {reason}")
+            else:
+                runner, stored = runner_up, reason
+        else:
+            pick, runner, stored = formula, runner_up, reason
+        if repeat_reason and not choice and candidates[formula]["recent"]:
+            stored = f"{stored} Repeats a recent formula: {repeat_reason}"
+        cur = con.execute(
+            "UPDATE videos SET formula_pick = ?, formula_runner_up = ?, formula_reason = ?, "
+            "updated_at = ? WHERE id = ? AND archived_at IS NULL AND status = ? "
+            "AND COALESCE(formula_choice, '') = ? AND COALESCE(formula_pick, '') = ? "
+            "AND COALESCE(visual_style, '') = ? AND COALESCE(style_pick, '') = ?",
+            (pick, runner, stored, _now(), video_id, row["status"], row["formula_choice"] or "",
+             held_raw, row["visual_style"] or "", row["style_pick"] or ""))
+        if cur.rowcount == 0:
+            return {"error": "The video changed while the call was in flight (its status, style "
+                             "or formula) — check get_video before deciding again"}
+    return {"video_id": video_id, "formula_pick": pick, "formula_runner_up": runner,
+            "formula_reason": stored, "chosen_by": "person" if choice else "auto",
+            "label": candidates[pick]["label"], "words": candidates[pick]["words"],
+            "reference": f"formulas/{pick}.md"}
+
+
+@mcp.tool
 def add_comment(video_id: str, author: str, text: str) -> dict:
     """Add a comment to a video's thread.
 
@@ -3460,6 +3816,7 @@ def upsert_project(
     default_agent_id: str | None = None,
     default_agent_model: str | None = None,
     default_agent_effort: str | None = None,
+    default_formula_id: str | None = None,
 ) -> dict:
     """Create or update a project (domain/series container).
 
@@ -3516,6 +3873,12 @@ def upsert_project(
         "medium", "high", "xhigh" or "max", or "" for the agent's own. It
         needs no agent: on an Automatic domain it applies to whichever agent
         the video is dealt.
+    default_formula_id: the script formula every new video filed into this
+        domain is written in, whatever its sourcing mode: a formula id from
+        get_video's formula_routing.candidates, or "" for Auto (a formula is
+        picked for each video from its topic). It is a person's choice for the
+        domain: set it only when a person asked for it. Changing it never
+        touches videos already filed.
     topic_cap: how many topics the domain may ever hold, a whole number from
         25 to 750 (100 when the domain is created). Every video ever filed
         counts, archived and rejected ones included. Once the domain holds
@@ -3525,8 +3888,8 @@ def upsert_project(
     OMITTING A FIELD LEAVES IT ALONE on a project that already exists; it is
     only defaulted when the project is created. Pass "" explicitly to clear
     description, default_visual_style, default_voice_id,
-    default_script_profile_id, default_agent_id, default_agent_model or
-    default_agent_effort. This matters because the callers of
+    default_script_profile_id, default_agent_id, default_agent_model,
+    default_agent_effort or default_formula_id. This matters because the callers of
     this tool are partial by nature — one command converts an existing domain
     into a curriculum seed and names only that, another files a video into a
     domain and names only its slug — and a full-replace upsert would have let
@@ -3555,6 +3918,8 @@ def upsert_project(
         if default_agent_effort not in ("",) + AGENT_EFFORTS:
             return {"error": f"default_agent_effort must be one of {list(AGENT_EFFORTS)}, or "
                              f"blank for the agent's own effort, got {default_agent_effort!r}"}
+    if default_formula_id is not None:
+        default_formula_id = default_formula_id.strip()
     if topic_cap is not None and (cap_error := _topic_cap_error(topic_cap)):
         return {"error": cap_error}
     seed = None if is_curriculum_seed is None else int(is_curriculum_seed)
@@ -3568,7 +3933,7 @@ def upsert_project(
         existing = con.execute(
             "SELECT description, is_curriculum_seed, status, default_visual_style, "
             "default_voice_id, default_script_profile_id, default_mascot_id, default_agent_id, "
-            "default_agent_model FROM projects WHERE id = ?",
+            "default_agent_model, default_formula_id FROM projects WHERE id = ?",
             (project_id,)
         ).fetchone()
         # The id names the domain's output directory, so a NEW one must be a
@@ -3633,6 +3998,14 @@ def upsert_project(
                 if err:
                     return {"error": err}
             default_agent_id, default_agent_model = new_agent, new_model
+        # Checked only when it changes, so a formula a later version dropped
+        # never blocks another edit of the domain. An experimental formula is
+        # allowed whatever the setting says: the setting is about what Auto
+        # may pick. Keep in sync: renderer/api/pipeline.py's create_project.
+        if (default_formula_id and default_formula_id not in tformulas.FORMULAS
+                and not (existing and (existing["default_formula_id"] or "") == default_formula_id)):
+            return {"error": f"default_formula_id {default_formula_id!r} is not a formula. Must "
+                             f"be one of: {list(tformulas.FORMULAS)}, or \"\" for Auto"}
         # Only a CHANGE to illustrated is refused without a key; re-sending a
         # stored default is left alone, as in pipeline.py's create_project.
         # Keep in sync: renderer/api/pipeline.py's create_project.
@@ -3660,7 +4033,7 @@ def upsert_project(
                                      default_visual_style, default_voice_id,
                                      default_script_profile_id, topic_cap, default_mascot_id,
                                      default_agent_id, default_agent_model,
-                                     default_agent_effort, created_at)
+                                     default_agent_effort, default_formula_id, created_at)
                VALUES (:id, :name,
                        COALESCE(:description, ''),
                        COALESCE(:seed, 0),
@@ -3673,6 +4046,7 @@ def upsert_project(
                        COALESCE(:agent, ''),
                        COALESCE(:agent_model, ''),
                        COALESCE(:agent_effort, ''),
+                       COALESCE(:formula, ''),
                        :now)
                ON CONFLICT(id) DO UPDATE SET
                  name                 = :name,
@@ -3688,12 +4062,13 @@ def upsert_project(
                  default_agent_id     = COALESCE(:agent, projects.default_agent_id),
                  default_agent_model  = COALESCE(:agent_model, projects.default_agent_model),
                  default_agent_effort =
-                     COALESCE(:agent_effort, projects.default_agent_effort)""",
+                     COALESCE(:agent_effort, projects.default_agent_effort),
+                 default_formula_id   = COALESCE(:formula, projects.default_formula_id)""",
             {"id": project_id, "name": name, "description": description, "seed": seed,
              "status": status, "style": default_visual_style, "voice": default_voice_id,
              "profile": default_script_profile_id, "cap": topic_cap, "mascot": default_mascot_id,
              "agent": default_agent_id, "agent_model": default_agent_model,
-             "agent_effort": default_agent_effort,
+             "agent_effort": default_agent_effort, "formula": default_formula_id,
              "default_cap": TOPIC_CAP_DEFAULT, "now": now},
         )
         row = con.execute(f"{_PROJECT_SELECT} WHERE p.id = ?", (project_id,)).fetchone()
@@ -4356,6 +4731,257 @@ def _lockstep_segment_frames(segments: list[dict], words: list[dict]) -> list[di
     return result
 
 
+def _plan_voice_runs(segments: list, voice: dict, roster: dict, lexicon: list):
+    """The runs a segmented script is voiced in (TMDEV-216): consecutive
+    segments spoken by the same voice, each with its roster entry and the
+    tts_text built for that voice's model. Returns the list, or the error
+    that refuses the voicing before any spend. `voice` is the video's resolved
+    voice; `roster` maps voice_id to entry. A one-voice script is one run.
+    vqa/stage_script.py stages tts_text through this too."""
+    runs = []
+    for run_voice_id, idx in tvoice.segment_runs(segments, voice["voice_id"]):
+        entry = voice if run_voice_id == voice["voice_id"] else roster.get(run_voice_id)
+        if entry is None:
+            return (f"segment {segments[idx[0]].get('id')!r} is voiced by {run_voice_id!r}, "
+                    "which is no longer in elevenlabs_voices — re-add it, or give the "
+                    "segment another voice")
+        run_segments = [segments[i] for i in idx]
+        model, label = entry["model_id"], entry["name"]
+        joined = _join_segment_voice(run_segments)
+        # Checked on the authored text: _build_tts_text rewrites <ipa> tags
+        # away, and the model may have changed since update_video.
+        err = _check_ipa_model(joined, model, label) or _check_phoneme_model(joined, model, label)
+        if err:
+            return err
+        tts_text = _build_tts_text(joined, _pronunciation_mode_for_model(model), lexicon)
+        err = _check_pause_markup_model(tts_text, model, label) or _check_markup_values(tts_text)
+        if err:
+            return err
+        runs.append({"voice": entry, "segments": run_segments, "tts_text": tts_text})
+    return runs
+
+
+# The longest previous_text / next_text a run's request carries about its
+# neighbour (TMDEV-216): a sentence or two is what continuity needs.
+_RUN_CONTEXT_CHARS = 200
+
+
+def _run_context_text(run: dict, last: bool) -> str:
+    """A neighbouring run's words for previous_text / next_text: the end of
+    the run before, or the start of the run after, cut at a word. The
+    authored words, never the run's tts_text: that holds respellings and, on
+    v3 and v4, IPA between slashes, which another model would read as text."""
+    text = " ".join(_strip_non_spoken(_join_segment_voice(run["segments"])).split())
+    if len(text) <= _RUN_CONTEXT_CHARS:
+        return text
+    if last:
+        cut = text[-_RUN_CONTEXT_CHARS:]
+        return cut[cut.find(" ") + 1:] if " " in cut else cut
+    cut = text[:_RUN_CONTEXT_CHARS]
+    return cut[:cut.rfind(" ")] if " " in cut else cut
+
+
+def _voice_run(run: dict, elevenlabs_key: str, video_id: str, context: dict) -> dict:
+    """Voice one run of segments (or a whole one-voice script) with
+    /with-timestamps and read its words back from the alignment.
+
+    Returns {"audio", "words": [{word, start, end}] in seconds from the run's
+    start, "duration", "credits"} or {"error", "credits"}. The credits of a
+    200 are recorded before anything else can fail, tagged with the run's
+    voice so the video modal can tell the voices of one voicing apart.
+    """
+    import httpx
+
+    entry, tts_text = run["voice"], run["tts_text"]
+    model_id = entry["model_id"]
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{entry['voice_id']}/with-timestamps"
+    voice_settings = {"stability": 0.5, "similarity_boost": 0.75}
+    # Sent only when it is not the default, so a voice nobody gave a speed
+    # sends exactly the request it always has (TMDEV-216).
+    speed = tvoice.voice_speed(entry)
+    if speed != tvoice.DEFAULT_SPEED:
+        voice_settings["speed"] = speed
+    payload = {
+        "text": tts_text,
+        "model_id": model_id,
+        "voice_settings": voice_settings,
+        "output_format": "mp3_44100_128",
+        **context,
+    }
+    # Gated strictly on a tag actually being present in tts_text, not on
+    # pronunciation_mode — same rationale as the normalized_alignment gate
+    # below (TMDEV-26 / commit 132c2e9): a legacy flat-script video (no
+    # segments, tts_text never contains phoneme tags) must not get SSML
+    # parsing silently turned on just because the install-wide mode happens
+    # to be "phoneme".
+    if "<phoneme" in tts_text:
+        payload["enable_ssml_parsing"] = True
+    headers = {"xi-api-key": elevenlabs_key, "Content-Type": "application/json"}
+
+    try:
+        with httpx.Client(timeout=120) as client:
+            resp = client.post(url, json=payload, headers=headers)
+    except Exception as e:
+        _provider_failed("elevenlabs", model_id, "voice", error=f"{type(e).__name__}: {e}")
+        return {"error": f"ElevenLabs request failed: {e}", "credits": None}
+
+    # A 200 has been charged for whatever happens next — a body that fails
+    # to parse, a missing audio field, or the segment/word integrity check
+    # below — so the credits are recorded before any of it runs. They come
+    # from ElevenLabs' `character-cost` header: the exact number of plan
+    # credits this call deducted, after the model's discount (Flash and
+    # Turbo cost half). Verified against the account's credit counter.
+    # The local character count is only a fallback for a response without
+    # the header, and is marked estimated: it strips markup ElevenLabs
+    # does bill (a <break> tag costs credits) and ignores the discount.
+    credits = None
+    if resp.status_code == 200:
+        try:
+            credits = int(resp.headers.get("character-cost"))
+            estimated = False
+        except (TypeError, ValueError):
+            credits = len(_strip_non_spoken(tts_text))
+            estimated = True
+        _record_usage(service="elevenlabs", model=model_id, operation="voice",
+                      units={"credits": credits}, videos=[video_id],
+                      request_id=resp.headers.get("request-id"), estimated=estimated,
+                      raw={"voice_id": entry["voice_id"]})
+    try:
+        if resp.status_code != 200:
+            _provider_failed("elevenlabs", model_id, "voice", resp=resp)
+            return {"error": f"ElevenLabs {resp.status_code}: {resp.text[:400]}", "credits": credits}
+        data = resp.json()
+        audio_bytes = base64.b64decode(data["audio_base64"])
+    except Exception as e:
+        _provider_failed("elevenlabs", model_id, "voice", resp=resp,
+                         error=f"unusable response: {type(e).__name__}: {e}")
+        return {"error": f"ElevenLabs returned an unusable response: {e}", "credits": credits}
+
+    # normalized_alignment collapses any inline <phoneme> tag into a single
+    # space-free token at the tagged word's position, matching the word
+    # count of the tag-stripped text — plain `alignment` instead returns the
+    # tag's raw markup characters verbatim, which shatters word-boundary
+    # tokenization on the spaces inside the tag's attributes. Gated strictly
+    # on a tag actually being present in tts_text (not just "segments" or
+    # "phoneme mode") because normalized_alignment also reflects ElevenLabs'
+    # general text normalization (numbers, dates, abbreviations spelled out)
+    # — for a plain script with no tags, that can expand one authored token
+    # into several normalized ones and break the lockstep count check that
+    # plain `alignment` (a literal, 1:1 mirror of the input text) never
+    # would. So this only ever applies to a run that actually used a
+    # phoneme tag; every other case — dictionary mode (tags already
+    # stripped before this point) and legacy flat-script — keeps reading
+    # plain `alignment`, unchanged from pre-TMDEV-26 behavior.
+    #
+    # Pause markup deliberately does NOT widen this gate. A live probe
+    # (TMDEV-26) confirmed plain `alignment` carries <break/> and [pause]
+    # markup verbatim, as zero-duration characters placed at the end of the
+    # silence, leaving every real word's timing literal — so the markup can
+    # be skipped by character index below without giving up alignment's 1:1
+    # mirror property, and without exposing dictionary-mode scripts (the
+    # default) to normalized_alignment's number/date expansion.
+    # used_normalized must reflect which field was actually read, not just
+    # which one was wanted — if normalized_alignment came back empty we fall
+    # back to plain `alignment`, and the marker-drop below would otherwise
+    # hunt for '.' tokens that were never there and report a misleading
+    # count mismatch.
+    normalized = data.get("normalized_alignment") if "<phoneme" in tts_text else None
+    alignment = normalized or data.get("alignment", {})
+    used_normalized = normalized is not None
+    chars      = alignment.get("characters", [])
+    char_start = alignment.get("character_start_times_seconds", [])
+    char_end   = alignment.get("character_end_times_seconds", [])
+
+    # Character positions of any pause markup carried verbatim in the
+    # alignment stream. Matched against the alignment's own characters
+    # rather than tts_text, so this stays correct whichever field was
+    # selected above.
+    markup_char_indices: set[int] = set()
+    aligned_text = "".join(chars)
+    for _rx in (_BREAK_TAG_RE, _V3_PAUSE_TAG_RE):
+        for _m in _rx.finditer(aligned_text):
+            markup_char_indices.update(range(_m.start(), _m.end()))
+
+    duration = char_end[-1] if char_end else (len(audio_bytes) / (128 * 1000 / 8))
+
+    words: list[dict] = []
+    buf: list[str]   = []
+    word_start: float | None = None
+    word_end: float = 0.0
+
+    def _flush():
+        nonlocal buf, word_start
+        if buf and word_start is not None:
+            words.append({"word": "".join(buf).strip(), "start": word_start, "end": word_end})
+        buf, word_start = [], None
+
+    for i, (ch, t0, t1) in enumerate(zip(chars, char_start, char_end)):
+        if ch in _WORD_BOUNDARY_CHARS or i in markup_char_indices:
+            # Pause markup ends the current word and contributes none of its
+            # own — the silence it produces survives as a gap between the
+            # surrounding words' frame spans, which is exactly what captions
+            # should do while nothing is being said.
+            _flush()
+        else:
+            if word_start is None:
+                word_start = t0
+            buf.append(ch)
+            word_end = t1
+    _flush()
+
+    # normalized_alignment renders a <break/> not verbatim but as a lone '.'
+    # token, so the character-index skip above cannot catch it. Drop those
+    # markers instead, count-checked. Unambiguous because
+    # _validate_script_segments rejects standalone punctuation words, so no
+    # authored token can be punctuation-only.
+    if used_normalized:
+        expected_markers = len(_BREAK_TAG_RE.findall(tts_text))
+        if expected_markers:
+            kept = [w for w in words if not _PUNCT_ONLY_RE.match(w["word"])]
+            dropped = len(words) - len(kept)
+            if dropped != expected_markers:
+                err = (f"Expected {expected_markers} break-tag marker token(s) in "
+                       f"ElevenLabs' normalized alignment but found {dropped}. "
+                       "Refusing to guess — captions would silently desync.")
+                _provider_failed("elevenlabs", model_id, "voice",
+                                 status=resp.status_code, error=err)
+                return {"error": err, "credits": credits}
+            words = kept
+
+    return {"audio": audio_bytes, "words": words, "duration": duration, "credits": credits}
+
+
+def _join_voice_audio(ffmpeg: str, parts: list[bytes]) -> tuple[bytes, list[float]]:
+    """Join the runs of a script spoken by more than one voice (TMDEV-216)
+    into one mp3, and return it with each run's decoded length in seconds.
+
+    Each part is decoded to WAV first: the WAV's frame count is the run's
+    real length, which is what the next run's words are offset by, and the
+    WAVs concatenate exactly. Probed: a v4 / multilingual_v2 / v4 join kept
+    every word within 0.14 s of these offsets by speech-to-text.
+    """
+    import wave
+    with tempfile.TemporaryDirectory(prefix="tubematic-voice-") as tmp:
+        tmpdir = Path(tmp)
+        wavs, durations = [], []
+        for i, part in enumerate(parts):
+            src, wav = tmpdir / f"run{i}.mp3", tmpdir / f"run{i}.wav"
+            src.write_bytes(part)
+            subprocess.run([ffmpeg, "-v", "error", "-y", "-i", str(src), "-ac", "1",
+                            "-ar", "44100", "-c:a", "pcm_s16le", str(wav)],
+                           check=True, capture_output=True, timeout=120)
+            with wave.open(str(wav), "rb") as w:
+                durations.append(w.getnframes() / w.getframerate())
+            wavs.append(wav)
+        listing = tmpdir / "runs.txt"
+        listing.write_text("".join(f"file '{w.name}'\n" for w in wavs), encoding="utf-8")
+        out = tmpdir / "joined.mp3"
+        subprocess.run([ffmpeg, "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i",
+                        str(listing), "-c:a", "libmp3lame", "-b:a", "128k", str(out)],
+                       check=True, capture_output=True, timeout=300)
+        return out.read_bytes(), durations
+
+
 @mcp.tool
 def generate_voice(video_id: str, script: str) -> dict:
     """Generate TTS audio for a script via ElevenLabs.
@@ -4378,6 +5004,13 @@ def generate_voice(video_id: str, script: str) -> dict:
     with only a flat `script` (no script_segments), the `script` argument
     is cleaned with the bracket/em-dash regex and no timeline.segments is
     written.
+
+    A segment may carry its own "voice_id": that roster voice speaks it
+    instead of the video's. Such a script is voiced in runs of consecutive
+    segments with the same voice, one ElevenLabs request per run with that
+    voice's model and speed, then joined into one audio.mp3; every run's
+    voice, markup and speed is checked before the first request, and
+    `credits` is the sum over the runs. A one-voice script is one request.
 
     Voice selection: the video's own voice_id (set via create_video or
     update_video) wins; if it's blank, the install default
@@ -4436,7 +5069,6 @@ def generate_voice(video_id: str, script: str) -> dict:
     err = _video_id_error(video_id)
     if err:
         return err
-    import httpx
 
     elevenlabs_key = _elevenlabs_key()
     if not elevenlabs_key:
@@ -4470,8 +5102,7 @@ def generate_voice(video_id: str, script: str) -> dict:
     if voice is None:
         return {"error": "No default voice set — pick one in the Voices step of onboarding, "
                           "or set a default voice in the Settings dashboard"}
-    voice_id, model_id, voice_label = voice["voice_id"], voice["model_id"], voice["name"]
-    mode = _pronunciation_mode_for_model(model_id)
+    model_id, voice_label = voice["model_id"], voice["name"]
 
     # Claim the video for this call before doing any billed work — the status
     # check above is a plain read, so two concurrent calls could otherwise
@@ -4490,20 +5121,19 @@ def generate_voice(video_id: str, script: str) -> dict:
 
     try:
         segments = video.get("script_segments")
+        roster = {v["voice_id"]: v for v in _get_voices()}
 
+        # Everything a voicing needs is decided here, before the first request:
+        # the voice of every run, the markup each run may carry, its speed and
+        # its tts_text. A script whose segments name more than one voice
+        # (TMDEV-216) is voiced as runs of consecutive same-voice segments, one
+        # request each; a one-voice script is one run, voiced exactly as before.
         if segments:
-            joined = _join_segment_voice(segments)
-            # Checked on the authored text: _build_tts_text rewrites <ipa>
-            # tags away, and the model may have changed since update_video.
-            err = (_check_ipa_model(joined, model_id, voice_label)
-                   or _check_phoneme_model(joined, model_id, voice_label))
-            if err:
-                return {"error": err}
-            tts_text = _build_tts_text(joined, mode, lexicon)
-            err = _check_pause_markup_model(tts_text, model_id, voice_label) or _check_markup_values(tts_text)
-            if err:
-                return {"error": err}
+            runs = _plan_voice_runs(segments, voice, roster, lexicon)
+            if isinstance(runs, str):
+                return {"error": runs}
         else:
+            runs = []
             # Legacy flat-script path: strip stage directions like [Show Card],
             # [SCENE], [SHOW] and em dashes before sending to ElevenLabs — these
             # must not appear in the voiced audio. Break tags are stripped too:
@@ -4528,6 +5158,22 @@ def generate_voice(video_id: str, script: str) -> dict:
             tts_text = _apply_respell(tts_text)
             tts_text = _apply_ipa(tts_text)
             tts_text = _apply_lexicon(tts_text, lexicon)
+            runs.append({"voice": voice, "segments": None, "tts_text": tts_text})
+
+        # A speed the voice's model would ignore is refused, never sent. This
+        # is defensive only: every roster reader already drops a roster that
+        # holds one, so no voice with such a speed resolves this far.
+        for run in runs:
+            err = tvoice.speed_error(tvoice.voice_speed(run["voice"]), run["voice"]["model_id"],
+                                     run["voice"]["name"])
+            if err:
+                return {"error": err}
+        ffmpeg = None
+        if len(runs) > 1:
+            ffmpeg = shutil.which("ffmpeg")
+            if not ffmpeg:
+                return {"error": "ffmpeg must be on PATH in the MCP container to join a script "
+                                 "spoken by more than one voice"}
 
         # The same names every reader derives (tubematic_core.jobfiles). A
         # planted symlink in place of either file is refused before spend.
@@ -4538,156 +5184,50 @@ def generate_voice(video_id: str, script: str) -> dict:
             return {"error": str(e)}
         audio_path.parent.mkdir(parents=True, exist_ok=True)
 
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/with-timestamps"
-        payload = {
-            "text": tts_text,
-            "model_id": model_id,
-            "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
-            "output_format": "mp3_44100_128",
-        }
-        # Gated strictly on a tag actually being present in tts_text, not on
-        # pronunciation_mode — same rationale as the normalized_alignment gate
-        # below (TMDEV-26 / commit 132c2e9): a legacy flat-script video (no
-        # segments, tts_text never contains phoneme tags) must not get SSML
-        # parsing silently turned on just because the install-wide mode happens
-        # to be "phoneme".
-        if "<phoneme" in tts_text:
-            payload["enable_ssml_parsing"] = True
-        headers = {"xi-api-key": elevenlabs_key, "Content-Type": "application/json"}
+        voiced, credits = [], 0
+        for i, run in enumerate(runs):
+            context = {}
+            # Each run hears its neighbours' words, so the joined audio keeps
+            # its intonation across a change of voice. eleven_v3 refuses the
+            # fields (probed: 400 unsupported_model), so its runs go without.
+            if len(runs) > 1 and run["voice"]["model_id"] not in tvoice.CONTEXT_REFUSED_MODELS:
+                if i > 0:
+                    context["previous_text"] = _run_context_text(runs[i - 1], last=True)
+                if i < len(runs) - 1:
+                    context["next_text"] = _run_context_text(runs[i + 1], last=False)
+            out = _voice_run(run, elevenlabs_key, video_id, context)
+            if out.get("credits") is not None:
+                credits += out["credits"]
+            if "error" in out:
+                return {"error": out["error"]}
+            voiced.append(out)
 
-        try:
-            with httpx.Client(timeout=120) as client:
-                resp = client.post(url, json=payload, headers=headers)
-        except Exception as e:
-            _provider_failed("elevenlabs", model_id, "voice", error=f"{type(e).__name__}: {e}")
-            return {"error": f"ElevenLabs request failed: {e}"}
-
-        # A 200 has been charged for whatever happens next — a body that fails
-        # to parse, a missing audio field, or the segment/word integrity check
-        # below — so the credits are recorded before any of it runs. They come
-        # from ElevenLabs' `character-cost` header: the exact number of plan
-        # credits this call deducted, after the model's discount (Flash and
-        # Turbo cost half). Verified against the account's credit counter.
-        # The local character count is only a fallback for a response without
-        # the header, and is marked estimated: it strips markup ElevenLabs
-        # does bill (a <break> tag costs credits) and ignores the discount.
-        credits = None
-        if resp.status_code == 200:
+        if len(voiced) == 1:
+            audio_bytes = voiced[0]["audio"]
+            durations = [voiced[0]["duration"]]
+        else:
+            # Each run's words are offset by the DECODED length of the audio
+            # before it, never by its last alignment time: on eleven_v4 the
+            # alignment can end ~0.08 s after the audio really does (probed).
             try:
-                credits = int(resp.headers.get("character-cost"))
-                estimated = False
-            except (TypeError, ValueError):
-                credits = len(_strip_non_spoken(tts_text))
-                estimated = True
-            _record_usage(service="elevenlabs", model=model_id, operation="voice",
-                          units={"credits": credits}, videos=[video_id],
-                          request_id=resp.headers.get("request-id"), estimated=estimated)
-        try:
-            if resp.status_code != 200:
-                _provider_failed("elevenlabs", model_id, "voice", resp=resp)
-                return {"error": f"ElevenLabs {resp.status_code}: {resp.text[:400]}"}
-            data = resp.json()
-            audio_bytes = base64.b64decode(data["audio_base64"])
-        except Exception as e:
-            _provider_failed("elevenlabs", model_id, "voice", resp=resp,
-                             error=f"unusable response: {type(e).__name__}: {e}")
-            return {"error": f"ElevenLabs returned an unusable response: {e}"}
-
-        # normalized_alignment collapses any inline <phoneme> tag into a single
-        # space-free token at the tagged word's position, matching the word
-        # count of the tag-stripped text — plain `alignment` instead returns the
-        # tag's raw markup characters verbatim, which shatters word-boundary
-        # tokenization on the spaces inside the tag's attributes. Gated strictly
-        # on a tag actually being present in tts_text (not just "segments" or
-        # "phoneme mode") because normalized_alignment also reflects ElevenLabs'
-        # general text normalization (numbers, dates, abbreviations spelled out)
-        # — for a plain script with no tags, that can expand one authored token
-        # into several normalized ones and break the lockstep count check that
-        # plain `alignment` (a literal, 1:1 mirror of the input text) never
-        # would. So this only ever applies to a segment that actually used a
-        # phoneme tag; every other case — dictionary mode (tags already
-        # stripped before this point) and legacy flat-script — keeps reading
-        # plain `alignment`, unchanged from pre-TMDEV-26 behavior.
-        #
-        # Pause markup deliberately does NOT widen this gate. A live probe
-        # (TMDEV-26) confirmed plain `alignment` carries <break/> and [pause]
-        # markup verbatim, as zero-duration characters placed at the end of the
-        # silence, leaving every real word's timing literal — so the markup can
-        # be skipped by character index below without giving up alignment's 1:1
-        # mirror property, and without exposing dictionary-mode scripts (the
-        # default) to normalized_alignment's number/date expansion.
-        # used_normalized must reflect which field was actually read, not just
-        # which one was wanted — if normalized_alignment came back empty we fall
-        # back to plain `alignment`, and the marker-drop below would otherwise
-        # hunt for '.' tokens that were never there and report a misleading
-        # count mismatch.
-        normalized = data.get("normalized_alignment") if "<phoneme" in tts_text else None
-        alignment = normalized or data.get("alignment", {})
-        used_normalized = normalized is not None
-        chars      = alignment.get("characters", [])
-        char_start = alignment.get("character_start_times_seconds", [])
-        char_end   = alignment.get("character_end_times_seconds", [])
-
-        # Character positions of any pause markup carried verbatim in the
-        # alignment stream. Matched against the alignment's own characters
-        # rather than tts_text, so this stays correct whichever field was
-        # selected above.
-        markup_char_indices: set[int] = set()
-        aligned_text = "".join(chars)
-        for _rx in (_BREAK_TAG_RE, _V3_PAUSE_TAG_RE):
-            for _m in _rx.finditer(aligned_text):
-                markup_char_indices.update(range(_m.start(), _m.end()))
-
-        audio_duration = char_end[-1] if char_end else (len(audio_bytes) / (128 * 1000 / 8))
-        total_frames   = round(audio_duration * FPS)
+                audio_bytes, durations = _join_voice_audio(ffmpeg, [o["audio"] for o in voiced])
+            except Exception as e:
+                _provider_failed("elevenlabs", model_id, "voice",
+                                 error=f"joining the voices failed: {type(e).__name__}: {e}")
+                return {"error": f"The voices were generated but could not be joined: {e}"}
 
         words: list[dict] = []
-        buf: list[str]   = []
-        word_start: float | None = None
-        word_end: float = 0.0
-
-        def _flush():
-            nonlocal buf, word_start
-            if buf and word_start is not None:
+        offset = 0.0
+        for out, duration in zip(voiced, durations):
+            for w in out["words"]:
                 words.append({
-                    "word": "".join(buf).strip(),
-                    "startFrame": round(word_start * FPS),
-                    "endFrame": round(word_end * FPS),
+                    "word": w["word"],
+                    "startFrame": round((offset + w["start"]) * FPS),
+                    "endFrame": round((offset + w["end"]) * FPS),
                 })
-            buf, word_start = [], None
-
-        for i, (ch, t0, t1) in enumerate(zip(chars, char_start, char_end)):
-            if ch in _WORD_BOUNDARY_CHARS or i in markup_char_indices:
-                # Pause markup ends the current word and contributes none of its
-                # own — the silence it produces survives as a gap between the
-                # surrounding words' frame spans, which is exactly what captions
-                # should do while nothing is being said.
-                _flush()
-            else:
-                if word_start is None:
-                    word_start = t0
-                buf.append(ch)
-                word_end = t1
-        _flush()
-
-        # normalized_alignment renders a <break/> not verbatim but as a lone '.'
-        # token, so the character-index skip above cannot catch it. Drop those
-        # markers instead, count-checked. Unambiguous because
-        # _validate_script_segments rejects standalone punctuation words, so no
-        # authored token can be punctuation-only.
-        if used_normalized:
-            expected_markers = len(_BREAK_TAG_RE.findall(tts_text))
-            if expected_markers:
-                kept = [w for w in words if not _PUNCT_ONLY_RE.match(w["word"])]
-                dropped = len(words) - len(kept)
-                if dropped != expected_markers:
-                    err = (f"Expected {expected_markers} break-tag marker token(s) in "
-                           f"ElevenLabs' normalized alignment but found {dropped}. "
-                           "Refusing to guess — captions would silently desync.")
-                    _provider_failed("elevenlabs", model_id, "voice",
-                                     status=resp.status_code, error=err)
-                    return {"error": err}
-                words = kept
+            offset += duration
+        audio_duration = offset if len(voiced) > 1 else durations[0]
+        total_frames   = round(audio_duration * FPS)
 
         timeline = {
             "totalFrames": total_frames,
@@ -4699,15 +5239,14 @@ def generate_voice(video_id: str, script: str) -> dict:
             try:
                 timeline["segments"] = _lockstep_segment_frames(segments, words)
             except (ValueError, IndexError) as e:
-                _provider_failed("elevenlabs", model_id, "voice",
-                                 status=resp.status_code, error=str(e))
+                _provider_failed("elevenlabs", model_id, "voice", status=200, error=str(e))
                 return {"error": str(e)}
-            # When normalized_alignment was used above (a phoneme tag was
-            # present), its word text for the tagged word is ElevenLabs'
-            # internal phonetic rewrite (e.g. "@m@ae1@d@ih0@s@ah0@n"), not the
-            # authored word — restore the authored text for on-screen captions.
-            # When plain `alignment` was used instead (the common case), this is
-            # a no-op: alignment already mirrors the input text literally, so
+            # When normalized_alignment was used (a phoneme tag was present),
+            # its word text for the tagged word is ElevenLabs' internal
+            # phonetic rewrite (e.g. "@m@ae1@d@ih0@s@ah0@n"), not the authored
+            # word — restore the authored text for on-screen captions. When
+            # plain `alignment` was used instead (the common case), this is a
+            # no-op: alignment already mirrors the input text literally, so
             # these tokens already match. Counts are guaranteed equal here
             # either way since _lockstep_segment_frames already validated them
             # via the same tokenization.
@@ -4724,6 +5263,7 @@ def generate_voice(video_id: str, script: str) -> dict:
         # re-derived later: the lexicon is install-wide and mutable, so a
         # derivation run at review time could reconstruct an instruction that
         # was never issued for this video.
+        tts_text = " ".join(run["tts_text"] for run in runs)
         _update_fields(video_id, voice_file_path=str(audio_path), timeline_path=str(timeline_path),
                         tts_text=tts_text)
         status_advanced = _set_status(video_id, "VOICE_READY", only_if="VOICING")
@@ -4904,7 +5444,14 @@ def validate_job(video_id: str) -> dict:
     Also runs an advisory text-layout audit: it renders a few settled frames of
     each scene in headless Chromium (producing no image) and measures real text
     bounding boxes, reporting text-on-text collisions with the offending
-    elements and their coordinates.
+    elements and their coordinates. For a mixed-scenes video it also measures
+    frame 0, and warns when nothing but text or a flat background is on screen
+    there, or when nothing moves in the first frames.
+
+    And advisory picture checks, from the data: a data-driven style's first
+    frame showing no subject, and a turn, re-opening or payoff (each segment's
+    role, as get_timeline reports it) with nothing new on screen near its
+    first word.
 
     Returns {passed: bool, errors: list[str], warnings: list[str]}.
     `passed` depends on `errors` alone — `warnings` never blocks a render.
@@ -4918,7 +5465,8 @@ def validate_job(video_id: str) -> dict:
     _init_db()
     with _conn() as con:
         row = con.execute(
-            "SELECT voice_file_path, timeline_path, scene_config_path, script_segments FROM videos WHERE id = ?",
+            "SELECT voice_file_path, timeline_path, scene_config_path, script_segments, formula_id "
+            "FROM videos WHERE id = ?",
             (video_id,),
         ).fetchone()
     if not row:
@@ -5224,6 +5772,20 @@ def validate_job(video_id: str) -> dict:
     finally:
         _heavy_checks_lock.release()
 
+    # Picture checks (TMDEV-215) — ADVISORY, pure data, so they run whatever
+    # the text audit did: a first frame with nothing but a headline or a blank
+    # stage on it, and a turn, re-opening or payoff spoken with nothing new on
+    # screen. A video with no formula on record gets the first-frame check only.
+    if ("scene_config" in dir() and isinstance(scene_config, dict)
+            and "timeline" in dir() and isinstance(timeline, dict)):
+        try:
+            warnings = warnings + picture_checks.check(
+                scene_config, timeline.get("segments") or [], script_segments or [],
+                tformulas.beat_roles(row["formula_id"] or ""), timeline.get("fps") or FPS)
+        except Exception as e:
+            warnings = warnings + [f"Picture checks could not run ({e}): the first frame and the "
+                                   "beat changes were not checked"]
+
     return {"passed": len(errors) == 0, "errors": errors, "warnings": warnings}
 
 
@@ -5383,7 +5945,8 @@ def get_pipeline_status() -> dict:
     before drafting, so a term already registered doesn't also get an
     unnecessary inline <respell> tag.
     elevenlabs_voices is the named voice roster (list of {name, voice_id,
-    model_id, pronunciation_mode}), elevenlabs_voice_id is the install default
+    model_id, pronunciation_mode}, plus speed on a voice whose speed is not
+    1.0), elevenlabs_voice_id is the install default
     ("" when unset) — list the roster (marking the default, with each voice's
     model) whenever a human needs to pick a voice (job creation, script
     approval). A voice's pronunciation_mode is the one get_video would report
@@ -7856,6 +8419,16 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     }
 
 
+def _parsed_segments(raw) -> list:
+    """A stored script_segments value as a list; [] for none or a value that
+    does not parse (a legacy row never fails a read over it)."""
+    try:
+        parsed = json.loads(raw) if raw else []
+    except (TypeError, ValueError):
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
 @mcp.tool
 def get_timeline(video_id: str, include_words: bool = False) -> dict:
     """Read a video's timeline.json — segment frame spans (and optionally
@@ -7871,9 +8444,17 @@ def get_timeline(video_id: str, include_words: bool = False) -> dict:
     videos); the segment-anchored primary path never needs it, so it's
     opt-in to keep the common-case payload small.
 
-    Returns {video_id, total_frames, fps, segments[, words]}, where segments
-    is [{id, startFrame, endFrame}] — empty if the video predates segmented
-    scripts. Returns {"error": ...} if the video doesn't exist or voice
+    Returns {video_id, total_frames, fps, first_frame, segments[, words]},
+    where segments is [{id, startFrame, endFrame, beat, role}] — empty if the
+    video predates segmented scripts. beat is the formula beat the script
+    gave the segment ("" when none). role is what the segment owes the
+    picture: "opening" for the first segment; "turn", "reopen" or "payoff"
+    for the first segment of a formula beat with that role; "" otherwise. A
+    turn or a re-opening needs a visible change on its first word, the payoff
+    the video's strongest picture (the style's own way of doing each is in
+    get_video's style.picture). first_frame is the formula's line on what the
+    first frame shows ("" when the video has no formula on record).
+    Returns {"error": ...} if the video doesn't exist or voice
     hasn't been generated yet (timeline.json not written).
     """
     err = _video_id_error(video_id)
@@ -7881,7 +8462,8 @@ def get_timeline(video_id: str, include_words: bool = False) -> dict:
         return err
     _init_db()
     with _conn() as con:
-        row = con.execute("SELECT id FROM videos WHERE id = ?", (video_id,)).fetchone()
+        row = con.execute("SELECT id, script_segments, formula_id FROM videos WHERE id = ?",
+                          (video_id,)).fetchone()
     if not row:
         return {"error": f"Video not found: {video_id}"}
 
@@ -7897,11 +8479,21 @@ def get_timeline(video_id: str, include_words: bool = False) -> dict:
     except Exception as e:
         return {"error": f"timeline.json could not be read: {e}"}
 
+    formula_id = row["formula_id"] or ""
+    raw_segments = timeline.get("segments", [])
+    try:
+        segments = picture_checks.annotate_segments(
+            raw_segments, _parsed_segments(row["script_segments"]), tformulas.beat_roles(formula_id))
+    except (TypeError, ValueError, AttributeError):
+        # A stored segment the annotation cannot read: hand back the spans
+        # unlabelled rather than failing the read.
+        segments = [{**s, "beat": "", "role": ""} for s in raw_segments if isinstance(s, dict)]
     result = {
         "video_id": video_id,
         "total_frames": timeline.get("totalFrames"),
         "fps": timeline.get("fps"),
-        "segments": timeline.get("segments", []),
+        "first_frame": tformulas.first_frame(formula_id),
+        "segments": segments,
     }
     if include_words:
         result["words"] = timeline.get("words", [])

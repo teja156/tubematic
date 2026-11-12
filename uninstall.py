@@ -42,6 +42,7 @@ _TUBEMATIC_SKILLS = [
     "tubematic-under-the-hood",
     "tubematic-case-file-story",
     "tubematic-style-routing",
+    "tubematic-formula-routing",
     "tubematic-mascot-builder",
 ]
 

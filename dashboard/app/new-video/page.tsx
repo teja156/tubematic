@@ -12,6 +12,8 @@ import { illustratedAvailable, styleOptions } from "@/lib/visualStyles";
 import { voiceLabel } from "@/lib/voices";
 import { ANGLE_MAX_CHARS, angleLength, cleanAngle, fetchAngleKinds, type AngleKind } from "@/lib/angles";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
+import { formulaOptions } from "@/lib/scriptFormulas";
+import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
 
 // The fixed domain every submission here is filed into. Keep in sync:
 // renderer/api/pipeline.py MANUAL_PROJECT_ID.
@@ -68,6 +70,9 @@ export default function NewVideoPage() {
   const [model, setModel] = useState<string | null>(null);
   const [effort, setEffort] = useState("");
   const [profileId, setProfileId] = useState("");
+  // "" is Auto: a formula is picked for the video from its topic.
+  const [formula, setFormula] = useState("");
+  const formulaNames = useScriptFormulaNames(true);
   const [style, setStyle] = useState<VisualStyle>("auto");
   const [voiceId, setVoiceId] = useState("");
   const [approve, setApprove] = useState(true);
@@ -169,6 +174,7 @@ export default function NewVideoPage() {
       agent_model: resolvedModel,
       agent_effort: effort,
       script_profile_id: profileId,
+      formula_choice: formula,
       visual_style: style,
       voice_id: voiceId,
       ...(angleText ? { angle: angleText, angle_kind: angleKind } : {}),
@@ -288,6 +294,20 @@ export default function NewVideoPage() {
             >
               <option value="">No profile (generic style)</option>
               {readyProfiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </Field>
+
+          <Field label="Formula">
+            <select
+              data-testid="new-video-formula"
+              value={formula}
+              onChange={(e) => setFormula(e.target.value)}
+              title="The structure the script is written in. Auto picks one from the topic."
+              style={selectStyle}
+            >
+              {formulaOptions(formulaNames, formula).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
             </select>
           </Field>
 

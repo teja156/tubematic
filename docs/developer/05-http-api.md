@@ -40,6 +40,8 @@ The same process serves the [render gateway](#the-render-gateway), a separate ap
 | `POST` | [`/videos/<video_id>/agent-outcome`](#post-videosvideo_idagent-outcome) | Report a finished agent session |
 | `POST` | [`/videos/<video_id>/agent-retry`](#post-videosvideo_idagent-retry) | Release a stuck video |
 | `POST` | [`/videos/<video_id>/switch-style`](#post-videosvideo_idswitch-style) | Take Auto's runner-up style at `SCRIPT_READY` |
+| `POST` | [`/videos/<video_id>/switch-formula`](#post-videosvideo_idswitch-formula) | Take the runner-up formula at `SCRIPT_READY` |
+| `POST` | [`/videos/<video_id>/switch-opening`](#post-videosvideo_idswitch-opening) | Have the script rewritten from another drafted opening at `SCRIPT_READY` |
 | `POST` | [`/videos/<video_id>/comments`](#post-videosvideo_idcomments) | Add a comment |
 | `DELETE` | [`/videos/<video_id>`](#delete-videosvideo_id) | Delete files, archive the row |
 | `GET` | [`/retention/backlog`](#get-retentionbacklog) | Size of unpublished leftovers |
@@ -291,12 +293,13 @@ The full row plus `comments[]` in chronological order. `gemini_feedback` is not 
 video route. The last two are `[]` for a video with no
 [script record](08-scripting-and-voice.md#what-a-script-records).
 
-Three computed fields describe the voice:
+Four computed fields describe the voice:
 
 | Field | On | Meaning |
 |---|---|---|
 | `effective_voice_id` | Lists and single videos | The video's `voice_id`, else the install default. `""` when neither is on the roster |
-| `voice_conflicts` | Lists and single videos | `{voice_id: reason}` for each roster voice whose model cannot speak the stored script |
+| `voice_conflicts` | Lists and single videos | `{voice_id: reason}` for each roster voice whose model cannot speak the segments the video's voice speaks |
+| `segment_voice_conflicts` | Single videos | `{segment id: {voice_id: reason}}` for each roster voice that cannot speak a segment's markup. Empty outside `SCRIPT_READY` |
 | `voice_info` | Single videos | The voice and model for the modal's read-only Voice rows |
 
 `voice_conflicts` comes from the check that makes `PATCH` answer `409` for such a voice, so a
@@ -309,7 +312,8 @@ Every response that returns one video carries `voice_info`: this route, `PATCH`,
 row.
 
 ```json
-{"voice_id": "a1", "name": "Adam", "model_id": "eleven_v3", "model_voiced": true}
+{"voice_id": "a1", "name": "Adam", "model_id": "eleven_v3", "model_voiced": true,
+ "other_voices": [{"voice_id": "r1", "name": "Rachel", "model_id": "eleven_multilingual_v2"}]}
 ```
 
 - `voice_id` is the video's own voice, else the install default. It is kept when the voice has
@@ -322,12 +326,17 @@ row.
   because a revision can switch the voice before the next voicing. `model_id` is then the voice's
   current roster model and `model_voiced` is `false`. The same applies when the ledger has no
   voicing row. `model_id` is `""` when neither is known.
+- A video spoken in more than one voice has one voicing row per run, each tagged with its voice.
+  `model_id` is read from the rows of the video's own voice. When the video's own voice spoke no
+  line, `model_id` is the current setting with `model_voiced` `false`.
+- `other_voices` lists the other voices the video's segments name, in script order. `name` and
+  `model_id` are `""` for one that has left the roster.
 
 ### `POST /videos`
 
 Files a topic at `TOPIC_PROPOSED`. Required: `topic`, `strategy`, `producibility_score`. Optional:
-`id`, `project_id`, `title`, `voice_id`, `visual_style`, and the topic's angle as `angle`,
-`angle_kind` and `angle_score`.
+`id`, `project_id`, `title`, `voice_id`, `visual_style`, `formula_choice`, and the topic's angle as
+`angle`, `angle_kind` and `angle_score`.
 
 | Status | Cause |
 |---|---|
@@ -347,6 +356,8 @@ Files a topic at `TOPIC_PROPOSED`. Required: `topic`, `strategy`, `producibility
   or `OPENAI_API_KEY`).
 - `visual_style` is `cartoon_3d` and the install-wide GPU `status` is not `working` (see
   [GPU rendering](#gpu-rendering)).
+- `formula_choice` is not a string, or is not `""` or a [formula](08-scripting-and-voice.md#formulas)
+  id.
 - The angle fails `tubematic_core.angles.angle_error`: `angle` or `angle_kind` is sent without the
   other, either is not a string, `angle_kind` is not a kind, `angle` is over 300 characters, or
   `angle_score` is not a whole number from 0 to 10. A `null` in any of the three reads as absent.
@@ -370,6 +381,9 @@ What the route fills in:
 - `mascot_id` is seeded from the domain's or the install's default mascot, whatever the `strategy`,
   while the GPU `status` is `working` and the style is not `cartoon_3d`
   (`pipeline.py::_seed_mascot`).
+- With no `formula_choice`, the video takes its domain's `default_formula_id` while that is a
+  formula, whatever its `strategy` (`pipeline.py::_project_default_formula`). Otherwise
+  `formula_choice` is `""`, and a formula is picked for the video before its script.
 
 The route does not validate `strategy` or `producibility_score`, and it does not require an angle.
 The MCP server's `create_video` does all three (see [Topic angle](02-pipeline.md#topic-angle)).
@@ -378,8 +392,8 @@ The MCP server's `create_video` does all three (see [Topic angle](02-pipeline.md
 
 The dashboard's **New Video** page. Required: `title` (at most 70 characters) and `topic`, both
 non-blank. Optional: `approve` (boolean, default `true`), `agent_id`, `agent_model`,
-`agent_effort`, `script_profile_id`, `visual_style`, `voice_id`, and the topic's angle as `angle`
-with `angle_kind`.
+`agent_effort`, `script_profile_id`, `visual_style`, `voice_id`, `formula_choice`, and the topic's
+angle as `angle` with `angle_kind`.
 
 `201` returns the row: `strategy` `manual`, `producibility_score` 0, `angle_score` 0, in the domain
 `manual`, at `TOPIC_APPROVED`, or at `TOPIC_PROPOSED` with `"approve": false`.
@@ -391,7 +405,7 @@ with `angle_kind`.
 - A pick is not a string. Only an absent or `null` pick means its default, so `false` and `0` are
   refused.
 - A pick fails the rule the same field has on [`PATCH`](#field-rules): the agent, its model and
-  effort, the script profile, the voice or the visual style.
+  effort, the script profile, the voice, the visual style or the formula.
 - The angle fails the rule it has on [`POST /videos`](#post-videos). An absent, `null` or blank
   `angle` with no `angle_kind` means no angle, which is accepted: the agent looks for one when it
   picks the video up. So does `none` or `n/a` as the sentence, or as the kind with no sentence
@@ -410,13 +424,15 @@ How it differs from `POST /videos`:
 The first request creates the domain `manual`, named **Manual Videos**, with `INSERT OR IGNORE`,
 so a rename on the Projects page is kept. Nothing is written until every field has passed. With no
 `voice_id`, the video takes the `manual` domain's `default_voice_id` when it has one on the roster.
+With no `formula_choice`, it takes the `manual` domain's `default_formula_id` in the same way.
 
 ### `PATCH /videos/<video_id>`
 
 The main write path. The body may hold any of `status`, `title`, `script`, `video_version`,
 `youtube_url`, `gemini_feedback`, `voice_id`, `agent_id`, `agent_model`, `agent_effort`,
-`script_profile_id`, `visual_style`, `publish_title`, `publish_description`, `mascot_id`, `angle`
-and `angle_kind`, plus the optional guard `onlyIfCurrentStatus`.
+`script_profile_id`, `visual_style`, `publish_title`, `publish_description`, `mascot_id`,
+`formula_choice`, `angle` and `angle_kind`, plus the optional guard `onlyIfCurrentStatus`. A body
+with `segment_voices` follows its own rules (see [A segment's voice](#a-segments-voice)).
 
 ```json
 {"status": "TOPIC_APPROVED", "onlyIfCurrentStatus": "TOPIC_PROPOSED", "visual_style": "auto"}
@@ -433,12 +449,12 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 | `400` | A field fails its rule below, a job-path column is present, or the body has no updatable field (`No updatable fields provided`) |
 | `404` | Video not found |
 | `409` | The video is archived |
-| `409` | `script_profile_id`, `visual_style` or `mascot_id` sent while the video is past `TOPIC_PROPOSED` |
+| `409` | `script_profile_id`, `visual_style`, `mascot_id` or `formula_choice` sent while the video is past `TOPIC_PROPOSED` |
 | `409` | `agent_id`, `agent_model` or `agent_effort` sent while the video is not at a human checkpoint |
 | `409` | `angle` and `angle_kind` sent while the video is past `TOPIC_PROPOSED` |
 | `409` | An approving `PATCH` while the video's mascot is archived, or while a Cartoon 3D, Under the Hood or Case File Story video keeps a mascot |
 | `409` | `{"error": "Status precondition failed", "current", "expected"}` |
-| `409` | `{"error", "voice_conflict": true}`: the voice's model cannot speak the stored script |
+| `409` | `{"error", "voice_conflict": true}`: the voice's model cannot speak the stored script, or, on approval to `VOICING`, a segment's own voice cannot speak that segment |
 | `409` | A model was written alone and the video's agent changed while the request was in flight |
 
 #### Field rules
@@ -453,8 +469,14 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   non-blank string within its cap (100 and 2000 characters). MCP `update_video` applies the same
   rule (see [Publishing](14-publishing.md#schema)). A `script` written here clears the video's
   `formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`, because they describe the
-  script it replaces. Only MCP `update_video` writes them.
+  script it replaces, and the formula pick (`formula_pick`, `formula_runner_up`,
+  `formula_reason`), because a script written by hand follows no formula. `formula_choice` stays. Only MCP `update_video` writes them.
 - `voice_id` must be on the roster, or `""` for the install default.
+- `formula_choice` must be a [formula](08-scripting-and-voice.md#formulas) id, or `""` for Auto. An
+  experimental formula is accepted whatever the `auto_experimental_formulas` setting says, because
+  the setting covers what Auto may pick. A `status` of `TOPIC_PROPOSED` empties `formula_pick`,
+  `formula_runner_up` and `formula_reason` and keeps `formula_choice`
+  (`tubematic_core/formulas.py::PICK_RESET_SET`, which `set_video_status` also uses).
 - `agent_id` must name a live agent. The video's current agent is accepted even when uninstalled.
   A change sets `agent_model` to `""` in the same `UPDATE`, unless the body also sets
   `agent_model`. `agent_effort` is kept, and the assignment deck is not touched.
@@ -496,7 +518,9 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 - The voice conflict check runs on every request that carries `voice_id`, including an approval
   that re-sends the video's own voice. That voice passes unless its model was changed in Settings
   after the script was written. The check is skipped at `TOPIC_PROPOSED`, and a voice written there
-  is bound to that status.
+  is bound to that status. It reads only the segments without a voice of their own.
+- A `status` of `VOICING` from `SCRIPT_READY` checks every segment against the voice that speaks it,
+  with or without `voice_id` in the body, and answers `409` with `voice_conflict` when one cannot.
 - A `mascot_id` is checked only when it changes, so a client that echoes the stored value is not
   refused for a GPU that has gone since. A switch to `cartoon_3d`, `under_the_hood` or `case_file_story` clears the mascot in the same
   `UPDATE`, and a changed mascot resets `mascot_version` to 0.
@@ -514,6 +538,22 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   the recorded renderer and canvas. Both are SQL fragments in `tubematic_core/visual_styles.py` that `update_video` and
   `set_video_status` also use.
 
+#### A segment's voice
+
+The Script tab sends `{"segment_voices": {"<segment id>": "<voice_id>"}}` to give a segment its own
+voice, or `""` to give it back to the video's voice. It is sent alone, without
+`onlyIfCurrentStatus`. The segments are rewritten and nothing else changes: the spoken words, the
+script record and the warnings stay. A `voice_id` equal to the video's voice is stored as no voice.
+
+| Status | Cause |
+|---|---|
+| `200` | The updated row plus `comments[]` |
+| `400` | Another key in the body, an empty or non-string map, an unknown segment id, or a voice not on the roster |
+| `404` | Video not found |
+| `409` | The video is archived, not at `SCRIPT_READY`, has no segments, or has no voice on the roster |
+| `409` | `{"error", "voice_conflict": true}`: the voice cannot speak that segment's markup |
+| `409` | The segments changed between the read and the write. The `UPDATE` is bound to the segments it read |
+
 ### `POST /videos/<video_id>/switch-style`
 
 Takes the runner-up of the style Auto picked ([How Auto picks a
@@ -529,13 +569,64 @@ and sets `visual_style` to the runner-up (`auto`
 for `scenes`), swaps `style_pick` and `style_runner_up`, sets `style_reason` to say a person
 switched it, and moves the video to `TOPIC_APPROVED`. It adds a `human` comment asking the agent to
 rewrite the script for the new style. The agent's next session writes a new script, which replaces
-the old one. A second switch goes back.
+the old one. A second switch goes back. The route also empties `formula_pick`, `formula_runner_up`
+and `formula_reason`, so the formula is picked again for the new style.
 
 | Status | When |
 |---|---|
 | `200` | The switch landed. The body is the video |
 | `404` | No such video |
 | `409` | The video is archived, not at `SCRIPT_READY`, has no Auto pick or no runner-up, the runner-up is not a style any more or this install cannot make it (with the reason), or the video changed while the request was in flight |
+
+### `POST /videos/<video_id>/switch-formula`
+
+Takes the runner-up of the formula picked for the video
+([How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked)). No body. The video
+must be at `SCRIPT_READY` and hold a `formula_pick` and a `formula_runner_up`.
+
+The route runs as one write transaction. It swaps `formula_pick` and `formula_runner_up`, sets
+`formula_choice` to the new pick (the formula is now a person's choice, so the agent cannot replace
+it), sets `formula_reason` to say a person switched it, and moves the video to `TOPIC_APPROVED`. It
+adds a `human` comment asking the agent to rewrite the script in the new formula. The stored script
+is left as it is until the agent's next session replaces it, because the route has no way to
+rewrite a script. A second switch goes back. An experimental runner-up needs no setting.
+
+| Status | When |
+|---|---|
+| `200` | The switch landed. The body is the video |
+| `404` | No such video |
+| `409` | A refusal listed below the table |
+
+`409` causes: the video is archived or not at `SCRIPT_READY`; it has no pick or no runner-up; the
+runner-up is a formula this version does not have; the video is on `auto` with no `style_pick`
+(scripted before styles were picked ahead of the script); or the video changed while the request
+was in flight.
+
+### `POST /videos/<video_id>/switch-opening`
+
+Has the script rewritten from another of the openings the agent drafted
+([What a script records](08-scripting-and-voice.md#what-a-script-records)). Body `{"index": n}`,
+the opening's place in `hook_alternatives`, from 0. The video must be at `SCRIPT_READY`.
+
+The route runs as one write transaction. It marks that opening `kept` in `hook_alternatives`,
+clears its `note`, sets `hook_type` to its type and moves the video to `TOPIC_APPROVED`. It adds a
+`human` comment that quotes the opening and asks the agent to rewrite the script from it, word for
+word, in the same formula. The stored script is left as it is and its `formula_id` is cleared,
+because the script now starts with another opening than the one its record names. `formula_pick` is kept, or
+set to the script's `formula_id` on a video scripted before formulas were picked, so the rewrite is
+not routed to another formula whose opening types differ.
+
+| Status | When |
+|---|---|
+| `200` | The switch landed. The body is the video |
+| `400` | `index` is not a whole number, or is outside the stored openings |
+| `404` | No such video |
+| `409` | A refusal listed below the table |
+
+`409` causes: the video is archived or not at `SCRIPT_READY`; it has no stored openings; the
+opening is the one already in use; the script has no pick and a `formula_id` this version does not
+have; the video is on `auto` with no `style_pick`; or the video changed while the request was in
+flight.
 
 ### `POST /videos/<video_id>/agent-outcome`
 
@@ -676,6 +767,7 @@ back, or they are reset. An omitted `status` is written as `active`, so clearing
 | `default_agent_id` | A live agent's id, or `''` for the weighted deal. Absent or `null` stores `''`. Any other non-string is refused |
 | `default_agent_model` | One of that agent's `models`, or `''` for the agent's default. Refused without a `default_agent_id` |
 | `default_agent_effort` | One of the five effort levels, or `''` for the agent's own level. It needs no `default_agent_id` |
+| `default_formula_id` | A [formula](08-scripting-and-voice.md#formulas) id, or `''` or `null` for Auto. An experimental formula is accepted whatever the `auto_experimental_formulas` setting says |
 | `topic_cap` | A whole number from 25 to 750. `true`, `"100"` and `100.5` are refused. Absent or `null` means 100 |
 
 Six checks run only when the value changes, because the dashboard re-sends the whole domain on
@@ -690,6 +782,7 @@ every edit and a value that became invalid later must not block other edits:
 - `default_agent_id` and `default_agent_model`, as a pair: a new agent is live, and the agent's
   `models` holds the model. The stored agent passes when it is sent again, so a model it dropped
   can be cleared with `''` while the agent is uninstalled.
+- `default_formula_id` being a formula.
 
 The id of an existing domain is not checked, so a domain filed under an older id stays editable.
 The id names the domain's output directory. A `topic_cap` below the domain's count is accepted and
@@ -728,18 +821,20 @@ Body: any subset of the declared keys. The response is the full settings object,
 ### `POST /voices/<voice_id>/preview`
 
 Generates an ElevenLabs sample of a roster voice with that voice's own model, or replays a cached
-one. An optional body `{"model_id": ...}` names another model, which lets the Settings page play a
-model change before it is saved. A missing or non-JSON body is accepted.
+one. An optional body `{"model_id": ..., "speed": ...}` names another model or speed, which lets the
+Settings page play a change before it is saved. Without `speed`, the voice's stored speed is used,
+or 1.0 when the model named does not honour speed. A missing or non-JSON body is accepted.
 
 | Status | Cause |
 |---|---|
 | `200` | `{path, cached, credits}`. `credits` is the plan credits the generation spent, 0 for a cache hit |
-| `400` | `voice_id` does not match `[A-Za-z0-9_-]+` or is not on the roster, or `model_id` is not a supported model. No ElevenLabs call is made |
+| `400` | `voice_id` does not match `[A-Za-z0-9_-]+` or is not on the roster, `model_id` is not a supported model, or `speed` is out of range or set on a model that ignores it. No ElevenLabs call is made |
 | `503` | No ElevenLabs key is configured |
 | `502` | ElevenLabs rejected the request, or the call failed |
 
-The cache file name is a hash of the voice id, the model and the sample text. A voice whose model
-changes therefore gets a new sample, and the typed `voice_id` does not reach a file path. A cache
+The cache file name is a hash of the voice id, the model, the speed (left out at 1.0) and the sample
+text. A voice whose model or speed changes therefore gets a new sample, and the typed `voice_id`
+does not reach a file path. A cache
 hit makes no outbound call.
 
 A generated preview is recorded in the usage ledger with no video, with credits from ElevenLabs'
@@ -758,9 +853,9 @@ style pickers from it. The write routes still refuse an unavailable style themse
 ### `GET /script-formulas`
 
 Returns `{"formulas": [...], "hook_types": [...]}` from the
-[formula files](08-scripting-and-voice.md#formulas). Each formula has `id`, `label`, `family`, `line`
-and `words` (`[min, max]`), in formula order. Each hook type has `id` and `label`. The dashboard uses
-it to label a video's `formula_id` and `hook_type`.
+[formula files](08-scripting-and-voice.md#formulas). Each formula has `id`, `label`, `family`, `line`,
+`words` (`[min, max]`) and `experimental`, in formula order. Each hook type has `id` and `label`. The
+dashboard uses it to label a video's formula and `hook_type` and to build its formula pickers.
 
 ### `GET /angle-kinds`
 
