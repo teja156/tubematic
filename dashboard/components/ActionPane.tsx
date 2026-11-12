@@ -13,7 +13,8 @@ import {
   effectiveAgent, effortLabel, effortOptionLabel, initialEffort, isUsable, modelLabel,
   pickedAgent, resolvedModel, topicApprovalPayload,
 } from "@/lib/agents";
-import { styleOptions, videoStyleLabel } from "@/lib/visualStyles";
+import { videoStyleLabel } from "@/lib/visualStyles";
+import { StylePicker } from "@/components/StylePicker";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
 import { hasFormula, videoFormulaLabel, type ScriptFormulaNames } from "@/lib/scriptFormulas";
 import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
@@ -401,33 +402,21 @@ function ActionButtons({ video, voices, defaultVoiceId, scriptProfiles = [], age
           </PickerField>
         )}
         <PickerField label="Visual style">
-          <select
-            data-testid={`style-select-${video.id}`}
+          <StylePicker
+            testId={`style-select-${video.id}`}
+            styles={visualStyles}
+            canUseOpenAI={illustratedAvailable}
+            gpu={gpu}
             value={selectedStyle}
-            onChange={(e) => {
-              const next = e.target.value as typeof selectedStyle;
-              setSelectedStyle(next);
+            onChange={(next) => {
+              setSelectedStyle(next as typeof selectedStyle);
               if (!styleTakesMascot(next, visualStyles)) setSelectedMascot("");
             }}
             title="Visual register for this video"
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: 11,
-              padding: "7px 8px",
-              background: "var(--panel)",
-              color: "var(--ink)",
-              border: "1px solid var(--border-2)",
-              // Sized by its longest option, the disabled "Illustrated (needs
-              // an OpenAI key)", it was 257px and pushed Revise onto a second
-              // line. Every selectable label fits in 150; the open list still
-              // shows the disabled one in full.
-              maxWidth: 150,
-            }}
-          >
-            {styleOptions(visualStyles, illustratedAvailable, gpu, selectedStyle).map((o) => (
-              <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
-            ))}
-          </select>
+            // Narrow, so Approve and Revise stay on the row; the list that
+            // opens is wide enough for every name and reason.
+            buttonStyle={{ fontFamily: "var(--mono)", fontSize: 11, padding: "6px 8px", width: 150 }}
+          />
         </PickerField>
         {mascotShown && (
           <PickerField label="Mascot (exp.)">

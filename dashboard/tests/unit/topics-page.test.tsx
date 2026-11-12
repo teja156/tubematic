@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TopicsPage from "@/app/topics/page";
+import { pickStyle, styleOption } from "./stylePickerHelpers";
 
 const MINING_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 
@@ -288,8 +289,8 @@ describe("TopicsPage — Illustrated default", () => {
   }
 
   function illustratedOption(testId: string) {
-    const select = screen.getByTestId(testId) as HTMLSelectElement;
-    return [...select.options].find((o) => o.value === "illustrated")!;
+    const row = styleOption(testId, "illustrated");
+    return { disabled: row.getAttribute("aria-disabled") === "true", textContent: row.textContent };
   }
 
   it("disables it in both pickers when no OpenAI key is stored", async () => {
@@ -381,8 +382,8 @@ describe("TopicsPage — default voice", () => {
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
     await openDefaults();
-    const select = await waitFor(() => screen.getByTestId("domain-style-seed-1"));
-    fireEvent.change(select, { target: { value: "auto" } });
+    await waitFor(() => screen.getByTestId("domain-style-seed-1"));
+    pickStyle("domain-style-seed-1", "auto");
     await waitFor(() => expect(postedProject(spy).default_voice_id).toBe("a1"));
   });
 
@@ -496,8 +497,8 @@ describe("TopicsPage — default script profile", () => {
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
     await openDefaults();
-    const select = await waitFor(() => screen.getByTestId("domain-style-seed-1"));
-    fireEvent.change(select, { target: { value: "auto" } });
+    await waitFor(() => screen.getByTestId("domain-style-seed-1"));
+    pickStyle("domain-style-seed-1", "auto");
     await waitFor(() => expect(postedProject(spy).default_script_profile_id).toBe("p-ready"));
   });
 
@@ -613,8 +614,8 @@ describe("TopicsPage — default mascot", () => {
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
     await openDefaults();
-    const select = await waitFor(() => screen.getByTestId("domain-style-seed-1"));
-    fireEvent.change(select, { target: { value: "auto" } });
+    await waitFor(() => screen.getByTestId("domain-style-seed-1"));
+    pickStyle("domain-style-seed-1", "auto");
     await waitFor(() => expect(postedProject(spy).default_mascot_id).toBe("tubi"));
   });
 
@@ -623,8 +624,8 @@ describe("TopicsPage — default mascot", () => {
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
     await openDefaults();
-    const select = await waitFor(() => screen.getByTestId("domain-style-seed-1"));
-    fireEvent.change(select, { target: { value: "auto" } });
+    await waitFor(() => screen.getByTestId("domain-style-seed-1"));
+    pickStyle("domain-style-seed-1", "auto");
     await waitFor(() => expect(postedProject(spy)).toHaveProperty("default_mascot_id", ""));
   });
 
@@ -663,7 +664,7 @@ describe("TopicsPage — default mascot", () => {
     const select = await waitFor(() => screen.getByTestId("domain-mascot-seed-1") as HTMLSelectElement);
     await waitFor(() => expect(select.value).toBe("tubi"));
     expect([...select.options].find((o) => o.value === "tubi")!.disabled).toBe(false);
-    fireEvent.change(screen.getByTestId("domain-style-seed-1"), { target: { value: "auto" } });
+    pickStyle("domain-style-seed-1", "auto");
     await waitFor(() => expect(postedProject(spy).default_mascot_id).toBe("tubi"));
   });
 
@@ -1499,8 +1500,8 @@ describe("TopicsPage — default formula", () => {
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
     await openDefaults();
-    const select = await waitFor(() => screen.getByTestId("domain-style-seed-1"));
-    fireEvent.change(select, { target: { value: "auto" } });
+    await waitFor(() => screen.getByTestId("domain-style-seed-1"));
+    pickStyle("domain-style-seed-1", "auto");
     await waitFor(() => expect(postedProject(spy).default_formula_id).toBe("scene-story"));
   });
 

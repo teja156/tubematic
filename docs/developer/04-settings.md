@@ -184,8 +184,8 @@ makes no more Gemini calls than that in one run
   ([The model follows the voice](08-scripting-and-voice.md#the-model-follows-the-voice)).
 - A video whose `voice_id` has left the roster fails before any ElevenLabs call. It does not fall
   back to the install default.
-- A voice's `speed` is 0.7 to 1.2 in steps of 0.05, allowed only on a model that honours it, and
-  never stored at 1.0 ([Speed](08-scripting-and-voice.md#speed)).
+- A voice's `speed` is 0.7 to 1.2 in steps of 0.05, on any model, and never stored at 1.0. A video
+  may carry a speed of its own that replaces it ([Speed](08-scripting-and-voice.md#speed)).
 - A `respell` should be one plain word that spells the sound. See
   [Respelling and the lexicon](08-scripting-and-voice.md#respelling-and-the-lexicon).
 

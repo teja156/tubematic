@@ -313,8 +313,14 @@ row.
 
 ```json
 {"voice_id": "a1", "name": "Adam", "model_id": "eleven_v3", "model_voiced": true,
- "other_voices": [{"voice_id": "r1", "name": "Rachel", "model_id": "eleven_multilingual_v2"}]}
+ "other_voices": [{"voice_id": "r1", "name": "Rachel", "model_id": "eleven_multilingual_v2"}],
+ "roster_speed": 1.0, "speed": 1.1}
 ```
+
+- `roster_speed` is the voice's speed in the roster, 1.0 when it has none. `speed` is, up to
+  `VOICING`, the speed the voicing will use (the video's own `voice_speed`, else `roster_speed`),
+  and once voiced the speed the audio was made at (`videos.voiced_speed`), `null` for a video
+  voiced before it was recorded (see [Speed](08-scripting-and-voice.md#speed)).
 
 - `voice_id` is the video's own voice, else the install default. It is kept when the voice has
   left the roster, and `name` is then `""`.
@@ -431,7 +437,8 @@ With no `formula_choice`, it takes the `manual` domain's `default_formula_id` in
 The main write path. The body may hold any of `status`, `title`, `script`, `video_version`,
 `youtube_url`, `gemini_feedback`, `voice_id`, `agent_id`, `agent_model`, `agent_effort`,
 `script_profile_id`, `visual_style`, `publish_title`, `publish_description`, `mascot_id`,
-`formula_choice`, `angle` and `angle_kind`, plus the optional guard `onlyIfCurrentStatus`. A body
+`formula_choice`, `angle`, `angle_kind` and `voice_speed`, plus the optional guard
+`onlyIfCurrentStatus`. A body
 with `segment_voices` follows its own rules (see [A segment's voice](#a-segments-voice)).
 
 ```json
@@ -452,6 +459,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 | `409` | `script_profile_id`, `visual_style`, `mascot_id` or `formula_choice` sent while the video is past `TOPIC_PROPOSED` |
 | `409` | `agent_id`, `agent_model` or `agent_effort` sent while the video is not at a human checkpoint |
 | `409` | `angle` and `angle_kind` sent while the video is past `TOPIC_PROPOSED` |
+| `409` | `voice_speed` sent while the video is not at `SCRIPT_READY` |
 | `409` | An approving `PATCH` while the video's mascot is archived, or while a Cartoon 3D, Under the Hood or Case File Story video keeps a mascot |
 | `409` | `{"error": "Status precondition failed", "current", "expected"}` |
 | `409` | `{"error", "voice_conflict": true}`: the voice's model cannot speak the stored script, or, on approval to `VOICING`, a segment's own voice cannot speak that segment |
@@ -465,6 +473,9 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   `agent_stuck_at`.
 - `title` must be a string of at most 70 characters. An update is refused where a create is
   clipped.
+- `voice_speed` is the video's own [speed](08-scripting-and-voice.md#speed): a number from 0.9 to
+  1.25 in steps of 0.05, or `null` to give the speed back to the voice. A person sets it at
+  `SCRIPT_READY` only, and the write is bound to that status. The approving `PATCH` may carry it.
 - `script` must come with both `publish_title` and `publish_description`. Each of those must be a
   non-blank string within its cap (100 and 2000 characters). MCP `update_video` applies the same
   rule (see [Publishing](14-publishing.md#schema)). A `script` written here clears the video's
@@ -823,14 +834,15 @@ Body: any subset of the declared keys. The response is the full settings object,
 
 Generates an ElevenLabs sample of a roster voice with that voice's own model, or replays a cached
 one. An optional body `{"model_id": ..., "speed": ...}` names another model or speed, which lets the
-Settings page play a change before it is saved. Without `speed`, the voice's stored speed is used,
-or 1.0 when the model named does not honour speed. A missing or non-JSON body is accepted.
+Settings page play a change before it is saved. Without `speed`, the voice's stored speed is used.
+A model that ignores ElevenLabs' speed, or a speed past the native maximum, gets a stretch of the
+sample (see [Speed](08-scripting-and-voice.md#speed)). A missing or non-JSON body is accepted.
 
 | Status | Cause |
 |---|---|
-| `200` | `{path, cached, credits}`. `credits` is the plan credits the generation spent, 0 for a cache hit |
-| `400` | `voice_id` does not match `[A-Za-z0-9_-]+` or is not on the roster, `model_id` is not a supported model, or `speed` is out of range or set on a model that ignores it. No ElevenLabs call is made |
-| `503` | No ElevenLabs key is configured |
+| `200` | `{path, cached, credits}`. `credits` is the plan credits the generation spent, 0 for a cache hit or a stretch of the cached recording at the native speed |
+| `400` | `voice_id` does not match `[A-Za-z0-9_-]+` or is not on the roster, `model_id` is not a supported model, or `speed` is out of range. No ElevenLabs call is made |
+| `503` | No ElevenLabs key is configured, or the sample needs a stretch and the API container has no `ffmpeg`. No ElevenLabs call is made |
 | `502` | ElevenLabs rejected the request, or the call failed |
 
 The cache file name is a hash of the voice id, the model, the speed (left out at 1.0) and the sample
@@ -847,8 +859,10 @@ A generated preview is recorded in the usage ledger with no video, with credits 
 Returns `{"styles": [...]}`: `auto` first, then every [style pack](10-scene-authoring.md#style-packs)
 in its pack order. Each entry has `id`, `label`, `experimental`, `canvas` (the canvas the style fixes,
 or `null`), `needs` (`openai_key`, `gpu`), `mascot` (false when the style's videos take no mascot),
-and `available` with `unavailable_reason` for this install
-now: `needs an OpenAI key`, `needs a working GPU` or `GPU not tested yet`. The dashboard builds its
+`dimension` (`2d` or `3d`), `preview` (the stem of the style's
+[preview files](10-scene-authoring.md#style-previews)), `tagline`, and `available` with
+`unavailable_reason` for this install now: `needs an OpenAI key`, `needs a working GPU` or
+`GPU not tested yet`. `auto` has `null` for `dimension` and `preview`. The dashboard builds its
 style pickers from it. The write routes still refuse an unavailable style themselves.
 
 ### `GET /script-formulas`

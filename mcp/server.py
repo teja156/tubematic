@@ -70,6 +70,7 @@ DATA_ROOT = Path.home() / ".tubematic-data"
 try:
     from tubematic_core import logging as tlog
     from tubematic_core import angles as tangles
+    from tubematic_core import audio_speed as taudio
     from tubematic_core import db as tdb
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
@@ -85,6 +86,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.
     sys.path.insert(0, str(REPO_ROOT))
     from tubematic_core import logging as tlog
     from tubematic_core import angles as tangles
+    from tubematic_core import audio_speed as taudio
     from tubematic_core import db as tdb
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
@@ -1277,6 +1279,12 @@ def get_video(video_id: str) -> dict:
     voice's model. Write the script for THEM: which pronunciation and pause
     markup is allowed depends on the model, and each voice has its own.
 
+    voice_speed is the video's own speed (null = none set), and
+    effective_voice_speed the speed its next voicing uses: voice_speed, else
+    the voice's roster speed. voice_speed_source says which ("video" or
+    "roster"). voiced_speed is the speed the current audio was made at (null
+    until a voicing records it); a pacing revision starts from it.
+
     illustrated_available is true when an OpenAI key is stored (the key itself
     is never returned). generate_character needs one. Read it here under the
     "auto" visual style before choosing generated character art; under
@@ -1366,6 +1374,11 @@ def get_video(video_id: str) -> dict:
     video["voice"] = voice
     video["elevenlabs_model_id"] = model_id
     video["pronunciation_mode"] = _pronunciation_mode_for_model(model_id)
+    # The speed the next voicing uses (TMDEV-227): the video's own, else the
+    # resolved voice's roster speed.
+    video["effective_voice_speed"] = (tvoice.effective_speed(video.get("voice_speed"), voice)
+                                      if voice else video.get("voice_speed"))
+    video["voice_speed_source"] = "video" if video.get("voice_speed") is not None else "roster"
     video["illustrated_available"] = bool(_openai_key())
     # Under "auto" the skill reads this before choosing the renderer, as it
     # reads illustrated_available before choosing generated art.
@@ -2749,8 +2762,21 @@ def update_video(
     angle: str | None = None,
     angle_kind: str | None = None,
     angle_score: int | None = None,
+    voice_speed: float | None = None,
 ) -> dict:
     """Update one or more fields on a video record. Pass only fields to change.
+
+    voice_speed: how fast this video's voice speaks, 0.9 to 1.25 in steps of
+    0.05; left out, the stored speed stays (none = each voice's roster speed,
+    get_pipeline_status's elevenlabs_voices); 0 clears it back to the roster
+    speed. Write it with the script, chosen
+    per the script-writing skill. It replaces the roster speed of every voice
+    in the video. A voice on eleven_v3 or eleven_v4 is recorded at its normal
+    pace and the recording is sped up after, keeping the pitch; a v2-family
+    voice is asked for the speed directly (above 1.2, the rest is a stretch).
+    Writable at TOPIC_APPROVED and at REVISION_REQUESTED (a pacing revision: a
+    re-voice whose words and voices are unchanged re-uses the kept recording
+    and costs nothing). A person sets it at SCRIPT_READY on the dashboard.
 
     angle, angle_kind, angle_score: the topic's angle (see create_video). Pass
     the sentence and its kind together, every time, with the score you gave
@@ -3175,6 +3201,15 @@ def update_video(
         if agent_effort and agent_effort not in AGENT_EFFORTS:
             return {"error": f"agent_effort {agent_effort!r} must be one of "
                              f"{list(AGENT_EFFORTS)}, or \"\" for the agent's own effort"}
+    # 0 clears the video's speed back to its voice's roster speed: None
+    # already means "leave it".
+    clear_speed = (voice_speed is not None and not isinstance(voice_speed, bool)
+                   and isinstance(voice_speed, (int, float)) and voice_speed == 0)
+    if voice_speed is not None and not clear_speed:
+        err = tvoice.video_speed_error(voice_speed)
+        if err:
+            return {"error": f"voice_speed: {err}"}
+        voice_speed = round(float(voice_speed), 2)
     if script_profile_id:
         _init_db()
         with _conn() as con:
@@ -3249,10 +3284,12 @@ def update_video(
         "resolved_visual_style": resolved_visual_style,
         "resolved_renderer": resolved_renderer,
         "publish_title": publish_title, "publish_description": publish_description,
-        "mascot_id": mascot_id,
+        "mascot_id": mascot_id, "voice_speed": voice_speed,
     }.items() if v is not None}
     if script_segments is not None:
         fields["script_segments"] = json.dumps(script_segments)
+    if clear_speed:
+        fields["voice_speed"] = None
     if formula_id is not None:
         stored = _stored_hooks(hooks)
         fields["formula_id"] = formula_id
@@ -3374,6 +3411,25 @@ def update_video(
     # only at the paid voicing step. Keep in sync: renderer/api/pipeline.py's
     # patch_video (voice_exempt).
     bound_fields = topic_locked + agent_locked + (["angle"] if angle_write else [])
+    # The speed's window, bound in the UPDATE like the freezes above: the agent
+    # writes it with the script and on a revision; a person changes it at
+    # SCRIPT_READY through the dashboard. Keep in sync: renderer/api/pipeline.py's
+    # patch_video (SCRIPT_READY only there).
+    if "voice_speed" in fields:
+        with _conn() as con:
+            row = con.execute("SELECT status FROM videos WHERE id = ?", (video_id,)).fetchone()
+        if not row:
+            return {"error": f"Video not found: {video_id}"}
+        if row["status"] not in VOICE_SPEED_AGENT_STATUSES:
+            return {"error": "voice_speed is written with the script (TOPIC_APPROVED) or on a "
+                             f"revision (REVISION_REQUESTED); this video is at {row['status']}"}
+        if checked_status is None:
+            checked_status = row["status"]
+            where_sql, where_params = " AND status = ?" + where_sql, [checked_status] + where_params
+        elif checked_status != row["status"]:
+            return {"error": f"The video moved from {checked_status} to {row['status']} while the "
+                             "call was in flight — check get_video"}
+        bound_fields = bound_fields + ["voice_speed"]
     if voice_exempt:
         if checked_status is None:
             checked_status = "TOPIC_PROPOSED"
@@ -3501,6 +3557,11 @@ def update_video(
     if warnings is not None:
         return {"video_id": video_id, "updated_fields": updated, "warnings": warnings}
     return {"video_id": video_id, "updated_fields": updated}
+
+
+# Where the agent may write a video's speed (TMDEV-227): with the script, and
+# on a revision. SCRIPT_READY is the person's (the dashboard's PATCH).
+VOICE_SPEED_AGENT_STATUSES = frozenset({"TOPIC_APPROVED", "REVISION_REQUESTED"})
 
 
 _ANGLE_ALREADY_SET = ("This video already has an angle, approved with its topic; at "
@@ -4878,9 +4939,11 @@ def _voice_run(run: dict, elevenlabs_key: str, video_id: str, context: dict) -> 
     model_id = entry["model_id"]
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{entry['voice_id']}/with-timestamps"
     voice_settings = {"stability": 0.5, "similarity_boost": 0.75}
-    # Sent only when it is not the default, so a voice nobody gave a speed
-    # sends exactly the request it always has (TMDEV-216).
-    speed = tvoice.voice_speed(entry)
+    # The native part of the run's speed (TMDEV-227, voice_models.speed_plan):
+    # 1.0 on eleven_v3/v4, whose recording is stretched afterwards. Sent only
+    # when it is not the default, so a voice nobody gave a speed sends exactly
+    # the request it always has (TMDEV-216).
+    speed = run.get("native", tvoice.DEFAULT_SPEED)
     if speed != tvoice.DEFAULT_SPEED:
         voice_settings["speed"] = speed
     payload = {
@@ -5064,6 +5127,82 @@ def _join_voice_audio(ffmpeg: str, parts: list[bytes]) -> tuple[bytes, list[floa
         return out.read_bytes(), durations
 
 
+def _kept_voice_runs(video_id: str, runs: list) -> list | None:
+    """The recordings a previous voicing of these same runs kept (TMDEV-227),
+    as [{audio, words, duration, native}] in run order, or None.
+
+    None when there are none, when any run differs (another voice, model or
+    text means another recording), and when no run's speed changed since the
+    last voicing: a re-voice with the same words at the same speed is a
+    request for a new take (a glitch, a wrong stress), and handing back the
+    same audio would answer it with nothing. A kept recording is re-stretched
+    to any speed from its own native speed, which is what makes a
+    speed-only re-voice cost nothing."""
+    try:
+        manifest_path = tjobs.voice_original_file(JOBS_DIR, video_id, tjobs.VOICE_ORIGINAL_MANIFEST)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        kept = manifest["runs"]
+        if not isinstance(kept, list) or len(kept) != len(runs):
+            return None
+        out = []
+        for i, (run, k) in enumerate(zip(runs, kept)):
+            if (k["voice_id"], k["model_id"], k["tts_text"]) != (
+                    run["voice"]["voice_id"], run["voice"]["model_id"], run["tts_text"]):
+                return None
+            audio = tjobs.voice_original_file(JOBS_DIR, video_id, f"run{i}.mp3").read_bytes()
+            # speed is None for a recording that was paid for but never
+            # delivered (the stretch or the join failed after the call): it is
+            # always reused, or the retry would pay for it again.
+            out.append({"audio": audio, "words": k["words"], "duration": float(k["duration"]),
+                        "native": float(k["native"]),
+                        "speed": None if k["speed"] is None else float(k["speed"])})
+        if all(o["speed"] == run["speed"] for o, run in zip(out, runs)):
+            return None
+        return out
+    except (OSError, ValueError, KeyError, TypeError, tjobs.UnsafePath):
+        return None
+
+
+def _keep_voice_runs(video_id: str, runs: list, voiced: list, write_audio: bool = True,
+                     delivered: bool = True) -> None:
+    """Keep each run's recording as ElevenLabs returned it, before any
+    stretch, with what it was made from and the speed it was last delivered
+    at. generate_voice keeps them right after the paid calls with
+    delivered=False (speed None), so a stretch or join that fails afterwards
+    loses nothing that was paid for, then marks them delivered once the audio
+    is written. A re-stretch rewrites only the manifest (write_audio=False).
+    The manifest is written last, through a temporary file checked like every
+    other job path, so a half-written set is never read back as a match."""
+    manifest_path = tjobs.voice_original_file(JOBS_DIR, video_id, tjobs.VOICE_ORIGINAL_MANIFEST)
+    # The folder is checked by the line above. A link planted as the temporary
+    # file is removed here, by name inside that folder, so the checked lookup
+    # below can succeed: unlinking a link never touches its target.
+    (manifest_path.parent / tjobs.VOICE_ORIGINAL_MANIFEST_TMP).unlink(missing_ok=True)
+    tmp = tjobs.voice_original_file(JOBS_DIR, video_id, tjobs.VOICE_ORIGINAL_MANIFEST_TMP)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.unlink(missing_ok=True)
+    entries = []
+    for i, (run, out) in enumerate(zip(runs, voiced)):
+        if write_audio:
+            run_path = tjobs.voice_original_file(JOBS_DIR, video_id, f"run{i}.mp3")
+            run_path.unlink(missing_ok=True)   # never write through whatever was there
+            run_path.write_bytes(out["audio"])
+        entries.append({"voice_id": run["voice"]["voice_id"], "model_id": run["voice"]["model_id"],
+                        "tts_text": run["tts_text"], "native": run["native"],
+                        "speed": run["speed"] if delivered else None,
+                        "duration": out["duration"], "words": out["words"]})
+    tmp.write_text(json.dumps({"version": 1, "runs": entries}), encoding="utf-8")
+    os.replace(tmp, manifest_path)
+
+
+def _drop_kept_voice_runs(video_id: str) -> None:
+    """Forget the kept recordings: without a manifest nothing is reused."""
+    try:
+        tjobs.voice_original_file(JOBS_DIR, video_id, tjobs.VOICE_ORIGINAL_MANIFEST).unlink(missing_ok=True)
+    except (OSError, tjobs.UnsafePath) as e:
+        log.warning("could not drop the kept voice recording of %s: %s", video_id, e)
+
+
 @mcp.tool
 def generate_voice(video_id: str, script: str) -> dict:
     """Generate TTS audio for a script via ElevenLabs.
@@ -5145,8 +5284,21 @@ def generate_voice(video_id: str, script: str) -> dict:
     between adjacent words' frame spans. Using the wrong syntax for the
     voice's model is rejected before any spend.
 
-    Returns {audio_path, timeline_path, credits, duration_secs, total_frames} —
-    credits are ElevenLabs plan credits, never dollars.
+    Speed: every run speaks at the video's voice_speed when it has one, else at
+    its voice's roster speed. A v2-family voice is asked for it (up to 1.2,
+    the rest a stretch); eleven_v3 and eleven_v4, which ignore ElevenLabs'
+    speed, record at 1.0 and the recording is sped up after with its pitch
+    kept. Every word time is divided by the same factor, so the timeline
+    matches the audio. Each voicing keeps the recordings as they came back
+    (jobs/<video_id>/voice-original/). A later call with the same voices and
+    words at a different speed re-stretches those instead of calling
+    ElevenLabs: credits 0, reused_recording true. The same words at the same
+    speed is a new take and is paid for.
+
+    Returns {audio_path, timeline_path, credits, duration_secs, total_frames,
+    voice_speed, reused_recording} — credits are ElevenLabs plan credits,
+    never dollars; voice_speed is the speed voiced (a list when the runs
+    differ).
     """
     err = _video_id_error(video_id)
     if err:
@@ -5242,20 +5394,32 @@ def generate_voice(video_id: str, script: str) -> dict:
             tts_text = _apply_lexicon(tts_text, lexicon)
             runs.append({"voice": voice, "segments": None, "tts_text": tts_text})
 
-        # A speed the voice's model would ignore is refused, never sent. This
-        # is defensive only: every roster reader already drops a roster that
-        # holds one, so no voice with such a speed resolves this far.
-        for run in runs:
-            err = tvoice.speed_error(tvoice.voice_speed(run["voice"]), run["voice"]["model_id"],
-                                     run["voice"]["name"])
+        # The speed of every run (TMDEV-227): the video's own speed when it has
+        # one, else each voice's roster speed, split into what ElevenLabs is
+        # asked for and a pitch-keeping stretch of the recording afterwards
+        # (all of it on eleven_v3/v4, which ignore the native setting).
+        video_speed = video.get("voice_speed")
+        if video_speed is not None:
+            err = tvoice.video_speed_error(video_speed)
             if err:
-                return {"error": err}
+                return {"error": f"the video's voice_speed is unusable: {err}"}
+        for run in runs:
+            run["speed"] = tvoice.effective_speed(video_speed, run["voice"])
+            run["native"], run["stretch"] = tvoice.speed_plan(run["speed"], run["voice"]["model_id"])
+        # A re-voice of the same runs re-stretches the recordings the last
+        # voicing kept, from their own native speed, and calls ElevenLabs not
+        # at all.
+        kept = _kept_voice_runs(video_id, runs)
+        if kept is not None:
+            for run, k in zip(runs, kept):
+                run["native"] = k["native"]
+                run["stretch"] = round(run["speed"] / k["native"], 6)
         ffmpeg = None
-        if len(runs) > 1:
+        if len(runs) > 1 or any(run["stretch"] != 1.0 for run in runs):
             ffmpeg = shutil.which("ffmpeg")
             if not ffmpeg:
                 return {"error": "ffmpeg must be on PATH in the MCP container to join a script "
-                                 "spoken by more than one voice"}
+                                 "spoken by more than one voice or to change a voice's speed"}
 
         # The same names every reader derives (tubematic_core.jobfiles). A
         # planted symlink in place of either file is refused before spend.
@@ -5267,7 +5431,7 @@ def generate_voice(video_id: str, script: str) -> dict:
         audio_path.parent.mkdir(parents=True, exist_ok=True)
 
         voiced, credits = [], 0
-        for i, run in enumerate(runs):
+        for i, run in enumerate(runs if kept is None else []):
             context = {}
             # Each run hears its neighbours' words, so the joined audio keeps
             # its intonation across a change of voice. eleven_v3 refuses the
@@ -5283,6 +5447,36 @@ def generate_voice(video_id: str, script: str) -> dict:
             if "error" in out:
                 return {"error": out["error"]}
             voiced.append(out)
+        recorded = voiced if kept is None else kept
+        if kept is None:
+            # Kept before anything that can still fail, so a retry re-uses
+            # what was paid for instead of paying again.
+            try:
+                _keep_voice_runs(video_id, runs, recorded, delivered=False)
+            except (OSError, tjobs.UnsafePath) as e:
+                log.warning("could not keep the original voice recording of %s: %s", video_id, e)
+
+        # The stretch, run by run, before the join: each run's words are then
+        # offset by its stretched length. Word times shrink with the audio, or
+        # the captions and the scene cuts would run ahead of the voice.
+        voiced = []
+        for run, out in zip(runs, recorded):
+            if run["stretch"] == 1.0:
+                voiced.append(out)
+                continue
+            try:
+                audio, seconds = taudio.stretch(ffmpeg, out["audio"], run["stretch"])
+            except Exception as e:
+                # A first failure keeps the paid recording for the retry (ffmpeg
+                # may only have timed out); a failure on a reused one drops it,
+                # so audio ffmpeg cannot read is never retried for ever.
+                if kept is not None:
+                    _drop_kept_voice_runs(video_id)
+                _provider_failed("elevenlabs", model_id, "voice",
+                                 error=f"changing the speed failed: {type(e).__name__}: {e}")
+                return {"error": f"The voice was generated but its speed could not be changed: {e}"}
+            voiced.append({**out, "audio": audio, "duration": seconds,
+                           "words": taudio.scale_words(out["words"], run["stretch"])})
 
         if len(voiced) == 1:
             audio_bytes = voiced[0]["audio"]
@@ -5294,6 +5488,11 @@ def generate_voice(video_id: str, script: str) -> dict:
             try:
                 audio_bytes, durations = _join_voice_audio(ffmpeg, [o["audio"] for o in voiced])
             except Exception as e:
+                # A first failure keeps the paid recording for the retry (ffmpeg
+                # may only have timed out); a failure on a reused one drops it,
+                # so audio ffmpeg cannot read is never retried for ever.
+                if kept is not None:
+                    _drop_kept_voice_runs(video_id)
                 _provider_failed("elevenlabs", model_id, "voice",
                                  error=f"joining the voices failed: {type(e).__name__}: {e}")
                 return {"error": f"The voices were generated but could not be joined: {e}"}
@@ -5321,6 +5520,9 @@ def generate_voice(video_id: str, script: str) -> dict:
             try:
                 timeline["segments"] = _lockstep_segment_frames(segments, words)
             except (ValueError, IndexError) as e:
+                # The recording does not fit the script's segments, so it is
+                # not kept: a retry must ask for a new take, never reuse this one.
+                _drop_kept_voice_runs(video_id)
                 _provider_failed("elevenlabs", model_id, "voice", status=200, error=str(e))
                 return {"error": str(e)}
             # When normalized_alignment was used (a phoneme tag was present),
@@ -5340,14 +5542,23 @@ def generate_voice(video_id: str, script: str) -> dict:
         # applicable) has passed — avoids leaving an orphan audio.mp3 on failure.
         audio_path.write_bytes(audio_bytes)
         timeline_path.write_text(json.dumps(timeline, indent=2), encoding="utf-8")
+        try:
+            _keep_voice_runs(video_id, runs, recorded, write_audio=False)
+        except (OSError, tjobs.UnsafePath) as e:
+            # The voicing stands; only a later speed-only re-voice would pay again.
+            log.warning("could not keep the original voice recording of %s: %s", video_id, e)
 
         # tts_text is stored as a record of what was actually spoken, not
         # re-derived later: the lexicon is install-wide and mutable, so a
         # derivation run at review time could reconstruct an instruction that
         # was never issued for this video.
         tts_text = " ".join(run["tts_text"] for run in runs)
+        # The speed the audio was made at, for the video window once the video
+        # is voiced: the video voice's runs, else the first run.
+        voiced_speed = next((r["speed"] for r in runs if r["voice"]["voice_id"] == voice["voice_id"]),
+                            runs[0]["speed"])
         _update_fields(video_id, voice_file_path=str(audio_path), timeline_path=str(timeline_path),
-                        tts_text=tts_text)
+                        tts_text=tts_text, voiced_speed=voiced_speed)
         status_advanced = _set_status(video_id, "VOICE_READY", only_if="VOICING")
 
         result = {
@@ -5356,6 +5567,9 @@ def generate_voice(video_id: str, script: str) -> dict:
             "credits": credits,
             "duration_secs": audio_duration,
             "total_frames": total_frames,
+            "voice_speed": runs[0]["speed"] if len({r["speed"] for r in runs}) == 1
+                           else [r["speed"] for r in runs],
+            "reused_recording": kept is not None,
         }
         if not status_advanced:
             result["warning"] = (

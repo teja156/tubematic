@@ -112,6 +112,9 @@ style.
 | Field | Holds |
 |---|---|
 | `id`, `label`, `order`, `experimental` | The style's name in the code and on the dashboard, its place in the pickers, and whether the dashboard marks it experimental |
+| `dimension` | `2d` or `3d`: the group the dashboard's style picker lists the style in. A style is `3d` when its world is a 3D scene |
+| `preview` | The stem of the style's [preview files](#style-previews) in `dashboard/public/style-previews/` |
+| `tagline` | One sentence under the preview: what the style is for, written for a person choosing it |
 | `renderer` | `dom` for the scene system, `cartoon_3d` for the 3D world |
 | `canvas` | The canvas the style fixes, or `null` when the agent chooses it |
 | `allows` | `figures`, `line_art` and `generated_characters`: the three permission columns above |
@@ -133,8 +136,30 @@ number of generated images a video costs at most (0 when absent).
 [How Auto picks a style](#how-auto-picks-a-style) reads all six.
 
 `tubematic_core/tests/test_style_packs.py` pins every gate's answer for each style, `auto`, a blank
-value and an unknown one. Adding a style is a new pack file, the style's renderer work and its
-authoring skill.
+value and an unknown one. Adding a style is a new pack file, the style's renderer work, its
+authoring skill and its preview.
+
+### Style previews
+
+Every pack ships a preview: a short silent loop and a poster, shown when a person opens the style
+in the dashboard's style picker. The files are `dashboard/public/style-previews/<preview>.mp4` and
+`<preview>.webp`, served by the dashboard and built into its image (the release tarball carries no
+dashboard files, so it does not grow).
+
+Make them with `scripts/make_style_preview.py`, from any finished 9:16 video of the style:
+
+```bash
+python3 scripts/make_style_preview.py <video.mp4> <preview> --start 12.5
+python3 scripts/make_style_preview.py <video.mp4> <preview> --start 1 --docker-image <image with ffmpeg>
+```
+
+It cuts 6 seconds (`--duration` changes it) to 540x960 at 30 fps, H.264 with no audio and the
+index at the front, and takes the poster from the loop's first frame as WebP. It uses `ffmpeg` on
+`PATH`, one named with `--ffmpeg`, or a Docker image that has it; every Tubematic backend image
+does. The previews are part of every install's download, so each has a cap: the loop 400 KB and
+the poster 40 KB. The script encodes again at a lower quality until a file fits.
+`test_style_packs.py` checks that every pack's two files exist, each within its cap, and that the
+folder stays under 12 MB. The script is a maintainer tool and is not in the release tarball.
 
 ### The canvas
 

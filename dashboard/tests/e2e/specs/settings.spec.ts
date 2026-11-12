@@ -262,7 +262,7 @@ test.describe("Settings page", () => {
     expect(settings).not.toHaveProperty("pronunciation_mode");
   });
 
-  test("a voice's speed persists, is disabled on v4, and the API refuses one there (TMDEV-216)", async ({ page }) => {
+  test("a voice's speed persists on every model, v4 included (TMDEV-227)", async ({ page }) => {
     await setSettings({
       elevenlabs_voices: [
         { name: "Narrator", voice_id: "voice-abc123", model_id: "eleven_multilingual_v2" },
@@ -272,21 +272,24 @@ test.describe("Settings page", () => {
     try {
       await gotoTab(page, "voice");
       await expect(page.getByTestId("voice-speed-0")).toBeVisible({ timeout: 10_000 });
-      await expect(page.getByTestId("voice-speed-1")).toBeDisabled();
+      // v4 ignores ElevenLabs' speed, so its recording is stretched instead: the picker is live.
+      await expect(page.getByTestId("voice-speed-1")).toBeEnabled();
 
       await page.getByTestId("voice-speed-0").selectOption("1.15");
       await settled(page);
+      await page.getByTestId("voice-speed-1").selectOption("1.10");
+      await settled(page);
       expect((await getSettings()).elevenlabs_voices).toEqual([
         { name: "Narrator", voice_id: "voice-abc123", model_id: "eleven_multilingual_v2", speed: 1.15 },
-        { name: "Teja", voice_id: "voice-t1", model_id: "eleven_v4" },
+        { name: "Teja", voice_id: "voice-t1", model_id: "eleven_v4", speed: 1.1 },
       ]);
 
-      // eleven_v4 ignores speed, so a speed there is refused, never stored.
+      // Past the roster range is still refused, never stored.
       const refused = await fetch(`${BASE}/settings`, {
         method: "POST",
         headers: { ...API_AUTH, "Content-Type": "application/json" },
         body: JSON.stringify({ elevenlabs_voices: [
-          { name: "Teja", voice_id: "voice-t1", model_id: "eleven_v4", speed: 1.1 }] }),
+          { name: "Teja", voice_id: "voice-t1", model_id: "eleven_v4", speed: 1.3 }] }),
       });
       expect(refused.status).toBe(400);
     } finally {

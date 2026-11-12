@@ -500,9 +500,11 @@ test.describe("Pipeline board", () => {
       const actionCard = page.getByTestId(`action-card-${video.id}`);
       await expect(actionCard).toBeVisible({ timeout: 10_000 });
 
-      const styleSelect = actionCard.getByTestId(`style-select-${video.id}`);
-      await expect(styleSelect).toHaveValue("auto");
-      await styleSelect.selectOption("stick");
+      const stylePicker = actionCard.getByTestId(`style-select-${video.id}`);
+      await expect(stylePicker).toHaveAttribute("data-value", "auto");
+      await stylePicker.click();
+      await page.getByTestId(`style-select-${video.id}-option-stick`).click();
+      await expect(stylePicker).toHaveAttribute("data-value", "stick");
 
       await actionCard.getByRole("button", { name: "Approve" }).click();
       await expect(actionCard).not.toBeVisible({ timeout: 5_000 });
@@ -535,13 +537,15 @@ test.describe("Pipeline board", () => {
       await page.goto("/");
       const actionCard = page.getByTestId(`action-card-${video.id}`);
       await expect(actionCard).toBeVisible({ timeout: 10_000 });
-      const styleSelect = actionCard.getByTestId(`style-select-${video.id}`);
-      await expect(styleSelect.locator('option[value="system_flow"]')).toHaveText("System Flow", { timeout: 10_000 });
-      await expect(styleSelect.locator('option[value="whiteboard"]')).toHaveText("Whiteboard");
-      expect(await styleSelect.locator("option").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value)))
-        .toEqual(served);
+      const stylePicker = actionCard.getByTestId(`style-select-${video.id}`);
+      await stylePicker.click();
+      const list = page.getByTestId(`style-select-${video.id}-list`);
+      await expect(list.getByTestId(`style-select-${video.id}-option-system_flow`)).toContainText("System Flow", { timeout: 10_000 });
+      await expect(list.getByTestId(`style-select-${video.id}-option-whiteboard`)).toContainText("Whiteboard");
+      expect((await list.locator('[role="option"]').evaluateAll((os) => os.map((o) => (o as HTMLElement).dataset.value))).sort())
+        .toEqual([...served].sort());
 
-      await styleSelect.selectOption("system_flow");
+      await list.getByTestId(`style-select-${video.id}-option-system_flow`).click();
       await actionCard.getByRole("button", { name: "Approve" }).click();
       await expect(actionCard).not.toBeVisible({ timeout: 5_000 });
       expect((await getVideo(video.id)).visual_style).toBe("system_flow");
@@ -558,12 +562,11 @@ test.describe("Pipeline board", () => {
         await page.goto("/");
         const actionCard = page.getByTestId(`action-card-${video.id}`);
         await expect(actionCard).toBeVisible({ timeout: 10_000 });
-        const illustrated = actionCard.getByTestId(`style-select-${video.id}`)
-          .locator('option[value="illustrated"]');
-        // The DOM property, not toBeDisabled(): Playwright reports a disabled
-        // <option> inside an enabled <select> as enabled.
-        await expect(illustrated).toHaveJSProperty("disabled", true);
+        await actionCard.getByTestId(`style-select-${video.id}`).click();
+        const illustrated = page.getByTestId(`style-select-${video.id}-option-illustrated`);
+        await expect(illustrated).toHaveAttribute("aria-disabled", "true");
         await expect(illustrated).toContainText("needs an OpenAI key");
+        await page.keyboard.press("Escape");
 
         // The server refuses it too — the dashboard is not the only caller.
         const res = await fetch(`${BASE}/videos/${video.id}`, {
@@ -576,12 +579,38 @@ test.describe("Pipeline board", () => {
 
         await setSettings({ openai_api_key: "sk-e2e-test" });
         await page.reload();
-        await expect(page.getByTestId(`action-card-${video.id}`)
-          .getByTestId(`style-select-${video.id}`)
-          .locator('option[value="illustrated"]')).toHaveJSProperty("disabled", false, { timeout: 10_000 });
+        await page.getByTestId(`action-card-${video.id}`).getByTestId(`style-select-${video.id}`).click();
+        await expect(page.getByTestId(`style-select-${video.id}-option-illustrated`))
+          .toHaveAttribute("aria-disabled", "false", { timeout: 10_000 });
       } finally {
         await setSettings({ openai_api_key: "" });
       }
+    });
+
+    test("the picker groups styles by 2D and 3D, tags the GPU style, and plays a style's preview", async ({ page }) => {
+      const video = await createVideo({ topic: `[${uid}] Style preview` });
+      await page.goto("/");
+      const actionCard = page.getByTestId(`action-card-${video.id}`);
+      await expect(actionCard).toBeVisible({ timeout: 10_000 });
+      const id = `style-select-${video.id}`;
+      await actionCard.getByTestId(id).click();
+      await expect(page.getByTestId(`${id}-group-3d`)).toContainText("Cartoon 3D");
+      await expect(page.getByTestId(`${id}-option-cartoon_3d`)).toContainText("GPU");
+      await expect(page.getByTestId(`${id}-option-stick`)).not.toContainText("GPU");
+
+      await page.getByTestId(`${id}-preview-whiteboard`).click();
+      const preview = page.getByTestId("style-preview");
+      await expect(preview).toBeVisible();
+      await expect(page.getByTestId("style-preview-title")).toHaveText("Whiteboard");
+      // The file is served by the dashboard and actually plays.
+      const video_el = page.getByTestId("style-preview-video");
+      await expect.poll(() => video_el.evaluate((v) => (v as HTMLVideoElement).readyState), { timeout: 10_000 })
+        .toBeGreaterThanOrEqual(2);
+      await page.getByTestId("style-preview-use").click();
+      await expect(preview).toBeHidden();
+      await expect(actionCard.getByTestId(id)).toHaveAttribute("data-value", "whiteboard");
+      // Nothing is sent until Approve.
+      expect((await getVideo(video.id)).visual_style).toBe("auto");
     });
 
     test("the frozen register is shown read-only once the picker is gone", async ({ page }) => {

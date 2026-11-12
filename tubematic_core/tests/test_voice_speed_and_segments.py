@@ -27,31 +27,55 @@ ADAM = {"name": "Adam", "voice_id": "adam", "model_id": "eleven_multilingual_v2"
 ROSTER = [TEJA, ADAM]
 
 
-def test_speed_models_are_the_catalog_minus_v3_and_v4():
-    assert vm.SPEED_MODELS == vm.DICTIONARY_COMPATIBLE_MODELS - {"eleven_v3", "eleven_v4"}
+def test_native_speed_models_are_the_catalog_minus_v3_and_v4():
+    assert vm.NATIVE_SPEED_MODELS == vm.DICTIONARY_COMPATIBLE_MODELS - {"eleven_v3", "eleven_v4"}
 
 
+@pytest.mark.parametrize("model", sorted(vm.DICTIONARY_COMPATIBLE_MODELS))
 @pytest.mark.parametrize("speed", [0.7, 0.95, 1.0, 1.1, 1.15, 1.2])
-def test_a_speed_in_range_on_a_v2_model_is_allowed(speed):
-    assert vm.speed_error(speed, "eleven_multilingual_v2") is None
+def test_a_roster_speed_in_range_is_allowed_on_every_model(speed, model):
+    # TMDEV-227 reverses TMDEV-216's refusal on v3/v4: they get a stretch.
+    assert vm.speed_error(speed) is None
+    assert vm.roster_entry_error({"name": "V", "voice_id": "v", "model_id": model, "speed": speed}) is None
 
 
 @pytest.mark.parametrize("speed,fragment", [
     (0.65, "between"), (1.25, "between"), (1.13, "multiple"), ("1.1", "number"), (True, "number"),
 ])
-def test_a_bad_speed_is_refused(speed, fragment):
-    assert fragment in vm.speed_error(speed, "eleven_multilingual_v2")
+def test_a_bad_roster_speed_is_refused(speed, fragment):
+    assert fragment in vm.speed_error(speed)
 
 
-@pytest.mark.parametrize("model", ["eleven_v3", "eleven_v4"])
-def test_a_speed_on_v3_or_v4_is_refused_and_names_the_voice(model):
-    err = vm.speed_error(1.1, model, "Teja")
-    assert "ignores speed" in err and "Teja" in err
+@pytest.mark.parametrize("speed", [0.9, 0.95, 1.0, 1.1, 1.25])
+def test_a_video_speed_in_range_is_allowed(speed):
+    assert vm.video_speed_error(speed) is None
 
 
-@pytest.mark.parametrize("model", ["eleven_v3", "eleven_v4"])
-def test_the_default_speed_is_allowed_on_every_model(model):
-    assert vm.speed_error(1.0, model) is None
+@pytest.mark.parametrize("speed,fragment", [
+    (0.85, "between"), (1.3, "between"), (0.7, "between"), (1.12, "multiple"), (None, "number"), (False, "number"),
+])
+def test_a_bad_video_speed_is_refused(speed, fragment):
+    assert fragment in vm.video_speed_error(speed)
+
+
+@pytest.mark.parametrize("target,model,plan", [
+    (1.0, "eleven_multilingual_v2", (1.0, 1.0)),
+    (1.1, "eleven_multilingual_v2", (1.1, 1.0)),     # native only
+    (1.2, "eleven_flash_v2_5", (1.2, 1.0)),
+    (1.25, "eleven_multilingual_v2", (1.2, 1.041667)),  # native to its maximum, the rest a stretch
+    (0.9, "eleven_turbo_v2", (0.9, 1.0)),
+    (1.0, "eleven_v4", (1.0, 1.0)),                  # no stretch at all at 1.0
+    (1.15, "eleven_v4", (1.0, 1.15)),                # v4 ignores speed: all stretch
+    (0.9, "eleven_v3", (1.0, 0.9)),
+])
+def test_speed_plan_splits_a_speed_into_native_and_stretch(target, model, plan):
+    assert vm.speed_plan(target, model) == plan
+
+
+def test_the_effective_speed_is_the_video_s_else_the_roster_s():
+    assert vm.effective_speed(None, TEJA) == 1.0
+    assert vm.effective_speed(None, {**ADAM, "speed": 1.15}) == 1.15
+    assert vm.effective_speed(1.1, {**ADAM, "speed": 0.8}) == 1.1
 
 
 def test_a_roster_entry_without_speed_is_valid_and_kept_as_is():
@@ -68,7 +92,7 @@ def test_a_speed_is_stored_rounded():
 
 
 @pytest.mark.parametrize("entry", [
-    {**TEJA, "speed": 1.1},                       # v4 ignores speed
+    {**TEJA, "speed": 1.3},                       # past the roster range
     {**ADAM, "pitch": 1.0},                       # unknown key
     {"name": "x", "voice_id": "y"},               # missing model
     {**ADAM, "model_id": ["eleven_v3"]},          # unhashable model

@@ -415,6 +415,9 @@ rows of the video modal.
   keeps its id with an empty name.
 - A `PATCH` response carries the field. `GET /videos` does not, because it would cost a ledger query
   per row.
+- It carries the voice's roster speed and, before voicing, the speed the voicing will use; once
+  voiced, the recorded speed, unchanged by a later roster edit, and none for a video voiced before
+  it was recorded.
 
 Trap: a voice's model can be edited in Settings after voicing, so reading the roster names a model
 the audio was not made with. The ledger is ignored from `TOPIC_PROPOSED` through `VOICING`: a
@@ -427,15 +430,20 @@ current setting.
 
 ### `test_voice_speed.py`
 
-Covers a voice's speed in `POST /settings` and in voice previews
-([Speed](../08-scripting-and-voice.md#speed)).
+Covers a voice's speed in `POST /settings` and in voice previews, and a video's own speed in
+`PATCH /videos/<id>` ([Speed](../08-scripting-and-voice.md#speed)).
 
-- A speed on a model that honours it is saved, a speed of 1.0 is never stored, and a roster without
-  a speed round-trips unchanged.
-- A speed on `eleven_v3` or `eleven_v4`, out of range, or off the 0.05 step is a `400`.
+- A speed is saved on every model, `eleven_v3` and `eleven_v4` included; a speed of 1.0 is never
+  stored, and a roster without a speed round-trips unchanged. A speed out of range or off the 0.05
+  step is a `400`.
 - A preview at 1.0 sends no speed and keeps the cache key previews had before speeds. A changed
-  speed makes a new preview. A speed in the body on a model that ignores it is refused before any
-  call, and a stored speed is dropped when the body names such a model.
+  speed makes a new preview. On `eleven_v4` the preview is recorded at 1.0 and stretched, a native
+  preview is not stretched, and one that needs a stretch with no `ffmpeg` is a `503` before any
+  call. A new speed for a v4 preview whose 1.0 recording is cached costs no call, and a stretch that
+  fails keeps the recording for the retry, once: a cached one that fails again is deleted.
+- A person sets a video's `voice_speed` at `SCRIPT_READY`, and `null` gives it back to the voice.
+  The approving `PATCH` may carry it. Out of range is a `400`, any other status a `409`, and a
+  status change racing the write leaves the speed unset.
 
 Trap: older versions read a roster with any key they do not know as empty. Keeping `speed` out of
 a roster nobody changed is what lets a rollback still read it.

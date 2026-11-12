@@ -9,7 +9,8 @@ import {
 } from "@/lib/domains";
 import { mascotGate, mascotGateNote, mascotOptions } from "@/lib/mascots";
 import { voiceLabel } from "@/lib/voices";
-import { illustratedAvailable, styleOptions } from "@/lib/visualStyles";
+import { illustratedAvailable } from "@/lib/visualStyles";
+import { StylePicker } from "@/components/StylePicker";
 import { codePoints } from "@/lib/utils";
 import { SectionLabel } from "@/components/SectionLabel";
 import { MiningSources } from "@/components/MiningSources";
@@ -254,18 +255,17 @@ function DomainDefaults({ values, onChange, testId, lists, canIllustrate, gpu }:
                    note="The style starts this domain's curriculum videos. The mascot starts every new video.">
         <div style={{ display: "flex", gap: 8 }}>
           <DomainField label="Visual style" flex="1.2 1 0">
-            <select
-              data-testid={testId("style")}
+            <StylePicker
+              testId={testId("style")}
+              styles={lists.styles}
+              canUseOpenAI={canIllustrate}
+              gpu={gpu}
               value={values.default_visual_style}
-              onChange={(e) => onChange({ default_visual_style: e.target.value })}
+              onChange={(next) => onChange({ default_visual_style: next })}
+              noneLabel="No style"
               title="Register this domain's curriculum videos start in"
-              style={pickerStyle}
-            >
-              <option value="">No style</option>
-              {styleOptions(lists.styles, canIllustrate, gpu, values.default_visual_style).map((o) => (
-                <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
-              ))}
-            </select>
+              buttonStyle={pickerStyle}
+            />
           </DomainField>
           <DomainField label="Mascot (exp.)" flex="1 1 0">
             <DomainMascotSelect testId={testId("mascot")} value={values.default_mascot_id}

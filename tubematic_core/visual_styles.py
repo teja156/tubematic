@@ -31,6 +31,7 @@ at the first video that uses it.
 """
 import json
 import pathlib
+import re
 
 PACKS_DIR = pathlib.Path(__file__).resolve().parent / "style_packs"
 
@@ -106,6 +107,11 @@ SCENES_PICTURE = {
 }
 
 
+# The picker's groups (TMDEV-226). A style is 3D when its world is a 3D scene.
+DIMENSIONS = ("2d", "3d")
+PREVIEW_STEM_RE = re.compile(r"[a-z0-9_]+")
+
+
 class PackError(ValueError):
     """A style pack that does not match the schema below."""
 
@@ -133,6 +139,17 @@ def _check_pack(path: pathlib.Path, data) -> dict:
         fail("order must be a whole number")
     if not isinstance(data.get("experimental"), bool):
         fail("experimental must be true or false")
+    # What the dashboard's picker shows (TMDEV-226): the group a style sits in,
+    # the stem of its preview files in dashboard/public/style-previews/ (a test
+    # checks both files exist and stay within the size budget; the API image
+    # holds no dashboard files, so nothing here looks for them), and the one
+    # line under the preview. Required, so a new pack fills them in itself.
+    if data.get("dimension") not in DIMENSIONS:
+        fail(f"dimension must be one of {DIMENSIONS}")
+    if not isinstance(data.get("preview"), str) or not PREVIEW_STEM_RE.fullmatch(data["preview"]):
+        fail("preview must be the stem of the preview files: lowercase letters, digits and underscores")
+    if not isinstance(data.get("tagline"), str) or not data["tagline"].strip():
+        fail("tagline must be a non-empty string")
     if data.get("renderer") not in RENDERERS:
         fail(f"renderer must be one of {RENDERERS}")
     if data.get("canvas") is not None and data["canvas"] not in VALID_CANVASES:
@@ -345,19 +362,26 @@ def _unavailable_reason(p: dict, openai_key_set: bool, gpu_status: str) -> str:
     return ""
 
 
+AUTO_TAGLINE = "The agent reads the topic and picks the style that fits it best."
+
+
 def public_list(openai_key_set: bool, gpu_status: str) -> list[dict]:
     """Every style, "auto" first, as the dashboard shows them: id, label,
     experimental, the canvas a style fixes (None when it does not), what it
-    needs, whether a video of it may carry a mascot, and whether this install
-    can produce it now, with the reason when it cannot. The API is the
-    authority on refusals; this only explains them."""
+    needs, whether a video of it may carry a mascot, whether this install
+    can produce it now (with the reason when it cannot), and what the picker
+    shows: its 2D/3D group, its preview stem and its one-line tagline (Auto has
+    no group and no preview). The API is the authority on refusals; this only
+    explains them."""
     out = [{"id": AUTO, "label": "Auto", "experimental": False, "canvas": None,
-            "needs": {k: False for k in _NEEDS}, "mascot": True, "available": True, "unavailable_reason": ""}]
+            "needs": {k: False for k in _NEEDS}, "mascot": True, "available": True, "unavailable_reason": "",
+            "dimension": None, "preview": None, "tagline": AUTO_TAGLINE}]
     for sid, p in PACKS.items():
         reason = _unavailable_reason(p, openai_key_set, gpu_status)
         out.append({"id": sid, "label": p["label"], "experimental": p["experimental"],
                     "canvas": p["canvas"], "needs": dict(p["needs"]), "mascot": sid not in NO_MASCOT_STYLES,
-                    "available": not reason, "unavailable_reason": reason})
+                    "available": not reason, "unavailable_reason": reason,
+                    "dimension": p["dimension"], "preview": p["preview"], "tagline": p["tagline"]})
     return out
 
 

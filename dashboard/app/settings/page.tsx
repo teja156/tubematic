@@ -56,10 +56,12 @@ const DICTIONARY_COMPATIBLE_MODELS = [
   "eleven_turbo_v2",
 ];
 
-// Models that honour a voice's speed (TMDEV-216, probed): eleven_v3 and
-// eleven_v4 ignore it, so the API refuses a speed there and the picker is
-// disabled. Keep in sync with tubematic_core/voice_models.py SPEED_MODELS.
-const SPEED_MODELS = [
+// Models that honour a voice's speed natively (TMDEV-216, probed). Every model
+// takes a speed (TMDEV-227): eleven_v3 and eleven_v4 ignore ElevenLabs' own
+// setting, so their recording is stretched to it after it is made. The set
+// only chooses the picker's note. Keep in sync with
+// tubematic_core/voice_models.py NATIVE_SPEED_MODELS.
+const NATIVE_SPEED_MODELS = [
   "eleven_multilingual_v2",
   "eleven_flash_v2_5",
   "eleven_turbo_v2_5",
@@ -70,12 +72,10 @@ const SPEED_MODELS = [
 // 0.70 to 1.20 in steps of 0.05: ElevenLabs' range, on the step the API takes.
 const SPEED_OPTIONS = Array.from({ length: 11 }, (_, i) => Math.round((0.7 + i * 0.05) * 100) / 100);
 
-// A roster entry as the API stores it: no speed at 1.0, and none on a model
-// that ignores it.
+// A roster entry as the API stores it: no speed at 1.0.
 function withSpeed(voice: Voice): Voice {
   const { speed, ...rest } = voice;
-  return speed !== undefined && speed !== 1 && SPEED_MODELS.includes(voice.model_id)
-    ? { ...rest, speed } : rest;
+  return speed !== undefined && speed !== 1 ? { ...rest, speed } : rest;
 }
 
 function SpeedSelect({ testId, model, speed, onChange, inputStyle }: {
@@ -85,16 +85,15 @@ function SpeedSelect({ testId, model, speed, onChange, inputStyle }: {
   onChange: (speed: number) => void;
   inputStyle: React.CSSProperties;
 }) {
-  const allowed = SPEED_MODELS.includes(model);
+  const native = NATIVE_SPEED_MODELS.includes(model);
   return (
     <select
       data-testid={testId}
       aria-label="Speed"
-      value={allowed ? speed.toFixed(2) : "1.00"}
-      disabled={!allowed}
+      value={speed.toFixed(2)}
       onChange={(e) => onChange(Number(e.target.value))}
-      title={allowed ? "How fast this voice speaks. 1.00 is ElevenLabs' normal pace."
-                     : `${model} ignores speed, so it stays at 1.00.`}
+      title={native ? "How fast this voice speaks. 1.00 is ElevenLabs' normal pace."
+                    : `How fast this voice speaks. ${model} ignores ElevenLabs' speed, so the recording is sped up or slowed down after it is made, keeping the pitch.`}
       style={{ ...inputStyle, width: 82 }}
     >
       {SPEED_OPTIONS.map((v) => (
@@ -1698,7 +1697,7 @@ function VoiceRow({
         default
       </label>
       <VoicePreviewButton voiceId={voice.voice_id} modelId={voice.model_id}
-                          speed={SPEED_MODELS.includes(voice.model_id) ? (voice.speed ?? 1) : 1} />
+                          speed={voice.speed ?? 1} />
       <button
         data-testid={`voice-remove-${index}`}
         onClick={onRemove}
