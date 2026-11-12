@@ -190,3 +190,9 @@ def test_a_return_to_the_topic_gives_a_legacy_insert_style_back_to_auto(client, 
     v2, v3 = client.get("/videos/v2").get_json(), client.get("/videos/v3").get_json()
     assert (v2["visual_style"], v2["resolved_renderer"]) == ("auto", "")
     assert v3["visual_style"] == "whiteboard"  # a person's main style is kept
+
+
+def test_the_review_times_include_the_inserts_transition():
+    cfg = {"fps": 30, "insertTransition": "wipe",
+           "inserts": [{"style": "system_flow", "startFrame": 600, "durationInFrames": 240}]}
+    assert "From 0:19.6 to 0:28.4:" in render_results._insert_review_block(cfg)

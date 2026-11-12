@@ -303,8 +303,8 @@ Covers the per-video Inserts setting and the HTTP side of insert scenes
   `POST /videos`. New Video takes the setting, or the manual domain's default.
 - A switch to the runner-up clears the inserts chosen for the old main style, and a return to the
   topic gives an insert style a person chose back to Auto (a person's main style is kept).
-- The review prompt names each insert's times with its style's insert review text, never a main
-  style's; with no inserts it adds nothing.
+- The review prompt names each insert's times, its transition frames included, with its style's
+  insert review text, never a main style's; with no inserts it adds nothing.
 - `GET /visual-styles` marks insert styles and which styles host inserts.
 - A single video reports `insert_summary` (count, seconds, styles) from its scene config, and `null`
   before one is written.

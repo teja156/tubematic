@@ -8819,8 +8819,11 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     if "mascot" in config:
         if not (row["mascot_id"] or ""):
             return {"error": "config.mascot is set but this video has no mascot; remove the key"}
+        # The mascot is hidden through each insert and its transition on
+        # either side, so no cue may land there.
+        lead = tinserts.TRANSITION_FRAMES.get(_insert_host(row)[0].get("transition", "cut"), 0)
         cue_errs = (tmascots.cue_errors(config["mascot"], total_frames, config.get("subtitles"))
-                    or inserts_mod.cue_errors(config["mascot"], quiet))
+                    or inserts_mod.cue_errors(config["mascot"], [(a - lead, b + lead) for a, b in quiet]))
         if cue_errs:
             return {"error": "config.mascot has problems: " + " ".join(cue_errs)}
 

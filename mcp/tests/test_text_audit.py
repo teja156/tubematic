@@ -982,3 +982,15 @@ def test_an_unmeasured_first_frame_says_nothing_beyond_the_missing_frame():
     out = {"passes": [{"scene": 0, "kind": "frame0", "requestedFrames": [0, 6], "frames": []}], "errors": []}
     warnings = text_audit.summarise(out, MIXED_CONFIG)
     assert len(warnings) == 1 and "could not measure scene 0" in warnings[0]
+
+
+def test_main_scene_samples_skip_the_frames_an_insert_covers_or_slides_over():
+    """TMDEV-224: an insert's transition runs just outside its window, where
+    the main scene is half covered; a sample there measures text nobody reads."""
+    cfg = {"totalFrames": 1500, "fps": 30, "insertTransition": "wipe",
+           "scenes": [{"type": "generated", "src": "vid/Main", "startFrame": 0, "durationInFrames": 1500}],
+           "inserts": [{"style": "terminal_doc", "startFrame": 600, "durationInFrames": 240,
+                        "props": {"terminalDoc": {"beats": [{"start": 600, "events": []}]}}}]}
+    passes, _ = text_audit.plan_passes(cfg)
+    main_frames = [p["first"] + k * p["step"] for p in passes if p["scene"] == 0 for k in range(p["count"])]
+    assert main_frames and not [f for f in main_frames if 588 <= f < 852]

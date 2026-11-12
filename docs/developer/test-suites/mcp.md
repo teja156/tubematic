@@ -944,7 +944,8 @@ Covers `mcp/inserts.py`, the insert half of `write_scene_config`, `choose_insert
   last word ends on that frame; non-object `props` are refused with a sentence; captions the
   shift cannot clear are refused; a main scene starting on an insert's first frame is refused; an
   insert anywhere in the segment that opens the payoff is refused; a System Flow insert's last events
-  are read before its final frames; an insert longer than its pack's `max_seconds` is refused.
+  are read before its final frames; an insert longer than its pack's `max_seconds` is refused; a
+  mascot cue in an insert's transition frames is refused.
 
 Trap: `BLOCKS` in `inserts.py` is where each insert style draws on the frame; a test reads System
 Flow's band from `camera.ts`, so a layout change there that moves the block fails until the shift is
@@ -1113,6 +1114,8 @@ Covers `mcp/text_audit.py`, the decision layer of the text-layout audit
   fading, and a canvas are quiet. The shapes of one SVG count as one picture, so a stick figure is a
   subject, and a filled card holding only text is a title card. A line drawing on counts as moving,
   and the warning names the scene on frame 0. Its frames skip the text checks.
+- A main scene's samples skip the frames an insert covers or slides over: the insert's transition
+  runs just outside its window, where the main scene is half covered.
 
 Trap: every threshold lives in this module, because it is the only layer the tests reach. The
 browser probe and its driver need a browser, so a threshold moved into the probe leaves the

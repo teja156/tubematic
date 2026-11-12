@@ -45,6 +45,7 @@ import tempfile
 import threading
 from pathlib import Path
 
+from tubematic_core import inserts as tinserts
 from tubematic_core import jobfiles as tjobs
 from tubematic_core import mascots as tmascots
 
@@ -332,6 +333,28 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
             "step": step,
             "count": count,
         })
+
+    # While an insert is on screen, and while it slides in or out (its
+    # transition runs just outside its window), the main scenes are covered
+    # or half covered: a sample of them there measures text nobody reads.
+    # Their samples in those frames are dropped; the insert's own passes
+    # below measure what is on screen then.
+    lead = tinserts.TRANSITION_FRAMES.get(scene_config.get("insertTransition") or "cut", 0)
+    covered = [(e["startFrame"] - lead, e["startFrame"] + e["durationInFrames"] + lead)
+               for e in scene_config.get("inserts") or []
+               if isinstance(e, dict) and isinstance(e.get("startFrame"), int)
+               and isinstance(e.get("durationInFrames"), int)]
+    if covered:
+        kept = []
+        for pass_ in passes:
+            frames = [pass_["first"] + k * pass_["step"] for k in range(pass_["count"])]
+            if not any(a <= f < b for f in frames for a, b in covered):
+                kept.append(pass_)
+                continue
+            # One pass per frame left, so the driver still samples exactly them.
+            kept += [{**pass_, "first": f, "step": 1, "count": 1} for f in frames
+                     if not any(a <= f < b for a, b in covered)]
+        passes = kept
 
     # Insert scenes (TMDEV-224) are sampled per board or beat like the
     # whole-video styles they come from; their passes are numbered after the

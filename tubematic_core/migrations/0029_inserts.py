@@ -23,7 +23,8 @@ Data changes:
   style pick, recorded renderer and canvas, and formula pick are cleared, and
   one at SCRIPT_READY (or a revision with a script) returns to TOPIC_APPROVED
   so its agent picks a main style and writes a new script; a revision asked for
-  at the topic, with no script yet, returns to TOPIC_PROPOSED.
+  at the topic, with no script yet, stays at REVISION_REQUESTED with its style
+  on Auto, so the person's revision is still carried out.
 - A style_runner_up that names an insert style is cleared: the dashboard's
   switch to it would be refused. Nothing has been voiced, so
   no voice credit is lost. A comment on the video says why.
@@ -81,10 +82,11 @@ def up(con):
         f"AND {unvoiced_revision})) AND archived_at IS NULL",
         _INSERT_STYLES + _UNVOICED).fetchall()
     for vid, style, status, scripted in rows:
-        # A revision asked for at the topic has no script yet: it goes back to
-        # the topic, never to an approval nobody gave. One asked for at Script
-        # Ready (or after a script) goes back to be rewritten.
-        target = ("TOPIC_PROPOSED" if status == "REVISION_REQUESTED" and not scripted
+        # A revision asked for at the topic has no script yet: it stays where
+        # it is, so the agent still carries out the person's request, and the
+        # revised topic returns to TOPIC_PROPOSED as Auto. One asked for at
+        # Script Ready (or after a script) goes back to be rewritten.
+        target = (status if status == "REVISION_REQUESTED" and not scripted
                   else "TOPIC_APPROVED" if status in ("SCRIPT_READY", "REVISION_REQUESTED") else status)
         con.execute(
             "UPDATE videos SET visual_style = 'auto', style_pick = '', style_runner_up = '', "
@@ -96,7 +98,9 @@ def up(con):
         label = _LABELS[style]
         then = ("Its agent picks a main style and writes a new script; the old script is discarded."
                 if target == "TOPIC_APPROVED" and status != "TOPIC_APPROVED"
-                else "Auto picks its main style when the topic is approved." if target == "TOPIC_PROPOSED"
+                else "Auto picks its main style when the topic is approved." if status == "TOPIC_PROPOSED"
+                else "The topic revision asked for is still to be done; Auto picks the main style once the "
+                     "revised topic is approved." if target == "REVISION_REQUESTED"
                 else "Its agent picks a main style before the script.")
         con.execute(
             "INSERT INTO comments (video_id, author, content, created_at) VALUES (?, 'human', ?, ?)",

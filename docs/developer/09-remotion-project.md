@@ -81,7 +81,7 @@ list. It wraps each `generated` entry in a `<Sequence>` at the entry's `startFra
 1. the canvas colour (`#0f0f0f` for `dark`, `#ffffff` for `light`)
 2. the main layer (`MainLayer`), which holds every entry of `scenes`
 3. the [insert scenes](#insert-scenes), one `<Sequence>` each
-4. the mascot, hidden for the whole of every insert window (`HiddenDuringInserts`)
+4. the mascot, hidden for every insert window and its transition frames on either side (`HiddenDuringInserts`)
 5. the captions
 6. the watermark
 
@@ -155,8 +155,7 @@ holds its first frame through the way in and its last through the way out (`Inse
 | `dip` | 8 | The main layer fades to the canvas colour, then the insert fades up, and the reverse on the way out |
 | `push` | 12 | The insert slides in from the right while the main layer slides out to the left, and back on the way out |
 | `wipe` | 12 | An edge moving right to left reveals the insert, and moves back left to right on the way out |
-
-A window shorter than two transitions shares its frames between the way in and the way out. An
+ An
 unknown or absent `insertTransition` reads as `cut`. `tubematic_core/inserts.py::TRANSITIONS` and
 `TRANSITION_FRAMES` are the Python copy, which the style packs are checked against.
 
@@ -686,8 +685,8 @@ for the MCP server, `cartoon-tools/audio/` is the soundtrack engine (Python), an
 ## The mascot layer
 
 A video with a mascot gets one extra layer from `CompositionBuilder`, `src/mascot/MascotLayer.tsx`. It
-sits above the scenes and the inserts and below the captions, and is hidden for the whole of every
-insert window. It renders only when the renderer passed the
+sits above the scenes and the inserts and below the captions, and is hidden for every insert window
+and its transition frames on either side. It renders only when the renderer passed the
 `mascotPath` render prop and the scene config carries a non-empty `mascot` cue list.
 
 The renderer alone sets `mascotPath`, as it does `watermark`. The prop points at the version of the

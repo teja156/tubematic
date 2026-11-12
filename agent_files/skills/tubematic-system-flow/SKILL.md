@@ -45,7 +45,8 @@ An insert is the same diagram, shorter, on the video's own frames. What differs 
   `chip` to the word that names it.
 - **Leave `subtitles` alone.** The main style's captions stay on screen over the insert, and the
   insert moves clear of them by itself.
-- **No mascot cue inside the window.** The mascot is hidden while the insert plays.
+- **No mascot cue inside the window, or in the transition frames just before and after it.** The
+  mascot is hidden while the insert slides in, plays and slides out.
 - **Look:** the insert follows the video's canvas (dark lines on paper on a light video, cyan on
   near-black on a dark one). You write no colour and no canvas for it.
 

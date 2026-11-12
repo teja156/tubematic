@@ -44,7 +44,8 @@ An insert is the same stage, shorter, on the video's own frames. What differs fr
   number or source the viewer should watch. Put each move's `at` on the word that names its thing.
 - **Leave `subtitles` alone.** The main style's captions stay on screen over the insert; the
   typed log captions belong to a whole Terminal Doc video only.
-- **No mascot cue inside the window.** The mascot is hidden while the insert plays.
+- **No mascot cue inside the window, or in the transition frames just before and after it.** The
+  mascot is hidden while the insert slides in, plays and slides out.
 
 Skip **The opening and the beats** and **Step 5**: the opening and the payoff belong to the main
 style, and the main style's skill writes, validates and submits the config.

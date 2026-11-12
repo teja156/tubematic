@@ -321,10 +321,15 @@ const InsertFrame: React.FC<{
   );
 };
 
-/** Hides what it wraps for the whole of every insert window (the mascot). */
-const HiddenDuringInserts: React.FC<{ children: React.ReactNode; windows: InsertWindow[] }> = ({ children, windows }) => {
+/** Hides what it wraps (the mascot) for the whole of every insert window and
+ *  its transition frames on either side, `lead` frames each. */
+const HiddenDuringInserts: React.FC<{ children: React.ReactNode; windows: InsertWindow[]; lead: number }> = ({
+  children,
+  windows,
+  lead,
+}) => {
   const frame = useCurrentFrame();
-  const inside = windows.some((w) => frame >= w.startFrame && frame < w.startFrame + w.durationInFrames);
+  const inside = windows.some((w) => frame >= w.startFrame - lead && frame < w.startFrame + w.durationInFrames + lead);
   return <AbsoluteFill style={{ visibility: inside ? "hidden" : undefined }}>{children}</AbsoluteFill>;
 };
 
@@ -498,7 +503,7 @@ export const CompositionBuilder: React.FC<CompositionBuilderProps> = ({
           cue frames are absolute, like the word timings). Only when the
           worker staged code AND the config has cues. */}
       {mascotPath && Array.isArray(sceneConfig.mascot) && sceneConfig.mascot.length > 0 && (
-        <HiddenDuringInserts windows={inserts}>
+        <HiddenDuringInserts windows={inserts} lead={TRANSITION_FRAMES[transition]}>
           <MascotLayer mascotPath={mascotPath} cues={sceneConfig.mascot} />
         </HiddenDuringInserts>
       )}

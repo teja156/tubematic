@@ -372,8 +372,8 @@ and the main style is already on its next picture as the insert leaves (`src/ins
 
 While an insert covers the frame, the main layer is hidden with `visibility`: every main component is
 a pure function of the frame, so it comes back on the picture its frame gives it, and hiding it skips
-its paint, which is most of a frame's cost in software GL. The mascot is hidden for the whole of
-each window. The captions stay on screen, in the main style's look.
+its paint, which is most of a frame's cost in software GL. The mascot is hidden for each window and
+its transition frames on either side, and no cue may land there. The captions stay on screen, in the main style's look.
 
 An insert style's scene takes an `insert` prop, `{origin, palette, shift}`. It adds `origin` to its
 frame, so its data stays on the video's frames; it draws its light look on a light canvas; and it

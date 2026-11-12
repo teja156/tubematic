@@ -508,3 +508,15 @@ def test_an_inserts_length_is_held_to_its_packs_limit(monkeypatch):
     monkeypatch.setitem(tvs.PACKS, "system_flow", {**pack, "insert": {**pack["insert"], "max_seconds": 5}})
     errors = _check(_config(_sf_insert(dur=180)))
     assert any("at most 5 s" in e for e in errors), errors
+
+
+def test_a_mascot_cue_in_an_inserts_transition_frames_is_refused(video):
+    vid = video(style="stick")
+    with server._conn() as con:
+        con.execute("INSERT INTO mascots (id, name, status, approved_version, archived, created_at, updated_at) "
+                    "VALUES ('moss', 'Moss', 'READY', 1, 0, ?, ?)", (_now(), _now()))
+        con.execute("UPDATE videos SET mascot_id = 'moss' WHERE id = ?", (vid,))
+    cfg = _config(_sf_insert())
+    cfg["mascot"] = [{"frame": 10, "on": True, "x": 0.5, "y": 0.5}, {"frame": 595, "on": True, "x": 0.5, "y": 0.5}]
+    result = server.write_scene_config(vid, cfg)
+    assert "falls inside an insert" in result.get("error", ""), result

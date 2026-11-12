@@ -109,7 +109,7 @@ def test_unvoiced_videos_in_an_insert_style_go_back_to_auto(tmp_path):
     rows = _rows(db)
     expect_status = {"sf_proposed": "TOPIC_PROPOSED", "sf_approved": "TOPIC_APPROVED",
                      "td_script": "TOPIC_APPROVED", "td_revision_unvoiced": "TOPIC_APPROVED",
-                     "sf_topic_revision": "TOPIC_PROPOSED"}
+                     "sf_topic_revision": "REVISION_REQUESTED"}
     for vid, status in expect_status.items():
         row = rows[vid]
         assert row["status"] == status, vid
@@ -120,7 +120,9 @@ def test_unvoiced_videos_in_an_insert_style_go_back_to_auto(tmp_path):
         # A person's formula choice is theirs, as on a style switch.
         assert row["formula_choice"] == "myth_buster", vid
         assert row["agent_no_progress_count"] == 0, vid
-        assert row["insert_styles"] == "", vid
+        # A topic revision waits at REVISION_REQUESTED, so it is marked like
+        # any video past the topic; its return to the topic clears the mark.
+        assert row["insert_styles"] == ("[]" if vid == "sf_topic_revision" else ""), vid
         assert row["updated_at"] != "2026-01-01T00:00:00Z", vid
     comments = _comments(db)
     for vid in expect_status:
@@ -148,7 +150,7 @@ def test_scripts_written_before_inserts_never_get_any(tmp_path):
     rows = _rows(db)
     for vid, status, *_ in VIDEOS:
         expected = ("" if status in ("TOPIC_PROPOSED", "TOPIC_APPROVED")
-                    or vid in ("td_script", "td_revision_unvoiced", "sf_topic_revision") else "[]")
+                    or vid in ("td_script", "td_revision_unvoiced") else "[]")
         assert rows[vid]["insert_styles"] == expected, vid
         assert rows[vid]["insert_mode"] == "auto", vid
 
@@ -184,11 +186,11 @@ def test_a_new_video_starts_undecided_with_inserts_on_auto(tmp_path):
     assert (row["insert_mode"], row["insert_styles"], row["insert_reason"]) == ("auto", "", "")
 
 
-def test_a_revision_asked_at_the_topic_goes_back_to_the_topic_and_says_so(tmp_path):
+def test_a_revision_asked_at_the_topic_is_still_carried_out_and_says_so(tmp_path):
     db = _db_at_0028(tmp_path)
     tdb.migrate(db)
     (author, content), = _comments(db)["sf_topic_revision"]
-    assert "when the topic is approved" in content
+    assert "still to be done" in content
 
 
 def test_a_runner_up_that_names_an_insert_style_is_cleared(tmp_path):

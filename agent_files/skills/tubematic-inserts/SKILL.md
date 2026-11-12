@@ -74,7 +74,8 @@ gives it. So inside every window:
 - The main style's "nothing changes for too long" rule skips the window; you do not need events in it.
 - A scene system with several scenes (`tubematic-scene-config`) keeps its scenes covering every
   frame; no scene may start inside a window.
-- A mascot is hidden during inserts: no mascot cue inside a window.
+- A mascot is hidden during inserts and while they slide in and out: no mascot cue inside a window or
+  within 12 frames either side of it.
 
 Your main style's skill names its own exceptions (Case File Story takes inserts only over shots
 before the term card).

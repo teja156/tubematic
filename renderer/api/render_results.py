@@ -28,6 +28,7 @@ from pathlib import Path
 import ai_review
 import db
 import pipeline
+from tubematic_core import inserts as tinserts
 from tubematic_core import jobfiles as tjobs
 from tubematic_core import renderers
 from tubematic_core import usage as tusage
@@ -567,6 +568,9 @@ def _insert_review_block(scene_config: dict) -> str:
     """The review prompt's notes on a video's insert scenes (TMDEV-224): each
     insert's times and its style's insert review text, from the packs."""
     fps = scene_config.get("fps") or 30
+    # The insert is on screen through its transition, which runs just outside
+    # its window, so the times the reviewer is given include it.
+    lead = tinserts.TRANSITION_FRAMES.get(scene_config.get("insertTransition") or "cut", 0)
     entries = []
     for e in scene_config.get("inserts") or []:
         p = pipeline.tvs.pack(e.get("style", "")) if isinstance(e, dict) else None
@@ -576,5 +580,5 @@ def _insert_review_block(scene_config: dict) -> str:
             start, dur = int(e["startFrame"]), int(e["durationInFrames"])
         except (KeyError, TypeError, ValueError):
             continue
-        entries.append((start / fps, (start + dur) / fps, p["insert"]["review"]))
+        entries.append((max(0, start - lead) / fps, (start + dur + lead) / fps, p["insert"]["review"]))
     return ai_review.insert_review_block(entries)

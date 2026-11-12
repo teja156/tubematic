@@ -587,7 +587,8 @@ Covers `0029`: the insert columns, and what still held an insert style as its ma
   back to Auto: one at Script Ready returns to Topic Approved, its style pick, renderer, canvas and
   formula pick are cleared, a person's formula choice is kept, and a comment says why.
 - A video at Revision Requested with no voice file moves the same way: back to Topic Approved when
-  it has a script, back to Topic Proposed when the revision was asked for at the topic. A runner-up
+  it has a script; a revision asked for at the topic stays at Revision Requested with its style on
+  Auto, so the person's request is still carried out. A runner-up
   that names an insert style is cleared.
 - A voiced or later video, and an archived one, keeps its style.
 - Every video past Topic Approved is marked as having no inserts; one before it starts undecided.
