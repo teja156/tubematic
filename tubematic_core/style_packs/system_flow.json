@@ -10,7 +10,8 @@
       "dark",
       "light"
     ],
-    "props_key": "systemFlow"
+    "props_key": "systemFlow",
+    "component": "SystemFlow"
   },
   "renderer": "dom",
   "canvas": "dark",

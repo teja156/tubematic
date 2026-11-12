@@ -1,5 +1,6 @@
 /*
- * SystemFlow: the whole of a System Flow video, as one scene.
+ * SystemFlow: a System Flow insert (TMDEV-224), or the whole of a System
+ * Flow video made before System Flow became an insert style.
  *
  * A diagram builds node by node on a dark canvas while points of light travel
  * its connectors, one board per subject, with a camera that keeps what is
@@ -28,14 +29,24 @@ import { BOX_H, BOX_W, LABEL_GAP, LABEL_LINE, LABEL_PX, SLOT_W, layoutBoard, poi
 import { CHIP_PX, H, W, boardKeys, cameraAt, chipLeft, svgTransform, toScreen, type Cam } from "./systemFlow/camera";
 
 // ── look (tokens from the style card) ─────────────────────────────────────────
-const BG = "#242724";
-const BLOB = "#202321";
-const CYAN = "#3fb8c8";
-const CYAN_DIM = "#386c6d";
-const INK = "#EAFBFF";
-const BOX_FILL = "#2a2e2b";
-const CHIP_BG = "#1a1d1b";
-const TONE: Record<Tone, string> = { structure: CYAN, relation: "#8B6CFF", ok: "#B8FF5A", fault: "#EC081F" };
+// "dark" is the style's own look. "light" is the same diagram on paper, used
+// when System Flow is an insert inside a light-canvas main style (TMDEV-224):
+// an insert follows its main style's canvas, so a light video never cuts to
+// black and its dark captions stay readable over the insert.
+type Look = {
+  bg: string; blob: string; cyan: string; cyanDim: string; ink: string; boxFill: string; chipBg: string;
+  tone: Record<Tone, string>;
+};
+const LOOKS: Record<"dark" | "light", Look> = {
+  dark: {
+    bg: "#242724", blob: "#202321", cyan: "#3fb8c8", cyanDim: "#386c6d", ink: "#EAFBFF", boxFill: "#2a2e2b",
+    chipBg: "#1a1d1b", tone: { structure: "#3fb8c8", relation: "#8B6CFF", ok: "#B8FF5A", fault: "#EC081F" },
+  },
+  light: {
+    bg: "#f5f4ef", blob: "#ecebe4", cyan: "#0b7f8f", cyanDim: "#a9cdd1", ink: "#15211f", boxFill: "#ffffff",
+    chipBg: "#ffffff", tone: { structure: "#0b7f8f", relation: "#5b3fd6", ok: "#3a7d0c", fault: "#cf0a1d" },
+  },
+};
 const DIM = 0.35;
 
 const SANS = "Barlow, system-ui, sans-serif";
@@ -116,7 +127,7 @@ const Halo: React.FC<{ x: number; top: number; color: string; opacity: number }>
   );
 
 // ── one board ─────────────────────────────────────────────────────────────────
-const Board: React.FC<{ p: Prepared; frame: number }> = ({ p, frame }) => {
+const Board: React.FC<{ p: Prepared; frame: number; look: Look }> = ({ p, frame, look }) => {
   const { board, layout } = p;
   const enter: Record<string, number> = {};
   for (const e of eventsOf(board, "node")) enter[e.node] = e.at;
@@ -151,7 +162,7 @@ const Board: React.FC<{ p: Prepared; frame: number }> = ({ p, frame }) => {
         <g transform={svgTransform(c)}>
         {/* the one bloom: around the active node */}
         {active && layout.nodes[active] && (enter[active] ?? Infinity) <= frame && (
-          <Halo x={layout.nodes[active].x} top={layout.nodes[active].boxTop} color={(faultAt[active] ?? Infinity) <= frame ? TONE.fault : CYAN} opacity={ramp(frame, activeFocusAt(board, active, frame), 10)} />
+          <Halo x={layout.nodes[active].x} top={layout.nodes[active].boxTop} color={(faultAt[active] ?? Infinity) <= frame ? look.tone.fault : look.cyan} opacity={ramp(frame, activeFocusAt(board, active, frame), 10)} />
         )}
 
         {/* connectors */}
@@ -160,7 +171,7 @@ const Board: React.FC<{ p: Prepared; frame: number }> = ({ p, frame }) => {
           if (t0 === undefined || frame < t0) return null;
           const d = easeOutExpo(ramp(frame, t0, TIMING.edgeDraw));
           const end = pointAlong(e.points, 1);
-          const color = edgeLit(e.from, e.to) ? CYAN : CYAN_DIM;
+          const color = edgeLit(e.from, e.to) ? look.cyan : look.cyanDim;
           return (
             <g key={e.id} opacity={edgeLit(e.from, e.to) ? 1 : DIM}>
               {/* Dots as circles: a stroke-dasharray made this scene 2.5 times
@@ -196,13 +207,13 @@ const Board: React.FC<{ p: Prepared; frame: number }> = ({ p, frame }) => {
           const faulted = (faultAt[n.id] ?? Infinity) <= frame;
           const shake = faulted ? Math.sin((frame - faultAt[n.id]) * 2.2) * 6 * (1 - ramp(frame, faultAt[n.id], 10)) : 0;
           const flash = arrivals[n.id] !== undefined ? 1 - ramp(frame, arrivals[n.id], 14) : 0;
-          const stroke = faulted ? TONE.fault : CYAN;
+          const stroke = faulted ? look.tone.fault : look.cyan;
           const cy = n.boxTop + BOX_H / 2;
           return (
             <g key={n.id} opacity={pIn * (lit(n.id) ? 1 : DIM)} transform={`translate(${n.x + shake} ${cy}) scale(${sc}) translate(${-n.x} ${-cy})`}>
-              <Halo x={n.x} top={n.boxTop} color={CYAN} opacity={flash} />
-              <rect x={n.x - BOX_W / 2} y={n.boxTop} width={BOX_W} height={BOX_H} rx={10} fill={BOX_FILL} stroke={stroke} strokeWidth={3 + 2 * flash} />
-              <Icon name={board.nodes.find((x) => x.id === n.id)?.icon ?? "server"} x={n.x} y={cy} size={72} color={faulted ? TONE.fault : CYAN} />
+              <Halo x={n.x} top={n.boxTop} color={look.cyan} opacity={flash} />
+              <rect x={n.x - BOX_W / 2} y={n.boxTop} width={BOX_W} height={BOX_H} rx={10} fill={look.boxFill} stroke={stroke} strokeWidth={3 + 2 * flash} />
+              <Icon name={board.nodes.find((x) => x.id === n.id)?.icon ?? "server"} x={n.x} y={cy} size={72} color={faulted ? look.tone.fault : look.cyan} />
             </g>
           );
         })}
@@ -213,7 +224,7 @@ const Board: React.FC<{ p: Prepared; frame: number }> = ({ p, frame }) => {
           if (!e) return null;
           const q = (frame - pk.at) / TIMING.packetTravel;
           if (q < 0 || q > 1) return null;
-          const color = TONE[pk.tone ?? "structure"];
+          const color = look.tone[pk.tone ?? "structure"];
           const along = (v: number) => pointAlong(e.points, pk.reverse ? 1 - v : v).p;
           const head = along(Easing.inOut(Easing.quad)(q));
           return (
@@ -251,7 +262,7 @@ const Board: React.FC<{ p: Prepared; frame: number }> = ({ p, frame }) => {
               fontWeight: 600,
               fontSize: LABEL_PX * c.s,
               lineHeight: LABEL_LINE,
-              color: INK,
+              color: look.ink,
               opacity: lit(n.id) ? 1 : DIM,
             }}
           >
@@ -273,7 +284,7 @@ const Board: React.FC<{ p: Prepared; frame: number }> = ({ p, frame }) => {
         if (frame < chip.at || frame >= until) return null;
         const mid = toScreen(c, pointAlong(e.points, 0.5).p.x, pointAlong(e.points, 0.5).p.y);
         const op = ramp(frame, chip.at, 6) * (1 - ramp(frame, until - 6, 6));
-        const color = TONE[chip.tone ?? "structure"];
+        const color = look.tone[chip.tone ?? "structure"];
         return (
           <div
             key={`c-${i}`}
@@ -287,7 +298,7 @@ const Board: React.FC<{ p: Prepared; frame: number }> = ({ p, frame }) => {
               fontWeight: 500,
               fontSize: CHIP_PX * c.s,
               color,
-              background: CHIP_BG,
+              background: look.chipBg,
               border: `${3 * c.s}px solid ${color}`,
               borderRadius: 10 * c.s,
               padding: `${4 * c.s}px ${16 * c.s}px`,
@@ -309,7 +320,7 @@ function activeFocusAt(board: SFBoard, node: string, frame: number): number {
 }
 
 // ── header: pill and headline, outside the camera ────────────────────────────
-const Header: React.FC<{ board: SFBoard; frame: number }> = ({ board, frame }) => {
+const Header: React.FC<{ board: SFBoard; frame: number; look: Look }> = ({ board, frame, look }) => {
   const words = board.headline.trim().split(/\s+/);
   // Type on at about 30 characters a second.
   let budget = Math.floor(Math.max(0, frame - board.startFrame) * 1.0);
@@ -323,8 +334,8 @@ const Header: React.FC<{ board: SFBoard; frame: number }> = ({ board, frame }) =
             fontSize: 30,
             letterSpacing: 3,
             textTransform: "uppercase",
-            color: CYAN,
-            border: `2px solid ${CYAN}`,
+            color: look.cyan,
+            border: `2px solid ${look.cyan}`,
             borderRadius: 999,
             padding: "6px 20px",
             opacity: ramp(frame, board.startFrame, 8),
@@ -333,13 +344,13 @@ const Header: React.FC<{ board: SFBoard; frame: number }> = ({ board, frame }) =
           {board.pill.slice(0, LIMITS.pillChars)}
         </div>
       )}
-      <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: 76, lineHeight: 1.2, color: INK, minHeight: 2 * 76 * 1.2 }}>
+      <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: 76, lineHeight: 1.2, color: look.ink, minHeight: 2 * 76 * 1.2 }}>
         {words.map((w, i) => {
           const shown = w.slice(0, Math.max(0, budget));
           budget -= w.length + 1;
           const last = i === words.length - 1;
           return (
-            <span key={i} style={{ color: last ? CYAN : INK }}>
+            <span key={i} style={{ color: last ? look.cyan : look.ink }}>
               {shown}
               {i < words.length - 1 ? " " : ""}
             </span>
@@ -351,8 +362,25 @@ const Header: React.FC<{ board: SFBoard; frame: number }> = ({ board, frame }) =
 };
 
 // ── the scene ─────────────────────────────────────────────────────────────────
-export default function SystemFlow({ systemFlow, durationInFrames }: { systemFlow?: SystemFlowData; durationInFrames: number }) {
-  const frame = useCurrentFrame();
+/** Where an insert sits on the video (TMDEV-224); see CompositionBuilder's InsertPlacement. */
+type Placement = { origin: number; palette: "dark" | "light"; shift: number };
+
+export default function SystemFlow({
+  systemFlow,
+  durationInFrames,
+  insert,
+}: {
+  systemFlow?: SystemFlowData;
+  durationInFrames: number;
+  insert?: Placement;
+}) {
+  // As an insert, the data is timed on the video's frames and the scene runs
+  // from `origin` for durationInFrames; as a whole video, origin is 0.
+  const origin = insert?.origin ?? 0;
+  const frame = useCurrentFrame() + origin;
+  const end = origin + durationInFrames;
+  const look = LOOKS[insert?.palette === "light" ? "light" : "dark"];
+  const shift = insert?.shift ?? 0;
   const [handle] = useState(() => delayRender("SystemFlow: loading bundled fonts"));
   useEffect(() => {
     loadFonts()
@@ -369,13 +397,13 @@ export default function SystemFlow({ systemFlow, durationInFrames }: { systemFlo
   const prepared: Prepared[] = useMemo(
     () =>
       boards.map((board, i) => {
-        const end = i + 1 < boards.length ? boards[i + 1].startFrame : durationInFrames;
+        const boardEnd = i + 1 < boards.length ? boards[i + 1].startFrame : end;
         const layout = layoutBoard(board);
-        return { board, layout, keys: boardKeys(board, layout, end), end };
+        return { board, layout, keys: boardKeys(board, layout, boardEnd), end: boardEnd };
       }),
     // The props are static for the whole render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [systemFlow, durationInFrames],
+    [systemFlow, end],
   );
 
   let idx = -1;
@@ -388,15 +416,18 @@ export default function SystemFlow({ systemFlow, durationInFrames }: { systemFlo
     : 0;
 
   return (
-    <AbsoluteFill style={{ background: BG, width: W, height: H, overflow: "hidden" }}>
+    <AbsoluteFill style={{ background: look.bg, width: W, height: H, overflow: "hidden" }}>
       {/* the faint darker blob in one corner: a flat shape, never a gradient */}
       <svg width={W} height={H} style={{ position: "absolute", left: 0, top: 0 }}>
-        <path d="M 1080 1500 C 960 1530 880 1640 900 1760 C 915 1850 990 1900 1080 1920 Z" fill={BLOB} />
+        <path d="M 1080 1500 C 960 1530 880 1640 900 1760 C 915 1850 990 1900 1080 1920 Z" fill={look.blob} />
       </svg>
       {cur && (
-        <AbsoluteFill style={{ opacity: fade }}>
-          <Board p={cur} frame={frame} />
-          <Header board={cur.board} frame={frame} />
+        // The shift moves the layout clear of the main style's captions; a
+        // positioned offset, never a CSS transform (a transformed layer is
+        // re-composited every frame in software GL).
+        <AbsoluteFill style={{ opacity: fade, top: shift, height: H }}>
+          <Board p={cur} frame={frame} look={look} />
+          <Header board={cur.board} frame={frame} look={look} />
         </AbsoluteFill>
       )}
     </AbsoluteFill>

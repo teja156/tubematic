@@ -112,6 +112,7 @@ import mascot_sheets  # renders a mascot's model sheets (a Node script on softwa
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
 import terminal_preview  # renders a Terminal Doc video's own moves for the agent to look at
+import inserts as inserts_mod  # the insert-scene checks (TMDEV-224)
 import picture_checks  # the first-frame and beat-change warnings (TMDEV-215), pure like text_audit
 
 DB_FILE      = Path(os.getenv("TUBEMATIC_DB", str(DATA_ROOT / "data" / "tubematic.db")))
@@ -291,6 +292,7 @@ from tubematic_core.visual_styles import (  # noqa: E402
     line_art_allowed,
 )
 from tubematic_core import visual_styles as tvs  # noqa: E402
+from tubematic_core import inserts as tinserts  # noqa: E402
 
 # ── Agent effort (TMDEV-106) ─────────────────────────────────────────────────
 # The effort level the agent CLI runs at, the sibling of its model: an
@@ -1373,6 +1375,8 @@ def get_video(video_id: str) -> dict:
     video["mascots_available"] = _gpu_probe_status() == "working"
     video["style"] = tvs.agent_view(video.get("visual_style") or "")
     video["style_routing"] = _style_routing(video)
+    video["insert_styles"] = tinserts.parse_styles(video.get("insert_styles"))
+    video["insert_routing"] = _insert_routing(video)
     video["angle_formula"] = tangles.formula_for(video.get("angle_kind"))
     video["formula_routing"] = _formula_routing(video)
     return video
@@ -1397,6 +1401,33 @@ def _style_routing(video: dict) -> dict:
         "candidates": tvs.routing_candidates(bool(_openai_key()), _gpu_probe_status(),
                                              bool(video.get("mascot_id"))),
         "domain": domain,
+    }
+
+
+def _insert_routing(video: dict) -> dict:
+    """get_video's insert_routing (TMDEV-224): whether inserts are decided for
+    the video, the main style's host block, and the insert styles to choose
+    from. decided is true once a choice is recorded, and also when there is
+    nothing to choose: the Inserts setting is None, or the main style hosts no
+    inserts."""
+    host, why = _insert_host(video)
+    mode = video.get("insert_mode") or tinserts.DEFAULT_INSERT_MODE
+    chosen = video.get("insert_styles")
+    if not isinstance(chosen, list) and chosen is not None:
+        chosen = tinserts.parse_styles(chosen)
+    return {
+        "decided": chosen is not None or mode == "none" or not host.get("host"),
+        "mode": mode,
+        "styles": chosen,
+        "reason": video.get("insert_reason") or "",
+        "host": bool(host.get("host")),
+        "transition": host.get("transition", ""),
+        "unavailable_reason": why if not host.get("host") else "",
+        "max_styles": tinserts.MAX_STYLES_PER_VIDEO,
+        "limits": {"target_seconds": tinserts.TARGET_SECONDS, "max_seconds": tinserts.MAX_SECONDS,
+                   "max_share": round(tinserts.MAX_SHARE, 3),
+                   "min_main_gap_seconds": tinserts.MIN_MAIN_GAP_SECONDS},
+        "candidates": tvs.insert_candidates(bool(_openai_key()), _gpu_probe_status()),
     }
 
 
@@ -1977,7 +2008,7 @@ def create_video(
     with _conn() as con:
         row = con.execute(
             "SELECT name, status, default_visual_style, default_voice_id, "
-            "default_script_profile_id, default_mascot_id, default_formula_id "
+            "default_script_profile_id, default_mascot_id, default_formula_id, default_insert_mode "
             "FROM projects WHERE id = ?", (project_id,)
         ).fetchone()
         if not row:
@@ -1996,7 +2027,7 @@ def create_video(
         visual_style = DEFAULT_VISUAL_STYLE
         if strategy == "curriculum":
             visual_style = (row["default_visual_style"] or "").strip() or DEFAULT_VISUAL_STYLE
-            if visual_style not in VISUAL_STYLES:
+            if visual_style not in tvs.MAIN_STYLES:
                 visual_style = DEFAULT_VISUAL_STYLE
         # Unlike the visual style, a project's default voice seeds EVERY video
         # filed into it (TMDEV-121) — it is the domain's narrator, not a series
@@ -2031,6 +2062,12 @@ def create_video(
         # the strategy (TMDEV-207); a domain on Automatic is dealt by weight.
         # Keep in sync: renderer/api/pipeline.py's create_video.
         agent_id, agent_model, agent_effort = _domain_agent(con, project_id)
+        # The domain's Inserts setting seeds EVERY video, like the formula
+        # (TMDEV-224): "none" is a production choice for the whole domain.
+        # Keep in sync: renderer/api/pipeline.py's create_video.
+        insert_mode = (row["default_insert_mode"] or "").strip()
+        if insert_mode not in tinserts.INSERT_MODES:
+            insert_mode = tinserts.DEFAULT_INSERT_MODE
         # The check above runs outside any transaction, so a pause or another
         # session's topic committed since then would be missed; the INSERT
         # re-checks both itself.
@@ -2039,12 +2076,13 @@ def create_video(
                (id, project_id, topic, strategy, producibility_score, title,
                 status, voice_id, agent_id, agent_model, agent_effort, visual_style,
                 script_profile_id, mascot_id, formula_choice, angle, angle_kind, angle_score,
-                created_at, updated_at)
-               SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                insert_mode, created_at, updated_at)
+               SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                WHERE {_DOMAIN_OPEN_GUARD}""",
             (video_id, project_id, topic, strategy, producibility_score, title, voice_id,
              agent_id, agent_model, agent_effort, visual_style, script_profile_id, mascot_id,
-             formula_choice, angle, angle_kind, angle_score, now, now, strategy, project_id),
+             formula_choice, angle, angle_kind, angle_score, insert_mode, now, now, strategy,
+             project_id),
         )
         if cur.rowcount == 0:
             return {"error": _closed_domain_error(con, project_id)
@@ -2053,7 +2091,7 @@ def create_video(
               "agent_id": agent_id, "agent_model": agent_model, "agent_effort": agent_effort,
               "visual_style": visual_style, "voice_id": voice_id,
               "script_profile_id": script_profile_id, "mascot_id": mascot_id,
-              "formula_choice": formula_choice,
+              "formula_choice": formula_choice, "insert_mode": insert_mode,
               "angle": angle, "angle_kind": angle_kind, "angle_score": angle_score}
     if title_warning:
         result["warning"] = title_warning
@@ -3030,10 +3068,20 @@ def update_video(
     if script_segments is not None or script is not None or voice_id is not None:
         with _conn() as con:
             vrow = con.execute("SELECT status, voice_id, script, script_segments, project_id, "
-                               "formula_pick, formula_choice FROM videos WHERE id = ?",
-                               (video_id,)).fetchone()
+                               "formula_pick, formula_choice, insert_mode, insert_styles "
+                               "FROM videos WHERE id = ?", (video_id,)).fetchone()
         if vrow is None:
             return {"error": f"Video not found: {video_id}"}
+        # Insert marks (TMDEV-224): a segment the script marks as an insert is
+        # shown in an insert style; the marks follow the video's Inserts setting
+        # and the styles chosen for it, and never sit on the first or last
+        # segment or two in a row.
+        if script_segments is not None:
+            mark_errs = tinserts.mark_errors(
+                script_segments, insert_mode=vrow["insert_mode"] or tinserts.DEFAULT_INSERT_MODE,
+                allowed=tinserts.parse_styles(vrow["insert_styles"]), insert_styles=tvs.INSERT_STYLES)
+            if mark_errs:
+                return {"error": "The script's insert marks have problems: " + " ".join(mark_errs)}
         # The script follows the formula picked for it (TMDEV-213). Checked
         # here and not in the UPDATE: a pick changes only by a switch or a
         # return to the topic, and both send the video back to be rewritten.
@@ -3148,6 +3196,7 @@ def update_video(
                                         record_hooks, vrow["project_id"], video_id,
                                         beats=[s.get("beat") or "" for s in script_segments or []
                                                if isinstance(s, dict)])
+            warnings += tinserts.mark_warnings(script_segments, tvoice.voice_speed(target) if target else 1.0)
             record_sets.append(("script_warnings = ?", json.dumps(warnings)))
 
     if title is not None and len(title) > VIDEO_TITLE_MAX_LEN:
@@ -3189,7 +3238,15 @@ def update_video(
         visual_style = visual_style.strip()
         if visual_style not in VISUAL_STYLES:
             return {"error": f"Invalid visual_style '{visual_style}'. "
-                             f"Must be one of: {sorted(VISUAL_STYLES)}"}
+                             f"Must be one of: {sorted(tvs.MAIN_STYLES)}"}
+        # An insert style is never a video's style (TMDEV-224). Refused on a
+        # change only: a legacy whole-video video re-sending its own style is
+        # not a choice. Keep in sync with renderer/api/pipeline.py's patch_video.
+        if tvs.is_insert_style(visual_style):
+            with _conn() as con:
+                cur = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+            if not cur or (cur["visual_style"] or "") != visual_style:
+                return {"error": tvs.insert_style_error(visual_style)}
         # Keep in sync with renderer/api/pipeline.py's patch_video.
         if tvs.needs_openai_key(visual_style) and not _openai_key():
             return {"error": tvs.openai_key_error(visual_style)}
@@ -3614,6 +3671,83 @@ def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str =
 
 
 @mcp.tool
+def choose_inserts(video_id: str, inserts: list[str], reason: str) -> dict:
+    """Record which insert styles a video may use, before its script is written.
+
+    Call this from the tubematic-insert-routing skill, once, at TOPIC_APPROVED,
+    after the main style is decided (a person's or Auto's) and before the
+    formula and the script, when get_video().insert_routing.decided is false.
+
+    inserts: the insert style ids the script may mark segments with, from
+    get_video().insert_routing.candidates, at most insert_routing.max_styles;
+    [] when no insert would make this video better, which is the right answer
+    for many videos. Choosing a style does not oblige the script to use it.
+
+    reason: one sentence, at most 300 characters, on what in the topic an
+    insert shows best (a request's path, a password being hashed) or why none
+    helps. A person reads it on the dashboard.
+
+    Refused unless the video is at TOPIC_APPROVED, its main style is decided,
+    its Inserts setting is Auto, its main style takes inserts, and nothing was
+    chosen yet. Returns the stored list.
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    if not isinstance(inserts, list) or not all(isinstance(i, str) for i in inserts):
+        return {"error": "inserts must be a list of insert style ids, or [] for none"}
+    chosen = list(dict.fromkeys(i.strip() for i in inserts))
+    bad = [i for i in chosen if i not in tvs.INSERT_STYLES]
+    if bad:
+        return {"error": f"{', '.join(map(repr, bad))} is not an insert style. Insert styles: "
+                         f"{', '.join(tvs.INSERT_STYLES)}"}
+    if len(chosen) > tinserts.MAX_STYLES_PER_VIDEO:
+        return {"error": f"At most {tinserts.MAX_STYLES_PER_VIDEO} insert styles for one video; "
+                         "keep the ones that show the most."}
+    reason = " ".join((reason or "").split())
+    if not reason:
+        return {"error": "reason is required: one sentence on what an insert shows best here, or why none helps"}
+    if len(reason) > tinserts.REASON_MAX_CHARS:
+        return {"error": f"reason is {len(reason)} characters; the limit is {tinserts.REASON_MAX_CHARS}"}
+    _init_db()
+    with _conn() as con:
+        video = _fetch_video(con, video_id)
+    if not video:
+        return {"error": f"Video not found: {video_id}"}
+    if video["archived_at"]:
+        return _archived_error(video_id, video["archived_at"])
+    if video["status"] != "TOPIC_APPROVED":
+        return {"error": f"Inserts are chosen at TOPIC_APPROVED, before the script; this video is at "
+                         f"{video['status']}"}
+    style = (video["visual_style"] or "").strip() or DEFAULT_VISUAL_STYLE
+    if style == DEFAULT_VISUAL_STYLE and not (video["style_pick"] or ""):
+        return {"error": "Pick the main style first (tubematic-style-routing, choose_visual_style), "
+                         "then the inserts."}
+    if (video["insert_mode"] or "") == "none":
+        return {"error": "This video's Inserts setting is None: it takes no insert scenes, and there "
+                         "is nothing to choose."}
+    host, why = _insert_host(video)
+    if not host.get("host"):
+        return {"error": why or "This video's style takes no insert scenes."}
+    unavailable = {c["id"]: c["unavailable_reason"]
+                   for c in tvs.insert_candidates(bool(_openai_key()), _gpu_probe_status())
+                   if not c["available"]}
+    for i in chosen:
+        if i in unavailable:
+            return {"error": f"{i!r} is not available on this install: {unavailable[i]}"}
+    with _conn() as con:
+        cur = con.execute(
+            "UPDATE videos SET insert_styles = ?, insert_reason = ?, updated_at = ? WHERE id = ? "
+            "AND archived_at IS NULL AND status = 'TOPIC_APPROVED' AND COALESCE(insert_styles, '') = '' "
+            "AND COALESCE(insert_mode, 'auto') = 'auto' AND visual_style IS ?",
+            (tinserts.dump_styles(chosen), reason, _now(), video_id, video["visual_style"]))
+        if cur.rowcount == 0:
+            return {"error": "Inserts are already chosen for this video, or it changed while the call "
+                             "was in flight; check get_video's insert_routing"}
+    return {"video_id": video_id, "insert_styles": chosen, "insert_reason": reason}
+
+
+@mcp.tool
 def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: str = "",
                           repeat_reason: str = "", learned_stamp: str = "") -> dict:
     """Record the script formula for a video, before its script is written.
@@ -3899,6 +4033,7 @@ def upsert_project(
     default_agent_model: str | None = None,
     default_agent_effort: str | None = None,
     default_formula_id: str | None = None,
+    default_insert_mode: str | None = None,
 ) -> dict:
     """Create or update a project (domain/series container).
 
@@ -3961,6 +4096,10 @@ def upsert_project(
         picked for each video from its topic). It is a person's choice for the
         domain: set it only when a person asked for it. Changing it never
         touches videos already filed.
+    default_insert_mode: the Inserts setting every new video filed into this
+        domain starts with: "auto" (the agent decides whether short insert
+        scenes help each video) or "none" (no insert scenes). Set "none" only
+        when a person asked for it.
     topic_cap: how many topics the domain may ever hold, a whole number from
         25 to 750 (100 when the domain is created). Every video ever filed
         counts, archived and rejected ones included. Once the domain holds
@@ -3984,13 +4123,17 @@ def upsert_project(
         default_visual_style = default_visual_style.strip()
         if default_visual_style and default_visual_style not in VISUAL_STYLES:
             return {"error": f"Invalid default_visual_style '{default_visual_style}'. Must be one "
-                             f"of: {sorted(VISUAL_STYLES)}, or \"\" for no default"}
+                             f"of: {sorted(tvs.MAIN_STYLES)}, or \"\" for no default"}
     if default_voice_id is not None:
         default_voice_id = default_voice_id.strip()
     if default_script_profile_id is not None:
         default_script_profile_id = default_script_profile_id.strip()
     if default_mascot_id is not None:
         default_mascot_id = default_mascot_id.strip()
+    if default_insert_mode is not None:
+        default_insert_mode = default_insert_mode.strip()
+        if default_insert_mode not in tinserts.INSERT_MODES:
+            return {"error": f"default_insert_mode must be one of {list(tinserts.INSERT_MODES)}"}
     if default_agent_id is not None:
         default_agent_id = default_agent_id.strip()
     if default_agent_model is not None:
@@ -4098,6 +4241,10 @@ def upsert_project(
             gpu_err = _cartoon3d_gpu_error(default_visual_style)
             if gpu_err:
                 return {"error": gpu_err}
+            # An insert style is never a domain's style (TMDEV-224); refused
+            # on a change only, as above.
+            if tvs.is_insert_style(default_visual_style):
+                return {"error": tvs.insert_style_error(default_visual_style)}
         will_be_seed = seed if seed is not None else (existing["is_curriculum_seed"] if existing else 0)
         if not will_be_seed:
             if status == "paused":
@@ -4115,7 +4262,8 @@ def upsert_project(
                                      default_visual_style, default_voice_id,
                                      default_script_profile_id, topic_cap, default_mascot_id,
                                      default_agent_id, default_agent_model,
-                                     default_agent_effort, default_formula_id, created_at)
+                                     default_agent_effort, default_formula_id,
+                                     default_insert_mode, created_at)
                VALUES (:id, :name,
                        COALESCE(:description, ''),
                        COALESCE(:seed, 0),
@@ -4129,6 +4277,7 @@ def upsert_project(
                        COALESCE(:agent_model, ''),
                        COALESCE(:agent_effort, ''),
                        COALESCE(:formula, ''),
+                       COALESCE(:insert_mode, 'auto'),
                        :now)
                ON CONFLICT(id) DO UPDATE SET
                  name                 = :name,
@@ -4145,13 +4294,14 @@ def upsert_project(
                  default_agent_model  = COALESCE(:agent_model, projects.default_agent_model),
                  default_agent_effort =
                      COALESCE(:agent_effort, projects.default_agent_effort),
-                 default_formula_id   = COALESCE(:formula, projects.default_formula_id)""",
+                 default_formula_id   = COALESCE(:formula, projects.default_formula_id),
+                 default_insert_mode  = COALESCE(:insert_mode, projects.default_insert_mode)""",
             {"id": project_id, "name": name, "description": description, "seed": seed,
              "status": status, "style": default_visual_style, "voice": default_voice_id,
              "profile": default_script_profile_id, "cap": topic_cap, "mascot": default_mascot_id,
              "agent": default_agent_id, "agent_model": default_agent_model,
              "agent_effort": default_agent_effort, "formula": default_formula_id,
-             "default_cap": TOPIC_CAP_DEFAULT, "now": now},
+             "insert_mode": default_insert_mode, "default_cap": TOPIC_CAP_DEFAULT, "now": now},
         )
         row = con.execute(f"{_PROJECT_SELECT} WHERE p.id = ?", (project_id,)).fetchone()
     return _project_out(row)
@@ -8200,12 +8350,62 @@ def _timeline_words(video_id: str) -> list[str]:
         return []
 
 
+# Each insert style's own check over one insert of a config (TMDEV-224), by
+# style id: fps, the narration's word starts and words, then the entry. A new
+# insert style adds its module's check_insert here.
+_INSERT_CHECKS = {
+    system_flow.STYLE_ID: lambda fps, starts, words, e: system_flow.check_insert(
+        e, fps, starts, tvs.pack(system_flow.STYLE_ID)["extra"]["icons"]),
+    terminal_doc.STYLE_ID: lambda fps, starts, words, e: terminal_doc.check_insert(e, fps, starts, words),
+}
+
+
+def _insert_host(row) -> tuple[dict, str]:
+    """The `inserts` block of the style a video's main scenes are drawn in,
+    and why it takes none (""). An "auto" video whose renderer settled on
+    Cartoon 3D is a 3D world, which takes none like the Cartoon 3D style."""
+    if (row["resolved_renderer"] or "") == "cartoon_3d":
+        return {"host": False}, tvs.PACKS["cartoon_3d"]["messages"]["inserts"]
+    host = tvs.hosts_inserts(row["visual_style"] or "")
+    p = tvs.pack(row["visual_style"] or "") or {}
+    if host["host"]:
+        return host, ""
+    msg = (p.get("messages") or {}).get("inserts", "")
+    if not msg and p.get("role") == "insert":
+        msg = (f"This is a whole {p['label']} video, made before {p['label']} became an insert style: it "
+               "takes no insert scenes. Remove config.inserts.")
+    return host, msg
+
+
+def _insert_errors(video_id: str, row, config: dict) -> list[str]:
+    """Every problem with a config's insert scenes, or [] (TMDEV-224)."""
+    script = _parsed_segments(row["script_segments"])
+    marks = {s.get("id"): tinserts.mark_of(s) for s in script if tinserts.mark_of(s)}
+    if not config.get("inserts") and not marks:
+        return []
+    fps, word_starts = _timeline_word_starts(video_id)
+    words = _timeline_words(video_id)
+    try:
+        tl = json.loads(tjobs.job_file(JOBS_DIR, video_id, tjobs.TIMELINE).read_text(encoding="utf-8"))
+        segments = picture_checks.annotate_segments(tl.get("segments", []), script,
+                                                    tformulas.beat_roles(row["formula_id"] or ""))
+    except (tjobs.UnsafePath, OSError, ValueError, TypeError, AttributeError):
+        segments = []
+    host, host_msg = _insert_host(row)
+    checks = {sid: (lambda e, f=fn: f(fps, word_starts, words, e)) for sid, fn in _INSERT_CHECKS.items()}
+    return inserts_mod.check(config, fps=fps, word_starts=word_starts, segments=segments, marks=marks,
+                             insert_mode=row["insert_mode"] or tinserts.DEFAULT_INSERT_MODE,
+                             allowed=tinserts.parse_styles(row["insert_styles"]), host=host,
+                             host_message=host_msg, style_checks=checks)
+
+
 def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     """write_scene_config's body, under the video's lock."""
     _init_db()
     with _conn() as con:
         row = con.execute(
-            "SELECT id, visual_style, resolved_visual_style, resolved_renderer, mascot_id, style_pick "
+            "SELECT id, visual_style, resolved_visual_style, resolved_renderer, mascot_id, style_pick, "
+            "insert_mode, insert_styles, script_segments, formula_id "
             "FROM videos WHERE id = ?", (video_id,)).fetchone()
     # The path-traversal guard is the shape check at the top (_video_id_error).
     if not row:
@@ -8248,6 +8448,12 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         canvas = settled or DEFAULT_CANVAS
         config["canvas"] = canvas
 
+    # ── inserts (TMDEV-224) ──────────────────────────────────────────────────
+    # Insert scenes are drawn over the main style for their windows, so the
+    # main style's data is held quiet inside each one: its validator gets the
+    # windows. The inserts themselves are checked once the captions are known.
+    quiet = inserts_mod.windows(config)
+
     # ── System Flow (TMDEV-196) ──────────────────────────────────────────────
     # A whole-video style: one installed SystemFlow scene whose props hold the
     # diagram as data, checked here so an overcrowded or mistimed diagram is
@@ -8278,7 +8484,7 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     if (row["visual_style"] or "") == whiteboard.STYLE_ID:
         fps, word_starts = _timeline_word_starts(video_id)
         problems = whiteboard.check(config, fps, word_starts,
-                                    tvs.pack(whiteboard.STYLE_ID)["extra"]["doodles"])
+                                    tvs.pack(whiteboard.STYLE_ID)["extra"]["doodles"], quiet=quiet)
         if problems:
             return {"error": "The Whiteboard board has problems: " + " ".join(problems)}
         if "subtitles" not in config:
@@ -8294,7 +8500,7 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         fps, word_starts = _timeline_word_starts(video_id)
         problems = bean_explainer.check(config, fps, word_starts, _timeline_words(video_id),
                                         tvs.pack(bean_explainer.STYLE_ID)["extra"], video_id,
-                                        _bean_custom_sources(video_id, config))
+                                        _bean_custom_sources(video_id, config), quiet=quiet)
         if problems:
             return {"error": "The Bean Explainer video has problems: " + " ".join(problems)}
         # The style's caption look, under whatever the config sets: a config that
@@ -8314,7 +8520,8 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     if (row["visual_style"] or "") == storybook_atlas.STYLE_ID:
         fps, word_starts = _timeline_word_starts(video_id)
         problems = storybook_atlas.check(config, fps, word_starts, tvs.pack(storybook_atlas.STYLE_ID)["extra"],
-                                         video_id, _bean_custom_sources(video_id, config, storybook_atlas.PROPS_KEY))
+                                         video_id, _bean_custom_sources(video_id, config, storybook_atlas.PROPS_KEY),
+                                         quiet=quiet)
         if problems:
             return {"error": "The Storybook Atlas video has problems: " + " ".join(problems)}
         given = config.get("subtitles")
@@ -8349,7 +8556,7 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         config = _uth_with_aspects(video_id, config)
         fps, word_starts = _timeline_word_starts(video_id)
         problems = under_the_hood.check(config, fps, word_starts,
-                                        tvs.pack(under_the_hood.STYLE_ID)["extra"], video_id)
+                                        tvs.pack(under_the_hood.STYLE_ID)["extra"], video_id, quiet=quiet)
         if problems:
             return {"error": "The Under the Hood video has problems: " + " ".join(problems)}
         given = config.get("subtitles")
@@ -8364,7 +8571,7 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     if (row["visual_style"] or "") == case_file_story.STYLE_ID:
         fps, word_starts = _timeline_word_starts(video_id)
         problems = case_file_story.check(config, fps, word_starts,
-                                         tvs.pack(case_file_story.STYLE_ID)["extra"], video_id)
+                                         tvs.pack(case_file_story.STYLE_ID)["extra"], video_id, quiet=quiet)
         if problems:
             return {"error": "The Case File Story video has problems: " + " ".join(problems)}
         given = config.get("subtitles")
@@ -8382,6 +8589,11 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         if sub_err:
             return {"error": sub_err}
 
+    # The insert scenes, now that the captions they must keep clear of are known.
+    insert_problems = _insert_errors(video_id, row, config)
+    if insert_problems:
+        return {"error": "The insert scenes have problems: " + " ".join(insert_problems)}
+
     # ── mascot cue track ─────────────────────────────────────────────────────
     # A bare list of cues (renderer: window.TRACK.cues). The cue rules (safe
     # zone, captions, walking) live in tubematic_core.mascots, shared with the
@@ -8389,7 +8601,8 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     if "mascot" in config:
         if not (row["mascot_id"] or ""):
             return {"error": "config.mascot is set but this video has no mascot; remove the key"}
-        cue_errs = tmascots.cue_errors(config["mascot"], total_frames, config.get("subtitles"))
+        cue_errs = (tmascots.cue_errors(config["mascot"], total_frames, config.get("subtitles"))
+                    or inserts_mod.cue_errors(config["mascot"], quiet))
         if cue_errs:
             return {"error": "config.mascot has problems: " + " ".join(cue_errs)}
 
@@ -8403,6 +8616,11 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     guard_err = _guard_scene_work(video_id)  # TMDEV-61
     if guard_err:
         return guard_err
+
+    # Each insert's src, palette and shift, and the main style's transition:
+    # the renderer reads them, the agent writes none of them.
+    config = inserts_mod.fill(config, canvas=canvas,
+                              transition=_insert_host(row)[0].get("transition", "cut"))
 
     # Backstop for "auto must resolve once and record what it resolved": if the
     # agent chose a canvas but never wrote resolved_visual_style, the canvas IS
@@ -8495,6 +8713,7 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         "size_bytes": path.stat().st_size,
         "total_frames": total_frames,
         "scene_count": len(scenes),
+        "insert_count": len(config.get("inserts") or []),
         "canvas": canvas,
         "visual_style": row["visual_style"],
         "subtitles_enabled": bool(config.get("subtitles", {}).get("enabled", True)),

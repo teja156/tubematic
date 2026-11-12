@@ -203,6 +203,50 @@ def test_a_shot_that_sits_still_too_long_is_refused_and_a_punch_in_fixes_it():
     assert _check() == []
 
 
+# ── insert windows: the story stays on screen where it matters ─────────────
+
+def _quiet(quiet, cfg=None):
+    return cfs.check(cfg if cfg is not None else EXAMPLE, 30, WORD_STARTS, EXTRA, VID, quiet=quiet)
+
+
+def test_the_example_passes_with_an_insert_over_a_shot():
+    assert _quiet(()) == []
+    assert _quiet([(420, 470)]) == []
+
+
+def test_a_punch_in_inside_an_insert_is_refused():
+    """The scene is hidden under the insert; the punch-in would land unseen."""
+    problems = _quiet([(600, 630)])
+    assert any("Beat 5 (shot): the punch-in at frame 617 is inside an insert (600-629)" in p
+               for p in problems), problems
+
+
+def test_a_shot_cut_inside_an_insert_is_refused_and_at_its_end_is_allowed():
+    problems = _quiet([(480, 520)])
+    assert any("Beat 5 (shot) starts at frame 498, inside an insert (480-519)" in p for p in problems), problems
+    assert _quiet([(420, 498)]) == []
+
+
+def test_an_insert_is_not_a_still_stretch():
+    cfg = _with(lambda d: d["beats"][BAG].pop("punch"))
+    assert any("nothing new appears" in p for p in _check(cfg))
+    assert not any("nothing new appears" in p for p in _quiet([(40, 150)], cfg))
+
+
+@pytest.mark.parametrize("window, fragment", [
+    ((250, 280), "covers beat 3 (count, frames 246-388)"),
+    ((660, 700), "covers beat 7 (bars, frames 692-972)"),
+    ((1000, 1050), "covers beat 9 (term, frames 1037-1255)"),
+    ((1270, 1300), "starts at or after the term card at frame 1037"),
+    ((1340, 1370), "starts at or after the term card at frame 1037"),
+])
+def test_an_insert_over_a_card_or_after_the_term_card_is_refused(window, fragment):
+    """A card holds the screen until it is read, and the consequence and the
+    choice end the story on screen: no insert covers them."""
+    problems = _quiet([window])
+    assert any(fragment in p for p in problems), problems
+
+
 def test_a_card_held_long_after_its_last_part_is_refused():
     # without its own frame the stamp lands early, and the card then sits finished for over five seconds
     cfg = _with(lambda d: d["beats"][TERM].pop("stampFrame"))

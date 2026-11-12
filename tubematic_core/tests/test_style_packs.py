@@ -378,12 +378,14 @@ def _insert_pack(**over):
     (lambda: _valid(insert={"max_seconds": 8}), 'no "insert" block'),
     (lambda: _insert_pack(inserts={"host": True, "transition": "cut"}), 'no "inserts" block'),
     (lambda: _insert_pack(insert={"max_seconds": 8}), "insert: {max_seconds"),
-    (lambda: _insert_pack(insert={"max_seconds": 20, "palettes": ["dark"], "props_key": "x"}),
+    (lambda: _insert_pack(insert={"max_seconds": 20, "palettes": ["dark"], "props_key": "x", "component": "X"}),
      "insert.max_seconds"),
-    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["blue"], "props_key": "x"}),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["blue"], "props_key": "x", "component": "X"}),
      "insert.palettes"),
-    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": ""}),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "", "component": "X"}),
      "insert.props_key"),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": " "}),
+     "insert.component"),
 ])
 def test_a_malformed_role_block_is_refused(make, fragment):
     data = make()

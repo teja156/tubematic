@@ -24,6 +24,21 @@ does not run `npm test`, so run the suite yourself after you change either modul
 The soundtrack tools under `cartoon-tools/audio/` have a pytest suite of their own, described on
 [`cartoon-audio.md`](cartoon-audio.md).
 
+## Insert scenes
+
+### `src/inserts/transitions.test.ts`
+
+Covers `src/inserts/transitions.ts`, how an insert scene goes in and out over its main style
+([Main styles and inserts](../10-scene-authoring.md#main-styles-and-inserts)).
+
+- An unknown or missing transition reads as a cut.
+- The way in runs over the insert's first frames and the way out over its last; a very short insert
+  shares its time between them.
+- The insert covers the frame only when fully in, so the main style is never hidden while it still
+  shows. A dip veils the main in the canvas colour before the insert fades up; a push moves the main
+  out as the insert comes in; a wipe uncovers the insert from the right.
+- `activeInsert` finds the window a frame falls in.
+
 ## Storybook Atlas
 
 ### `src/scenes/installed/storybookAtlas/storybookAtlas.test.ts`

@@ -180,6 +180,35 @@ def test_a_long_stretch_with_nothing_new_is_refused():
     assert any("Nothing new happens from frame 536 to 669" in p for p in _check(cfg))
 
 
+# ── insert windows: the plate stays quiet while an insert plays ─────────────
+
+def _quiet(quiet, config=None):
+    return uth.check(config or EXAMPLE, 30, WORD_STARTS, EXTRA, VID, quiet=quiet)
+
+
+def test_the_example_passes_with_an_insert_where_nothing_starts():
+    assert _quiet(()) == []
+    assert _quiet([(360, 400)]) == []
+
+
+def test_an_event_inside_an_insert_is_refused():
+    """The plate is hidden under the insert; counters running there are never seen."""
+    problems = _quiet([(450, 465)])
+    assert any("Plate 3, the counters at frame 456 starts inside an insert (450-464)" in p for p in problems), problems
+
+
+def test_a_plate_cut_inside_an_insert_is_refused_and_at_its_end_is_allowed():
+    problems = _quiet([(290, 310)])
+    assert any("Plate 3 cuts at frame 299, inside an insert (290-309)" in p for p in problems), problems
+    assert _quiet([(285, 299)]) == []
+
+
+def test_an_insert_is_not_a_still_stretch():
+    cfg = _with(lambda p: p[3]["events"].pop(3))   # the pose at 603 bridges the chart's draw
+    assert any("Nothing new happens" in p for p in _check(cfg))
+    assert not any("Nothing new happens" in p for p in _quiet([(550, 660)], cfg))
+
+
 def test_a_stats_chip_counts_in_its_box():
     # a one-character stat with a long chip: the chip reaches 244 px left of the right edge
     def crowd(p):

@@ -267,6 +267,40 @@ def test_an_entry_with_no_x_walks_to_the_middle_and_is_checked_there():
     assert any("grace needs the floor" in p for p in problems), problems
 
 
+# ── insert windows: the book stays quiet while an insert plays ──────────────
+
+def _quiet(quiet, config=None):
+    return sa.check(config or EXAMPLE, 30, WORD_STARTS, EXTRA, quiet=quiet)
+
+
+def test_the_example_passes_with_an_insert_where_nothing_starts():
+    assert _quiet(()) == []
+    assert _quiet([(700, 730)]) == []
+
+
+def test_an_event_inside_an_insert_is_refused():
+    """The book is hidden under the insert; an act there, or a constellation's
+    second words, would happen unseen."""
+    problems = _quiet([(560, 580)])
+    assert any("Chapter 2: the act at frame 566 starts inside an insert (560-579)" in p for p in problems), problems
+    problems = _quiet([(1320, 1340)])
+    assert any("the constellation's thenAt 1332 is inside an insert (1320-1339)" in p for p in problems), problems
+
+
+def test_a_chapter_cut_inside_an_insert_is_refused_and_at_its_end_is_allowed():
+    problems = _quiet([(910, 940)])
+    assert any("Chapter 3 starts at frame 923, inside an insert (910-939)" in p for p in problems), problems
+    assert _quiet([(900, 923)]) == []
+
+
+def test_an_insert_is_not_a_still_stretch():
+    def drop(d):
+        d["chapters"][2]["events"] = [e for e in d["chapters"][2]["events"] if e["at"] < 1100 or e["type"] == "constellation"]
+    cfg = _with(drop)
+    assert any("nothing changes on stage" in p for p in _check(cfg))
+    assert not any("nothing changes" in p for p in _quiet([(1080, 1230)], cfg))
+
+
 def test_a_walk_cut_short_never_counts_as_an_arrival():
     assert sa.walk_ends([{"at": 0, "x": 900}, {"at": 10, "pose": "think"}], 210) == []
 

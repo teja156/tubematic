@@ -10,7 +10,8 @@
       "dark",
       "light"
     ],
-    "props_key": "terminalDoc"
+    "props_key": "terminalDoc",
+    "component": "TerminalDoc"
   },
   "renderer": "dom",
   "canvas": "dark",
@@ -88,6 +89,10 @@
           "fontFamily": "VT323, monospace",
           "fontSize": 62
         }
+      },
+      "paper": {
+        "label": "dark ink on paper, for an insert inside a light-canvas main style",
+        "captions": {}
       }
     },
     "moves": {

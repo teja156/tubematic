@@ -182,6 +182,37 @@ def test_a_long_stretch_with_nothing_new_is_refused():
     assert any("Nothing changes from frame" in p for p in problems), problems
 
 
+# ── insert windows: the stage stays quiet while an insert plays ─────────────
+
+def _quiet(quiet, config=None):
+    return be.check(config or EXAMPLE, 30, WORD_STARTS, WORDS, EXTRA, quiet=quiet)
+
+
+def test_the_example_passes_with_an_insert_where_nothing_starts():
+    assert _quiet(()) == []
+    assert _quiet([(160, 190)]) == []
+
+
+def test_an_event_inside_an_insert_is_refused():
+    """The stage is hidden under the insert; a label shown there is never seen."""
+    problems = _quiet([(140, 160)])
+    assert any("Shot 2, the label at frame 150 starts inside an insert (140-159)" in p for p in problems), problems
+
+
+def test_a_cut_inside_an_insert_is_refused_and_at_its_end_is_allowed():
+    problems = _quiet([(280, 300)])
+    assert any("Shot 3 cuts at frame 288, inside an insert (280-299)" in p for p in problems), problems
+    assert _quiet([(270, 288)]) == []
+
+
+def test_an_insert_is_not_a_still_stretch():
+    def drop(d):
+        d["shots"][3]["events"] = [e for e in d["shots"][3]["events"] if e["frame"] < 560]
+    cfg = _with(drop)
+    assert any("Nothing changes from frame" in p for p in _check(cfg))
+    assert not any("Nothing changes" in p for p in _quiet([(540, 690)], cfg))
+
+
 def test_two_pose_swaps_too_close_together_read_as_a_twitch():
     def add(d):
         d["shots"][1]["events"].insert(5, {"type": "pose", "frame": 222, "who": "narrator", "pose": "shrug", "face": "sad"})

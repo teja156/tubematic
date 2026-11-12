@@ -165,8 +165,8 @@ def _check_pack(path: pathlib.Path, data) -> dict:
         if "inserts" in data:
             fail('an insert style has no "inserts" block (it cannot host inserts)')
         block = data.get("insert")
-        if not isinstance(block, dict) or set(block) != {"max_seconds", "palettes", "props_key"}:
-            fail("an insert style needs insert: {max_seconds, palettes, props_key}")
+        if not isinstance(block, dict) or set(block) != {"max_seconds", "palettes", "props_key", "component"}:
+            fail("an insert style needs insert: {max_seconds, palettes, props_key, component}")
         secs = block["max_seconds"]
         if not isinstance(secs, (int, float)) or isinstance(secs, bool) \
                 or not 0 < secs <= tinserts.MAX_SECONDS:
@@ -176,6 +176,8 @@ def _check_pack(path: pathlib.Path, data) -> dict:
             fail(f"insert.palettes must list the canvases it can follow, from {VALID_CANVASES}")
         if not isinstance(block["props_key"], str) or not block["props_key"].strip():
             fail("insert.props_key must name the props key its scene reads")
+        if not isinstance(block["component"], str) or not block["component"].strip():
+            fail("insert.component must name the installed scene that draws it")
     if data.get("renderer") not in RENDERERS:
         fail(f"renderer must be one of {RENDERERS}")
     if data.get("canvas") is not None and data["canvas"] not in VALID_CANVASES:
@@ -540,7 +542,8 @@ AUTO_PICK_RESET_SET = (
     "visual_style = CASE WHEN COALESCE(style_pick, '') != '' THEN 'auto' ELSE visual_style END, "
     f"resolved_renderer = CASE WHEN {_BACK_TO_AUTO} THEN '' ELSE resolved_renderer END, "
     f"resolved_visual_style = CASE WHEN {_BACK_TO_AUTO} THEN '' ELSE resolved_visual_style END, "
-    "style_pick = '', style_runner_up = '', style_reason = ''"
+    "style_pick = '', style_runner_up = '', style_reason = '', "
+    "insert_styles = '', insert_reason = ''"
 )
 
 # A new style decision (Auto's pick, or a switch to the runner-up) is always
@@ -549,7 +552,11 @@ AUTO_PICK_RESET_SET = (
 # renderer recorded as "cartoon_3d" by an earlier Auto would still send the new
 # style's scenes to the Cartoon 3D renderer, and an old canvas would be forced
 # on a style that leaves the canvas to the agent.
-NEW_STYLE_CLEARS_SET = "resolved_renderer = '', resolved_visual_style = ''"
+#
+# The insert styles chosen for the old main style go too (TMDEV-224): whether
+# an insert helps depends on the main style, so they are decided again.
+NEW_STYLE_CLEARS_SET = ("resolved_renderer = '', resolved_visual_style = '', "
+                        "insert_styles = '', insert_reason = ''")
 
 
 def renderer_after_style_write_sql(value_expr: str = "?") -> str:

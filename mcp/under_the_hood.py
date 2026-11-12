@@ -27,6 +27,8 @@ import math
 import re
 from decimal import ROUND_HALF_UP, Decimal
 
+from quiet_windows import uncovered, window_at, window_text
+
 SCENE_SRC = "UnderTheHood"
 PROPS_KEY = "underTheHood"
 STYLE_ID = "under_the_hood"
@@ -264,11 +266,13 @@ def check_scene_use(visual_style: str, scenes: list) -> str:
     return ""
 
 
-def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "") -> list[str]:
+def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "",
+          quiet=()) -> list[str]:
     """Every problem with an Under the Hood config, one sentence each (at most
     MAX_ERRORS), or [] when it may be written. `extra` is the style pack's
     catalogue block. A plate's `aspect` must already be filled in (the server
-    reads it from the photograph's file); absent means square."""
+    reads it from the photograph's file); absent means square. `quiet` holds
+    the config's insert windows (mcp/quiet_windows.py)."""
     errors: list[str] = []
 
     def err(msg: str) -> None:
@@ -320,6 +324,18 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
             err(f"{where} lasts {ends[i] - starts[i]} frames; a plate needs at least "
                 f"{LIMITS['minPlateSeconds']} s.")
         sound.append(_check_plate(p, i, plates, starts, ends, fps, video_id, images, sound, err))
+        w = window_at(starts[i], quiet) if starts[i] else None
+        if w:
+            err(f"{where} cuts at frame {starts[i]}, inside an insert ({window_text(w)}), where the plate is "
+                f"hidden; cut at {w[1]} or before {w[0]}.")
+        evs = p.get("events")
+        for e in evs if isinstance(evs, list) else []:
+            f = e.get("frame") if isinstance(e, dict) else None
+            w = window_at(f, quiet) if _int(f) else None
+            if w:
+                err(f"{where}, the {e.get('type') or 'event'} at frame {f} starts inside an insert "
+                    f"({window_text(w)}), where the plate is hidden; move it to a word at {w[1]} or later, "
+                    f"or before {w[0]}.")
     if len(images) > LIMITS["maxImages"]:
         err(f"The plates use {len(images)} different photographs; a video may use at most "
             f"{LIMITS['maxImages']}. Reuse a photograph with another focus or zoom instead of a new one.")
@@ -342,10 +358,12 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
     still = round(LIMITS["maxStillSeconds"] * fps)
     prev = 0
     for c in sorted(c for c in changes if 0 <= c < total) + [total]:
-        if c - prev > still:
-            err(f"Nothing new happens from frame {prev} to {c} ({(c - prev) / fps:.1f} s); the longest "
-                f"stretch allowed is {LIMITS['maxStillSeconds']} s. Add a callout, an outline, a pose, a "
-                "counter or a new plate.")
+        # An insert window is not still: the insert changes the screen there.
+        for a, b in uncovered(prev, c, quiet):
+            if b - a > still:
+                err(f"Nothing new happens from frame {a} to {b} ({(b - a) / fps:.1f} s); the longest "
+                    f"stretch allowed is {LIMITS['maxStillSeconds']} s. Add a callout, an outline, a pose, a "
+                    "counter or a new plate.")
         prev = c
     return errors
 

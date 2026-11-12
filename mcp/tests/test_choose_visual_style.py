@@ -69,16 +69,16 @@ def _row(vid="vid_1"):
 
 def test_a_pack_pick_becomes_the_videos_visual_style(db):
     _video()
-    out = server.choose_visual_style("vid_1", "system_flow", "A packet's path through a network.",
+    out = server.choose_visual_style("vid_1", "whiteboard", "A packet's path through a network.",
                                      runner_up="stick")
-    assert out["visual_style"] == "system_flow"
-    assert out["style"]["authoring_skill"] == "tubematic-system-flow"
+    assert out["visual_style"] == "whiteboard"
+    assert out["style"]["authoring_skill"] == "tubematic-whiteboard"
     assert out["style"]["script"]  # the style's own script guidance reaches the script writer
-    assert _row() == {"status": "TOPIC_APPROVED", "visual_style": "system_flow",
-                      "style_pick": "system_flow", "style_runner_up": "stick",
+    assert _row() == {"status": "TOPIC_APPROVED", "visual_style": "whiteboard",
+                      "style_pick": "whiteboard", "style_runner_up": "stick",
                       "style_reason": "A packet's path through a network."}
     # Every existing reader now sees the picked style.
-    assert server.get_video("vid_1")["style"]["id"] == "system_flow"
+    assert server.get_video("vid_1")["style"]["id"] == "whiteboard"
 
 
 def test_scenes_keeps_auto_and_records_the_decision(db):
@@ -101,7 +101,7 @@ def test_the_choice_is_made_once(db):
 
 def test_a_person_chosen_style_is_never_overridden(db):
     _video(style="stick")
-    err = server.choose_visual_style("vid_1", "system_flow", "Fits better.")
+    err = server.choose_visual_style("vid_1", "whiteboard", "Fits better.")
     assert "chosen by a person" in err["error"]
     assert _row()["visual_style"] == "stick"
 
@@ -180,9 +180,9 @@ def test_the_update_repeats_every_check(db, monkeypatch):
             return row
 
         monkeypatch.setattr(server, "_style_choice_row", racing)
-        err = server.choose_visual_style("vid_1", "system_flow", "A path.")
+        err = server.choose_visual_style("vid_1", "whiteboard", "A path.")
         assert "changed while the call was in flight" in err["error"], change
-        assert _row()["visual_style"] != "system_flow", change
+        assert _row()["visual_style"] != "whiteboard", change
 
 
 def test_a_mascot_landing_mid_call_stops_a_3d_pick(db, monkeypatch):
@@ -226,7 +226,7 @@ def test_availability_is_read_under_the_write_lock(db, monkeypatch):
         return real(*a, **kw)
 
     monkeypatch.setattr(tvs, "routing_candidates", probing)
-    assert "error" not in server.choose_visual_style("vid_1", "system_flow", "A path.")
+    assert "error" not in server.choose_visual_style("vid_1", "whiteboard", "A path.")
     assert seen == ["database is locked"]
 
 
@@ -255,7 +255,7 @@ def test_a_person_chosen_style_reads_as_decided(db):
 
 def test_a_topic_revision_gives_an_auto_pick_back_to_auto(db):
     _video()
-    server.choose_visual_style("vid_1", "system_flow", "A path.", runner_up="stick")
+    server.choose_visual_style("vid_1", "whiteboard", "A path.", runner_up="stick")
     with server._conn() as con:
         con.execute("UPDATE videos SET status = 'REVISION_REQUESTED' WHERE id = 'vid_1'")
     assert server.set_video_status("vid_1", "TOPIC_PROPOSED")["status"] == "TOPIC_PROPOSED"
@@ -280,18 +280,18 @@ def test_a_person_chosen_style_survives_a_topic_revision(db):
 
 def test_other_transitions_keep_the_pick(db):
     _video()
-    server.choose_visual_style("vid_1", "system_flow", "A path.")
+    server.choose_visual_style("vid_1", "whiteboard", "A path.")
     server.set_video_status("vid_1", "SCRIPT_READY")
-    assert _row()["style_pick"] == "system_flow"
+    assert _row()["style_pick"] == "whiteboard"
 
 
 def test_a_changed_style_clears_the_pick_and_the_same_one_keeps_it(db):
     _video()
-    server.choose_visual_style("vid_1", "system_flow", "A path.", runner_up="stick")
+    server.choose_visual_style("vid_1", "whiteboard", "A path.", runner_up="stick")
     with server._conn() as con:
         con.execute("UPDATE videos SET status = 'TOPIC_PROPOSED' WHERE id = 'vid_1'")
-    assert "error" not in server.update_video("vid_1", visual_style="system_flow")
-    assert _row()["style_pick"] == "system_flow"
+    assert "error" not in server.update_video("vid_1", visual_style="whiteboard")
+    assert _row()["style_pick"] == "whiteboard"
     assert "error" not in server.update_video("vid_1", visual_style="stick")
     assert _row() == {"status": "TOPIC_PROPOSED", "visual_style": "stick", "style_pick": "",
                       "style_runner_up": "", "style_reason": ""}
@@ -317,7 +317,7 @@ def test_a_pick_clears_the_renderer_and_canvas_an_earlier_auto_recorded(db):
     style: the worker reads it as a Cartoon 3D render."""
     _video()
     _set_resolved("cartoon_3d", "dark")
-    assert "error" not in server.choose_visual_style("vid_1", "system_flow", "A path.")
+    assert "error" not in server.choose_visual_style("vid_1", "whiteboard", "A path.")
     assert _resolved() == ("", "")
 
 
@@ -353,7 +353,7 @@ def test_a_person_changing_the_style_clears_the_old_scene_choices(db):
     _set_resolved("cartoon_3d", "dark")
     assert "error" not in server.update_video("vid_1", visual_style="auto")  # same value
     assert _resolved() == ("cartoon_3d", "dark")
-    assert "error" not in server.update_video("vid_1", visual_style="system_flow")
+    assert "error" not in server.update_video("vid_1", visual_style="whiteboard")
     assert _resolved() == ("", "")
 
 
@@ -414,7 +414,7 @@ def test_write_scene_config_refuses_a_cartoon_scene_on_a_routed_mixed_scenes_vid
 def test_the_mixed_scenes_message_is_only_for_mixed_scenes(db):
     _gpu(ok=True)
     _video()
-    server.choose_visual_style("vid_1", "system_flow", "A path.")
+    server.choose_visual_style("vid_1", "whiteboard", "A path.")
     with server._conn() as con:
         con.execute("UPDATE videos SET status = 'VOICE_READY' WHERE id = 'vid_1'")
     err = server.update_video("vid_1", resolved_renderer="cartoon_3d")["error"]

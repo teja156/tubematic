@@ -239,7 +239,7 @@ def test_a_bracket_that_reaches_the_next_slot_needs_it_empty():
 def test_the_scene_use_rule():
     scene = EXAMPLE["scenes"][0]
     assert td.check_scene_use("terminal_doc", [scene]) == ""
-    assert "used only when the video's visual_style is terminal_doc" in td.check_scene_use("stick", [scene])
+    assert "Terminal Doc is an insert style" in td.check_scene_use("stick", [scene])
     assert "exactly one scene" in td.check_scene_use("terminal_doc", [scene, scene])
     assert "exactly one scene" in td.check_scene_use("terminal_doc", [{**scene, "type": "installed"}])
     assert td.check_scene_use("stick", [{"src": "Other"}]) == ""
@@ -328,7 +328,7 @@ def test_a_broken_config_is_refused_before_anything_is_written(make_video):
 
 def test_another_style_cannot_use_the_terminal_scene(make_video):
     vid = make_video("vid_td4", style="motion_graphics")
-    assert "visual_style is terminal_doc" in server.write_scene_config(vid, copy.deepcopy(EXAMPLE))["error"]
+    assert "Terminal Doc is an insert style" in server.write_scene_config(vid, copy.deepcopy(EXAMPLE))["error"]
 
 
 def test_a_terminal_doc_video_cannot_be_built_from_other_scenes(make_video):

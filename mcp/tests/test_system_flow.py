@@ -90,7 +90,7 @@ def test_the_skills_worked_example_passes():
 
 
 def test_only_a_system_flow_video_may_use_the_scene():
-    assert "visual_style is system_flow" in sf.check_scene_use("stick", EXAMPLE["scenes"])
+    assert "System Flow is an insert style" in sf.check_scene_use("stick", EXAMPLE["scenes"])
     assert sf.check_scene_use("stick", [{"src": "intro", "source": "generated"}]) == ""
 
 
@@ -220,7 +220,7 @@ def test_another_style_cannot_use_the_system_flow_scene(make_video):
     cfg = copy.deepcopy(EXAMPLE)
     del cfg["canvas"]  # so the scene rule refuses it, not the canvas rule
     result = server.write_scene_config(vid, cfg)
-    assert "visual_style is system_flow" in result["error"]
+    assert "System Flow is an insert style" in result["error"]
 
 
 def test_a_system_flow_video_cannot_be_built_from_other_scenes(make_video):
@@ -259,7 +259,7 @@ def test_a_system_flow_scene_of_another_type_is_refused():
     scenes[0]["type"] = "generated"
     scenes[0]["source"] = "generated"
     assert "exactly one scene" in sf.check_scene_use("system_flow", scenes)
-    assert "visual_style is system_flow" in sf.check_scene_use("stick", scenes)
+    assert "System Flow is an insert style" in sf.check_scene_use("stick", scenes)
 
 
 @pytest.mark.parametrize("event, fragment", [
