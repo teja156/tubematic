@@ -252,7 +252,7 @@ Covers the rule of [Learned routing](../08-scripting-and-voice.md#learned-routin
 - A group under `WATCH_MIN_GROUP` reads `thin`, and an account with fewer posts than that gives no
   evidence at all.
 - A group well above the account's median is `better`, well below is `worse`, and inside
-  `LEARN_MARGIN` is `even`. A median at exactly the margin counts, whatever float division makes
+  `LEARN_MARGIN` is `even`. A median on the margin itself counts, whatever float division makes
   of it. One outlier cannot lift a group's median.
 - Across accounts, better on one and even on another is `better`, and a disagreement is `mixed`
   with no points. A video posted to two accounts counts once in `videos`, and a formula's
