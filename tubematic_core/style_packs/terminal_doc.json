@@ -48,8 +48,10 @@
       "real, named things the viewer came to see as pictures (Motion Graphics)",
       "lists of everyday habits or behaviours one person reacts to (Bean Explainer)",
       "places, journeys and geography",
-      "people's life stories and characters the viewer must recognise"
+      "people's life stories and characters the viewer must recognise",
+      "a real-world event or accident caused by a bug: the machine, the place and the moment are the story (Motion Graphics fits it)"
     ],
+    "cannot_show": "any picture of a real thing: no photographs, machines, places or people, only text, numbers and simple glyphs on a screen",
     "signals": [
       "the script turns on one word, password, key, hash or string",
       "something is encoded, encrypted or transformed letter by letter",

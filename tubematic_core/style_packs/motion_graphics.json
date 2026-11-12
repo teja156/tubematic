@@ -24,14 +24,17 @@
   "routing": {
     "best_for": [
       "real, specific subjects the viewer came to see: products, screenshots, named people and places as images",
-      "image-led topics where full-bleed imagery carries the beats"
+      "image-led topics where full-bleed imagery carries the beats",
+      "a real event, accident or failure and its cause, shown with the real machine, place or company and diagrams of what went wrong"
     ],
     "avoid_for": [
       "topics whose beats are generic roles acted out by people"
     ],
+    "cannot_show": "people or roles acting out a step: it draws no figures",
     "signals": [
       "the script names specific real things that are best shown as pictures",
-      "most beats want a full-frame image or a vector diagram, none wants a character"
+      "most beats want a full-frame image or a vector diagram, none wants a character",
+      "a real, dated event happens to a named machine, company or place"
     ],
     "moods": [
       "bold",
