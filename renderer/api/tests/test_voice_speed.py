@@ -270,3 +270,26 @@ def test_once_voiced_the_window_shows_the_speed_the_audio_was_made_at(client, db
 def test_a_video_voiced_before_the_speed_was_recorded_shows_none(client, db_path):
     _video(db_path, status="VIDEO_READY")
     assert _get(client)["voice_info"]["speed"] is None
+
+
+def test_a_new_speed_for_a_cached_v4_preview_costs_no_call(client, preview_env, stretched):
+    roster = [{**_roster()[0], "model_id": "eleven_v4"}]
+    client.post("/settings", json={"elevenlabs_voices": roster})
+    r1, sent1 = _preview(client)                         # 1.0: a paid recording, cached
+    assert sent1 is not None and json.loads(r1.data)["credits"] == 117
+    r2, sent2 = _preview(client, json={"speed": 1.1})    # stretched from that cache
+    assert sent2 is None and json.loads(r2.data)["credits"] == 0 and stretched == [1.1]
+
+
+def test_a_failed_preview_stretch_keeps_the_recording_for_the_retry(client, preview_env, stretched, monkeypatch):
+    client.post("/settings", json={"elevenlabs_voices": [{**_roster()[0], "model_id": "eleven_v4"}]})
+
+    def broken(ffmpeg, audio, factor):
+        raise RuntimeError("timeout")
+    good = pipeline.taudio.stretch
+    monkeypatch.setattr(pipeline.taudio, "stretch", broken)
+    r, sent = _preview(client, json={"speed": 1.1})
+    assert r.status_code == 502 and sent is not None
+    monkeypatch.setattr(pipeline.taudio, "stretch", good)
+    r, sent = _preview(client, json={"speed": 1.1})
+    assert r.status_code == 200 and sent is None

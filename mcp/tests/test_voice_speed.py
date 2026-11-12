@@ -269,3 +269,24 @@ def test_a_recording_that_does_not_fit_the_segments_is_not_reused(job_db, record
     monkeypatch.setattr(server, "_lockstep_segment_frames", real)
     out = server.generate_voice("v1", "")
     assert out["reused_recording"] is False and len(recorder.payloads) == 2   # a new take, paid
+
+
+def test_audio_ffmpeg_cannot_read_is_retried_once_free_then_paid_again(job_db, recorder, monkeypatch):
+    job_db("v1", script_segments=[_seg("s1", "Hello there.")], voice_id="t1")
+    _set("v1", voice_speed=1.1)
+
+    def unreadable(ffmpeg, audio, factor):
+        raise RuntimeError("Invalid data found when processing input")
+    monkeypatch.setattr(server.taudio, "stretch", unreadable)
+    server.generate_voice("v1", "")          # paid; the recording is kept
+    server.generate_voice("v1", "")          # reused for free, fails again, dropped
+    assert len(recorder.payloads) == 1
+    server.generate_voice("v1", "")          # a new take
+    assert len(recorder.payloads) == 2
+
+
+def test_get_video_names_the_speed_the_audio_was_made_at(job_db, recorder):
+    job_db("v1", script_segments=[_seg("s1", "Hello there.")], voice_id="t1")
+    _set("v1", voice_speed=1.15)
+    server.generate_voice("v1", "")
+    assert server.get_video("v1")["voiced_speed"] == 1.15

@@ -1282,7 +1282,8 @@ def get_video(video_id: str) -> dict:
     voice_speed is the video's own speed (null = none set), and
     effective_voice_speed the speed its next voicing uses: voice_speed, else
     the voice's roster speed. voice_speed_source says which ("video" or
-    "roster").
+    "roster"). voiced_speed is the speed the current audio was made at (null
+    until a voicing records it); a pacing revision starts from it.
 
     illustrated_available is true when an OpenAI key is stored (the key itself
     is never returned). generate_character needs one. Read it here under the
@@ -5466,6 +5467,11 @@ def generate_voice(video_id: str, script: str) -> dict:
             try:
                 audio, seconds = taudio.stretch(ffmpeg, out["audio"], run["stretch"])
             except Exception as e:
+                # A first failure keeps the paid recording for the retry (ffmpeg
+                # may only have timed out); a failure on a reused one drops it,
+                # so audio ffmpeg cannot read is never retried for ever.
+                if kept is not None:
+                    _drop_kept_voice_runs(video_id)
                 _provider_failed("elevenlabs", model_id, "voice",
                                  error=f"changing the speed failed: {type(e).__name__}: {e}")
                 return {"error": f"The voice was generated but its speed could not be changed: {e}"}
@@ -5482,6 +5488,11 @@ def generate_voice(video_id: str, script: str) -> dict:
             try:
                 audio_bytes, durations = _join_voice_audio(ffmpeg, [o["audio"] for o in voiced])
             except Exception as e:
+                # A first failure keeps the paid recording for the retry (ffmpeg
+                # may only have timed out); a failure on a reused one drops it,
+                # so audio ffmpeg cannot read is never retried for ever.
+                if kept is not None:
+                    _drop_kept_voice_runs(video_id)
                 _provider_failed("elevenlabs", model_id, "voice",
                                  error=f"joining the voices failed: {type(e).__name__}: {e}")
                 return {"error": f"The voices were generated but could not be joined: {e}"}

@@ -24,6 +24,7 @@ mounted, as your own user. It renders nothing and calls no paid service.
 import argparse
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -104,8 +105,9 @@ def main(argv=None):
     ap.add_argument("--docker-image", help="run ffmpeg from this Docker image instead")
     ap.add_argument("--out-dir", default=str(OUT_DIR), help="where the two files go")
     args = ap.parse_args(argv)
-    if not args.stem.replace("_", "").isalnum() or args.stem != args.stem.lower():
-        ap.error("stem must be lowercase letters, digits and underscores")
+    # The pack check's own rule (visual_styles.PREVIEW_STEM_RE): ASCII only.
+    if not re.fullmatch(r"[a-z0-9_]+", args.stem):
+        ap.error("stem must be lowercase ASCII letters, digits and underscores")
     if not 1 <= args.duration <= 10:
         ap.error("--duration must be between 1 and 10 seconds")
     clip, poster = make(args)

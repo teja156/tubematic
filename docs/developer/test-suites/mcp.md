@@ -320,7 +320,8 @@ and `get_video`.
   fails after the paid call keeps the recording, and the retry reuses it for nothing.
 - A planted link in place of the temporary manifest is removed, never written through, and the
   recording is kept. A recording whose words do not fit the segments is dropped, so the retry asks
-  for a new take. The speed the audio was made at is recorded on the video.
+  for a new take, and so is a reused recording that fails the stretch again. The speed the audio
+  was made at is recorded on the video and returned by `get_video`.
 - The agent writes `voice_speed` at `TOPIC_APPROVED` and `REVISION_REQUESTED` only, in range and on
   the step, and 0 clears it. `get_video` reports the stored speed, the speed the voicing will use and where it comes
   from.

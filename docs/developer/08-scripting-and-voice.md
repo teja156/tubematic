@@ -495,8 +495,10 @@ it resets when the voice or model it is given changes.
   preview cached before speeds existed is still found. A model or speed change therefore produces a
   fresh sample, and the human-typed `voice_id` is not used in a file path.
 - The speed follows the same [speed plan](#speed) as a voicing: the native part is sent, and the
-  rest is a stretch of the sample before it is cached. A sample that needs a stretch is refused
-  with a `503` before the call when the API container has no `ffmpeg`.
+  rest is a stretch of the sample before it is cached. The recording at the native speed is cached
+  too, under its own key, so a stretched preview starts from it when it exists (no call) and a
+  stretch that fails keeps it for the retry. A sample that needs a stretch is refused with a `503`
+  before the call when the API container has no `ffmpeg`.
 - Its credits are recorded with no video. The usage ledger treats that as a normal case, and the
   preview appears in the Analytics page's Spend tab. Do not invent a video id for it.
 
@@ -738,7 +740,9 @@ through the same symlink check as every job path, so a half-written set is never
 of the video's own voice, which is the one a person picks (in a two-voice video with no speed of its
 own, a second voice can speak at its own roster speed). The video window shows it once the video
 is voiced, because a roster speed can be edited afterwards. A recording that does not fit the
-script's segments is not kept, so a retry asks ElevenLabs for a new take. Render staging copies
+script's segments is not kept, so a retry asks ElevenLabs for a new take. A stretch or join that
+fails on a reused recording drops it as well, so audio `ffmpeg` cannot read is retried once for
+free and then voiced again. Render staging copies
 only the named job files and images, so the kept recordings never reach a renderer.
 
 A roster speed of 1.0 is never stored (`voice_models.py::normalize_roster_entry`). A roster in which

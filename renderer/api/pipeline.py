@@ -4584,11 +4584,14 @@ def create_pipeline_blueprint() -> Blueprint:
 
         # The key names the speed only when it is not the default, so every
         # preview cached before speeds existed is still found.
-        speed_part = "" if speed == tvoice.DEFAULT_SPEED else f"|{speed:.2f}"
-        cache_key = hashlib.sha256(
-            f"{voice_id}|{model_id}{speed_part}|{VOICE_PREVIEW_SAMPLE_TEXT}".encode()
-        ).hexdigest()[:16]
         preview_dir = OUTPUT_DIR / "voice-previews"
+
+        def _key(at: float) -> str:
+            part = "" if at == tvoice.DEFAULT_SPEED else f"|{at:.2f}"
+            return hashlib.sha256(
+                f"{voice_id}|{model_id}{part}|{VOICE_PREVIEW_SAMPLE_TEXT}".encode()).hexdigest()[:16]
+
+        cache_key = _key(speed)
         preview_path = preview_dir / f"{cache_key}.mp3"
         container_path = f"/output_videos/voice-previews/{cache_key}.mp3"
 
@@ -4598,41 +4601,51 @@ def create_pipeline_blueprint() -> Blueprint:
             return jsonify({"error": "ffmpeg must be on PATH in the API container to preview "
                                      f"{model_id} at speed {speed:.2f}"}), 503
 
-        import httpx as _httpx
-        payload = {
-            "text": VOICE_PREVIEW_SAMPLE_TEXT,
-            "model_id": model_id,
-            "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
-            "output_format": "mp3_44100_128",
-        }
-        if native != tvoice.DEFAULT_SPEED:
-            payload["voice_settings"]["speed"] = native
-        headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
-        try:
-            with _httpx.Client(timeout=60) as client:
-                resp = client.post(
-                    f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
-                    json=payload,
-                    headers=headers,
-                )
-        except Exception as e:
-            return jsonify({"error": f"ElevenLabs request failed: {e}"}), 502
-        if resp.status_code != 200:
-            return jsonify({"error": f"ElevenLabs {resp.status_code}: {resp.text[:400]}"}), 502
-        credits, estimated = _elevenlabs_credits(resp, VOICE_PREVIEW_SAMPLE_TEXT)
-        tusage.record_usage(db_path, service="elevenlabs", model=model_id,
-                            operation="voice_preview", units={"credits": credits},
-                            request_id=resp.headers.get("request-id"), estimated=estimated)
-
-        audio = resp.content
+        # A stretched preview starts from the recording at its native speed,
+        # which is itself the cached preview at that speed: when it is cached,
+        # a new speed costs no call, and when the stretch fails after a paid
+        # call, the recording is kept for the retry.
+        native_path = preview_dir / f"{_key(native)}.mp3"
+        credits = 0
+        if stretch != 1.0 and native_path.exists():
+            audio = native_path.read_bytes()
+        else:
+            import httpx as _httpx
+            payload = {
+                "text": VOICE_PREVIEW_SAMPLE_TEXT,
+                "model_id": model_id,
+                "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+                "output_format": "mp3_44100_128",
+            }
+            if native != tvoice.DEFAULT_SPEED:
+                payload["voice_settings"]["speed"] = native
+            headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
+            try:
+                with _httpx.Client(timeout=60) as client:
+                    resp = client.post(
+                        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                        json=payload,
+                        headers=headers,
+                    )
+            except Exception as e:
+                return jsonify({"error": f"ElevenLabs request failed: {e}"}), 502
+            if resp.status_code != 200:
+                return jsonify({"error": f"ElevenLabs {resp.status_code}: {resp.text[:400]}"}), 502
+            credits, estimated = _elevenlabs_credits(resp, VOICE_PREVIEW_SAMPLE_TEXT)
+            tusage.record_usage(db_path, service="elevenlabs", model=model_id,
+                                operation="voice_preview", units={"credits": credits},
+                                request_id=resp.headers.get("request-id"), estimated=estimated)
+            audio = resp.content
+            preview_dir.mkdir(parents=True, exist_ok=True)
+            native_path.write_bytes(audio)
         if stretch != 1.0:
             try:
                 audio, _ = taudio.stretch(ffmpeg, audio, stretch)
             except Exception as e:
                 return jsonify({"error": f"the preview was generated but could not be sped up: {e}",
                                 "credits": credits}), 502
-        preview_dir.mkdir(parents=True, exist_ok=True)
-        preview_path.write_bytes(audio)
+            preview_dir.mkdir(parents=True, exist_ok=True)
+            preview_path.write_bytes(audio)
         return jsonify({"path": container_path, "cached": False, "credits": credits})
 
     # ── /pipeline/pause ───────────────────────────────────────────────────────

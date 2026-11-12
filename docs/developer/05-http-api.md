@@ -840,7 +840,7 @@ sample (see [Speed](08-scripting-and-voice.md#speed)). A missing or non-JSON bod
 
 | Status | Cause |
 |---|---|
-| `200` | `{path, cached, credits}`. `credits` is the plan credits the generation spent, 0 for a cache hit |
+| `200` | `{path, cached, credits}`. `credits` is the plan credits the generation spent, 0 for a cache hit or a stretch of the cached recording at the native speed |
 | `400` | `voice_id` does not match `[A-Za-z0-9_-]+` or is not on the roster, `model_id` is not a supported model, or `speed` is out of range. No ElevenLabs call is made |
 | `503` | No ElevenLabs key is configured, or the sample needs a stretch and the API container has no `ffmpeg`. No ElevenLabs call is made |
 | `502` | ElevenLabs rejected the request, or the call failed |
