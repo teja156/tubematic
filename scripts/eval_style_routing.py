@@ -53,6 +53,7 @@ INSERT_SKILL = REPO / "agent_files" / "skills" / "tubematic-insert-routing" / "S
 CASES = REPO / "tubematic_core" / "tests" / "fixtures" / "style_routing_cases.json"
 DEFAULT_OUT_DIR = REPO / "docs_private" / "reports" / "style-routing"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+MAX_REPLY_TOKENS = 8192
 
 INSTRUCTION = """\
 You are the Tubematic agent running the tubematic-style-routing skill below for one video.
@@ -176,8 +177,13 @@ def ask_openrouter(prompt: str, system: str, model: str, timeout: int,
                    key: str, answer_key: str = "style") -> tuple[dict | None, str, float]:
     """The same question through OpenRouter's chat completions. Returns the
     answer, an error and the call's cost in dollars (0 when not reported)."""
-    body = json.dumps({"model": model, "messages": [{"role": "system", "content": system},
-                                                    {"role": "user", "content": prompt}]}).encode()
+    # A cap on the reply: the answer is one short JSON object (with the model's
+    # reasoning before it), and OpenRouter reserves credit for the model's
+    # whole output window when none is given, refusing the call (402) on a
+    # balance far larger than the reply costs.
+    body = json.dumps({"model": model, "max_tokens": MAX_REPLY_TOKENS,
+                       "messages": [{"role": "system", "content": system},
+                                    {"role": "user", "content": prompt}]}).encode()
     req = urllib.request.Request(OPENROUTER_URL, data=body, method="POST", headers={
         "Authorization": f"Bearer {key}", "Content-Type": "application/json"})
     # OpenRouter keeps a slow request open by sending whitespace, so the socket

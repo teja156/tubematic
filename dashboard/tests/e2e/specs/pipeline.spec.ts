@@ -525,30 +525,44 @@ test.describe("Pipeline board", () => {
       expect((await getVideo(video.id)).visual_style).toBe("stick");
     });
 
-    test("the picker offers the styles the API serves, System Flow and Whiteboard included, and approving with it persists", async ({ page }) => {
+    test("the picker offers the styles the API serves, the insert styles apart and not choosable, and approving with a main style persists", async ({ page }) => {
       // The list comes from GET /visual-styles (the style packs), not from a
       // copy in the dashboard: a new pack must appear here with no dashboard edit.
+      // System Flow is an insert style (TMDEV-224): listed, never a video's style.
       const res = await fetch(`${BASE}/visual-styles`, { headers: { ...API_AUTH } });
-      const served = (await res.json()).styles.map((s: { id: string }) => s.id);
+      const styles = (await res.json()).styles as { id: string; role: string }[];
+      const served = styles.map((s) => s.id);
       expect(served).toContain("system_flow");
       expect(served).toContain("whiteboard");
+      expect(styles.find((s) => s.id === "system_flow")!.role).toBe("insert");
 
-      const video = await createVideo({ topic: `[${uid}] System Flow pick` });
+      const video = await createVideo({ topic: `[${uid}] Whiteboard pick` });
       await page.goto("/");
       const actionCard = page.getByTestId(`action-card-${video.id}`);
       await expect(actionCard).toBeVisible({ timeout: 10_000 });
       const stylePicker = actionCard.getByTestId(`style-select-${video.id}`);
       await stylePicker.click();
       const list = page.getByTestId(`style-select-${video.id}-list`);
-      await expect(list.getByTestId(`style-select-${video.id}-option-system_flow`)).toContainText("System Flow", { timeout: 10_000 });
+      const systemFlow = list.getByTestId(`style-select-${video.id}-option-system_flow`);
+      await expect(systemFlow).toContainText("System Flow", { timeout: 10_000 });
+      await expect(systemFlow).toHaveAttribute("aria-disabled", "true");
       await expect(list.getByTestId(`style-select-${video.id}-option-whiteboard`)).toContainText("Whiteboard");
       expect((await list.locator('[role="option"]').evaluateAll((os) => os.map((o) => (o as HTMLElement).dataset.value))).sort())
         .toEqual([...served].sort());
 
-      await list.getByTestId(`style-select-${video.id}-option-system_flow`).click();
+      await list.getByTestId(`style-select-${video.id}-option-whiteboard`).click();
       await actionCard.getByRole("button", { name: "Approve" }).click();
       await expect(actionCard).not.toBeVisible({ timeout: 5_000 });
-      expect((await getVideo(video.id)).visual_style).toBe("system_flow");
+      expect((await getVideo(video.id)).visual_style).toBe("whiteboard");
+
+      // The server refuses an insert style as a video's style too.
+      const other = await createVideo({ topic: `[${uid}] System Flow refused` });
+      const refused = await fetch(`${BASE}/videos/${other.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...API_AUTH },
+        body: JSON.stringify({ visual_style: "system_flow" }),
+      });
+      expect(refused.status).toBe(400);
     });
 
     test("Illustrated is disabled and refused with no OpenAI key, and offered once one is stored", async ({ page }) => {

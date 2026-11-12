@@ -207,7 +207,7 @@ test.describe("Topics page", () => {
     // accessible name also carries its selected option, and "Agent" is a group
     // title as well as a caption.
     const captions = panel.locator("label > span:first-child");
-    await expect(captions).toHaveText(["Visual style", "Mascot (exp.)", "Default voice",
+    await expect(captions).toHaveText(["Visual style", "Mascot (exp.)", "Inserts", "Default voice",
                                        "Script profile", "Formula", "Agent", "Model", "Effort",
                                        "Topic cap"]);
     for (const caption of await captions.all()) await expect(caption).toBeVisible();

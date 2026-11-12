@@ -83,6 +83,8 @@ def test_openrouter_sends_the_skill_as_system_and_the_video_as_user(monkeypatch)
     assert answer["style"] == "system_flow" and err == "" and cost == 0.0012
     assert sent["url"] == ev.OPENROUTER_URL and sent["auth"] == "Bearer k-test" and sent["timeout"] == 60
     assert sent["body"]["model"] == "deepseek/deepseek-v4.1-flash"
+    # A capped reply, so a small balance is not refused for the model's whole output window.
+    assert sent["body"]["max_tokens"] == ev.MAX_REPLY_TOKENS
     assert sent["body"]["messages"] == [{"role": "system", "content": "the skill"},
                                         {"role": "user", "content": "the video"}]
 
