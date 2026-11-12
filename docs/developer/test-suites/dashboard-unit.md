@@ -896,6 +896,7 @@ Covers `components/StylePicker.tsx` ([Visual-style picker](../15-dashboard.md#vi
 - The eye opens the preview without picking: the muted loop and poster from `/style-previews/`, Prev
   and Next, and **Use this style**, which picks and closes. An insert or an unavailable style shows
   its preview, says why, and offers no **Use this style**.
+- The arrows step through styles, except while the player's own controls have focus.
 - `StylePreviewButton` opens a frozen style's preview without a way to pick it, and renders nothing
   for a style with no preview.
 

@@ -734,8 +734,11 @@ delivered once the audio is written: a stretch or join that fails in between los
 for, and the retry reuses it. The manifest is written last, through a temporary file that goes
 through the same symlink check as every job path, so a half-written set is never read as a match.
 
-`generate_voice` also records the speed the audio was made at in `videos.voiced_speed`. The video
-window shows that once the video is voiced, because a roster speed can be edited afterwards. Render staging copies
+`generate_voice` also records the speed the audio was made at in `videos.voiced_speed`: the speed
+of the video's own voice, which is the one a person picks (in a two-voice video with no speed of its
+own, a second voice can speak at its own roster speed). The video window shows it once the video
+is voiced, because a roster speed can be edited afterwards. A recording that does not fit the
+script's segments is not kept, so a retry asks ElevenLabs for a new take. Render staging copies
 only the named job files and images, so the kept recordings never reach a renderer.
 
 A roster speed of 1.0 is never stored (`voice_models.py::normalize_roster_entry`). A roster in which

@@ -5173,6 +5173,10 @@ def _keep_voice_runs(video_id: str, runs: list, voiced: list, write_audio: bool 
     The manifest is written last, through a temporary file checked like every
     other job path, so a half-written set is never read back as a match."""
     manifest_path = tjobs.voice_original_file(JOBS_DIR, video_id, tjobs.VOICE_ORIGINAL_MANIFEST)
+    # The folder is checked by the line above. A link planted as the temporary
+    # file is removed here, by name inside that folder, so the checked lookup
+    # below can succeed: unlinking a link never touches its target.
+    (manifest_path.parent / tjobs.VOICE_ORIGINAL_MANIFEST_TMP).unlink(missing_ok=True)
     tmp = tjobs.voice_original_file(JOBS_DIR, video_id, tjobs.VOICE_ORIGINAL_MANIFEST_TMP)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.unlink(missing_ok=True)
@@ -5186,9 +5190,16 @@ def _keep_voice_runs(video_id: str, runs: list, voiced: list, write_audio: bool 
                         "tts_text": run["tts_text"], "native": run["native"],
                         "speed": run["speed"] if delivered else None,
                         "duration": out["duration"], "words": out["words"]})
-    tmp.unlink(missing_ok=True)                # a planted link is removed, never followed
     tmp.write_text(json.dumps({"version": 1, "runs": entries}), encoding="utf-8")
     os.replace(tmp, manifest_path)
+
+
+def _drop_kept_voice_runs(video_id: str) -> None:
+    """Forget the kept recordings: without a manifest nothing is reused."""
+    try:
+        tjobs.voice_original_file(JOBS_DIR, video_id, tjobs.VOICE_ORIGINAL_MANIFEST).unlink(missing_ok=True)
+    except (OSError, tjobs.UnsafePath) as e:
+        log.warning("could not drop the kept voice recording of %s: %s", video_id, e)
 
 
 @mcp.tool
@@ -5498,6 +5509,9 @@ def generate_voice(video_id: str, script: str) -> dict:
             try:
                 timeline["segments"] = _lockstep_segment_frames(segments, words)
             except (ValueError, IndexError) as e:
+                # The recording does not fit the script's segments, so it is
+                # not kept: a retry must ask for a new take, never reuse this one.
+                _drop_kept_voice_runs(video_id)
                 _provider_failed("elevenlabs", model_id, "voice", status=200, error=str(e))
                 return {"error": str(e)}
             # When normalized_alignment was used (a phoneme tag was present),

@@ -234,11 +234,11 @@ def test_a_planted_temporary_manifest_link_is_removed_not_followed(job_db, recor
     kept = server.JOBS_DIR / "v1" / "voice-original"
     kept.mkdir(parents=True)
     (kept / "manifest.json.tmp").symlink_to(target)
-    # The safe-path check refuses the planted link: nothing is kept this time,
-    # the voicing itself still lands, and the link's target is never written.
+    # The planted link is removed (never followed) and the recording is kept.
     assert "error" not in server.generate_voice("v1", "")
     assert target.read_text() == "keep me"
-    assert not (kept / "manifest.json").exists()
+    assert not (kept / "manifest.json.tmp").is_symlink()
+    assert (kept / "manifest.json").is_file()
 
 
 def test_the_speed_the_audio_was_made_at_is_recorded(job_db, recorder):
@@ -256,3 +256,16 @@ def test_zero_clears_the_video_speed_back_to_the_voice(job_db, recorder):
     assert out.get("updated_fields") == ["voice_speed"]
     v = server.get_video("v1")
     assert v["voice_speed"] is None and v["voice_speed_source"] == "roster"
+
+
+def test_a_recording_that_does_not_fit_the_segments_is_not_reused(job_db, recorder, monkeypatch):
+    job_db("v1", script_segments=[_seg("s1", "Hello there.")], voice_id="t1")
+
+    def misfit(segments, words):
+        raise ValueError("token count mismatch")
+    real = server._lockstep_segment_frames
+    monkeypatch.setattr(server, "_lockstep_segment_frames", misfit)
+    assert "mismatch" in server.generate_voice("v1", "")["error"]
+    monkeypatch.setattr(server, "_lockstep_segment_frames", real)
+    out = server.generate_voice("v1", "")
+    assert out["reused_recording"] is False and len(recorder.payloads) == 2   # a new take, paid

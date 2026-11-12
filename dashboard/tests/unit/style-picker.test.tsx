@@ -121,6 +121,16 @@ describe("StylePicker", () => {
     fireEvent.keyDown(screen.getByTestId("style-preview"), { key: "Escape" });
   });
 
+  it("leaves the arrow keys to the player when its controls have focus", () => {
+    render(<Harness />);
+    openStyleList("sp");
+    fireEvent.click(screen.getByTestId("sp-preview-whiteboard"));
+    fireEvent.keyDown(screen.getByTestId("style-preview-video"), { key: "ArrowRight" });
+    expect(screen.getByTestId("style-preview-title").textContent).toBe("Whiteboard");
+    fireEvent.keyDown(screen.getByTestId("style-preview-title"), { key: "ArrowRight" });
+    expect(screen.getByTestId("style-preview-title").textContent).not.toBe("Whiteboard");
+  });
+
   it("says why a style shown in the preview cannot be made here", () => {
     render(<Harness gpu={{ status: "not_usable" }} />);
     openStyleList("sp");

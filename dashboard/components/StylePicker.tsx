@@ -96,6 +96,8 @@ export function StylePreviewDialog({ rows, index, onIndex, onClose, onUse }: {
           className="grid-cols-1 border-[#1e1e30] bg-[var(--panel)] text-[var(--ink)]"
           style={{ width: "auto", maxWidth: "calc(100vw - 32px)", zIndex: 300 }}
           onKeyDown={(e) => {
+            // The player's own controls (shown with reduced motion) seek with the arrows.
+            if (e.target instanceof HTMLMediaElement) return;
             if (e.key === "ArrowRight") { e.preventDefault(); step(1); }
             if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
           }}
