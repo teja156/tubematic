@@ -3,6 +3,11 @@
   "label": "Storybook Atlas",
   "order": 80,
   "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "push"
+  },
   "renderer": "dom",
   "canvas": "light",
   "authoring_skill": "tubematic-storybook-atlas",

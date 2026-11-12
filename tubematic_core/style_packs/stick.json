@@ -3,6 +3,11 @@
   "label": "Stick Explainer",
   "order": 20,
   "experimental": false,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "wipe"
+  },
   "renderer": "dom",
   "canvas": "light",
   "authoring_skill": "tubematic-scene-config",

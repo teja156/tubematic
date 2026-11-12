@@ -3,6 +3,11 @@
   "label": "Motion Graphics",
   "order": 10,
   "experimental": false,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "dip"
+  },
   "renderer": "dom",
   "canvas": "dark",
   "authoring_skill": "tubematic-scene-config",

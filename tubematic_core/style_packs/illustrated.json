@@ -3,6 +3,11 @@
   "label": "Illustrated",
   "order": 30,
   "experimental": false,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "dip"
+  },
   "renderer": "dom",
   "canvas": null,
   "authoring_skill": "tubematic-scene-config",

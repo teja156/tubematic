@@ -3,6 +3,11 @@
   "label": "Under the Hood",
   "order": 90,
   "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "cut"
+  },
   "renderer": "dom",
   "canvas": "dark",
   "authoring_skill": "tubematic-under-the-hood",

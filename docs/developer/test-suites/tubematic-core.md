@@ -113,6 +113,11 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
 - A malformed pack is refused with the field at fault, `auto` cannot be a pack, and every shipped
   pack passes. The optional `routing.images`, `routing.moods` and `script` are checked when
   present, and a pack without them still loads.
+- System Flow and Terminal Doc are the insert styles and every other pack is a main style; a stored
+  insert style still reads as a style, and choosing one as a video's style is refused with a reason.
+  Every main style hosts inserts except Cartoon 3D, whose pack says why, and every host names a
+  transition from `inserts.TRANSITIONS`. `public_list` and `agent_view` carry `role` and `inserts`.
+  A malformed `role`, `inserts` or `insert` block is refused with the field at fault.
 
 Trap: each answer in the truth table decides what an agent may draw or what the AI review is told is
 intended, so a changed answer shows up only after a render. Change the table only when a style's
@@ -192,14 +197,33 @@ Covers `tubematic_core/script_checks.py`
 Trap: the quiet half matters as much as the firing half. The list is shown to a person and handed to
 the agent, so a check that fires on a sound script teaches both to ignore it.
 
+### `test_inserts.py`
+
+Covers `tubematic_core/inserts.py`: the rules a script's insert marks are held to
+([Main styles and inserts](../10-scene-authoring.md#main-styles-and-inserts)).
+
+- A mark in the middle of the script is fine, and a script with no marks is fine whatever the
+  video's settings.
+- A mark on the first or the last segment, or on two segments in a row, is refused.
+- Marks are refused when the video's Inserts setting is None, when inserts are not decided yet
+  (the message names the insert-routing skill), when the style is not one the video chose, and
+  when it is not an insert style at all.
+- A marked segment whose words would run past 8 seconds warns (`insert_long`), pause and
+  pronunciation tags do not count as words, and a faster voice moves the limit.
+- `parse_styles` reads `''` as undecided and anything malformed as no inserts.
+
+Trap: length is only a warning here, because a segment's real length is known only once it is
+voiced; `mcp/inserts.py` measures it on the timeline when the scenes are written.
+
 ### `test_style_routing.py`
 
 Covers the candidate list Auto's style routing reads (`visual_styles.py::routing_candidates`) and
 the fixed topic set in `tests/fixtures/style_routing_cases.json`
 ([How Auto picks a style](../10-scene-authoring.md#how-auto-picks-a-style)).
 
-- Every pack, then `scenes`, is a candidate in pack order, and a pack added at run time becomes one
-  with no other edit.
+- Every main pack, then `scenes`, is a candidate in pack order, and a pack added at run time becomes
+  one with no other edit. An insert style is never a candidate for the main style; every insert pack
+  is an insert candidate, with its routing block and its longest length.
 - Each candidate carries its routing block and its image count, and the list shares no state with
   the packs.
 - A candidate is unavailable for the same reasons that refuse the choice: no OpenAI key, a GPU that
@@ -535,6 +559,22 @@ Covers `0026`: `videos.angle`, `angle_kind` and `angle_score`.
 
 Trap: `''` means no angle, which is true of every topic filed before the upgrade. Such a topic
 stays usable, so the migration has no backfill.
+
+### `test_inserts_migration.py`
+
+Covers `0029`: the insert columns, and what still held an insert style as its main one.
+
+- A domain whose default is System Flow or Terminal Doc gets `auto`; every domain's insert mode is
+  `auto`.
+- A video not yet voiced (Topic Proposed, Topic Approved, Script Ready) in one of those styles goes
+  back to Auto: one at Script Ready returns to Topic Approved, its style pick, renderer, canvas and
+  formula pick are cleared, a person's formula choice is kept, and a comment says why.
+- A voiced or later video, and an archived one, keeps its style.
+- Every video past Topic Approved is marked as having no inserts; one before it starts undecided.
+- A second run changes nothing, and a new video starts undecided with inserts on Auto.
+
+Trap: a script written before inserts existed has no insert segments, so marking it "no inserts"
+keeps the scene author from adding any to it.
 
 ## Shared rules
 

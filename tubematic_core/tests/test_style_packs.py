@@ -16,6 +16,7 @@ import pytest
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
+from tubematic_core import inserts as tinserts  # noqa: E402
 from tubematic_core import visual_styles as tvs  # noqa: E402
 
 # style: (figures, line_art, generated_characters, fixed canvas, needs key, needs GPU)
@@ -321,3 +322,71 @@ def test_the_agent_view_carries_the_style_script_guidance():
     assert "component" in tvs.agent_view("system_flow")["script"]
     assert tvs.agent_view("stick")["script"] == ""
     assert tvs.agent_view("auto")["script"] == ""
+
+
+# ── main styles and insert styles (TMDEV-224) ────────────────────────────────
+
+def test_system_flow_and_terminal_doc_are_insert_styles_and_the_rest_are_main():
+    assert set(tvs.INSERT_STYLES) == {"system_flow", "terminal_doc"}
+    assert tvs.MAIN_STYLES == ("auto",) + tuple(s for s in tvs.PACKS if s not in tvs.INSERT_STYLES)
+    # A stored legacy value still reads as a style.
+    assert {"system_flow", "terminal_doc"} <= set(tvs.VISUAL_STYLES)
+
+
+def test_every_main_style_hosts_inserts_except_cartoon_3d():
+    hosts = {sid: tvs.hosts_inserts(sid)["host"] for sid in tvs.MAIN_PACKS}
+    assert {sid for sid, host in hosts.items() if not host} == {"cartoon_3d"}
+    assert tvs.hosts_inserts("auto") == tvs.SCENES_INSERTS
+    assert tvs.hosts_inserts("system_flow") == {"host": False}  # a legacy whole-video video
+    for sid, p in tvs.MAIN_PACKS.items():
+        if p["inserts"]["host"]:
+            assert p["inserts"]["transition"] in tinserts.TRANSITIONS, sid
+    assert tvs.PACKS["cartoon_3d"]["messages"]["inserts"]
+
+
+def test_an_insert_style_is_refused_as_a_video_style_with_a_reason():
+    assert "insert style" in tvs.insert_style_error("system_flow")
+    assert "Terminal Doc" in tvs.insert_style_error(" terminal_doc ")
+    assert tvs.insert_style_error("whiteboard") == ""
+    assert tvs.insert_style_error("auto") == ""
+
+
+def test_the_public_list_and_the_agent_view_carry_the_role():
+    rows = {r["id"]: r for r in tvs.public_list(True, "working")}
+    assert rows["system_flow"]["role"] == "insert"
+    assert rows["whiteboard"]["role"] == "main" and rows["whiteboard"]["inserts"]["host"] is True
+    assert rows["cartoon_3d"]["inserts"] == {"host": False}
+    assert rows["auto"]["role"] == "main"
+    view = tvs.agent_view("bean_explainer")
+    assert view["role"] == "main" and view["inserts"] == {"host": True, "transition": "wipe"}
+    assert tvs.agent_view("auto")["inserts"] == tvs.SCENES_INSERTS
+
+
+def _insert_pack(**over):
+    data = json.loads((tvs.PACKS_DIR / "system_flow.json").read_text())
+    data.update(over)
+    return data
+
+
+@pytest.mark.parametrize("make, fragment", [
+    (lambda: _valid(role="side"), "role must be one of"),
+    (lambda: {k: v for k, v in _valid().items() if k != "inserts"}, "inserts: {host"),
+    (lambda: _valid(inserts={"host": True}), "inserts.transition"),
+    (lambda: _valid(inserts={"host": True, "transition": "spin"}), "inserts.transition"),
+    (lambda: _valid(inserts={"host": False, "transition": "cut"}), "only the key host"),
+    (lambda: _valid(inserts={"host": False}), "messages.inserts"),
+    (lambda: _valid(insert={"max_seconds": 8}), 'no "insert" block'),
+    (lambda: _insert_pack(inserts={"host": True, "transition": "cut"}), 'no "inserts" block'),
+    (lambda: _insert_pack(insert={"max_seconds": 8}), "insert: {max_seconds"),
+    (lambda: _insert_pack(insert={"max_seconds": 20, "palettes": ["dark"], "props_key": "x"}),
+     "insert.max_seconds"),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["blue"], "props_key": "x"}),
+     "insert.palettes"),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": ""}),
+     "insert.props_key"),
+])
+def test_a_malformed_role_block_is_refused(make, fragment):
+    data = make()
+    name = "system_flow.json" if data.get("id") == "system_flow" else "stick.json"
+    with pytest.raises(tvs.PackError, match=fragment.replace(".", r"\.")):
+        tvs._check_pack(pathlib.Path(name), data)

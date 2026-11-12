@@ -3,6 +3,15 @@
   "label": "Terminal Doc",
   "order": 70,
   "experimental": false,
+  "role": "insert",
+  "insert": {
+    "max_seconds": 8,
+    "palettes": [
+      "dark",
+      "light"
+    ],
+    "props_key": "terminalDoc"
+  },
   "renderer": "dom",
   "canvas": "dark",
   "authoring_skill": "tubematic-terminal-doc",

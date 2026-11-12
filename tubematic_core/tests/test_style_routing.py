@@ -33,16 +33,31 @@ def _by_id(**kw):
 
 # ── the candidate list ───────────────────────────────────────────────────────
 
-def test_every_pack_and_mixed_scenes_is_a_candidate_in_pack_order():
+def test_every_main_pack_and_mixed_scenes_is_a_candidate_in_pack_order():
     ids = [c["id"] for c in tvs.routing_candidates(True, "working", False)]
-    assert ids == list(tvs.PACKS) + [tvs.SCENES]
+    assert ids == list(tvs.MAIN_PACKS) + [tvs.SCENES]
     assert tvs.ROUTE_CHOICES == tuple(ids)
+
+
+def test_an_insert_style_is_never_a_candidate_for_the_main_style():
+    ids = {c["id"] for c in tvs.routing_candidates(True, "working", False)}
+    assert tvs.INSERT_STYLES and not ids & set(tvs.INSERT_STYLES)
+
+
+def test_every_insert_pack_is_an_insert_candidate_in_pack_order():
+    rows = tvs.insert_candidates(True, "working")
+    assert [r["id"] for r in rows] == list(tvs.INSERT_PACKS)
+    for r in rows:
+        for key in ("best_for", "avoid_for", "signals", "moods"):
+            assert key in r["routing"], (r["id"], key)
+        assert r["max_seconds"] == tvs.PACKS[r["id"]]["insert"]["max_seconds"]
+        assert r["authoring_skill"] and r["available"]
 
 
 def test_a_new_pack_becomes_a_candidate_with_no_other_edit(monkeypatch):
     extra = json.loads((tvs.PACKS_DIR / "stick.json").read_text())
     extra.update(id="zz_new", label="New Style", order=999)
-    monkeypatch.setitem(tvs.PACKS, "zz_new", tvs._check_pack(pathlib.Path("zz_new.json"), extra))
+    monkeypatch.setitem(tvs.MAIN_PACKS, "zz_new", tvs._check_pack(pathlib.Path("zz_new.json"), extra))
     ids = [c["id"] for c in tvs.routing_candidates(True, "working", False)]
     assert ids[-2:] == ["zz_new", tvs.SCENES]
 
@@ -53,7 +68,7 @@ def test_each_candidate_carries_its_routing_block_and_cost():
             assert key in c["routing"], (c["id"], key)
         assert c["images"] == c["routing"]["images"]
         assert c["authoring_skill"]
-    assert _by_id(openai_key_set=True, gpu_status="working", has_mascot=False)["system_flow"]["images"] == 0
+    assert _by_id(openai_key_set=True, gpu_status="working", has_mascot=False)["whiteboard"]["images"] == 0
 
 
 @pytest.mark.parametrize("key, gpu, mascot, unavailable", [

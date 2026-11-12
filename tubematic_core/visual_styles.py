@@ -32,6 +32,8 @@ at the first video that uses it.
 import json
 import pathlib
 
+from . import inserts as tinserts
+
 PACKS_DIR = pathlib.Path(__file__).resolve().parent / "style_packs"
 
 AUTO = "auto"
@@ -59,6 +61,13 @@ _ROUTING = ("best_for", "avoid_for", "signals")
 # what a turn or a re-opening looks like, what the payoff gets, how it ends.
 # The scene author reads it from get_video's style.picture.
 PICTURE_KEYS = ("opening", "turn", "payoff", "ending")
+
+# What a pack is for (TMDEV-224). A "main" style carries a whole video: its
+# opening, payoff and ending. An "insert" style is never a video's style: it
+# draws short insert scenes inside a main style's video, where the narration
+# reaches what it shows best. A video still holding an insert style as its
+# visual_style (one voiced before 2.3.0) finishes on the old whole-video path.
+ROLES = ("main", "insert")
 
 # Auto's other outcome besides a pack: keep the mixed scene system, where the
 # agent draws each beat from any vocabulary and settles the canvas at scene
@@ -88,6 +97,9 @@ SCENES_ROUTING = {
     "images": 6,
     "images_per_video": "a few, only where a beat needs a picture",
 }
+
+# How the mixed scene system hosts inserts, as a main pack's `inserts` block.
+SCENES_INSERTS = {"host": True, "transition": "dip"}
 
 
 # The picture duties of Auto's mixed scene system, which has no pack.
@@ -132,6 +144,38 @@ def _check_pack(path: pathlib.Path, data) -> dict:
         fail("order must be a whole number")
     if not isinstance(data.get("experimental"), bool):
         fail("experimental must be true or false")
+    if data.get("role") not in ROLES:
+        fail(f"role must be one of {ROLES}")
+    if data["role"] == "main":
+        if "insert" in data:
+            fail('a main style has no "insert" block (that is for insert styles)')
+        block = data.get("inserts")
+        if not isinstance(block, dict) or not isinstance(block.get("host"), bool):
+            fail("a main style needs inserts: {host: true or false, ...}")
+        if block["host"]:
+            if set(block) != {"host", "transition"} or block["transition"] not in tinserts.TRANSITIONS:
+                fail(f"inserts.transition must be one of {tinserts.TRANSITIONS} when host is true, "
+                     "and inserts has no other keys")
+        elif set(block) != {"host"}:
+            fail("inserts has only the key host when host is false")
+        elif not (isinstance(data.get("messages", {}).get("inserts"), str)
+                  and data["messages"]["inserts"].strip()):
+            fail("inserts.host is false, so messages.inserts must say why and what to do instead")
+    else:
+        if "inserts" in data:
+            fail('an insert style has no "inserts" block (it cannot host inserts)')
+        block = data.get("insert")
+        if not isinstance(block, dict) or set(block) != {"max_seconds", "palettes", "props_key"}:
+            fail("an insert style needs insert: {max_seconds, palettes, props_key}")
+        secs = block["max_seconds"]
+        if not isinstance(secs, (int, float)) or isinstance(secs, bool) \
+                or not 0 < secs <= tinserts.MAX_SECONDS:
+            fail(f"insert.max_seconds must be a number above 0 and at most {tinserts.MAX_SECONDS}")
+        if not isinstance(block["palettes"], list) or not block["palettes"] \
+                or not set(block["palettes"]) <= set(VALID_CANVASES):
+            fail(f"insert.palettes must list the canvases it can follow, from {VALID_CANVASES}")
+        if not isinstance(block["props_key"], str) or not block["props_key"].strip():
+            fail("insert.props_key must name the props key its scene reads")
     if data.get("renderer") not in RENDERERS:
         fail(f"renderer must be one of {RENDERERS}")
     if data.get("canvas") is not None and data["canvas"] not in VALID_CANVASES:
@@ -206,7 +250,15 @@ def _load() -> dict:
 
 PACKS = _load()
 
+# Every style a stored visual_style may hold. Insert styles are in it, so a
+# video voiced before they became inserts still reads as its style.
 VISUAL_STYLES = (AUTO,) + tuple(PACKS)
+
+MAIN_PACKS = {sid: p for sid, p in PACKS.items() if p["role"] == "main"}
+INSERT_PACKS = {sid: p for sid, p in PACKS.items() if p["role"] == "insert"}
+# What a person, a domain default or Auto may choose as a video's style.
+MAIN_STYLES = (AUTO,) + tuple(MAIN_PACKS)
+INSERT_STYLES = tuple(INSERT_PACKS)
 
 # Styles that fix the canvas. A partial map on purpose: membership in it, never
 # equality with "auto", is the test for "has the canvas been settled".
@@ -216,6 +268,32 @@ CANVAS_BY_STYLE = {sid: p["canvas"] for sid, p in PACKS.items() if p["canvas"]}
 # overlay) and any pack that says "mascot": false.
 NO_MASCOT_STYLES = tuple(sid for sid, p in PACKS.items()
                          if p["renderer"] == "cartoon_3d" or p.get("mascot") is False)
+
+
+def is_insert_style(visual_style: str) -> bool:
+    return (visual_style or "").strip() in INSERT_PACKS
+
+
+def insert_style_error(visual_style: str) -> str:
+    """The refusal for choosing an insert style as a video's style, or ""."""
+    p = INSERT_PACKS.get((visual_style or "").strip())
+    if not p:
+        return ""
+    return (f"{p['label']} is an insert style: it draws short scenes inside another style's video, "
+            f"never a whole video. Choose a main style (or Auto) and leave Inserts on Auto.")
+
+
+def hosts_inserts(visual_style: str) -> dict:
+    """The `inserts` block of the style a video's main scenes are drawn in:
+    {host, transition}. "auto" (the mixed scene system, or a style not picked
+    yet) hosts with SCENES_INSERTS. An insert style held by a legacy whole-video
+    video hosts none."""
+    p = pack(visual_style)
+    if p is None:
+        return dict(SCENES_INSERTS)
+    if p["role"] == "insert":
+        return {"host": False}
+    return dict(p["inserts"])
 
 
 def pack(visual_style: str) -> dict | None:
@@ -346,11 +424,13 @@ def public_list(openai_key_set: bool, gpu_status: str) -> list[dict]:
     can produce it now, with the reason when it cannot. The API is the
     authority on refusals; this only explains them."""
     out = [{"id": AUTO, "label": "Auto", "experimental": False, "canvas": None,
-            "needs": {k: False for k in _NEEDS}, "mascot": True, "available": True, "unavailable_reason": ""}]
+            "needs": {k: False for k in _NEEDS}, "mascot": True, "role": "main",
+            "inserts": dict(SCENES_INSERTS), "available": True, "unavailable_reason": ""}]
     for sid, p in PACKS.items():
         reason = _unavailable_reason(p, openai_key_set, gpu_status)
         out.append({"id": sid, "label": p["label"], "experimental": p["experimental"],
                     "canvas": p["canvas"], "needs": dict(p["needs"]), "mascot": sid not in NO_MASCOT_STYLES,
+                    "role": p["role"], "inserts": dict(p.get("inserts") or {"host": False}),
                     "available": not reason, "unavailable_reason": reason})
     return out
 
@@ -368,15 +448,17 @@ def agent_view(visual_style: str) -> dict:
                 "renderer": None, "canvas": None,
                 "authoring_skill": "tubematic-scene-config",
                 "allows": {k: True for k in _ALLOWS}, "script": "",
-                "picture": dict(SCENES_PICTURE)}
+                "picture": dict(SCENES_PICTURE), "role": "main",
+                "inserts": dict(SCENES_INSERTS)}
     return {"id": p["id"], "label": p["label"], "renderer": p["renderer"], "canvas": p["canvas"],
             "authoring_skill": p["authoring_skill"], "allows": dict(p["allows"]),
-            "script": p.get("script", ""), "picture": dict(p["picture"])}
+            "script": p.get("script", ""), "picture": dict(p["picture"]),
+            "role": p["role"], "inserts": hosts_inserts(p["id"])}
 
 
 # ── Auto's routing (TMDEV-203) ───────────────────────────────────────────────
 
-ROUTE_CHOICES = tuple(PACKS) + (SCENES,)
+ROUTE_CHOICES = tuple(MAIN_PACKS) + (SCENES,)
 
 MASCOT_EXCLUDES_3D = "the video has a mascot, which has no place in a 3D world"
 MASCOT_EXCLUDED = "the video has a mascot, which this style does not take"
@@ -401,7 +483,7 @@ def routing_candidates(openai_key_set: bool, gpu_status: str, has_mascot: bool) 
     mascot cannot take a 3D-world style (the mascot is a flat overlay), nor a
     style whose pack takes no mascot."""
     out = []
-    for sid, p in PACKS.items():
+    for sid, p in MAIN_PACKS.items():
         reason = _unavailable_reason(p, openai_key_set, gpu_status)
         if not reason and has_mascot and sid in NO_MASCOT_STYLES:
             reason = MASCOT_EXCLUDES_3D if p["renderer"] == "cartoon_3d" else MASCOT_EXCLUDED
@@ -418,6 +500,24 @@ def routing_candidates(openai_key_set: bool, gpu_status: str, has_mascot: bool) 
                             for k, v in SCENES_ROUTING.items()},
                 "images": SCENES_ROUTING["images"], "available": True,
                 "unavailable_reason": ""})
+    return out
+
+
+def insert_candidates(openai_key_set: bool, gpu_status: str) -> list[dict]:
+    """Every insert style, for get_video's insert_routing: id, label, its
+    routing block (what a beat must be about for the insert to fit), the
+    longest it may last, the script guidance for narrating an insert segment,
+    and whether this install can make it now. Read from the packs, so a new
+    insert pack is a candidate the day it ships."""
+    out = []
+    for sid, p in INSERT_PACKS.items():
+        reason = _unavailable_reason(p, openai_key_set, gpu_status)
+        routing = {k: (list(v) if isinstance(v, list) else v) for k, v in p["routing"].items()}
+        routing.setdefault("moods", [])
+        out.append({"id": sid, "label": p["label"], "experimental": p["experimental"],
+                    "authoring_skill": p["authoring_skill"], "routing": routing,
+                    "max_seconds": p["insert"]["max_seconds"], "script": p.get("script", ""),
+                    "available": not reason, "unavailable_reason": reason})
     return out
 
 

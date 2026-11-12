@@ -3,6 +3,11 @@
   "label": "Bean Explainer",
   "order": 60,
   "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "wipe"
+  },
   "renderer": "dom",
   "canvas": "light",
   "authoring_skill": "tubematic-bean-explainer",
