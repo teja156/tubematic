@@ -86,7 +86,7 @@ One row per video, from proposed topic to published file.
 | `angle_kind` | TEXT NOT NULL | `''` | The angle's kind, a key of `tubematic_core.angles.ANGLE_KINDS`, or `''`. Written together with `angle` |
 | `angle_score` | INTEGER NOT NULL | `0` | 0 to 10. `0` means unscored. The MCP `create_video` tool rejects a research proposal whose angle scores below 5 |
 | `script` | TEXT NOT NULL | `''` | The flat script, derived from `script_segments` |
-| `script_segments` | TEXT | | JSON array of `{id, voice, visual}`, each optionally with `beat` |
+| `script_segments` | TEXT | | JSON array of `{id, voice, visual}`, each optionally with `beat` and `insert` (the insert style the segment is marked with) |
 | `formula_id` | TEXT NOT NULL | `''` | The [formula](08-scripting-and-voice.md#formulas) the script follows. `''` means none on record |
 | `hook_type` | TEXT NOT NULL | `''` | The hook type of the opening the script uses, or `''` |
 | `hook_alternatives` | TEXT NOT NULL | `''` | JSON array of the three openings the agent drafted, `{type, text, kept, note}`, or `''` |
@@ -100,12 +100,15 @@ One row per video, from proposed topic to published file.
 | `voice_id` | TEXT NOT NULL | `''` | The video's voice. `''` means the install default |
 | `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |
 | `script_profile_id` | TEXT NOT NULL | `''` | The script profile. `''` means the generic style |
-| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `system_flow`, `bean_explainer`, `cartoon_3d`, `whiteboard`, `storybook_atlas`, `terminal_doc`, `under_the_hood` or `case_file_story`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
+| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a main [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `bean_explainer`, `cartoon_3d`, `whiteboard`, `storybook_atlas`, `under_the_hood` or `case_file_story`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
 | `resolved_visual_style` | TEXT NOT NULL | `''` | The canvas `auto` settled on: `dark` or `light`. Written once by the agent |
 | `resolved_renderer` | TEXT NOT NULL | `''` | The renderer an `auto` video uses: `dom` or `cartoon_3d`. Written once by the agent, and not over HTTP |
 | `style_pick` | TEXT NOT NULL | `''` | What Auto picked before the script: a style pack id (then also `visual_style`), `scenes` for the mixed scene system, or `''` when Auto has not decided or a person chose the style |
 | `style_runner_up` | TEXT NOT NULL | `''` | The candidate that came second, offered as a switch at `SCRIPT_READY`, or `''` |
 | `style_reason` | TEXT NOT NULL | `''` | Auto's one-sentence reason for the pick, at most 300 characters |
+| `insert_mode` | TEXT NOT NULL | `auto` | The Inserts setting: `auto` (the agent decides whether insert scenes help) or `none`. Seeded from the domain's `default_insert_mode`. Set while the video is `TOPIC_PROPOSED` and frozen after |
+| `insert_styles` | TEXT NOT NULL | `''` | `''` while undecided, then a JSON list of the insert style ids the script may use (`[]` for none). Written once by `choose_inserts`. See [Insert columns](#insert-columns) |
+| `insert_reason` | TEXT NOT NULL | `''` | The agent's one-sentence reason for the insert decision, at most 300 characters |
 | `mascot_id` | TEXT NOT NULL | `''` | The [mascot](#mascots-and-mascot_versions) the video shows. `''` means none. Settable only while the video is `TOPIC_PROPOSED` |
 | `mascot_version` | INTEGER NOT NULL | `0` | The mascot version the video was authored against. `0` means not pinned yet |
 | `agent_id` | TEXT | `NULL` | The [agent](#agents) the video runs under. `NULL` means the default agent at dispatch time |
@@ -155,16 +158,21 @@ first. Any write to the column changes render order.
 ### Visual style columns
 
 `motion_graphics`, `stick` and `illustrated` are permission sets: each names which scene
-vocabularies the video may draw from. `system_flow` makes the whole video one diagram scene written
-as data, `bean_explainer` one cartoon-bean scene written as data, `whiteboard` one board
+vocabularies the video may draw from. `bean_explainer` makes the whole video one cartoon-bean scene
+written as data, `whiteboard` one board
 scene written as data, `storybook_atlas` one picture-book scene in chapters written as data,
-`terminal_doc` one typographic scene written as data, `under_the_hood` one scene of annotated
+`under_the_hood` one scene of annotated
 close-up photographs written as data, and `case_file_story` one scene of painted stills with meters
 and number cards written as data (the last two need an OpenAI key). `cartoon_3d` selects a different renderer (one painted 3D world written as code for the
 video) and needs a working GPU. `auto` leaves the choice to the agent. The values are checked in
 code against the style packs, and the column has no CHECK constraint, so a new style needs no
 migration.
 [Frozen choices](02-pipeline.md#frozen-choices) covers when each may change.
+
+`system_flow` and `terminal_doc` are insert styles: they draw short insert scenes inside another
+style's video, and no write sets either as a new `visual_style`. A video that holds one from an
+earlier version keeps it and renders as one whole-video diagram or typographic scene written as
+data.
 
 Under `auto` the agent first picks a style, at `TOPIC_APPROVED` (`choose_visual_style`). A pack it
 picks becomes `visual_style`, and `style_pick`, `style_runner_up` and `style_reason` record that
@@ -184,6 +192,17 @@ A video that stays on `auto` (the mixed scene system) records two more decisions
   the canvas the video already uses. The column means nothing unless `visual_style` is `auto`.
 - `resolved_renderer` is written before any scene is authored. A revision round that changed the
   renderer would discard every scene.
+
+### Insert columns
+
+`insert_mode`, `insert_styles` and `insert_reason` record whether a video uses
+[insert scenes](10-scene-authoring.md#main-styles-and-inserts). `tubematic_core/inserts.py::parse_styles`
+reads `insert_styles`: `''` is undecided (`None`), anything else a list. The agent decides at
+`TOPIC_APPROVED`, after the main style and before the script, with `choose_inserts`; it decides
+nothing when `insert_mode` is `none` or the main style takes no inserts. Every new main style
+decision and a return to `TOPIC_PROPOSED` clear `insert_styles` and `insert_reason`
+(`visual_styles.py::NEW_STYLE_CLEARS_SET`, `AUTO_PICK_RESET_SET`), because whether an insert helps
+depends on the main style.
 
 ### Mascot columns
 
@@ -282,6 +301,7 @@ A domain. Every video files into one, whatever its research mode.
 | `default_agent_model` | TEXT NOT NULL | `''` | One of that agent's models. `''` means the agent's default model |
 | `default_agent_effort` | TEXT NOT NULL | `''` | One of the five effort levels. `''` means the agent's own level |
 | `default_formula_id` | TEXT NOT NULL | `''` | The [formula](08-scripting-and-voice.md#formulas) every new video in the domain is written in, whatever its `strategy`. `''` means Auto: a formula is picked for each video |
+| `default_insert_mode` | TEXT NOT NULL | `auto` | The Inserts setting (`auto` or `none`) every new video in the domain starts with, whatever its `strategy` |
 | `topic_cap` | INTEGER NOT NULL | `100` | How many topics the domain may ever hold, 25 to 750. See [Topic cap](02-pipeline.md#topic-cap) |
 | `created_at` | TEXT NOT NULL | | |
 
@@ -748,6 +768,7 @@ only in the pre-migration backup.
 | `0025_formula_pick.sql` | Adds `videos.formula_choice`, `formula_pick`, `formula_runner_up` and `formula_reason` and `projects.default_formula_id`, `''` on every existing row | No |
 | `0026_topic_angle.sql` | Adds `videos.angle`, `angle_kind` and `angle_score`, empty and 0 on every existing video | No |
 | `0028_formula_evidence.sql` | Adds `videos.formula_evidence`, `''` on every existing video | No |
+| `0029_inserts.py` | Adds `videos.insert_mode`, `insert_styles` and `insert_reason` and `projects.default_insert_mode`, and moves stored `system_flow` and `terminal_doc` choices off those styles. Details below | Yes |
 
 `0001_baseline.py` is Python because SQLite has no `ADD COLUMN IF NOT EXISTS`, and a `.sql` file
 cannot express an `ALTER TABLE` guarded by a pragma check. Every statement in it is idempotent, so
@@ -778,8 +799,21 @@ the writer refuses a list with any bad entry. Each dropped entry is logged at `W
 `0016_openai_only_images.sql` exists because the MCP server reads `image_model` raw, so a value
 outside the list would make every `generate_image` call refuse.
 
-While `0016` or `0019` is pending, `upgrade.py` refuses `--no-stop`, because containers recreated
-one at a time would leave old code running against the new database. A row that was `RENDERING`
+`0029_inserts.py` makes `system_flow` and `terminal_doc` insert styles. Besides the four columns
+(`auto`, `''`, `''`, `auto` on existing rows), it:
+
+- sets a domain's `default_visual_style` of `system_flow` or `terminal_doc` to `auto`
+- sets a live video in either style that is not voiced yet (`TOPIC_PROPOSED`, `TOPIC_APPROVED`,
+  `SCRIPT_READY`) back to `auto`, clears its style pick, recorded renderer and canvas and formula
+  pick, moves one at `SCRIPT_READY` back to `TOPIC_APPROVED` for a new script, and adds a `human`
+  comment saying why
+- sets `insert_styles` to `[]` on every video not at `TOPIC_PROPOSED` or `TOPIC_APPROVED`, because
+  its script was written without insert marks
+
+A video in either style that is already voiced keeps it and finishes as one whole-video scene.
+
+While `0016`, `0019` or `0029` is pending, `upgrade.py` refuses `--no-stop`, because containers
+recreated one at a time would leave old code running against the new database. A row that was `RENDERING`
 when `0019` was applied keeps `renderer_id = ''`. The worker's lease sweep re-queues it, counts a
 retry and comments "Render interrupted by the upgrade".
 

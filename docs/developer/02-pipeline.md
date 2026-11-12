@@ -78,7 +78,7 @@ flowchart TD
 | Status | Owner | Meaning |
 |---|---|---|
 | `TOPIC_PROPOSED` | Human | A researched, scored topic waits for a decision |
-| `TOPIC_APPROVED` | Agent | The agent picks a style when the video is on `auto`, then writes a script |
+| `TOPIC_APPROVED` | Agent | The agent picks a style when the video is on `auto`, decides on insert scenes, then writes a script |
 | `TOPIC_REJECTED` | none | Terminal. A human rejected the topic |
 | `SCRIPT_READY` | Human | A script exists. Approving it authorizes the paid voicing |
 | `VOICING` | Agent | The agent calls ElevenLabs |
@@ -95,9 +95,17 @@ flowchart TD
 | `FAILED` | none | Terminal, except after a failed publish: **Retry publishing** asks postforme and moves the video to `PUBLISHING` (a live post exists) or `VIDEO_APPROVED` (nothing is live) |
 
 There is no `SCRIPTING` status. The agent picks a video up at `TOPIC_APPROVED` and writes the
-script in one session. On a video whose style is `auto`, the same session first picks the style
-([How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style)), because the script is
-written for it.
+script in one session. Before the script, the same session works through four decisions in order,
+because the script is written for them:
+
+1. The topic's angle, when the video has none ([Topic angle](#topic-angle)).
+2. The main style, when the video is on `auto`
+   ([How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style)).
+3. Which insert styles the script may use, when the Inserts setting is Auto and the main style takes
+   inserts (`choose_inserts`, [Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts)).
+   The script then marks each insert segment with `insert`.
+4. The script formula
+   ([How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked)).
 
 ### Render-stage exits
 
@@ -156,8 +164,8 @@ this section describes a domain that is not on it.
 ### `TOPIC_PROPOSED`: the scope checkpoint
 
 A rejection here costs only the research already done. The approval is also where the topic
-choices are made: the voice, the script profile, the visual style and the mascot
-([Frozen choices](#frozen-choices)).
+choices are made: the voice, the script profile, the visual style, the mascot and the Inserts
+setting ([Frozen choices](#frozen-choices)).
 
 ### `SCRIPT_READY`: the money checkpoint
 
@@ -247,7 +255,7 @@ control.
 
 | Group | Fields | Settable while the video is at |
 |---|---|---|
-| Topic | `script_profile_id`, `visual_style`, `mascot_id`, `formula_choice` | `TOPIC_PROPOSED` only |
+| Topic | `script_profile_id`, `visual_style`, `mascot_id`, `formula_choice`, `insert_mode` | `TOPIC_PROPOSED` only |
 | Agent | `agent_id`, `agent_model`, `agent_effort` | Any human checkpoint: `TOPIC_PROPOSED`, `SCRIPT_READY`, `VIDEO_READY` |
 
 The topic group shapes what the script is, so a later change would leave a script that does not
@@ -309,6 +317,21 @@ pick. Three writes of the formula decision happen after the topic checkpoint
   openings, and the video goes back to `TOPIC_APPROVED` for a new script.
 - A move back to `TOPIC_PROPOSED` and a style switch both drop the pick, so it is made again. A
   person's `formula_choice` is kept.
+
+`insert_mode` is the video's Inserts setting: `auto` lets the agent decide whether short insert
+scenes help, and `none` forbids them. It is seeded from the domain's `default_insert_mode` and
+frozen because the insert decision is made from it at `TOPIC_APPROVED` and the script marks its
+insert segments from that decision. The decision itself, `insert_styles`, is written after the
+topic checkpoint:
+
+- `choose_inserts`, once, at `TOPIC_APPROVED` after the main style is decided: the agent records
+  which insert styles the script may use (`[]` for none) and a reason, before any script exists.
+- A new main style (Auto's pick, a switch to the runner-up) and a move back to `TOPIC_PROPOSED`
+  clear it, because whether an insert helps depends on the main style. It is decided again.
+
+Auto never picks an insert style (`system_flow`, `terminal_doc`), and a write that changes a
+video's `visual_style` to one is refused. A video that holds one from an earlier version keeps it and
+renders as one whole-video scene ([Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts)).
 
 Two fields that follow from `visual_style` are write-once. The agent writes them through
 `update_video`, HTTP cannot write them, and a second, different value is refused:

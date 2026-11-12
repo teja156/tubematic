@@ -351,7 +351,9 @@ Files a topic at `TOPIC_PROPOSED`. Required: `topic`, `strategy`, `producibility
 - `id` is not letters, digits, `_` and `-`, starts with `-`, or is longer than 128 characters. The
   id names the video's job directory.
 - `project_id` names no domain, `title` is not a string, or `voice_id` is not on the roster.
-- `visual_style` is not `auto` or a [style pack](10-scene-authoring.md#style-packs) id.
+- `visual_style` is not `auto` or a main [style pack](10-scene-authoring.md#style-packs) id. An
+  insert style (`system_flow`, `terminal_doc`) is refused with `visual_styles.py::insert_style_error`
+  ([Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts)).
 - `visual_style` is `illustrated`, `under_the_hood` or `case_file_story` and no OpenAI key is stored (the settings row
   or `OPENAI_API_KEY`).
 - `visual_style` is `cartoon_3d` and the install-wide GPU `status` is not `working` (see
@@ -373,8 +375,8 @@ What the route fills in:
 - With no `voice_id`, the video takes its domain's `default_voice_id` if that voice is on the
   roster, whatever its `strategy`. Otherwise `voice_id` is `""`, the install default. The voice is
   copied onto the row, so a later change to the domain's default does not change filed videos.
-- With no `visual_style`, a `curriculum` video takes its domain's `default_visual_style`, and every
-  other video starts at `auto`. An inherited `illustrated` or `cartoon_3d` is stored even when its
+- With no `visual_style`, a `curriculum` video takes its domain's `default_visual_style` while that
+  is a main style, and every other video starts at `auto`. An inherited `illustrated` or `cartoon_3d` is stored even when its
   condition does not hold. The approving `PATCH`, which carries `visual_style`, refuses it.
 - A `curriculum` video takes its domain's `default_script_profile_id` while that profile is `READY`
   and not archived. Every other video starts with `""`. The route takes no `script_profile_id`.
@@ -384,6 +386,8 @@ What the route fills in:
 - With no `formula_choice`, the video takes its domain's `default_formula_id` while that is a
   formula, whatever its `strategy` (`pipeline.py::_project_default_formula`). Otherwise
   `formula_choice` is `""`, and a formula is picked for the video before its script.
+- `insert_mode` is the domain's `default_insert_mode`, whatever the `strategy`, or `auto` with no
+  domain (`pipeline.py::_project_default_insert_mode`). The route takes no `insert_mode`.
 
 The route does not validate `strategy` or `producibility_score`, and it does not require an angle.
 The MCP server's `create_video` does all three (see [Topic angle](02-pipeline.md#topic-angle)).
@@ -392,8 +396,8 @@ The MCP server's `create_video` does all three (see [Topic angle](02-pipeline.md
 
 The dashboard's **New Video** page. Required: `title` (at most 70 characters) and `topic`, both
 non-blank. Optional: `approve` (boolean, default `true`), `agent_id`, `agent_model`,
-`agent_effort`, `script_profile_id`, `visual_style`, `voice_id`, `formula_choice`, and the topic's
-angle as `angle` with `angle_kind`.
+`agent_effort`, `script_profile_id`, `visual_style`, `voice_id`, `formula_choice`, `insert_mode`
+(`auto` or `none`), and the topic's angle as `angle` with `angle_kind`.
 
 `201` returns the row: `strategy` `manual`, `producibility_score` 0, `angle_score` 0, in the domain
 `manual`, at `TOPIC_APPROVED`, or at `TOPIC_PROPOSED` with `"approve": false`.
@@ -405,7 +409,8 @@ angle as `angle` with `angle_kind`.
 - A pick is not a string. Only an absent or `null` pick means its default, so `false` and `0` are
   refused.
 - A pick fails the rule the same field has on [`PATCH`](#field-rules): the agent, its model and
-  effort, the script profile, the voice, the visual style or the formula.
+  effort, the script profile, the voice, the visual style (an insert style included), the formula
+  or `insert_mode`.
 - The angle fails the rule it has on [`POST /videos`](#post-videos). An absent, `null` or blank
   `angle` with no `angle_kind` means no angle, which is accepted: the agent looks for one when it
   picks the video up. So does `none` or `n/a` as the sentence, or as the kind with no sentence
@@ -424,14 +429,15 @@ How it differs from `POST /videos`:
 The first request creates the domain `manual`, named **Manual Videos**, with `INSERT OR IGNORE`,
 so a rename on the Projects page is kept. Nothing is written until every field has passed. With no
 `voice_id`, the video takes the `manual` domain's `default_voice_id` when it has one on the roster.
-With no `formula_choice`, it takes the `manual` domain's `default_formula_id` in the same way.
+With no `formula_choice`, it takes the `manual` domain's `default_formula_id` in the same way, and
+with no `insert_mode` the `manual` domain's `default_insert_mode`.
 
 ### `PATCH /videos/<video_id>`
 
 The main write path. The body may hold any of `status`, `title`, `script`, `video_version`,
 `youtube_url`, `gemini_feedback`, `voice_id`, `agent_id`, `agent_model`, `agent_effort`,
 `script_profile_id`, `visual_style`, `publish_title`, `publish_description`, `mascot_id`,
-`formula_choice`, `angle` and `angle_kind`, plus the optional guard `onlyIfCurrentStatus`. A body
+`formula_choice`, `insert_mode`, `angle` and `angle_kind`, plus the optional guard `onlyIfCurrentStatus`. A body
 with `segment_voices` follows its own rules (see [A segment's voice](#a-segments-voice)).
 
 ```json
@@ -449,7 +455,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 | `400` | A field fails its rule below, a job-path column is present, or the body has no updatable field (`No updatable fields provided`) |
 | `404` | Video not found |
 | `409` | The video is archived |
-| `409` | `script_profile_id`, `visual_style`, `mascot_id` or `formula_choice` sent while the video is past `TOPIC_PROPOSED` |
+| `409` | `script_profile_id`, `visual_style`, `mascot_id`, `formula_choice` or `insert_mode` sent while the video is past `TOPIC_PROPOSED` |
 | `409` | `agent_id`, `agent_model` or `agent_effort` sent while the video is not at a human checkpoint |
 | `409` | `angle` and `angle_kind` sent while the video is past `TOPIC_PROPOSED` |
 | `409` | An approving `PATCH` while the video's mascot is archived, or while a Cartoon 3D, Under the Hood or Case File Story video keeps a mascot |
@@ -488,7 +494,9 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 - `script_profile_id` must be a `READY` profile that is not archived, or `""` for none.
 - `visual_style` must be `auto` or a [style pack](10-scene-authoring.md#style-packs) id.
   `illustrated`, `under_the_hood` and `case_file_story` need a stored OpenAI key and `cartoon_3d`
-  needs a working GPU.
+  needs a working GPU. A change to an insert style (`system_flow`, `terminal_doc`) is `400`. The
+  stored value sent again passes, because the approving `PATCH` re-sends it.
+- `insert_mode` must be `auto` or `none` (the video's Inserts setting). `null` is refused.
 - `mascot_id` must be a string. A changed value must be a pickable mascot, needs a GPU `status` of
   `working`, and is refused on a video that will be `cartoon_3d`, `under_the_hood` or `case_file_story`. `""` clears
   the mascot.
@@ -505,8 +513,8 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 - `onlyIfCurrentStatus` is part of the `UPDATE … WHERE id = ? AND status = ?` statement, so the
   check and the write are atomic. On a mismatch the route reads the row again and reports the
   current status. Use it for every status change. The dashboard does.
-- `script_profile_id`, `visual_style`, `mascot_id` and the angle can be written at `TOPIC_PROPOSED`
-  only. The three agent fields can be written at a status in `ACTIONABLE_STATUSES` only. Both checks read
+- `script_profile_id`, `visual_style`, `mascot_id`, `formula_choice`, `insert_mode` and the angle
+  can be written at `TOPIC_PROPOSED` only. The three agent fields can be written at a status in `ACTIONABLE_STATUSES` only. Both checks read
   the status before the update, so the `PATCH` that approves a video can carry them. The reasons
   are in [Frozen choices](02-pipeline.md#frozen-choices).
 - A write that carries a frozen field is bound to the status the check read, even without
@@ -534,8 +542,9 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   scenes. The same value again keeps them. The mascot checks of the same request judge the video
   by the renderer it will have after the write, so a changed style is not refused for a Cartoon 3D
   renderer it clears. A `status` of `TOPIC_PROPOSED` without a `visual_style`
-  returns a style Auto picked to `auto` and clears the record, and on every `auto` video it clears
-  the recorded renderer and canvas. Both are SQL fragments in `tubematic_core/visual_styles.py` that `update_video` and
+  returns a style Auto picked to `auto` and clears the record and the insert decision
+  (`insert_styles`, `insert_reason`), and on every `auto` video it clears the recorded renderer and
+  canvas. Both are SQL fragments in `tubematic_core/visual_styles.py` that `update_video` and
   `set_video_status` also use.
 
 #### A segment's voice
@@ -570,7 +579,8 @@ for `scenes`), swaps `style_pick` and `style_runner_up`, sets `style_reason` to 
 switched it, and moves the video to `TOPIC_APPROVED`. It adds a `human` comment asking the agent to
 rewrite the script for the new style. The agent's next session writes a new script, which replaces
 the old one. A second switch goes back. The route also empties `formula_pick`, `formula_runner_up`,
-`formula_reason` and `formula_evidence`, so the formula is picked again for the new style.
+`formula_reason` and `formula_evidence`, and `insert_styles` and `insert_reason`, so the inserts and
+the formula are decided again for the new style.
 
 | Status | When |
 |---|---|
@@ -761,7 +771,7 @@ back, or they are reset. An omitted `status` is written as `active`, so clearing
 | `description` | A string of at most 2000 code points. Absent or `null` stores `''` |
 | `is_curriculum_seed` | Read as a boolean, default `false` |
 | `status` | `active` or `paused`. `paused` needs `is_curriculum_seed` |
-| `default_visual_style` | `auto`, a style pack id, or `''` for none |
+| `default_visual_style` | `auto`, a main style pack id, or `''` for none |
 | `default_voice_id` | A roster voice, or `''` for the install default |
 | `default_script_profile_id` | A `READY` profile that is not archived, or `''` or `null` for none. Any other non-string, such as `false` or `0`, is refused |
 | `default_mascot_id` | `''` (inherit the install default), `none` (no mascot), or a pickable mascot id |
@@ -769,14 +779,15 @@ back, or they are reset. An omitted `status` is written as `active`, so clearing
 | `default_agent_model` | One of that agent's `models`, or `''` for the agent's default. Refused without a `default_agent_id` |
 | `default_agent_effort` | One of the five effort levels, or `''` for the agent's own level. It needs no `default_agent_id` |
 | `default_formula_id` | A [formula](08-scripting-and-voice.md#formulas) id, or `''` or `null` for Auto. An experimental formula is accepted whatever the `auto_experimental_formulas` setting says |
+| `default_insert_mode` | `auto` or `none`: the Inserts setting new videos in the domain start with. Absent or `null` stores `auto` |
 | `topic_cap` | A whole number from 25 to 750. `true`, `"100"` and `100.5` are refused. Absent or `null` means 100 |
 
-Six checks run only when the value changes, because the dashboard re-sends the whole domain on
+These checks run only when the value changes, because the dashboard re-sends the whole domain on
 every edit and a value that became invalid later must not block other edits:
 
 - The `description` length.
-- `default_visual_style`: `illustrated`, `under_the_hood` and `case_file_story` need a stored
-  OpenAI key and `cartoon_3d` needs a working GPU.
+- `default_visual_style`: an insert style is refused, `illustrated`, `under_the_hood` and
+  `case_file_story` need a stored OpenAI key, and `cartoon_3d` needs a working GPU.
 - `default_voice_id` on the roster.
 - `default_script_profile_id` being `READY`.
 - `default_mascot_id` being pickable, with a working GPU.
@@ -847,7 +858,10 @@ A generated preview is recorded in the usage ledger with no video, with credits 
 Returns `{"styles": [...]}`: `auto` first, then every [style pack](10-scene-authoring.md#style-packs)
 in its pack order. Each entry has `id`, `label`, `experimental`, `canvas` (the canvas the style fixes,
 or `null`), `needs` (`openai_key`, `gpu`), `mascot` (false when the style's videos take no mascot),
-and `available` with `unavailable_reason` for this install
+`role` (`main`, or `insert` for a style that draws only
+[insert scenes](10-scene-authoring.md#main-styles-and-inserts)), `inserts` (`{host, transition}` on
+a main style that takes inserts, `{host: false}` otherwise), and `available` with
+`unavailable_reason` for this install
 now: `needs an OpenAI key`, `needs a working GPU` or `GPU not tested yet`. The dashboard builds its
 style pickers from it. The write routes still refuse an unavailable style themselves.
 
