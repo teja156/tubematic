@@ -149,9 +149,9 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
 - A video with a script record shows the formula and the opening type by the labels the real
   `GET /script-formulas` returns, the openings and the warnings. A script written over HTTP then
   clears the record. The record is seeded the same way, because only `update_video` writes one.
-- A video with a picked formula shows it after the word Auto, with its reason and runner-up, and
-  **Switch to …** moves it to `TOPIC_APPROVED` with the runner-up as its pick and as the person's
-  choice. **Use this opening** moves a video to `TOPIC_APPROVED` with that opening marked as the one
+- A video with a picked formula shows it after the word Auto, with its reason, the line on what
+  the watch figures said, and the runner-up, and **Switch to …** moves it to `TOPIC_APPROVED` with
+  the runner-up as its pick and as the person's choice, and empties `formula_evidence`. **Use this opening** moves a video to `TOPIC_APPROVED` with that opening marked as the one
   in use and a comment that names it. Both are seeded in the API container, because only the
   agent's `choose_script_formula` and `update_video` write them.
 - A formula chosen in the window at `TOPIC_PROPOSED` is stored with the approval, from a picker

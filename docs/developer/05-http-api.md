@@ -470,12 +470,12 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   rule (see [Publishing](14-publishing.md#schema)). A `script` written here clears the video's
   `formula_id`, `hook_type`, `hook_alternatives` and `script_warnings`, because they describe the
   script it replaces, and the formula pick (`formula_pick`, `formula_runner_up`,
-  `formula_reason`), because a script written by hand follows no formula. `formula_choice` stays. Only MCP `update_video` writes them.
+  `formula_reason`, `formula_evidence`), because a script written by hand follows no formula. `formula_choice` stays. Only MCP `update_video` writes them.
 - `voice_id` must be on the roster, or `""` for the install default.
 - `formula_choice` must be a [formula](08-scripting-and-voice.md#formulas) id, or `""` for Auto. An
   experimental formula is accepted whatever the `auto_experimental_formulas` setting says, because
   the setting covers what Auto may pick. A `status` of `TOPIC_PROPOSED` empties `formula_pick`,
-  `formula_runner_up` and `formula_reason` and keeps `formula_choice`
+  `formula_runner_up`, `formula_reason` and `formula_evidence` and keeps `formula_choice`
   (`tubematic_core/formulas.py::PICK_RESET_SET`, which `set_video_status` also uses).
 - `agent_id` must name a live agent. The video's current agent is accepted even when uninstalled.
   A change sets `agent_model` to `""` in the same `UPDATE`, unless the body also sets
@@ -569,8 +569,8 @@ and sets `visual_style` to the runner-up (`auto`
 for `scenes`), swaps `style_pick` and `style_runner_up`, sets `style_reason` to say a person
 switched it, and moves the video to `TOPIC_APPROVED`. It adds a `human` comment asking the agent to
 rewrite the script for the new style. The agent's next session writes a new script, which replaces
-the old one. A second switch goes back. The route also empties `formula_pick`, `formula_runner_up`
-and `formula_reason`, so the formula is picked again for the new style.
+the old one. A second switch goes back. The route also empties `formula_pick`, `formula_runner_up`,
+`formula_reason` and `formula_evidence`, so the formula is picked again for the new style.
 
 | Status | When |
 |---|---|
@@ -586,7 +586,8 @@ must be at `SCRIPT_READY` and hold a `formula_pick` and a `formula_runner_up`.
 
 The route runs as one write transaction. It swaps `formula_pick` and `formula_runner_up`, sets
 `formula_choice` to the new pick (the formula is now a person's choice, so the agent cannot replace
-it), sets `formula_reason` to say a person switched it, and moves the video to `TOPIC_APPROVED`. It
+it), sets `formula_reason` to say a person switched it, empties `formula_evidence` (it was about the
+formula switched away from), and moves the video to `TOPIC_APPROVED`. It
 adds a `human` comment asking the agent to rewrite the script in the new formula. The stored script
 is left as it is until the agent's next session replaces it, because the route has no way to
 rewrite a script. A second switch goes back. An experimental runner-up needs no setting.

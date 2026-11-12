@@ -17,11 +17,16 @@ case is:
 | `ok` | Formulas that are acceptable but not the best |
 | `style` | Optional. The video's visual style, a style pack id. Without it the video is on mixed scenes |
 | `experimental` | Optional. `true` routes the case with `auto_experimental_formulas` on, and lets it expect an experimental formula |
+| `learned` | Optional. `{mode, points}`: the domain's watch figures as the server hands them over, with points per formula id. Without it the case is a domain with no figures |
 | `note` | Why the expectation is what it is, when that is not obvious |
 
 `tubematic_core/tests/test_formula_routing.py` checks it in CI: every id is a real formula or
 style, every formula that is not experimental is the first expectation of at least three cases
-routed with the setting off, and every experimental formula has a case.
+routed with the setting off, and every experimental formula has a case. A case's `learned` names
+only real formulas.
+
+A case with `learned` checks that the points move the pick only among the formulas that fit the
+topic: its `expect` is the fitting formula even where a formula that does not fit has the points.
 
 A change that adds a formula adds its topics: three for a formula that is not experimental, one for
 an experimental one. CI fails until it does.

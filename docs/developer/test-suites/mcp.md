@@ -801,6 +801,26 @@ as the switch.
 Trap: rotation is enforced by the tool. Left to the skill's prose, a model that skipped the step
 would give a domain the same structure every time, with nothing recording that it did.
 
+### `test_learned_routing.py`
+
+Covers [Learned routing](../08-scripting-and-voice.md#learned-routing) through the MCP surface:
+`get_video`'s `formula_routing.learned`, each candidate's `learned` points, and the
+`formula_evidence` record `choose_script_formula` stores.
+
+- With evidence, a better formula has 2 points, a worse one -1 and an untried one 0, every formula
+  is a candidate, and the opening types come ranked. `learned` carries no per-formula table.
+- The setting `learned_routing` off, `publishing_enabled` off, or a domain with no evidence gives 0
+  points everywhere and stores `''`. At a status where nothing is picked or written, the figures are
+  not read.
+- The pick stores what the figures said about the agent's formula, also when it was not favoured
+  and when a person chose another formula.
+- Every fourth pick in a domain is a trial pick, which gives the points to formulas with too few
+  videos. A return to `TOPIC_PROPOSED` clears the record with the pick.
+
+Trap: the record is worked out by the server under the pick's write lock. Taking it from the agent,
+or reading the trial-pick count outside the lock, would let the dashboard show figures the pick
+never read.
+
 ### `test_choose_visual_style.py`
 
 Covers `choose_visual_style`, `get_video`'s `style_routing`, and the two writes that give a pick back

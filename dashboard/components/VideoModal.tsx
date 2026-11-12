@@ -36,7 +36,7 @@ import { formatRenderDuration } from "@/lib/renderers";
 import { approvalMascot, showMascotPicker, styleTakesMascot } from "@/lib/mascots";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
 import { ScriptRecord } from "@/components/ScriptRecord";
-import { formulaLabel, formulaOptions, hasFormula, hasScriptRecord, videoFormulaLabel } from "@/lib/scriptFormulas";
+import { formulaEvidenceLine, formulaLabel, formulaOptions, hasFormula, hasScriptRecord, videoFormulaLabel } from "@/lib/scriptFormulas";
 import { useScriptFormulaNames } from "@/lib/useScriptFormulas";
 import { TopicAngle } from "@/components/TopicAngle";
 import { angleScoreLabel } from "@/lib/angles";
@@ -1751,6 +1751,14 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                         value={
                           <span data-testid="formula-pick-reason">
                             {video.formula_reason || "—"}
+                            {formulaEvidenceLine(video.formula_evidence, formulaNames) && (
+                              <span
+                                data-testid="formula-pick-evidence"
+                                style={{ display: "block", color: "var(--dim)", marginTop: 4 }}
+                              >
+                                {formulaEvidenceLine(video.formula_evidence, formulaNames)}
+                              </span>
+                            )}
                             {formulaRunnerUp && (
                               <span style={{ display: "block", color: "var(--dim)", marginTop: 4 }}>
                                 Runner-up: {formulaLabel(formulaRunnerUp, formulaNames)}

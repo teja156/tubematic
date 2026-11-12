@@ -226,17 +226,50 @@ topic set in `tests/fixtures/formula_routing_cases.json`
 - `suits_style` follows the formula's own `styles` list, is false for `auto`, `scenes` and an
   unknown style, and removes no candidate. `recent` marks the formulas passed in and ignores an id
   that is no formula.
-- `PICK_RESET_SET` names the three pick columns and leaves `formula_choice` and `formula_id` alone.
+- `PICK_RESET_SET` names the pick columns and `formula_evidence`, and leaves `formula_choice` and
+  `formula_id` alone.
 - Every topic names only real formulas and styles. Every formula that is not experimental is the
   first expectation of at least three topics routed with the setting off, every experimental
   formula has a topic, and a topic expects an experimental formula first only when it is marked to
   be routed with the setting on.
+- A topic that carries learned points names real formulas, and the set has both a learned and a
+  trial-pick case.
 
 Trap: the three-topic minimum fails CI for a new formula until its change adds topics for it, so
 the hand-run eval ([Formula routing](formula-routing.md)) measures every formula.
 
 Trap: the reset must not name `formula_choice`. A return to the topic that emptied it would put a
 video a person chose a formula for back on Auto.
+
+### `test_watch_evidence.py`
+
+Covers the rule of [Learned routing](../08-scripting-and-voice.md#learned-routing) in
+`tubematic_core/watch.py`, against a migrated database with seeded publications and snapshots.
+
+- Only the latest snapshot of a published post counts. Posts younger than `LEARN_MIN_AGE_DAYS`, posts
+  with no publish time, posts on a platform that reports no share and other domains' posts are left
+  out. Instagram's share, worked out from seconds and the video's length, counts.
+- A group under `WATCH_MIN_GROUP` reads `thin`, and an account with fewer posts than that gives no
+  evidence at all.
+- A group well above the account's median is `better`, well below is `worse`, and inside
+  `LEARN_MARGIN` is `even`. One outlier cannot lift a group's median.
+- Across accounts, better on one and even on another is `better`, and a disagreement is `mixed`
+  with no points. A video posted to two accounts counts once in `videos`.
+- Openings are ranked better first, list only counted types, and carry only type, label,
+  standing and videos. A script with no recorded formula counts toward the baseline only.
+- The points per mode, the every-fourth trial pick counted from stored records only (the video
+  itself and other domains left out), and the trial pick moving the points to thin formulas.
+- Learning off or a domain with no evidence gives every formula 0 points and stores no record.
+
+Trap: the comparison is inside one account only. Pooling accounts would compare one audience's
+share with another's and read the difference as the formula's.
+
+### `test_formula_evidence_migration.py`
+
+Covers `0028`, `videos.formula_evidence`.
+
+- An existing pick keeps its formula, runner-up, reason and script, and reads `''`, which is a pick
+  made without figures. A second run changes nothing, and a new video starts with `''`.
 
 ### `test_visual_style.py`
 

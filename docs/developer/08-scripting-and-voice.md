@@ -155,7 +155,7 @@ flowchart TD
     J --> K
 ```
 
-Four columns on the video hold the decision (see [`videos`](03-database.md#videos)):
+Five columns on the video hold the decision (see [`videos`](03-database.md#videos)):
 
 | Column | Meaning |
 |---|---|
@@ -163,6 +163,7 @@ Four columns on the video hold the decision (see [`videos`](03-database.md#video
 | `formula_pick` | The formula the script is written in. `''` until the pick is made |
 | `formula_runner_up` | The formula that came second, or `''` |
 | `formula_reason` | One sentence on why, at most `REASON_MAX_CHARS` characters as the agent writes it |
+| `formula_evidence` | What the install's watch figures said about the agent's formula when it picked, as JSON the server writes, or `''` when the pick was made without them (see [Learned routing](#learned-routing)) |
 
 `formulas.py::routing_candidates` builds the candidate list `get_video` returns as
 `formula_routing.candidates`: every formula with its `line`, `best_for`, `also_for`, `avoid_for`,
@@ -171,6 +172,7 @@ Four columns on the video hold the decision (see [`videos`](03-database.md#video
 | Mark | Meaning |
 |---|---|
 | `suits_style` | The formula's `styles` names the video's visual style. The skill gives it one point. A style removes no candidate, because a style pack's own `script` text already outranks the formula |
+| `learned` | `{points, standing, videos}` from the domain's watch figures (see [Learned routing](#learned-routing)). `points` is 0 for every candidate when learning is inactive |
 | `recent` | The formula is the one of either of the domain's `ROTATION_WINDOW` most recently filed other videos that have a formula (the pick, else the one recorded with the script). A video back at `TOPIC_PROPOSED` or rejected does not count |
 | `available`, `unavailable_reason` | `false` for an experimental formula while `auto_experimental_formulas` is off. A person's own choice is available whatever the setting says |
 
@@ -199,9 +201,9 @@ These events change a pick:
 
 | Event | What happens |
 |---|---|
-| The video returns to `TOPIC_PROPOSED` (`set_video_status` or `PATCH /videos/<id>`) | `formulas.py::PICK_RESET_SET` empties `formula_pick`, `formula_runner_up` and `formula_reason`. `formula_choice` stays |
+| The video returns to `TOPIC_PROPOSED` (`set_video_status` or `PATCH /videos/<id>`) | `formulas.py::PICK_RESET_SET` empties `formula_pick`, `formula_runner_up`, `formula_reason` and `formula_evidence`. `formula_choice` stays |
 | [`POST /videos/<id>/switch-style`](05-http-api.md#post-videosvideo_idswitch-style) | The same reset, so the formula is picked again for the new style |
-| [`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula) | The pick and the runner-up swap, `formula_choice` becomes the new pick, and the video returns to `TOPIC_APPROVED` to be rewritten |
+| [`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula) | The pick and the runner-up swap, `formula_choice` becomes the new pick, `formula_evidence` is emptied, and the video returns to `TOPIC_APPROVED` to be rewritten |
 | A `script` written through [`PATCH /videos/<id>`](05-http-api.md#patch-videosvideo_id) | `PICK_RESET_SET` empties the pick with the script's record, because a script written by hand follows no formula. `formula_choice` stays |
 | [`POST /videos/<id>/switch-opening`](05-http-api.md#post-videosvideo_idswitch-opening) | The pick stays, or becomes the script's `formula_id` on a video with no pick. Another stored opening is marked as the one in use, `formula_id` is cleared, and the video returns to `TOPIC_APPROVED` to be rewritten from it |
 
@@ -216,6 +218,59 @@ a session that runs the current skills. Both switches refuse a video still on `a
 `scripts/eval_formula_routing.py` runs the skill over a fixed topic set with the Claude Code CLI
 and scores the picks. You run it by hand; see
 [Formula routing tests](test-suites/formula-routing.md).
+
+### Learned routing
+
+An install's own analytics are the only retention data it has. Learned routing reads them: in
+each domain, the formulas and the opening types that hold that domain's viewers get points in the
+router and a place in the writer's choice of opening. The rule is code in
+`tubematic_core/watch.py`, shared by the API and the MCP server, so the two cannot disagree. The
+same module holds the [watch figure](14-publishing.md#watch-figures) reader and `WATCH_MIN_GROUP`.
+
+`watch.py::domain_evidence` reads the latest snapshot of every published post of the domain's
+videos and takes its share watched (`LEARN_MEASURE`, `watched_pct`). Seconds watched would favour
+the longer formulas for their length. These posts are left out:
+
+- a post published less than `LEARN_MIN_AGE_DAYS` (7) ago, whose figures are still moving;
+- a post whose platform reports no share (TikTok's consumer connection).
+
+The comparison stays inside one account, because every account has its own audience and every
+platform measures in its own way:
+
+1. The account's baseline is the median share watched of all the domain's posts there. An
+   account with fewer than `WATCH_MIN_GROUP` (20) such posts gives no evidence.
+2. A formula, or a `hook_type`, with at least `WATCH_MIN_GROUP` posts on the account is compared
+   by its own median. It reads `better` at or above 1 + `LEARN_MARGIN` (10%) of the baseline,
+   `worse` at or below 1 − `LEARN_MARGIN`, and `even` between. Medians keep one outlier video
+   from carrying a group.
+3. Across accounts, `better` on at least one and `worse` on none is `better`, and the mirror is
+   `worse`. Any disagreement is `mixed` and counts as no evidence. A formula with no counted group
+   anywhere is `thin`.
+
+Learning is active when the setting `learned_routing` and `publishing_enabled` are both on and
+some formula has a counted group in the domain. Inactive, every candidate's points are 0 and
+routing is as described above. `watch.py::learning_mode` makes every `EXPLORE_EVERY`-th (4th)
+pick in a domain with evidence a trial pick, counted from the domain's videos with a stored
+`formula_evidence`. Without it the favoured formula is picked more, gathers more videos and looks
+ever more certain.
+
+| Mode | Points |
+|---|---|
+| `learned` | 2 for `better`, -1 for `worse`, 0 for the rest |
+| `explore` | 2 for `thin`, 0 for the rest |
+
+The routing skill adds the points only to the formulas that are a clear fit by the topic's own
+points, so a formula that does not fit is never picked for its numbers. Rotation then runs on the
+totals as before, and the figures are never a `repeat_reason`. `get_video` reads the figures only
+at `TOPIC_APPROVED` and `REVISION_REQUESTED`, where a formula is picked or a script written.
+
+The script-writing skill reads `formula_routing.learned.openings`, the opening types with a
+counted group, ranked. It is the last tie-break between two openings, after the quality of the
+opening and after the domain's recent types.
+
+`choose_script_formula` works the figures out again under its write lock and stores
+`formula_evidence`, which the video window shows under **Why this formula**. The agent never
+supplies it.
 
 ### The topic's angle
 

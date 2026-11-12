@@ -297,6 +297,24 @@ known. It scores every formula against the kind of topic it is, and it avoids th
 domain's previous two videos when another one fits, so a domain's videos do not all share one
 structure. The opening varies in the same way.
 
+### Learning from your own viewers
+
+Once your videos are published and Tubematic reads their analytics, Auto also learns which
+formulas and openings hold viewers in each domain. It reads the share of each video viewers
+watched, on each account separately, from posts at least a week old. A formula counts once at
+least 20 of the domain's videos with figures use it on one account. A formula that holds viewers
+clearly better than the domain's other videos is favoured, and one that holds them clearly worse
+counts against it.
+
+Auto only weighs these figures among formulas that already fit the topic, so a topic never gets a
+formula that does not suit it because that formula did well elsewhere. Every fourth pick in a
+domain is a trial pick, which favours formulas the domain has too few videos of, so Auto keeps
+learning about the formulas it has not tried. When two openings the agent drafts are equally
+strong, it keeps the type that holds the domain's viewers better.
+
+With publishing off, or before a domain has enough published videos, Auto picks from the topic
+alone. **Learn from watch figures** in [Preferences](05-settings.md#preferences) switches it off.
+
 You can choose the formula yourself in two places:
 
 - For one video, with the **Formula** picker in its window at Topic Proposed, or on the
@@ -311,7 +329,9 @@ have picked, with its reason.
 ### Changing the formula at Script Ready
 
 In the video's window, **Formula** names the formula and **Why this formula** gives the reason and
-the runner-up. The formula's name follows the word Auto when the agent picked it.
+the runner-up. The formula's name follows the word Auto when the agent picked it. When Auto read
+your watch figures for the pick, a line under the reason says whether the pick leaned on them or
+was a trial pick, and how many videos and accounts were behind them.
 
 - **Switch to <runner-up>** has the script rewritten in the runner-up formula. On a video whose
   formula you chose, the runner-up is the formula Auto would have picked, or Auto's second choice

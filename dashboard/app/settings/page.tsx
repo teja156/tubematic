@@ -353,7 +353,7 @@ const TABS = [
   // No settings fields either — agents live in their own table and save
   // through /agents, so they sit outside the Save/dirty machinery entirely.
   { key: "agents", label: "Agents", fields: [] },
-  { key: "preferences", label: "Preferences", fields: ["user_preferences", "auto_experimental_formulas"] },
+  { key: "preferences", label: "Preferences", fields: ["user_preferences", "auto_experimental_formulas", "learned_routing"] },
   // Model prices live in their own table and save through /prices, like the
   // Agents tab — outside the Save/dirty machinery.
   { key: "costs", label: "Costs", fields: [] },
@@ -1256,6 +1256,29 @@ export default function SettingsPage() {
           }}
         >
           {val("auto_experimental_formulas") ? "ON" : "OFF"}
+        </button>
+      </Row>
+      <Row
+        label="Learn from watch figures"
+        note="Let Auto prefer the script formulas that hold your viewers in a domain, read from your own published videos' share watched. It only chooses among formulas that fit the topic, counts a formula once at least 20 of the domain's videos with figures use it on one account, and every fourth pick tries a formula with too few videos. Off, or with publishing off, Auto chooses from the topic alone."
+      >
+        <button
+          data-testid="toggle-learned-routing"
+          onClick={() => edit({ learned_routing: !val("learned_routing") })}
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            padding: "7px 16px",
+            border: `1px solid ${val("learned_routing") ? "var(--green)" : "var(--border)"}`,
+            background: val("learned_routing") ? "rgba(74,222,128,0.1)" : "var(--panel)",
+            color: val("learned_routing") ? "var(--green)" : "var(--mute)",
+            cursor: "pointer",
+            transition: "all .15s",
+          }}
+        >
+          {val("learned_routing") ? "ON" : "OFF"}
         </button>
       </Row>
           <SaveBar tabKey="preferences" count={dirtyFields("preferences").length} saving={saving} onSave={saveTab} />

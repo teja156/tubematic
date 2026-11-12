@@ -754,6 +754,10 @@ Covers the `tubematic-formula-routing` skill
   formula, and a person's choice is kept with a comment saying so. A pick in a revision is for a
   script revision only and always goes back to a person. Rotation is skipped beside a person's
   choice. The uninstaller and the skills README know it.
+- Learned points go only to formulas that are already a clear fit, decided before the points are
+  added. The skill knows both modes, takes trial-pick points as given, treats a missing `learned`
+  as 0, never uses the figures as a `repeat_reason`, and states the points and standings the server
+  gives (`tubematic_core/watch.py`).
 
 Trap: a skill that named formulas would prefer the ones it knew about, and a new formula would need
 an edit to be picked. The candidates are data for that reason.
@@ -770,6 +774,8 @@ model is called.
   answer key still works.
 - The report counts best, acceptable and failed picks overall and by formula, and lists the wrong
   ones. Every topic in the set builds a prompt.
+- A topic with no `learned` reaches the skill with learning inactive and 0 points everywhere, and
+  one with `learned` hands its points over as the server would.
 
 ### `test_eval_style_routing.py`
 
@@ -828,7 +834,8 @@ Covers the `tubematic-script-writing-skill` skill and `scripts/gen_formula_refer
 - The openings step prefers a type the domain's previous two videos did not use, and starts from
   the opening a person switched to, word for word, only while that comment is the newest and no
   script has been written since. Opening warnings on that opening stay, and the fallback for an
-  older tool server applies only to an unknown argument, never to a refused formula.
+  older tool server applies only to an unknown argument, never to a refused formula. The domain's
+  `learned.openings` break only a tie that the recent types leave.
 - A style that asks for names may name its people.
 - The user guide's formula table names every formula.
 

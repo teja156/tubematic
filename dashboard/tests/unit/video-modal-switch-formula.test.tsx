@@ -160,6 +160,23 @@ describe("VideoModal — the formula pick", () => {
     await waitFor(() => expect(reason).toHaveTextContent("Runner-up: Scene Story"));
   });
 
+  it("says under the reason when the pick leaned on this install's watch figures", async () => {
+    renderModal(makeVideo("SCRIPT_READY", {
+      formula_evidence: JSON.stringify({ formula: "follow-the-flow", mode: "learned",
+        standing: "better", points: 2, videos: 31, accounts: 2, min_group: 20 }),
+    }));
+    const line = await screen.findByTestId("formula-pick-evidence");
+    await waitFor(() => expect(line).toHaveTextContent(
+      "Leaned on this install's watch figures: Follow the Flow held more of each video"));
+    expect(line).toHaveTextContent("(31 videos on 2 accounts)");
+  });
+
+  it("adds no line for a pick made without watch figures", async () => {
+    renderModal(makeVideo("SCRIPT_READY", { formula_evidence: "" }));
+    await screen.findByTestId("formula-pick-reason");
+    expect(screen.queryByTestId("formula-pick-evidence")).not.toBeInTheDocument();
+  });
+
   it("offers the switch at Script Ready and posts it after a confirm", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const fetchMock = renderModal(makeVideo("SCRIPT_READY"));

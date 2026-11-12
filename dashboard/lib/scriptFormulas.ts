@@ -81,3 +81,55 @@ export function hasFormula(video: Pick<Video, "formula_choice" | "formula_pick" 
   return (video.formula_choice ?? "") !== "" || (video.formula_pick ?? "") !== ""
     || (video.formula_id ?? "") !== "";
 }
+
+/** What a video's formula_evidence holds: what this install's own watch
+ *  figures said about the formula Auto passed when it picked, written by the
+ *  server. '' = the pick was made without them. */
+interface FormulaEvidence {
+  formula: string;
+  mode: "learned" | "explore";
+  standing: string;
+  points: number;
+  videos: number;
+  accounts: number;
+  min_group: number;
+}
+
+function parseEvidence(raw: string | undefined): FormulaEvidence | null {
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw);
+    return value && typeof value === "object" && typeof value.formula === "string" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** The line under "Why this formula" that says whether the pick leaned on
+ *  this install's watch figures, and how many videos were behind them. ""
+ *  when the pick was made without them, which shows nothing. */
+export function formulaEvidenceLine(raw: string | undefined, names: ScriptFormulaNames | null): string {
+  const ev = parseEvidence(raw);
+  if (!ev) return "";
+  const label = formulaLabel(ev.formula, names);
+  const behind = `${plural(ev.videos, "video", "videos")} on ${plural(ev.accounts, "account", "accounts")}`;
+  if (ev.mode === "explore") {
+    return ev.standing === "thin"
+      ? `A trial pick: fewer than ${ev.min_group} of this domain's videos with watch figures use ${label}, so Auto tried it to learn how it holds viewers.`
+      : "A trial pick, made without this domain's watch figures.";
+  }
+  switch (ev.standing) {
+    case "better":
+      return `Leaned on this install's watch figures: ${label} held more of each video than this domain's other videos (${behind}).`;
+    case "worse":
+      return `This install's watch figures were read: ${label} held less of each video than this domain's other videos (${behind}). It was picked because it fits the topic best.`;
+    case "even":
+      return `This install's watch figures were read: ${label} held about as much of each video as this domain's other videos (${behind}).`;
+    case "mixed":
+      return `This install's watch figures were read: for ${label} the accounts disagree (${behind}), so they did not count.`;
+    default:
+      return `This install's watch figures were read: fewer than ${ev.min_group} of this domain's videos with figures use ${label}, so they did not count.`;
+  }
+}

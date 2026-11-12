@@ -266,6 +266,11 @@ preference cannot make the agent skip one of your approvals.
 [script formulas](03-using-tubematic.md#the-formulas) marked experimental. It is off by default.
 While it is off, an experimental formula is used only where you chose it yourself.
 
+**Learn from watch figures** lets Auto prefer the formulas that hold your viewers in a domain,
+read from your own published videos (see
+[Learning from your own viewers](03-using-tubematic.md#learning-from-your-own-viewers)). It is on
+by default and changes nothing until a domain has enough published videos with figures.
+
 A script ends on its payoff. To have scripts end with a closing line, ask for one here:
 
 ```

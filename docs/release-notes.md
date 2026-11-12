@@ -61,6 +61,11 @@ A video whose script was already written when you upgraded has no formula, and i
 **Formula** row. A video that is approved but not yet scripted gets a formula picked before its
 script.
 
+Learning from your watch figures is on after the upgrade. Your published videos from before it
+have no formula on record, so they count only as each domain's baseline, and Auto picks as it
+did until a domain has 20 videos of one formula with figures on one account. To pick from the
+topic alone, switch off **Learn from watch figures** in **Settings → Preferences**.
+
 If you upgrade from 2.1.0 or 2.1.1, `upgrade.py` can stop and list generated scenes it cannot read.
 Those versions saved every new scene so that only the root user could read it. Make them readable,
 then run `upgrade.py` again:
@@ -184,6 +189,13 @@ If you go back to 2.1.x later:
   rise-and-fall story told from its end. Auto picks them only while **Experimental formulas** is on
   in **Settings → Preferences**, and you can choose one yourself at any time. See
   [The formulas](https://docs.tubematic.ai/user-guide/using-tubematic#the-formulas).
+- Auto learns from your own viewers. Once a domain has enough published videos with analytics, Auto
+  favours the formulas that hold viewers there, judged by the share of each video watched, among
+  the formulas that fit the topic. Every fourth pick tries a formula the domain has too few videos
+  of. The agent also keeps the opening type that holds the domain's viewers better when two of its
+  drafts are equally strong. **Why this formula** says when a pick leaned on these figures, and
+  **Learn from watch figures** in **Settings → Preferences** switches it off. See
+  [Learning from your own viewers](https://docs.tubematic.ai/user-guide/using-tubematic#learning-from-your-own-viewers).
 - The agent drafts three different openings for a script and uses one. The **Script** tab lists
   all three, and **Use this opening** at Script Ready has the script rewritten from another one.
 - **Script warnings** on the **Script** tab: automatic checks on a script's words, such as an

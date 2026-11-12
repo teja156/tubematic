@@ -590,8 +590,11 @@ host's timezone.
 
 ### Watch figures
 
-`postforme.py::extract_retention` reads six figures from a snapshot's `raw_json`. The table
-`_RETENTION_FIELDS` names each platform's keys and units.
+`tubematic_core/watch.py::extract_retention` reads six figures from a snapshot's `raw_json`. The
+table `_RETENTION_FIELDS` names each platform's keys and units. The reader lives in
+`tubematic_core` because formula routing in the MCP server reads the same figures (see
+[Learned routing](08-scripting-and-voice.md#learned-routing)); `postforme.py` imports it under the
+same name.
 
 | Figure | YouTube | Instagram | Facebook | TikTok |
 |---|---|---|---|---|
@@ -650,7 +653,8 @@ a time because each platform counts a view and a watched second in its own way.
 
 - A group's figure for a measure is the median of the posts that report it, with `n`, the number of
   those posts. `videos` counts every post in the group.
-- `min_group` is `pipeline.py::WATCH_MIN_GROUP` (20). The dashboard marks a group with fewer videos.
+- `min_group` is `tubematic_core/watch.py::WATCH_MIN_GROUP` (20). The dashboard marks a group with
+  fewer videos, and learned routing counts no such group.
 - `pipeline.py::_watch_group_of` places a post in a group. A `visual_style` of `auto` or `''` reads
   as "Mixed scenes", or as Cartoon 3D when `resolved_renderer` is `cartoon_3d`.
 - Script length is the word count of `videos.script` without its markup (`_script_words`), in the
@@ -726,7 +730,8 @@ database, so a rotated key applies on the next call.
 | `get_post_results` | `GET /social-post-results?post_id=…` |
 | `get_account_feed` | `GET /social-account-feeds/{id}?expand=metrics` |
 | `scrub`, `public_account` | The first and third credential defences above |
-| `compose_caption`, `build_platform_configurations`, `extract_metrics` | Per-platform shaping |
+| `compose_caption`, `build_platform_configurations` | Per-platform shaping |
+| `extract_metrics`, `extract_retention` | Imported from `tubematic_core/watch.py` and kept under these names |
 
 `find_post_by_external_id` reads every page of matches (up to 500 posts) and fetches each match's
 results. It returns a live post (a target succeeded, or one has yet to report) in preference to a
