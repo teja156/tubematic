@@ -37,7 +37,9 @@ def test_the_layer_needs_both_the_staged_code_and_cues():
     """mascotPath comes only from the worker (only for a mascot video); the
     cues come from the agent. Either alone draws nothing."""
     src = _read("CompositionBuilder.tsx")
-    assert re.search(r"\{mascotPath && Array\.isArray\(sceneConfig\.mascot\) && sceneConfig\.mascot\.length > 0 && \(\s*<MascotLayer", src)
+    # Wrapped so it is hidden during insert scenes (TMDEV-224).
+    assert re.search(r"\{mascotPath && Array\.isArray\(sceneConfig\.mascot\) && sceneConfig\.mascot\.length > 0 && \(\s*"
+                     r"<HiddenDuringInserts windows=\{inserts\}>\s*<MascotLayer", src)
     assert "sceneConfig.mascotPath" not in src   # the code path is a render prop, never the agent's file
 
 

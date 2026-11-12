@@ -165,8 +165,9 @@ def _check_pack(path: pathlib.Path, data) -> dict:
         if "inserts" in data:
             fail('an insert style has no "inserts" block (it cannot host inserts)')
         block = data.get("insert")
-        if not isinstance(block, dict) or set(block) != {"max_seconds", "palettes", "props_key", "component"}:
-            fail("an insert style needs insert: {max_seconds, palettes, props_key, component}")
+        if not isinstance(block, dict) or set(block) != {"max_seconds", "palettes", "props_key", "component",
+                                                         "review"}:
+            fail("an insert style needs insert: {max_seconds, palettes, props_key, component, review}")
         secs = block["max_seconds"]
         if not isinstance(secs, (int, float)) or isinstance(secs, bool) \
                 or not 0 < secs <= tinserts.MAX_SECONDS:
@@ -178,6 +179,8 @@ def _check_pack(path: pathlib.Path, data) -> dict:
             fail("insert.props_key must name the props key its scene reads")
         if not isinstance(block["component"], str) or not block["component"].strip():
             fail("insert.component must name the installed scene that draws it")
+        if not isinstance(block["review"], str) or not block["review"].strip():
+            fail("insert.review must tell the AI review what the insert looks like on purpose")
     if data.get("renderer") not in RENDERERS:
         fail(f"renderer must be one of {RENDERERS}")
     if data.get("canvas") is not None and data["canvas"] not in VALID_CANVASES:

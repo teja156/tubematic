@@ -52,6 +52,7 @@ try:
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
     from tubematic_core import formulas as tformulas
+    from tubematic_core import inserts as tinserts
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import prices as tprices
@@ -69,6 +70,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
     from tubematic_core import formulas as tformulas
+    from tubematic_core import inserts as tinserts
     from tubematic_core import ids as tids
     from tubematic_core import jobfiles as tjobs
     from tubematic_core import prices as tprices
@@ -1526,6 +1528,28 @@ def _style_undecided(row) -> bool:
         and not (row["style_pick"] or "")
 
 
+def _project_default_insert_mode(con, project_id) -> str:
+    """The Inserts setting a new video in project_id starts with (TMDEV-224):
+    the project's default_insert_mode, else "auto". Seeded for every video,
+    like the formula. Keep in sync: mcp/server.py's create_video."""
+    if not project_id:
+        return tinserts.DEFAULT_INSERT_MODE
+    row = con.execute("SELECT default_insert_mode FROM projects WHERE id = ?",
+                      (project_id,)).fetchone()
+    mode = ((row[0] if row else "") or "").strip()
+    return mode if mode in tinserts.INSERT_MODES else tinserts.DEFAULT_INSERT_MODE
+
+
+def _insert_mode_arg(raw):
+    """(insert_mode, error) for an Inserts setting sent by a person: absent and
+    null mean "not sent" (None); anything else must be "auto" or "none"."""
+    if raw is None:
+        return None, None
+    if not isinstance(raw, str) or raw.strip() not in tinserts.INSERT_MODES:
+        return None, f"insert_mode must be one of {list(tinserts.INSERT_MODES)}"
+    return raw.strip(), None
+
+
 def _formula_choice_arg(raw):
     """(formula_choice, error) for a formula sent with a new video: absent,
     null and "" all mean Auto; anything else must be a formula id."""
@@ -1640,7 +1664,7 @@ ACTIONABLE_STATUSES = {"TOPIC_PROPOSED", "SCRIPT_READY", "VIDEO_READY"}
 # frozen only while an agent or the renderer holds the video.
 # Keep in sync: mcp/server.py's TOPIC_ONLY_FIELDS, AGENT_CHECKPOINT_FIELDS and
 # HUMAN_CHECKPOINT_STATUSES.
-TOPIC_ONLY_FIELDS = ("script_profile_id", "visual_style", "mascot_id", "formula_choice")
+TOPIC_ONLY_FIELDS = ("script_profile_id", "visual_style", "mascot_id", "formula_choice", "insert_mode")
 
 
 def _body_angle(body: dict, *, with_score: bool):
@@ -3006,9 +3030,15 @@ def create_pipeline_blueprint() -> Blueprint:
             "status", "title", "script", "video_version", "youtube_url",
             "gemini_feedback", "voice_id", "agent_id", "agent_model", "agent_effort",
             "script_profile_id", "visual_style", "publish_title", "publish_description",
-            "mascot_id", "formula_choice", "angle", "angle_kind",
+            "mascot_id", "formula_choice", "angle", "angle_kind", "insert_mode",
         }
         fields = {k: v for k, v in body.items() if k in allowed}
+        # The video's Inserts setting (TMDEV-224): Auto or None, at the topic.
+        if "insert_mode" in fields:
+            mode, mode_err = _insert_mode_arg(fields["insert_mode"])
+            if mode_err or mode is None:
+                return jsonify({"error": mode_err or "insert_mode must be \"auto\" or \"none\""}), 400
+            fields["insert_mode"] = mode
         # The formula a person chooses for the video, or "" for Auto
         # (TMDEV-213). An experimental one is allowed whatever the setting
         # says: the setting is about what Auto may pick.
@@ -3235,6 +3265,12 @@ def create_pipeline_blueprint() -> Blueprint:
             # A style that takes no mascot (Cartoon 3D, Under the Hood) refuses
             # a picked mascot and clears a stored one when the video switches to it.
             style_after = fields.get("visual_style", cur_vid["visual_style"]) or ""
+            # An insert style is never a video's style (TMDEV-224). Refused on a
+            # change only: the approving PATCH re-sends the stored style, and a
+            # video voiced before it became an insert style keeps it.
+            if (tvs.is_insert_style(fields.get("visual_style", ""))
+                    and fields["visual_style"] != (cur_vid["visual_style"] or "")):
+                return jsonify({"error": tvs.insert_style_error(fields["visual_style"])}), 400
             takes_no_mascot = bool(tmascots.no_mascot_error(style_after))
             if fields.get("mascot_id") and fields["mascot_id"] != stored_mascot:
                 err = _mascot_pick_error(con, fields["mascot_id"])
@@ -3913,8 +3949,10 @@ def create_pipeline_blueprint() -> Blueprint:
             if visual_style and visual_style not in VISUAL_STYLES:
                 return jsonify({
                     "error": f"Invalid visual_style '{visual_style}'. "
-                             f"Must be one of: {sorted(VISUAL_STYLES)}"
+                             f"Must be one of: {sorted(tvs.MAIN_STYLES)}"
                 }), 400
+            if tvs.is_insert_style(visual_style):
+                return jsonify({"error": tvs.insert_style_error(visual_style)}), 400
             # Only an explicit choice is refused. A seeded default is taken as
             # stored, never rewritten; if the key has gone since the domain's
             # default was set, the approval PATCH (which carries visual_style)
@@ -3938,7 +3976,7 @@ def create_pipeline_blueprint() -> Blueprint:
                         "SELECT default_visual_style FROM projects WHERE id = ?",
                         (body["project_id"],)).fetchone()
                     seeded = ((prow["default_visual_style"] if prow else "") or "").strip()
-                    if seeded in VISUAL_STYLES:
+                    if seeded in tvs.MAIN_STYLES:
                         visual_style = seeded
             # The default script profile seeds curriculum videos only, like the
             # visual style (TMDEV-145). A profile no longer READY seeds nothing:
@@ -3964,6 +4002,9 @@ def create_pipeline_blueprint() -> Blueprint:
             # create_video.
             if not formula_choice:
                 formula_choice = _project_default_formula(con, body.get("project_id"))
+            # The domain's Inserts setting seeds EVERY video too (TMDEV-224).
+            # Keep in sync: mcp/server.py's create_video.
+            insert_mode = _project_default_insert_mode(con, body.get("project_id"))
             # The check above runs outside any transaction, so a pause or another
             # session's topic committed since then would be missed; the INSERT
             # re-checks both itself.
@@ -3972,13 +4013,13 @@ def create_pipeline_blueprint() -> Blueprint:
                    (id, project_id, title, topic, strategy, producibility_score,
                     status, video_version, voice_id, agent_id, agent_model, agent_effort,
                     visual_style, script_profile_id, mascot_id, formula_choice, angle, angle_kind,
-                    angle_score, created_at, updated_at)
-                   SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    angle_score, insert_mode, created_at, updated_at)
+                   SELECT ?, ?, ?, ?, ?, ?, 'TOPIC_PROPOSED', 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                    WHERE {_DOMAIN_OPEN_GUARD}""",
                 (vid, body.get("project_id"), title,
                  body["topic"], body["strategy"], body["producibility_score"], voice_id,
                  agent_id, agent_model, agent_effort, visual_style, script_profile_id,
-                 mascot_id, formula_choice, angle, angle_kind, angle_score, now, now,
+                 mascot_id, formula_choice, angle, angle_kind, angle_score, insert_mode, now, now,
                  body["strategy"], body.get("project_id")),
             )
             if cur.rowcount == 0:
@@ -4068,11 +4109,17 @@ def create_pipeline_blueprint() -> Blueprint:
             }), 400
 
         visual_style = picks["visual_style"] or DEFAULT_VISUAL_STYLE
-        if visual_style not in VISUAL_STYLES:
+        if visual_style not in tvs.MAIN_STYLES:
+            if tvs.is_insert_style(visual_style):
+                return jsonify({"error": tvs.insert_style_error(visual_style)}), 400
             return jsonify({
                 "error": f"Invalid visual_style '{visual_style}'. "
-                         f"Must be one of: {sorted(VISUAL_STYLES)}"
+                         f"Must be one of: {sorted(tvs.MAIN_STYLES)}"
             }), 400
+        # The Inserts setting (TMDEV-224): sent, or the manual domain's default.
+        insert_mode, mode_err = _insert_mode_arg(body.get("insert_mode"))
+        if mode_err:
+            return jsonify({"error": mode_err}), 400
         voice_id = picks["voice_id"]
         profile_id = picks["script_profile_id"]
         formula_choice, formula_err = _formula_choice_arg(picks["formula_choice"])
@@ -4130,16 +4177,18 @@ def create_pipeline_blueprint() -> Blueprint:
             # formula when it has one (TMDEV-213), like the voice.
             if not formula_choice:
                 formula_choice = _project_default_formula(con, MANUAL_PROJECT_ID)
+            if insert_mode is None:
+                insert_mode = _project_default_insert_mode(con, MANUAL_PROJECT_ID)
             con.execute(
                 """INSERT INTO videos
                    (id, project_id, title, topic, strategy, producibility_score, status,
                     video_version, voice_id, agent_id, agent_model, agent_effort,
                     script_profile_id, visual_style, mascot_id, formula_choice, angle,
-                    angle_kind, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, 'manual', 0, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    angle_kind, insert_mode, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, 'manual', 0, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (vid, MANUAL_PROJECT_ID, title, topic, status, voice_id, agent_id,
                  agent_model, agent_effort, profile_id, visual_style, mascot_id,
-                 formula_choice, angle, angle_kind, now, now),
+                 formula_choice, angle, angle_kind, insert_mode, now, now),
             )
             video = _video_with_comments(con, vid)
         return jsonify(video), 201
@@ -4216,6 +4265,13 @@ def create_pipeline_blueprint() -> Blueprint:
         if not isinstance(default_formula, str):
             return jsonify({"error": "default_formula_id must be a string"}), 400
         default_formula = default_formula.strip()
+        # The Inserts setting the domain's new videos start with (TMDEV-224).
+        # Absent and null mean "auto", which on this full replace is what
+        # omission means. Keep in sync: mcp/server.py's upsert_project.
+        default_insert_mode, mode_err = _insert_mode_arg(body.get("default_insert_mode"))
+        if mode_err:
+            return jsonify({"error": mode_err.replace("insert_mode", "default_insert_mode")}), 400
+        default_insert_mode = default_insert_mode or tinserts.DEFAULT_INSERT_MODE
         # The agent, model and effort the domain's new videos start on
         # (TMDEV-207). "" on the agent is Automatic, the weighted deal. Absent
         # and null mean "", which on this full replace is what omission means;
@@ -4272,6 +4328,9 @@ def create_pipeline_blueprint() -> Blueprint:
                 if err:
                     return jsonify({"error": err}), 400
             unchanged = prev is not None and (prev["default_visual_style"] or "") == default_style
+            # An insert style is never a domain's style (TMDEV-224), on a change only.
+            if not unchanged and tvs.is_insert_style(default_style):
+                return jsonify({"error": tvs.insert_style_error(default_style)}), 400
             if not unchanged and _illustrated_needs_key(con, default_style):
                 return jsonify({"error": tvs.openai_key_error(default_style)}), 400
             gpu_err = "" if unchanged else _cartoon3d_gpu_error(con, default_style)
@@ -4341,8 +4400,8 @@ def create_pipeline_blueprint() -> Blueprint:
                                          default_script_profile_id, default_mascot_id,
                                          default_agent_id, default_agent_model,
                                          default_agent_effort, default_formula_id, topic_cap,
-                                         created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                         default_insert_mode, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
                      name=excluded.name,
                      description=excluded.description,
@@ -4356,11 +4415,12 @@ def create_pipeline_blueprint() -> Blueprint:
                      default_agent_model=excluded.default_agent_model,
                      default_agent_effort=excluded.default_agent_effort,
                      default_formula_id=excluded.default_formula_id,
-                     topic_cap=excluded.topic_cap""",
+                     topic_cap=excluded.topic_cap,
+                     default_insert_mode=excluded.default_insert_mode""",
                 (pid, body["name"], description, is_seed, status,
                  default_style, default_voice, default_profile, default_mascot,
                  default_agent, default_agent_model, default_agent_effort, default_formula,
-                 topic_cap, _now()),
+                 topic_cap, default_insert_mode, _now()),
             )
             row = con.execute(f"{_PROJECT_SELECT} WHERE p.id = ?", (pid,)).fetchone()
         return jsonify(_project_out(row)), 201

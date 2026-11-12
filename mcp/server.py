@@ -319,7 +319,7 @@ DEFAULT_AGENT_EFFORT = "high"
 HUMAN_CHECKPOINT_STATUSES = ("TOPIC_PROPOSED", "SCRIPT_READY", "VIDEO_READY")
 # formula_choice is a person's choice of formula (TMDEV-213). No tool here
 # writes it; it is in the list because the list is one with the API's.
-TOPIC_ONLY_FIELDS = ("script_profile_id", "visual_style", "mascot_id", "formula_choice")
+TOPIC_ONLY_FIELDS = ("script_profile_id", "visual_style", "mascot_id", "formula_choice", "insert_mode")
 AGENT_CHECKPOINT_FIELDS = ("agent_id", "agent_model", "agent_effort")
 # Where update_video may write a topic's angle (TMDEV-214): at the topic, on a
 # revision, and at TOPIC_APPROVED only while the video has none (the fill the

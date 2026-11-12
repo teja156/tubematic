@@ -137,7 +137,7 @@ def test_terminal_doc():
     assert "review" in p and p["captions"]["background"] == "log"
     assert p["routing"]["images"] == 0
     # each skin's caption changes are caption keys
-    assert set(p["extra"]["skins"]) == {"house", "crt"}
+    assert set(p["extra"]["skins"]) == {"house", "crt", "paper"}  # paper: an insert on a light canvas
     for skin in p["extra"]["skins"].values():
         assert set(skin["captions"]) <= set(p["captions"]) | {"accent"}
     assert tvs.effective_canvas("terminal_doc", "light") == "dark"
@@ -378,13 +378,13 @@ def _insert_pack(**over):
     (lambda: _valid(insert={"max_seconds": 8}), 'no "insert" block'),
     (lambda: _insert_pack(inserts={"host": True, "transition": "cut"}), 'no "inserts" block'),
     (lambda: _insert_pack(insert={"max_seconds": 8}), "insert: {max_seconds"),
-    (lambda: _insert_pack(insert={"max_seconds": 20, "palettes": ["dark"], "props_key": "x", "component": "X"}),
+    (lambda: _insert_pack(insert={"max_seconds": 20, "palettes": ["dark"], "props_key": "x", "component": "X", "review": "r"}),
      "insert.max_seconds"),
-    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["blue"], "props_key": "x", "component": "X"}),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["blue"], "props_key": "x", "component": "X", "review": "r"}),
      "insert.palettes"),
-    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "", "component": "X"}),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "", "component": "X", "review": "r"}),
      "insert.props_key"),
-    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": " "}),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": " ", "review": "r"}),
      "insert.component"),
 ])
 def test_a_malformed_role_block_is_refused(make, fragment):
