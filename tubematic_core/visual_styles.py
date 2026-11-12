@@ -80,7 +80,7 @@ SCENES_LABEL = "Mixed scenes"
 SCENES_ROUTING = {
     "best_for": [
         "a topic where full-frame pictures of real, named things carry several beats and people or "
-        "roles acted out by figures carry others: Motion Graphics draws no figures, and Stick "
+        "roles acted out by figures carry others: Photo Explainer draws no figures, and Stick "
         "Explainer shows pictures only in a few panels on its white canvas",
         "topics no style describes better, where no one treatment carries the whole video",
     ],
@@ -243,6 +243,10 @@ def _check_pack(path: pathlib.Path, data) -> dict:
     # a real event out of a style that draws only text or boxes.
     if not (isinstance(routing.get("cannot_show"), str) and routing["cannot_show"].strip()):
         fail("routing.cannot_show must be one sentence saying what the style cannot show")
+    # Optional (TMDEV-225): a style that loses a close call to a richer one.
+    # Auto reads it as the first tie-break, so no style is named in the skill.
+    if "yields_ties" in routing and not isinstance(routing["yields_ties"], bool):
+        fail("routing.yields_ties, when present, must be true or false")
     images = routing.get("images", 0)
     if not isinstance(images, int) or isinstance(images, bool) or images < 0:
         fail("routing.images, when present, must be a whole number of generated images, 0 or more")

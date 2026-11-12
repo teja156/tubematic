@@ -95,7 +95,7 @@ def test_whiteboard():
     assert p["extra"]["doodles"] == sorted(set(p["extra"]["doodles"]))
     # TMDEV-203 routes on these; each must name what sets it apart.
     avoid = " ".join(p["routing"]["avoid_for"])
-    assert "System Flow" in avoid and "Stick" in avoid and "Motion Graphics" in avoid
+    assert "System Flow" in avoid and "Stick" in avoid and "Photo Explainer" in avoid
 def test_bean_explainer():
     p = tvs.pack("bean_explainer")
     assert p["renderer"] == "dom" and p["canvas"] == "light"
@@ -443,3 +443,22 @@ def test_the_preview_folder_stays_within_budget():
     stems = {f.stem for f in PREVIEW_DIR.iterdir() if f.suffix in (".mp4", ".webp")}
     for stem in stems:
         assert (PREVIEW_DIR / f"{stem}.mp4").is_file() and (PREVIEW_DIR / f"{stem}.webp").is_file(), stem
+
+
+# ── Photo Explainer (TMDEV-225) ─────────────────────────────────────────────
+
+def test_motion_graphics_is_labelled_photo_explainer_and_yields_close_calls():
+    p = tvs.pack("motion_graphics")
+    assert p["label"] == "Photo Explainer"  # the stored id is unchanged
+    assert p["routing"]["yields_ties"] is True
+    # Its diagrams are System Flow inserts: no picture duty asks it to build one.
+    assert "diagram" not in " ".join(p["picture"].values()).lower()
+    others = [sid for sid, q in tvs.MAIN_PACKS.items() if q["routing"].get("yields_ties")]
+    assert others == ["motion_graphics"]
+
+
+def test_yields_ties_is_checked_when_present():
+    data = _valid()
+    data["routing"] = {**data["routing"], "yields_ties": "yes"}
+    with pytest.raises(tvs.PackError, match=r"routing\.yields_ties"):
+        tvs._check_pack(pathlib.Path("stick.json"), data)

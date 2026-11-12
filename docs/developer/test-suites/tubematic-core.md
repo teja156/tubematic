@@ -105,7 +105,7 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   subject limits and the lengths the term, the stamp and the options may have, and its `review`
   text says the meter row is hidden on the closing choice. A pack that takes no mascot must say why.
 - Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its
-  routing's `avoid_for` names System Flow, Stick and Motion Graphics, the styles Auto must tell it
+  routing's `avoid_for` names System Flow, Stick and Photo Explainer, the styles Auto must tell it
   apart from.
 - Every pack says how it shows the opening, a turn, the payoff and the ending (`picture`), and
   `agent_view` hands a copy of it to the agent, the mixed scenes' block under `auto`. Case File
@@ -119,6 +119,9 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   Every main style hosts inserts except Cartoon 3D, whose pack says why, and every host names a
   transition from `inserts.TRANSITIONS`. `public_list` and `agent_view` carry `role` and `inserts`.
   A malformed `role`, `inserts` or `insert` block is refused with the field at fault.
+- `motion_graphics` is labelled Photo Explainer, is the one main pack whose `routing.yields_ties`
+  is `true`, and none of its picture duties asks for a diagram. A `yields_ties` that is not true or
+  false is refused.
 - Every pack names its picker group (`dimension`), its preview stem and its tagline, and
   `public_list` passes them on, `null` for Auto. Cartoon 3D is the 3D style and the one whose
   `needs.gpu` gives the GPU tag.

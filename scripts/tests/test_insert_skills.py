@@ -159,3 +159,11 @@ def test_the_skills_that_teach_inserts_carry_no_ticket_id():
              *_hosting_authoring_skills(), *(tvs.PACKS[s]["authoring_skill"] for s in tvs.INSERT_STYLES)}
     for name in names:
         assert not re.search(r"\b(TMDEV|VQA|EXQA)-\d+", _skill(name)), name
+
+
+def test_photo_explainer_draws_no_diagram_scene_of_its_own():
+    """Its diagrams are System Flow inserts, or a labelled photograph when there
+    is no insert (TMDEV-225)."""
+    text = (SKILLS / "tubematic-scene-config" / "SKILL.md").read_text()
+    rule = text.split("Under `motion_graphics` (Photo Explainer) a DIAGRAM beat is not yours to draw")[1][:600]
+    assert "system_flow" in rule and "HYBRID" in rule and "Never a vector diagram scene" in rule

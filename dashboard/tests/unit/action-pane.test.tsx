@@ -758,7 +758,7 @@ describe("ActionPane — visual style picker", () => {
     // Without this the dashboard cannot explain why two videos look different,
     // which is the entire reason the resolution is recorded. It names the
     // CANVAS rather than a register, because an auto video on a dark canvas
-    // may still contain figures — "Motion Graphics" would be a lie.
+    // may still contain figures — "Photo Explainer" would be a lie.
     const video = {
       ...makeVideo("VIDEO_READY"),
       visual_style: "auto" as const,

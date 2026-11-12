@@ -138,9 +138,13 @@ style.
 The `routing` block lists what the style suits (`best_for`), what it must not get (`avoid_for`),
 one sentence saying what it cannot put on screen at all (`cannot_show`, such as "any picture of a
 real thing" for a style that draws only text), and the signals in a topic or script that point to
-it (`signals`). Two fields are optional: `moods`, the tones the style suits, and `images`, a whole
-number of generated images a video costs at most (0 when absent).
-[How Auto picks a style](#how-auto-picks-a-style) reads all six.
+it (`signals`). Three fields are optional: `moods`, the tones the style suits, `images`, a whole
+number of generated images a video costs at most (0 when absent), and `yields_ties`, `true` on a
+style that loses a close call to any style without it (`motion_graphics`, labelled Photo Explainer,
+is the plain photo style the richer styles should win close calls from).
+[How Auto picks a style](#how-auto-picks-a-style) reads all seven. An insert style's `routing`
+describes beats rather than topics, because the insert-routing skill scores beats
+([Main styles and inserts](#main-styles-and-inserts)).
 
 `tubematic_core/tests/test_style_packs.py` pins every gate's answer for each style, `auto`, a blank
 value and an unknown one. Adding a style is a new pack file, the style's renderer work, its
@@ -197,15 +201,16 @@ flowchart TD
     C --> D["rule out: unavailable,<br/>a plain avoid_for match,<br/>cannot_show covers what must be seen"]
     D --> E["score: best_for 3 or 1,<br/>each signal 1"]
     E --> F{"a clear fit?<br/>3 points or more"}
-    F -->|yes| G["the highest; ties by<br/>specificity, a person's hint,<br/>mood, images, order"]
+    F -->|yes| G["the highest; ties by yielding,<br/>specificity, a person's hint,<br/>mood, images, order"]
     F -->|no| H["scenes:<br/>the mixed scene system"]
     G --> I["choose_visual_style"]
     H --> I
     I --> J["script written for<br/>the picked style"]
 ```
 
-The candidates are data: `tubematic_core/visual_styles.py::routing_candidates` lists every style
-pack in pack order, then `scenes`, each with its `routing` block and whether this install and this
+The candidates are data: `tubematic_core/visual_styles.py::routing_candidates` lists every main
+style pack in pack order, then `scenes` (insert styles are decided after the main style, by
+`choose_inserts`), each with its `routing` block and whether this install and this
 video can have it. A style that needs an OpenAI key or a working GPU the install lacks is
 unavailable, and so is a style that takes no mascot (a 3D world, or a pack with `"mascot": false`)
 on a video with a mascot. The skill names no style, so a new
@@ -230,7 +235,7 @@ video back to `TOPIC_APPROVED` for a new script. A video moved back to `TOPIC_PR
 `scenes` is the mixed scene system: every beat drawn from any vocabulary, on a canvas the agent
 chooses at `VOICE_READY`. Its routing block (`visual_styles.py::SCENES_ROUTING`) is scored like a
 pack's. It is the best answer when full-frame pictures of real things carry some beats and roles
-acted out by figures carry others (Motion Graphics draws no figures, Stick Explainer shows pictures
+acted out by figures carry others (Photo Explainer draws no figures, Stick Explainer shows pictures
 only in panels), and the fallback when nothing reaches 3 points. Its renderer is always `dom`, recorded in `videos.resolved_renderer`. The
 agent chooses the canvas once, `update_video(resolved_visual_style="dark" | "light")`: `dark` when
 images carry the video (about a third or more of the beats are PHOTO or HYBRID) and `light` when

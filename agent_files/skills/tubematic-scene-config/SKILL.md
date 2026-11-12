@@ -243,7 +243,7 @@ Read `visual_style` from `get_video`:
 
 | `visual_style` | Canvas | You may use |
 |---|---|---|
-| `motion_graphics` | Dark | Vector animation, full-bleed generated imagery. **No figures in the scenes' own content** (a mascot, when the video has one, is a separate overlay layer, see *Mascot*). |
+| `motion_graphics` | Dark | Photo Explainer: full-bleed generated imagery of the real things the video is about, with slow camera moves. **No figures in the scenes' own content** (a mascot, when the video has one, is a separate overlay layer, see *Mascot*). **No diagram scenes of your own:** see the rule below the table. |
 | `stick` | Light | **Hand-drawn** `StickFigure` line art, line-art diagrams, generated imagery **in panels**. |
 | `illustrated` | **You choose** | Characters are **generated illustrated assets** (`generate_character`) rather than line art. You pick the drawing style *and* the canvas from the topic. |
 | `cartoon_3d` | Dark (never visible) | Nothing here: one 3D world as code, by the tubematic-cartoon3d skill. Needs a working GPU; the API refuses it otherwise. |
@@ -373,8 +373,13 @@ built:
 | **DIAGRAM** — a relation with no appearance | Vector scene, dark palette; `StepFlowDiagram` default | Vector scene, black line on white; `StepFlowDiagram theme="light"` |
 
 **STICK is available under `auto` and `stick`, never under a forced `motion_graphics`** — excluding
-figures is that option's entire purpose. There, a role beat is a DIAGRAM or, if the beat genuinely
-needs a person shown, a PHOTO.
+figures is that option's entire purpose. There, a role beat is a PHOTO of the real thing the role
+acts on, or a HYBRID.
+
+**Under `motion_graphics` (Photo Explainer) a DIAGRAM beat is not yours to draw.** Where the script
+marked the segment as a `system_flow` insert, the insert draws it (step 8). Where it is not marked
+(the video's Inserts setting is None, or no insert was chosen), draw it as a HYBRID: the photograph of
+the real thing, with labels or arrows on it. Never a vector diagram scene of your own in this style.
 
 **The silhouette rule in *Images* still stands, word for word.** A named character, creature or real
 place is never reduced to an icon, silhouette or marker — and a stick figure is exactly such a

@@ -50,12 +50,12 @@
     ],
     "avoid_for": [
       "components passing requests, packets or data between them (Stick Explainer acts them out, with System Flow inserts)",
-      "real, named things the viewer should see as pictures (Motion Graphics)",
+      "real, named things the viewer should see as pictures (Photo Explainer)",
       "generic roles acting out a scene (Stick)",
       "emotional or people-centred stories",
       "visually rich history or places",
       "fast news or hype",
-      "a real accident, disaster or failure told with its real machine, place or company (Motion Graphics fits it)"
+      "a real accident, disaster or failure told with its real machine, place or company (Photo Explainer fits it)"
     ],
     "cannot_show": "photographs or faithful pictures of real, named things or people: everything is a marker doodle",
     "signals": [

@@ -33,7 +33,7 @@ whether a pack's `avoid_for` holds.
 
 The real-event topics are failures with a technical cause (a rocket, a spacecraft, a trading firm,
 an outage), each with a brief written the way research writes one: one idea, often a number, and a
-beat list. They expect Motion Graphics and accept mixed scenes and Storybook Atlas. A brief built
+beat list. They expect Photo Explainer and accept mixed scenes and Storybook Atlas. A brief built
 around a number reads as a number story, so these topics check that the routing skill's real-failure
 question and each pack's `cannot_show` keep a text or diagram style from taking the story of a real
 rocket or company. Two negative controls keep the rule from reaching too far: the same number with no

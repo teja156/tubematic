@@ -671,7 +671,7 @@
         "stick"
       ],
       "future": "",
-      "note": "A real ship, real people and a mechanism, all carried by photographs and vector diagrams: Motion Graphics. No beat needs someone acting a step out."
+      "note": "A real ship, real people and a mechanism, all carried by photographs and vector diagrams: Photo Explainer. No beat needs someone acting a step out."
     },
     {
       "title": "Why your phone battery wears out",
@@ -855,7 +855,7 @@
         "stick"
       ],
       "future": "",
-      "note": "Mixed-scenes probe: real banks as full-frame pictures, and a borrower, a banker and a ratings agent doing each step. Motion Graphics draws no figures; Stick Explainer shows pictures only in small panels.",
+      "note": "Mixed-scenes probe: real banks as full-frame pictures, and a borrower, a banker and a ratings agent doing each step. Photo Explainer draws no figures; Stick Explainer shows pictures only in small panels.",
       "inserts_expect": "any"
     },
     {
@@ -971,7 +971,7 @@
         "scenes"
       ],
       "future": "",
-      "note": "Pair probe, Under the Hood vs Whiteboard and Motion Graphics: one device opened up part by part, magnified."
+      "note": "Pair probe, Under the Hood vs Whiteboard and Photo Explainer: one device opened up part by part, magnified."
     },
     {
       "title": "How much energy is in a AA battery",
@@ -1130,7 +1130,7 @@
         "whiteboard"
       ],
       "future": "",
-      "note": "Pair probe, Under the Hood vs Motion Graphics: one machine opened up stage by stage."
+      "note": "Pair probe, Under the Hood vs Photo Explainer: one machine opened up stage by stage."
     },
     {
       "title": "The biggest ships ever built",
@@ -1142,7 +1142,7 @@
         "scenes"
       ],
       "future": "",
-      "note": "Old-style probe, Motion Graphics vs Under the Hood: real things the viewer came to see whole, ranked, with no inside to open."
+      "note": "Old-style probe, Photo Explainer vs Under the Hood: real things the viewer came to see whole, ranked, with no inside to open."
     },
     {
       "title": "How a 911 call reaches the right dispatcher",
@@ -1300,7 +1300,7 @@
         "whiteboard"
       ],
       "future": "",
-      "note": "Mixed-scenes probe: real photographs of a real event, and generic people whose steps are the mechanism. Motion Graphics draws no figures; Stick Explainer shows pictures only in small panels."
+      "note": "Mixed-scenes probe: real photographs of a real event, and generic people whose steps are the mechanism. Photo Explainer draws no figures; Stick Explainer shows pictures only in small panels."
     },
     {
       "title": "Ariane 5: A 64-Bit Number Squeezed Into 16 Bits",
@@ -1377,7 +1377,7 @@
         "scenes"
       ],
       "future": "",
-      "note": "Real-event pair probe, Motion Graphics vs Terminal Doc: a real video and its counter, but the number stays on screen, so Terminal Doc is acceptable.",
+      "note": "Real-event pair probe, Photo Explainer vs Terminal Doc: a real video and its counter, but the number stays on screen, so Terminal Doc is acceptable.",
       "inserts_expect": "any"
     },
     {

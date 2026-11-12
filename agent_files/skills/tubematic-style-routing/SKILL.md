@@ -38,6 +38,7 @@ topic best and leave its diagram or string beats to the inserts. Each entry is:
 | `routing.cannot_show` | What the style cannot put on screen at all |
 | `routing.signals` | Things that, when true of this topic's script, point to the style |
 | `routing.moods` | The tones the style suits. A tie-break only |
+| `routing.yields_ties` | When `true`, the style loses a tie to any candidate without it (Step 5) |
 | `images` | Generated images a video in this style costs, at most. A tie-break only |
 | `experimental` | The style is new. A tie-break only, never a reason to skip it |
 | `available`, `unavailable_reason` | Whether this install and this video can have the style now |
@@ -135,12 +136,14 @@ A candidate is a **clear fit** with at least 3 points.
 
 ## Step 5: Break ties, in this order
 
-1. **Specificity.** The candidate whose winning `best_for` entry names this topic's kind more
+1. **Yielding.** A candidate whose `routing.yields_ties` is `true` loses a tie to one
+   without it: its pack says it gives way when another style fits as well.
+2. **Specificity.** The candidate whose winning `best_for` entry names this topic's kind more
    narrowly. "Networking and protocols" beats "mechanisms" for a protocol.
-2. **A person's hint.** The domain's description or a comment asks for a look one candidate has.
-3. **Mood.** The candidate whose `moods` match the mood from Step 1.
-4. **Cost.** Fewer `images`. Generated images cost money on every video.
-5. **Order.** The earlier candidate in the list.
+3. **A person's hint.** The domain's description or a comment asks for a look one candidate has.
+4. **Mood.** The candidate whose `moods` match the mood from Step 1.
+5. **Cost.** Fewer `images`. Generated images cost money on every video.
+6. **Order.** The earlier candidate in the list.
 
 Never break a tie by novelty, by what recent videos used, or by which style is the most elaborate.
 The right style for this topic is right even if the last three videos used it.
@@ -212,6 +215,6 @@ request: DNS, TCP and TLS, the load balancer, the app server, the database, and 
       what must be seen ruled out
 - [ ] Points counted from `best_for` and `signals` by meaning, not by shared words
 - [ ] A style picked only as a clear fit (3 points or more), otherwise `scenes`
-- [ ] Ties broken by specificity, a person's hint, mood, cost, then order
+- [ ] Ties broken by yielding, specificity, a person's hint, mood, cost, then order
 - [ ] `choose_visual_style` called with a one-sentence reason and a runner-up
 - [ ] A comment with the description and the top three scores

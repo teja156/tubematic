@@ -737,6 +737,8 @@ Covers the `tubematic-style-routing` skill
   `choose_visual_style` with its real arguments and reason limit.
 - The operator runs it before the script-writing skill at `TOPIC_APPROVED`, the script-writing skill
   follows `style.script`, and the uninstaller and the skills README know it.
+- A candidate whose pack sets `routing.yields_ties` loses a tie first, before specificity, and at
+  least one main pack sets it.
 
 Trap: a skill that named styles would prefer the ones it knew about, and a new pack would need an
 edit to be picked. The candidates are data for that reason.
@@ -781,7 +783,8 @@ Covers the skills that make a video with insert scenes
   returns, and its segment shape names the `insert` key.
 - Every main style that takes inserts, by its pack, sends its authoring skill to
   `tubematic-inserts`, and the mixed scene system does too. Case File Story keeps inserts off its
-  cards and its ending. The scene system draws a marked diagram beat as the insert. Cartoon 3D,
+  cards and its ending. The scene system draws a marked diagram beat as the insert, and under Photo
+  Explainer draws no diagram scene of its own (an insert, or a labelled photograph). Cartoon 3D,
   whose pack takes none, says so.
 - The insert styles' skills open with an **As an insert** section that states the limits
   `mcp/system_flow.py` and `mcp/terminal_doc.py` enforce on an insert (the board or beat count, no
