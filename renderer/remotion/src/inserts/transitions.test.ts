@@ -8,19 +8,23 @@ describe("insert transitions", () => {
     expect(transitionOf("wipe")).toBe("wipe");
   });
 
-  it("runs the way in over the first frames and the way out over the last", () => {
-    const n = TRANSITION_FRAMES.dip;
-    expect(insertProgress(-1, 200, n)).toBe(0);
-    expect(insertProgress(0, 200, n)).toBeCloseTo(1 / n);
-    expect(insertProgress(n - 1, 200, n)).toBe(1);
-    expect(insertProgress(100, 200, n)).toBe(1);
-    expect(insertProgress(199, 200, n)).toBeCloseTo(1 / n);
-    expect(insertProgress(200, 200, n)).toBe(0);
+  it("runs the way in before the window and the way out after it, so the whole window is fully in", () => {
+    const n = TRANSITION_FRAMES.push;
+    expect(insertProgress(-n - 1, 200, n)).toBe(0);
+    expect(insertProgress(-n, 200, n)).toBeCloseTo(1 / (n + 1));
+    expect(insertProgress(-1, 200, n)).toBeCloseTo(n / (n + 1));
+    expect(insertProgress(0, 200, n)).toBe(1);
+    expect(insertProgress(199, 200, n)).toBe(1);
+    expect(insertProgress(200, 200, n)).toBeCloseTo(n / (n + 1));
+    expect(insertProgress(200 + n - 1, 200, n)).toBeCloseTo(1 / (n + 1));
+    expect(insertProgress(200 + n, 200, n)).toBe(0);
   });
 
-  it("shares a very short window between the way in and the way out", () => {
-    expect(insertProgress(5, 10, 12)).toBe(1);
-    expect(insertProgress(0, 10, 12)).toBeCloseTo(1 / 5);
+  it("a cut shows the insert for exactly its window", () => {
+    expect(insertProgress(-1, 60, 0)).toBe(0);
+    expect(insertProgress(0, 60, 0)).toBe(1);
+    expect(insertProgress(59, 60, 0)).toBe(1);
+    expect(insertProgress(60, 60, 0)).toBe(0);
   });
 
   it("a cut covers the frame for the whole window", () => {
@@ -50,6 +54,10 @@ describe("insert transitions", () => {
   it("finds the window a frame falls in", () => {
     const windows = [{ startFrame: 100, durationInFrames: 50 }, { startFrame: 400, durationInFrames: 60 }];
     expect(activeInsert(99, windows, "cut")).toBeNull();
+    // A wipe starts its way in 12 frames before the window and ends 12 after.
+    expect(activeInsert(88, windows, "wipe")).toMatchObject({ index: 0, local: -12 });
+    expect(activeInsert(87, windows, "wipe")).toBeNull();
+    expect(activeInsert(161, windows, "wipe")).toMatchObject({ index: 0, local: 61 });
     expect(activeInsert(120, windows, "cut")).toMatchObject({ index: 0, local: 20, progress: 1 });
     expect(activeInsert(459, windows, "cut")).toMatchObject({ index: 1 });
     expect(activeInsert(460, windows, "cut")).toBeNull();

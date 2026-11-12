@@ -5,7 +5,7 @@
   "experimental": false,
   "role": "insert",
   "insert": {
-    "max_seconds": 8,
+    "max_seconds": 9,
     "palettes": [
       "dark",
       "light"

@@ -25,8 +25,8 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
    upgrade moves.
 4. System Flow and Terminal Doc are now insert styles, never a style for a whole video (see Changed). On upgrade, a
    video in one of them that is not voiced yet (a topic waiting for approval, an approved topic, a
-   script waiting at Script Ready, or a script sent back for revision before it was voiced) goes back
-   to Auto: its agent picks a new style and writes a new
+   script waiting at Script Ready, or a topic or script sent back for revision before it was voiced)
+   goes back to Auto: its agent picks a new style and writes a new
    script, which costs one agent session and no voice credits. The script waiting at Script Ready is
    discarded, so approve it before you upgrade if you want to keep it as it is. A video already voiced
    finishes in its old style. A domain whose default style was System Flow or Terminal Doc now
@@ -73,7 +73,7 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   usually go to Stick Explainer, with the request's path as a System Flow insert.
 - Motion Graphics is now called **Photo Explainer** and is for real, specific things the viewer came to
   see as full-frame pictures: products, buildings, artworks, machines, named people and places, and
-  real events. It draws no diagram scenes of its own: a diagram in it is a System Flow insert. Auto
+  real events. A diagram in it is shown as a System Flow insert. Auto
   picks it less often, and when another style fits a topic just as well, Auto picks the other style.
   Videos that already have the style keep it under its new name.
 - A voice's speed in **Settings → Voice** now works on `eleven_v3` and `eleven_v4` voices, which

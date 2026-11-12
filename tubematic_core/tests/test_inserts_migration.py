@@ -32,6 +32,7 @@ VIDEOS = [
     ("td_voiced", "VOICE_READY", "terminal_doc", "terminal_doc", None),
     ("sf_revision", "REVISION_REQUESTED", "system_flow", "", None),
     ("td_revision_unvoiced", "REVISION_REQUESTED", "terminal_doc", "terminal_doc", None),
+    ("sf_topic_revision", "REVISION_REQUESTED", "system_flow", "", None),
     ("sf_scheduled", "SCHEDULED", "system_flow", "system_flow", None),
     ("td_archived", "SCRIPT_READY", "terminal_doc", "terminal_doc", "2026-01-02T00:00:00Z"),
     ("wb_script", "SCRIPT_READY", "whiteboard", "whiteboard", None),
@@ -55,7 +56,8 @@ def _db_at_0028(tmp_path) -> pathlib.Path:
         con.execute("INSERT INTO projects (id, name, default_visual_style, created_at) "
                     "VALUES (?, ?, ?, '2026-01-01T00:00:00Z')", (pid, pid, style))
     for vid, status, style, pick, archived in VIDEOS:
-        voiced = status not in ("TOPIC_PROPOSED", "TOPIC_APPROVED", "SCRIPT_READY") and vid != "td_revision_unvoiced"
+        voiced = (status not in ("TOPIC_PROPOSED", "TOPIC_APPROVED", "SCRIPT_READY")
+                  and vid not in ("td_revision_unvoiced", "sf_topic_revision"))
         con.execute(
             "INSERT INTO videos (id, topic, status, visual_style, style_pick, style_runner_up, "
             "style_reason, resolved_visual_style, resolved_renderer, formula_choice, formula_pick, "
@@ -66,6 +68,8 @@ def _db_at_0028(tmp_path) -> pathlib.Path:
              archived))
         if voiced:
             con.execute("UPDATE videos SET voice_file_path = '/jobs/x/audio.mp3' WHERE id = ?", (vid,))
+        if status not in ("TOPIC_PROPOSED", "TOPIC_APPROVED") and vid != "sf_topic_revision":
+            con.execute("UPDATE videos SET script = 'A script.' WHERE id = ?", (vid,))
     con.commit()
     con.close()
     return db
@@ -104,7 +108,8 @@ def test_unvoiced_videos_in_an_insert_style_go_back_to_auto(tmp_path):
     tdb.migrate(db)
     rows = _rows(db)
     expect_status = {"sf_proposed": "TOPIC_PROPOSED", "sf_approved": "TOPIC_APPROVED",
-                     "td_script": "TOPIC_APPROVED", "td_revision_unvoiced": "TOPIC_APPROVED"}
+                     "td_script": "TOPIC_APPROVED", "td_revision_unvoiced": "TOPIC_APPROVED",
+                     "sf_topic_revision": "TOPIC_PROPOSED"}
     for vid, status in expect_status.items():
         row = rows[vid]
         assert row["status"] == status, vid
@@ -133,7 +138,8 @@ def test_voiced_and_later_videos_keep_their_style(tmp_path):
         before = next(v for v in VIDEOS if v[0] == vid)
         assert (rows[vid]["status"], rows[vid]["visual_style"]) == (before[1], before[2]), vid
         assert rows[vid]["resolved_renderer"] == "dom", vid
-    assert set(_comments(db)) == {"sf_proposed", "sf_approved", "td_script", "td_revision_unvoiced"}
+    assert set(_comments(db)) == {"sf_proposed", "sf_approved", "td_script", "td_revision_unvoiced",
+                                  "sf_topic_revision"}
 
 
 def test_scripts_written_before_inserts_never_get_any(tmp_path):
@@ -142,7 +148,7 @@ def test_scripts_written_before_inserts_never_get_any(tmp_path):
     rows = _rows(db)
     for vid, status, *_ in VIDEOS:
         expected = ("" if status in ("TOPIC_PROPOSED", "TOPIC_APPROVED")
-                    or vid in ("td_script", "td_revision_unvoiced") else "[]")
+                    or vid in ("td_script", "td_revision_unvoiced", "sf_topic_revision") else "[]")
         assert rows[vid]["insert_styles"] == expected, vid
         assert rows[vid]["insert_mode"] == "auto", vid
 
@@ -176,3 +182,21 @@ def test_a_new_video_starts_undecided_with_inserts_on_auto(tmp_path):
     con.close()
     row = _rows(db)["new"]
     assert (row["insert_mode"], row["insert_styles"], row["insert_reason"]) == ("auto", "", "")
+
+
+def test_a_revision_asked_at_the_topic_goes_back_to_the_topic_and_says_so(tmp_path):
+    db = _db_at_0028(tmp_path)
+    tdb.migrate(db)
+    (author, content), = _comments(db)["sf_topic_revision"]
+    assert "when the topic is approved" in content
+
+
+def test_a_runner_up_that_names_an_insert_style_is_cleared(tmp_path):
+    db = _db_at_0028(tmp_path)
+    con = sqlite3.connect(db)
+    con.execute("UPDATE videos SET style_runner_up = 'system_flow' WHERE id = 'wb_script'")
+    con.commit()
+    con.close()
+    tdb.migrate(db)
+    assert _rows(db)["wb_script"]["style_runner_up"] == ""
+    assert _rows(db)["auto_approved"]["style_runner_up"] == ""

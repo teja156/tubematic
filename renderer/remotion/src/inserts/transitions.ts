@@ -17,6 +17,12 @@
  * - wipe: the insert is revealed by an edge moving right to left, and
  *         uncovered the same way out.
  *
+ * The transitions run just outside the insert's window: the way in over the n
+ * frames before it, the way out over the n frames after it. So the insert's
+ * whole window is fully on screen, and on the way out the main style is
+ * already showing the picture it comes back to (its next cut sits on the
+ * window's end; the validators keep the window itself quiet).
+ *
  * While an insert fully covers the frame the main layer is hidden (not
  * unmounted: every main component is a pure function of the frame, so it
  * comes back on the picture it would have shown, and hiding it skips its
@@ -41,19 +47,16 @@ export function transitionOf(name: string | undefined): InsertTransition {
 
 /**
  * How far into its transition an insert is at `local` (frames since the
- * insert's start), for a transition of `n` frames: 0 = not shown yet (or
- * gone), 1 = fully in. Transitions run inside the insert's own window, so its
- * first and last n frames are the way in and the way out. A window shorter
- * than two transitions shares the time between them.
+ * insert's start), for a transition of `n` frames: 0 = not shown (before or
+ * after), 1 = fully in. The whole window [0, duration) is fully in; the way in
+ * runs over [-n, 0) and the way out over [duration, duration + n).
  */
 export function insertProgress(local: number, duration: number, n: number): number {
-  if (local < 0 || local >= duration) return 0;
-  if (n <= 0) return 1;
-  const k = Math.min(n, Math.floor(duration / 2));
-  if (k <= 0) return 1;
-  const tIn = clamp01((local + 1) / k);
-  const tOut = clamp01((duration - local) / k);
-  return Math.min(tIn, tOut);
+  const k = Math.max(0, n);
+  if (local < -k || local >= duration + k) return 0;
+  if (local < 0) return clamp01((local + k + 1) / (k + 1));
+  if (local >= duration) return clamp01((duration + k - local) / (k + 1));
+  return 1;
 }
 
 /** The window an absolute frame falls in, with its progress, or null. */
@@ -62,7 +65,7 @@ export function activeInsert(frame: number, windows: InsertWindow[], transition:
   for (let i = 0; i < windows.length; i++) {
     const w = windows[i];
     const local = frame - w.startFrame;
-    if (local >= 0 && local < w.durationInFrames) {
+    if (local >= -n && local < w.durationInFrames + n) {
       const p = insertProgress(local, w.durationInFrames, n);
       return { index: i, local, progress: p };
     }

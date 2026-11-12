@@ -21,8 +21,11 @@ Data changes:
   REVISION_REQUESTED with no voice file) whose style is system_flow or
   terminal_doc goes back to Auto, as the dashboard's switch-style does: its
   style pick, recorded renderer and canvas, and formula pick are cleared, and
-  one at SCRIPT_READY or REVISION_REQUESTED returns to TOPIC_APPROVED so its
-  agent picks a main style and writes a new script. Nothing has been voiced, so
+  one at SCRIPT_READY (or a revision with a script) returns to TOPIC_APPROVED
+  so its agent picks a main style and writes a new script; a revision asked for
+  at the topic, with no script yet, returns to TOPIC_PROPOSED.
+- A style_runner_up that names an insert style is cleared: the dashboard's
+  switch to it would be refused. Nothing has been voiced, so
   no voice credit is lost. A comment on the video says why.
 - A video already voiced or later keeps its style and finishes as a
   whole-video System Flow or Terminal Doc (the validators keep that path for a
@@ -70,30 +73,39 @@ def up(con):
     # A table adopted from before the baseline can lack voice_file_path; with
     # no column there is no voice, so a revision counts as unvoiced.
     unvoiced_revision = ("COALESCE(voice_file_path, '') = ''" if "voice_file_path" in videos else "1")
+    has_script = ("(COALESCE(script, '') != '' OR COALESCE(script_segments, '') != '')"
+                  if {"script", "script_segments"} <= videos else "0")
     rows = con.execute(
-        f"SELECT id, visual_style, status FROM videos WHERE visual_style IN ({marks}) "
+        f"SELECT id, visual_style, status, {has_script} FROM videos WHERE visual_style IN ({marks}) "
         f"AND (status IN ({unvoiced}) OR (status = 'REVISION_REQUESTED' "
         f"AND {unvoiced_revision})) AND archived_at IS NULL",
         _INSERT_STYLES + _UNVOICED).fetchall()
-    for vid, style, status in rows:
+    for vid, style, status, scripted in rows:
+        # A revision asked for at the topic has no script yet: it goes back to
+        # the topic, never to an approval nobody gave. One asked for at Script
+        # Ready (or after a script) goes back to be rewritten.
+        target = ("TOPIC_PROPOSED" if status == "REVISION_REQUESTED" and not scripted
+                  else "TOPIC_APPROVED" if status in ("SCRIPT_READY", "REVISION_REQUESTED") else status)
         con.execute(
             "UPDATE videos SET visual_style = 'auto', style_pick = '', style_runner_up = '', "
             "style_reason = '', resolved_renderer = '', resolved_visual_style = '', "
             "formula_pick = '', formula_runner_up = '', formula_reason = '', formula_evidence = '', "
             "insert_styles = '', insert_reason = '', "
-            "status = CASE WHEN status IN ('SCRIPT_READY', 'REVISION_REQUESTED') THEN 'TOPIC_APPROVED' "
-            "ELSE status END, "
-            "agent_no_progress_count = 0, agent_stuck_at = NULL, updated_at = ? WHERE id = ?",
-            (now, vid))
+            "status = ?, agent_no_progress_count = 0, agent_stuck_at = NULL, updated_at = ? WHERE id = ?",
+            (target, now, vid))
         label = _LABELS[style]
         then = ("Its agent picks a main style and writes a new script; the old script is discarded."
-                if status in ("SCRIPT_READY", "REVISION_REQUESTED") else "Auto picks its main style when it is approved."
-                if status == "TOPIC_PROPOSED" else "Its agent picks a main style before the script.")
+                if target == "TOPIC_APPROVED" and status != "TOPIC_APPROVED"
+                else "Auto picks its main style when the topic is approved." if target == "TOPIC_PROPOSED"
+                else "Its agent picks a main style before the script.")
         con.execute(
             "INSERT INTO comments (video_id, author, content, created_at) VALUES (?, 'human', ?, ?)",
             (vid, f"Upgrade to 2.3.0: {label} is now an insert style, shown in short scenes inside "
                   f"another style, never a whole video. This video's style is back on Auto. {then}",
              now))
+
+    # A runner-up that names an insert style can no longer be switched to.
+    con.execute(f"UPDATE videos SET style_runner_up = '' WHERE style_runner_up IN ({marks})", _INSERT_STYLES)
 
     con.execute(
         "UPDATE videos SET insert_styles = '[]' WHERE insert_styles = '' "

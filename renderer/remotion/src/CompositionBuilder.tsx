@@ -13,7 +13,7 @@ import { TextRevealScene, TimelineWord } from "./scenes/TextRevealScene";
 import Subtitles, { SubtitleConfig } from "./scenes/installed/Subtitles";
 import Watermark from "./Watermark";
 import { MascotCue, MascotLayer } from "./mascot/MascotLayer";
-import { activeInsert, insertLook, transitionOf, type InsertWindow } from "./inserts/transitions";
+import { TRANSITION_FRAMES, activeInsert, insertLook, transitionOf, type InsertWindow } from "./inserts/transitions";
 
 // ── Types (the shape of scene-config.json; docs/developer/09-remotion-project.md) ───
 
@@ -90,6 +90,10 @@ interface InsertConfig {
 export interface InsertPlacement {
   /** The insert's first frame on the video's clock: its data's frames are absolute. */
   origin: number;
+  /** Frames the scene's Sequence starts before `origin` (the way in); the scene
+   *  holds its first frame through them and its last frame through as many
+   *  after its window (the way out). */
+  lead: number;
   palette: Canvas;
   shift: number;
 }
@@ -290,15 +294,17 @@ const MainLayer: React.FC<{
   );
 };
 
-/** One insert, inside its own Sequence (so the frame here is local). */
+/** One insert, inside its own Sequence, which starts `lead` frames before the
+ *  window (so the frame here is local to that). */
 const InsertFrame: React.FC<{
   children: React.ReactNode;
   durationInFrames: number;
   startFrame: number;
+  lead: number;
   transition: ReturnType<typeof transitionOf>;
-}> = ({ children, durationInFrames, startFrame, transition }) => {
+}> = ({ children, durationInFrames, startFrame, lead, transition }) => {
   const local = useCurrentFrame();
-  const at = activeInsert(local + startFrame, [{ startFrame, durationInFrames }], transition);
+  const at = activeInsert(local + startFrame - lead, [{ startFrame, durationInFrames }], transition);
   const look = insertLook(transition, at ? at.progress : 0);
   if (look.insertOpacity <= 0) return null;
   return (
@@ -461,14 +467,20 @@ export const CompositionBuilder: React.FC<CompositionBuilderProps> = ({
       {/* Over the main style and under the mascot and the captions, which
           stay on screen through an insert. */}
       {inserts.map((ins, i) => {
+        // The Sequence also holds the transition frames on either side of
+        // the window (see transitions.ts), during which the scene holds its
+        // first and its last frame.
+        const lead = TRANSITION_FRAMES[transition];
         const placement: InsertPlacement = {
           origin: ins.startFrame,
+          lead,
           palette: ins.palette ?? sceneConfig.canvas ?? DEFAULT_CANVAS,
           shift: ins.shift ?? 0,
         };
         return (
-          <Sequence key={`insert-${i}`} from={ins.startFrame} durationInFrames={ins.durationInFrames}>
-            <InsertFrame durationInFrames={ins.durationInFrames} startFrame={ins.startFrame} transition={transition}>
+          <Sequence key={`insert-${i}`} from={ins.startFrame - lead} durationInFrames={ins.durationInFrames + 2 * lead}>
+            <InsertFrame durationInFrames={ins.durationInFrames} startFrame={ins.startFrame} lead={lead}
+                         transition={transition}>
               <GeneratedScene
                 src={ins.src}
                 source="installed"

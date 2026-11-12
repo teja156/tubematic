@@ -33,9 +33,10 @@ An insert is the same diagram, shorter, on the video's own frames. What differs 
 - **The first board starts at the insert's `startFrame`**, not at frame 0. Every other frame is a
   frame of the video, from `get_timeline`, inside the window.
 - **At most 3 boards; usually one.** An insert shows one diagram, or two.
-- **The insert's end is a cut.** The main style's transition takes the insert away over its last
-  frames (up to 12, `insert_routing.transition` names it), so every event of the last board finishes,
-  and is read, before that: the tool names the latest frame that works.
+- **The insert's end is a cut back to the main style.** The main style's transition runs just before
+  and just after the window, so the whole window is on screen. Every event of the last board still
+  finishes, and is read, before the window's final 6 frames: the tool names the latest frame that
+  works.
 - **Every other rule below holds over the window:** the diagram limits, labels, icons, order,
   seen before the cut, one chip and one focus at a time, and something new at least every 3.5
   seconds.

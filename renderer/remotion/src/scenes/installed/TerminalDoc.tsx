@@ -59,7 +59,7 @@ const Beat: React.FC<{ state: StageState; ctx: MoveContext }> = ({ state, ctx })
 );
 
 /** Where an insert sits on the video (TMDEV-224); see CompositionBuilder's InsertPlacement. */
-type Placement = { origin: number; palette: "dark" | "light"; shift: number };
+type Placement = { origin: number; lead?: number; palette: "dark" | "light"; shift: number };
 
 export default function TerminalDoc({
   terminalDoc,
@@ -74,8 +74,12 @@ export default function TerminalDoc({
   // from `origin`; its skin follows the main style's canvas and it uses only
   // shipped moves (the validator refuses custom moves in an insert).
   const origin = insert?.origin ?? 0;
-  const frame = useCurrentFrame() + origin;
   const end = origin + durationInFrames;
+  // An insert's Sequence starts `lead` frames early for its way in and runs as
+  // long after its window for its way out; it holds its first and last frame
+  // through them, so it slides in already showing its picture.
+  const raw = useCurrentFrame() + origin - (insert?.lead ?? 0);
+  const frame = insert ? Math.min(Math.max(raw, origin), end - 1) : raw;
   const ready = useTerminalFonts("TerminalDoc");
   const data: TerminalDocData = terminalDoc ?? { skin: "house", beats: [] };
   const customList = insert ? [] : (data.customMoves ?? []);

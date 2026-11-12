@@ -96,7 +96,7 @@ def payoff_index(segments, formula_id: str) -> int | None:
 
 
 def mark_errors(segments, *, insert_mode: str, allowed, insert_styles: tuple,
-                formula_id: str = "") -> list[str]:
+                formula_id: str = "", hosts: bool = True, host_message: str = "") -> list[str]:
     """Why a script's insert marks are refused, or [] when they are fine.
 
     segments: the script_segments list being written.
@@ -106,6 +106,8 @@ def mark_errors(segments, *, insert_mode: str, allowed, insert_styles: tuple,
     insert_styles: every insert style id (visual_styles.INSERT_STYLES).
     formula_id: the formula the script is written in, whose payoff beat
         belongs to the main style.
+    hosts, host_message: whether the video's main style takes inserts, and
+        why not when it does not.
     """
     if not isinstance(segments, list):
         return []
@@ -116,6 +118,9 @@ def mark_errors(segments, *, insert_mode: str, allowed, insert_styles: tuple,
             errors.append(f"script_segments[{i}].insert must be a style id string or absent")
     if not any(marks):
         return errors
+    if not hosts:
+        return errors + [(host_message or "This video's style takes no insert scenes.")
+                         + " Remove every segment's insert key."]
     if insert_mode == "none":
         return errors + ["This video's Inserts setting is None: no segment may be marked as an "
                          "insert. Remove every segment's insert key."]

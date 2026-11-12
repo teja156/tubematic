@@ -32,8 +32,8 @@ Covers `src/inserts/transitions.ts`, how an insert scene goes in and out over it
 ([Main styles and inserts](../10-scene-authoring.md#main-styles-and-inserts)).
 
 - An unknown or missing transition reads as a cut.
-- The way in runs over the insert's first frames and the way out over its last; a very short insert
-  shares its time between them.
+- The way in runs over the frames before the insert's window and the way out over the frames after
+  it, so the whole window is fully in; a cut shows the insert only during its window.
 - The insert covers the frame only when fully in, so the main style is never hidden while it still
   shows. A dip veils the main in the canvas colour before the insert fades up; a push moves the main
   out as the insert comes in; a wipe uncovers the insert from the right.

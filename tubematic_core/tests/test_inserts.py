@@ -120,3 +120,9 @@ def test_the_segment_that_opens_the_payoff_cannot_be_an_insert():
     assert any("opens the payoff" in e for e in errors), errors
     assert ti.payoff_index(segs, formula) == 1
     assert ti.mark_errors(segs, insert_mode="auto", allowed=["system_flow"], insert_styles=STYLES) == []
+
+
+def test_a_style_that_takes_no_inserts_refuses_marks_with_its_own_reason():
+    errors = ti.mark_errors(_segs("", "system_flow", ""), insert_mode="auto", allowed=None,
+                            insert_styles=STYLES, hosts=False, host_message="Cartoon 3D takes none.")
+    assert errors == ["Cartoon 3D takes none. Remove every segment's insert key."]

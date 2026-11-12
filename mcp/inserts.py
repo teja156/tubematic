@@ -113,7 +113,6 @@ def check(config: dict, *, fps: int, word_starts: list[int], segments: list[dict
     total = config.get("totalFrames")
     if not _int(total) or total < 1:
         return errors
-    max_frames = round(tinserts.MAX_SECONDS * fps)
     min_frames = round(2 * fps)
     gap = round(tinserts.MIN_MAIN_GAP_SECONDS * fps)
     snaps = sorted(set(word_starts))
@@ -150,8 +149,9 @@ def check(config: dict, *, fps: int, word_starts: list[int], segments: list[dict
         end = start + dur
         label = tvs.PACKS[style]["label"]
         where = f"Insert {k + 1} ({label}, frames {start}-{end - 1})"
-        if dur > max_frames:
-            err(f"{where} lasts {dur / fps:.1f} s; an insert lasts at most {tinserts.MAX_SECONDS:.0f} s "
+        cap = min(tvs.PACKS[style]["insert"]["max_seconds"], tinserts.MAX_SECONDS)
+        if dur > round(cap * fps):
+            err(f"{where} lasts {dur / fps:.1f} s; a {label} insert lasts at most {cap:g} s "
                 f"(aim for {tinserts.TARGET_SECONDS:.0f}). Cover only the part of the segment it shows best.")
         if dur < min_frames:
             err(f"{where} lasts {dur / fps:.1f} s; an insert needs at least 2 s to be read.")

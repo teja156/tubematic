@@ -944,7 +944,7 @@ Covers `mcp/inserts.py`, the insert half of `write_scene_config`, `choose_insert
   last word ends on that frame; non-object `props` are refused with a sentence; captions the
   shift cannot clear are refused; a main scene starting on an insert's first frame is refused; an
   insert anywhere in the segment that opens the payoff is refused; a System Flow insert's last events
-  are read before the main style's transition out.
+  are read before its final frames; an insert longer than its pack's `max_seconds` is refused.
 
 Trap: `BLOCKS` in `inserts.py` is where each insert style draws on the frame; a test reads System
 Flow's band from `camera.ts`, so a layout change there that moves the block fails until the shift is

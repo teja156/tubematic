@@ -494,10 +494,17 @@ def test_an_insert_in_the_segment_that_opens_the_payoff_is_refused_anywhere_in_i
     assert any("opens the payoff" in e for e in errors), errors
 
 
-def test_a_system_flow_inserts_last_events_are_read_before_the_hosts_transition_out():
+def test_a_system_flow_inserts_last_events_are_read_before_its_end():
     import system_flow
     late = _sf_insert()
     late["props"]["systemFlow"]["boards"][0]["events"][-1]["at"] = 800  # chip, read for 30 frames
-    assert system_flow.check_insert(late, FPS, WORD_STARTS, ICONS, exit_frames=0) == []
-    errors = system_flow.check_insert(late, FPS, WORD_STARTS, ICONS, exit_frames=12)
-    assert any("chip event at 800" in e for e in errors), errors
+    assert system_flow.check_insert(late, FPS, WORD_STARTS, ICONS) == []
+    late["props"]["systemFlow"]["boards"][0]["events"][-1]["at"] = 810
+    assert any("chip event at 810" in e for e in system_flow.check_insert(late, FPS, WORD_STARTS, ICONS))
+
+
+def test_an_inserts_length_is_held_to_its_packs_limit(monkeypatch):
+    pack = dict(tvs.PACKS["system_flow"])
+    monkeypatch.setitem(tvs.PACKS, "system_flow", {**pack, "insert": {**pack["insert"], "max_seconds": 5}})
+    errors = _check(_config(_sf_insert(dur=180)))
+    assert any("at most 5 s" in e for e in errors), errors

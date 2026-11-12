@@ -3094,8 +3094,9 @@ def update_video(
     if script_segments is not None or script is not None or voice_id is not None:
         with _conn() as con:
             vrow = con.execute("SELECT status, voice_id, script, script_segments, project_id, "
-                               "formula_pick, formula_choice, insert_mode, insert_styles "
-                               "FROM videos WHERE id = ?", (video_id,)).fetchone()
+                               "formula_pick, formula_choice, insert_mode, insert_styles, "
+                               "visual_style, resolved_renderer FROM videos WHERE id = ?",
+                               (video_id,)).fetchone()
         if vrow is None:
             return {"error": f"Video not found: {video_id}"}
         # The script follows the formula picked for it (TMDEV-213). Checked
@@ -3114,10 +3115,11 @@ def update_video(
         # and the styles chosen for it, and never sit on the first or last
         # segment or two in a row, nor on the segment that opens the payoff.
         if script_segments is not None:
+            host, host_msg = _insert_host(vrow)
             mark_errs = tinserts.mark_errors(
                 script_segments, insert_mode=vrow["insert_mode"] or tinserts.DEFAULT_INSERT_MODE,
                 allowed=tinserts.parse_styles(vrow["insert_styles"]), insert_styles=tvs.INSERT_STYLES,
-                formula_id=formula_id or bound or "")
+                formula_id=formula_id or bound or "", hosts=bool(host.get("host")), host_message=host_msg)
             if mark_errs:
                 return {"error": "The script's insert marks have problems: " + " ".join(mark_errs)}
         stored_voice = vrow["voice_id"] or ""
@@ -8566,14 +8568,12 @@ def _timeline_words(video_id: str) -> list[str]:
 
 
 # Each insert style's own check over one insert of a config (TMDEV-224), by
-# style id: fps, the narration's word starts and words, the frames the host
-# style's transition takes on the way out, then the entry. A new insert style
-# adds its module's check_insert here.
+# style id: fps, the narration's word starts and words, then the entry. A new
+# insert style adds its module's check_insert here.
 _INSERT_CHECKS = {
-    system_flow.STYLE_ID: lambda fps, starts, words, out, e: system_flow.check_insert(
-        e, fps, starts, tvs.pack(system_flow.STYLE_ID)["extra"]["icons"], exit_frames=out),
-    # Terminal Doc's own read margin (15 frames) already outlasts every transition.
-    terminal_doc.STYLE_ID: lambda fps, starts, words, out, e: terminal_doc.check_insert(e, fps, starts, words),
+    system_flow.STYLE_ID: lambda fps, starts, words, e: system_flow.check_insert(
+        e, fps, starts, tvs.pack(system_flow.STYLE_ID)["extra"]["icons"]),
+    terminal_doc.STYLE_ID: lambda fps, starts, words, e: terminal_doc.check_insert(e, fps, starts, words),
 }
 
 
@@ -8609,8 +8609,7 @@ def _insert_errors(video_id: str, row, config: dict) -> list[str]:
     except (tjobs.UnsafePath, OSError, ValueError, TypeError, AttributeError):
         segments = []
     host, host_msg = _insert_host(row)
-    out = tinserts.TRANSITION_FRAMES.get(host.get("transition", "cut"), 0)
-    checks = {sid: (lambda e, f=fn: f(fps, word_starts, words, out, e)) for sid, fn in _INSERT_CHECKS.items()}
+    checks = {sid: (lambda e, f=fn: f(fps, word_starts, words, e)) for sid, fn in _INSERT_CHECKS.items()}
     return inserts_mod.check(config, fps=fps, word_starts=word_starts, segments=segments, marks=marks,
                              insert_mode=row["insert_mode"] or tinserts.DEFAULT_INSERT_MODE,
                              allowed=tinserts.parse_styles(row["insert_styles"]), host=host,

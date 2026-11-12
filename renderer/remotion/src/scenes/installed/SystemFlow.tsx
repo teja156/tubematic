@@ -363,7 +363,7 @@ const Header: React.FC<{ board: SFBoard; frame: number; look: Look }> = ({ board
 
 // ── the scene ─────────────────────────────────────────────────────────────────
 /** Where an insert sits on the video (TMDEV-224); see CompositionBuilder's InsertPlacement. */
-type Placement = { origin: number; palette: "dark" | "light"; shift: number };
+type Placement = { origin: number; lead?: number; palette: "dark" | "light"; shift: number };
 
 export default function SystemFlow({
   systemFlow,
@@ -377,8 +377,12 @@ export default function SystemFlow({
   // As an insert, the data is timed on the video's frames and the scene runs
   // from `origin` for durationInFrames; as a whole video, origin is 0.
   const origin = insert?.origin ?? 0;
-  const frame = useCurrentFrame() + origin;
   const end = origin + durationInFrames;
+  // An insert's Sequence starts `lead` frames early for its way in and runs as
+  // long after its window for its way out; it holds its first and last frame
+  // through them, so it slides in already showing its picture.
+  const raw = useCurrentFrame() + origin - (insert?.lead ?? 0);
+  const frame = insert ? Math.min(Math.max(raw, origin), end - 1) : raw;
   const look = LOOKS[insert?.palette === "light" ? "light" : "dark"];
   const shift = insert?.shift ?? 0;
   const [handle] = useState(() => delayRender("SystemFlow: loading bundled fonts"));

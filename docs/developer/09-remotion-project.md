@@ -143,8 +143,10 @@ entry's `props` plus an `insert` prop, `InsertPlacement`:
 | `shift` | Pixels the component's layout moves down, or up when negative, to stay clear of the main style's captions |
 
 The main style names one transition into and out of its inserts (`insertTransition`). Each
-transition runs inside the insert's own window: its first frames are the way in and its last frames
-the way out. `inserts/transitions.ts` holds the transitions as pure functions of the frame
+transition runs just outside the insert's window: the way in over the frames before it and the way
+out over the frames after it, so the whole window is on screen and the main style is already on its
+next picture as the insert leaves. The insert's `Sequence` covers those frames too, and the component
+holds its first frame through the way in and its last through the way out (`InsertPlacement.lead`). `inserts/transitions.ts` holds the transitions as pure functions of the frame
 (`insertProgress`, `activeInsert`, `insertLook`), and `TRANSITION_FRAMES` gives their lengths.
 
 | Transition | Frames | What it looks like |
