@@ -255,6 +255,8 @@ def _valid(**over):
     ({"allows": {"figures": True}}, "allows"),
     ({"needs": {"openai_key": True, "gpu": False}}, "messages.openai_key"),
     ({"routing": {"best_for": [], "avoid_for": []}}, "routing.signals"),
+    ({"routing": {"best_for": ["a"], "avoid_for": [], "signals": []}}, "routing.cannot_show"),
+    ({"routing": {"best_for": ["a"], "avoid_for": [], "signals": [], "cannot_show": " "}}, "routing.cannot_show"),
     ({"review": ""}, "review"),
     ({"script": "  "}, "script"),
     ({"picture": None}, "picture"),
@@ -298,7 +300,7 @@ def test_the_optional_routing_fields_are_checked_when_present(routing_over, frag
 
 def test_a_pack_written_before_the_optional_fields_still_loads():
     data = _valid()
-    data["routing"] = {k: data["routing"][k] for k in ("best_for", "avoid_for", "signals")}
+    data["routing"] = {k: data["routing"][k] for k in ("best_for", "avoid_for", "signals", "cannot_show")}
     data.pop("script", None)
     tvs._check_pack(pathlib.Path("stick.json"), data)
 

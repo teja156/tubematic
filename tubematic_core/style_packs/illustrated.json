@@ -34,6 +34,7 @@
     "avoid_for": [
       "topics with no people in them"
     ],
+    "cannot_show": "real, named people as they look: its characters are generated drawings",
     "signals": [
       "the same person or creature returns in several beats"
     ],

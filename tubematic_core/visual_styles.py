@@ -80,6 +80,7 @@ SCENES_ROUTING = {
         "real people, places or events told only through their pictures and diagrams (Motion "
         "Graphics fits them)",
     ],
+    "cannot_show": "one continuous 3D world the viewer moves through: every beat is a flat scene of its own",
     "signals": [
         "some beats want photographs of real people, places or things, others want someone acting "
         "out a step",
@@ -188,6 +189,11 @@ def _check_pack(path: pathlib.Path, data) -> dict:
     if "moods" in routing and not (isinstance(routing["moods"], list)
                                    and all(isinstance(m, str) and m.strip() for m in routing["moods"])):
         fail("routing.moods, when present, must be a list of non-empty strings")
+    # What the style cannot put on screen (TMDEV-222). Auto rules a candidate
+    # out when this covers something the topic must show, which is what keeps
+    # a real event out of a style that draws only text or boxes.
+    if not (isinstance(routing.get("cannot_show"), str) and routing["cannot_show"].strip()):
+        fail("routing.cannot_show must be one sentence saying what the style cannot show")
     images = routing.get("images", 0)
     if not isinstance(images, int) or isinstance(images, bool) or images < 0:
         fail("routing.images, when present, must be a whole number of generated images, 0 or more")

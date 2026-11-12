@@ -39,7 +39,7 @@
       "step-by-step reasoning and derivations",
       "maths and physics where a formula or a quantity is built up",
       "money arithmetic worked out: interest, prices, percentages",
-      "a chain of causes that ends in one picture",
+      "an abstract or everyday chain of causes that ends in one picture",
       "two ideas compared side by side",
       "a mental model, a rule of thumb or a definition"
     ],
@@ -49,8 +49,10 @@
       "generic roles acting out a scene (Stick)",
       "emotional or people-centred stories",
       "visually rich history or places",
-      "fast news or hype"
+      "fast news or hype",
+      "a real accident, disaster or failure told with its real machine, place or company (Motion Graphics fits it)"
     ],
+    "cannot_show": "photographs or faithful pictures of real, named things or people: everything is a marker doodle",
     "signals": [
       "the script works something out step by step",
       "numbers or a formula are built up as the narration goes",

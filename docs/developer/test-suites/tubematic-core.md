@@ -111,8 +111,9 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   `agent_view` hands a copy of it to the agent, the mixed scenes' block under `auto`. Case File
   Story's ending is its choice card and Whiteboard's its recap.
 - A malformed pack is refused with the field at fault, `auto` cannot be a pack, and every shipped
-  pack passes. The optional `routing.images`, `routing.moods` and `script` are checked when
-  present, and a pack without them still loads.
+  pack passes. Every pack states what it cannot show (`routing.cannot_show`). The optional
+  `routing.images`, `routing.moods` and `script` are checked when present, and a pack without them
+  still loads.
 - Every pack names its picker group (`dimension`), its preview stem and its tagline, and
   `public_list` passes them on, `null` for Auto. Cartoon 3D is the 3D style and the one whose
   `needs.gpu` gives the GPU tag.
@@ -210,8 +211,8 @@ the fixed topic set in `tests/fixtures/style_routing_cases.json`
 
 - Every pack, then `scenes`, is a candidate in pack order, and a pack added at run time becomes one
   with no other edit.
-- Each candidate carries its routing block and its image count, and the list shares no state with
-  the packs.
+- Each candidate, `scenes` included, carries its routing block (`cannot_show` too) and its image
+  count, and the list shares no state with the packs.
 - A candidate is unavailable for the same reasons that refuse the choice: no OpenAI key, a GPU that
   is not working or not tested, a mascot on a style that takes none (a 3D world, Under the Hood, Case File Story).
   `scenes` is always available.

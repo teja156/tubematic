@@ -1322,7 +1322,7 @@ def get_video(video_id: str) -> dict:
     is a style id, or "scenes" for the mixed scene system) or when a person
     chose the style, so there is nothing for Auto to do. candidates lists
     every style Auto may pick, from the style packs, plus "scenes": each with
-    its routing data (best_for, avoid_for, signals, moods, images) and whether
+    its routing data (best_for, avoid_for, cannot_show, signals, moods, images) and whether
     this install and this video can have it now (available,
     unavailable_reason). domain is {name, description} of the video's domain.
     Record a decision with choose_visual_style.

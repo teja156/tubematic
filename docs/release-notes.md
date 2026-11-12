@@ -14,8 +14,8 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 ### Upgrade notes
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode) after you
-   upgrade. The skills that write scripts and handle revisions changed, and a session started
-   before the upgrade keeps the old ones.
+   upgrade. The skills that write scripts, handle revisions and pick a video's style changed, and a
+   session started before the upgrade keeps the old ones.
 2. To go back to 2.2.x after upgrading, restore the database backup the upgrade took. 2.2.x cannot
    read the new voice speed column, and it reads a voice list with a speed on an `eleven_v3` or
    `eleven_v4` voice as empty.
@@ -48,6 +48,16 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   their normal pace and speeds the recording up or slows it down, keeping the pitch. A voice
   without a speed sounds as it did before.
   [Voice](https://docs.tubematic.ai/user-guide/settings#voice) has the details.
+
+### Fixed
+
+- Auto picked a text or diagram style, such as Terminal Doc or Whiteboard, for a real failure with
+  a technical cause, such as a rocket destroyed by a software bug or a trading firm ruined by one
+  server. The video showed numbers and boxes and never the rocket or the firm. Auto now picks a
+  style that can show the real thing, usually Motion Graphics, and rules out any style that cannot
+  show what the topic needs. A video whose style was already picked keeps it.
+  [How Auto picks a style](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#what-auto-does)
+  has the details.
 
 ## v2.2.0
 
