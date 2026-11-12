@@ -1334,6 +1334,21 @@
       ],
       "future": "",
       "note": "Negative control for the real-event rule: the same number as the Gangnam Style probe, with no real event. The number itself is the subject."
+    },
+    {
+      "title": "How Heartbleed leaked server memory",
+      "brief": "The 2014 OpenSSL bug: a heartbeat message claims to carry 64 kilobytes but carries one byte, the server echoes back 64 kilobytes anyway, and the extra bytes are whatever sat next to it in memory: passwords, keys, cookies. Beats: the heartbeat, the lie about its length, the echo, what leaked, the one-line fix.",
+      "expect": [
+        "system_flow"
+      ],
+      "ok": [
+        "terminal_doc",
+        "stick",
+        "scenes",
+        "motion_graphics"
+      ],
+      "future": "",
+      "note": "Negative control for the real-failure rule: a real, named bug, but nothing to see beyond the requests and the bytes, so a diagram style stays right."
     }
   ]
 }

@@ -73,14 +73,17 @@ have asked for a look when approving or revising the topic. Then write down, in 
 3. **What must be seen:** pictures of real named things, a place moved through, a mechanism or
    flow, numbers, text, or nothing concrete. Before you write it, answer one question: is the
    whole video the story of one real failure, accident or disaster that happened to a named
-   machine, product, place or company (a launch that went wrong, a crash, an outage, a collapse)?
-   If it is, pictures of that real thing are part of what must be seen, whatever the brief's angle
-   is: a brief built around one idea (a number, a unit, a line of code) still tells the story of
-   the real thing it happened to. Not this: a list of several things, each one item; history told
-   as a story (an invention, a discovery, a famous first, a walk through a real place in the
-   past), whose people and places can be drawn; and a real thing whose own text, code or number is
-   the whole subject (a famous cipher, an inscription, a number's limit), which is seen through
-   that text. For these, describe what must be seen as you would without this question.
+   machine, product, place or company (a launch that went wrong, a crash, an outage, a collapse),
+   one the viewer would want to see (the rocket, the aircraft, the control room, the trading floor,
+   the screens across the world)? If it is, pictures of that real thing are part of what must be
+   seen, whatever the brief's angle is: a brief built around one idea (a number, a unit, a line of
+   code) still tells the story of the real thing it happened to. Not this: a list of several
+   things, each one item; history told as a story that is not a failure (an invention, a
+   discovery, a famous first, a walk through a real place in the past), whose people and places
+   can be drawn; a flaw in a piece of software with nothing to see beyond its code and the
+   requests through it; and a real thing whose own text, code or number is the whole subject (a
+   famous cipher, an inscription, a number's limit), which is seen through that text. For these,
+   describe what must be seen as you would without this question.
 4. **Form:** how-it-works explainer, list, story, history, comparison, warning.
 5. **Mood:** the tone the narration wants (calm, curious, dramatic, playful, sober, warm).
 
@@ -98,6 +101,7 @@ Remove a candidate when:
 - Its `cannot_show` plainly covers something you wrote under "what must be seen" in Step 1. A style
   that cannot show the subject makes an unwatchable video however many points it would score. A
   candidate with no `cannot_show` line has stated nothing; do not rule it out on this ground.
+  `scenes` is the fallback and is never ruled out on this ground either.
 
 ## Step 3: Score the rest
 

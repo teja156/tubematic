@@ -79,8 +79,7 @@ SCENES_ROUTING = {
         "real people, places or events told only through their pictures and diagrams (Motion "
         "Graphics fits them)",
     ],
-    "cannot_show": "one continuous world or a house look held from start to finish: every beat is a scene of "
-                   "its own",
+    "cannot_show": "one continuous 3D world the viewer moves through: every beat is a flat scene of its own",
     "signals": [
         "some beats want photographs of real people, places or things, others want someone acting "
         "out a step",
