@@ -163,7 +163,7 @@ Five columns on the video hold the decision (see [`videos`](03-database.md#video
 | `formula_pick` | The formula the script is written in. `''` until the pick is made |
 | `formula_runner_up` | The formula that came second, or `''` |
 | `formula_reason` | One sentence on why, at most `REASON_MAX_CHARS` characters as the agent writes it |
-| `formula_evidence` | What the install's watch figures said about the agent's formula when it picked, as JSON the server writes, or `''` when the pick was made without them (see [Learned routing](#learned-routing)) |
+| `formula_evidence` | What the install's watch figures said about the picked formula, as JSON the server writes, or `''` when the pick was made without them or a person chose the formula (see [Learned routing](#learned-routing)) |
 
 `formulas.py::routing_candidates` builds the candidate list `get_video` returns as
 `formula_routing.candidates`: every formula with its `line`, `best_for`, `also_for`, `avoid_for`,
@@ -268,9 +268,14 @@ The script-writing skill reads `formula_routing.learned.openings`, the opening t
 counted group, ranked. It is the last tie-break between two openings, after the quality of the
 opening and after the domain's recent types.
 
-`choose_script_formula` works the figures out again under its write lock and stores
-`formula_evidence`, which the video window shows under **Why this formula**. The agent never
-supplies it.
+The skill passes the mode it scored with as `choose_script_formula`'s `learned_mode`. The tool
+works the figures out again under its write lock, refuses the pick when the mode has changed since
+the agent read it (another pick in the domain landed in between, which moves the trial-pick count),
+and stores `formula_evidence`, which the video window shows under **Why this formula**. The agent
+never supplies the record. No record is stored for a pick made without `learned_mode` (learning was
+off when the agent read, or an older skill) or for a video with a `formula_choice`, whose script is
+written in the person's formula whatever the figures say. Such a pick does not count toward the
+trial picks either.
 
 ### The topic's angle
 

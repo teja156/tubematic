@@ -128,8 +128,8 @@ points alone, before this step.
 The server works the points out from the share of the video viewers watched, compared inside
 each account the domain posts to:
 
-- In `"learned"` mode, a formula that holds this domain's viewers clearly better than its other
-  videos has 2, one that holds them clearly worse has -1, and the rest 0.
+- In `"learned"` mode, a formula that holds this domain's viewers clearly better than the domain's
+  videos as a whole has 2, one that holds them clearly worse has -1, and the rest 0.
 - In `"explore"` mode (every fourth pick in a domain with figures), the figures are set aside
   and a formula with too few videos to read has 2. This is how the install keeps learning about
   formulas it has not tried; take the points as they are.
@@ -171,8 +171,12 @@ scored.
 
 ```
 choose_script_formula(video_id, formula=<id>, reason=<one sentence>, runner_up=<id or "">,
-                      repeat_reason=<one sentence, only for a recent formula>)
+                      repeat_reason=<one sentence, only for a recent formula>,
+                      learned_mode=<formula_routing.learned.mode, or "">)
 ```
+
+- `learned_mode` is `formula_routing.learned.mode` when `learned.active` was `true` and you added
+  the points in Step 3b, and `""` otherwise.
 
 - `reason` is one sentence of at most 300 characters, written for the person who approves the
   script: the feature of the topic that decided it ("A dated outage with a public account of
@@ -196,8 +200,10 @@ If the call refuses:
   decide again from the new list.
 - **a recent formula with no `repeat_reason`:** go back to Step 4. Take another clear fit, or call
   again with `repeat_reason` when there is none.
+- **the domain's watch figures changed since you read `get_video`:** another video of the domain
+  was picked in between. Read `get_video` again and go back to Step 3b with the new points.
 - **`formula_routing` has no `learned`, or a candidate has no `learned`:** the server is older than
-  these instructions. Count its points as 0.
+  these instructions. Count its points as 0 and pass no `learned_mode`.
 - **`get_video` has no `formula_routing`, or the tool does not exist:** the server is older than
   these instructions. Take `follow-the-flow` for an explanation or `scene-story` for a true case,
   add a comment saying the formula could not be recorded before the script, and go on to the

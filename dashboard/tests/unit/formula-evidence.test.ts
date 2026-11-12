@@ -25,12 +25,12 @@ describe("formulaEvidenceLine", () => {
   it("names the formula and the videos behind a pick that leaned on the figures", () => {
     expect(formulaEvidenceLine(record({}), NAMES)).toBe(
       "Leaned on this install's watch figures: Follow the Flow held more of each video than this "
-      + "domain's other videos (24 videos on 1 account).");
+      + "domain's videos as a whole (24 videos on 1 account).");
   });
 
   it("says when the figures were read and did not favour the formula", () => {
     expect(formulaEvidenceLine(record({ standing: "worse", points: -1, accounts: 2 }), NAMES))
-      .toContain("held less of each video than this domain's other videos (24 videos on 2 accounts)");
+      .toContain("held less of each video than this domain's videos as a whole (24 videos on 2 accounts)");
     expect(formulaEvidenceLine(record({ standing: "even", points: 0 }), NAMES))
       .toContain("about as much");
     expect(formulaEvidenceLine(record({ standing: "mixed", points: 0 }), NAMES))

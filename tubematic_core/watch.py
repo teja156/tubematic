@@ -268,10 +268,12 @@ def domain_evidence(con, project_id: str, now: datetime | None = None) -> dict:
     better, even or worse by its median against that baseline. Medians, so one
     outlier cannot carry a group.
 
-    Returns {active, accounts, formulas: {id: {standing, videos, figures}},
-    openings: [{type, label, standing, videos}]}. `figures` is the most posts
-    with a figure the formula has on any one account; `videos` counts the
-    distinct videos behind its counted groups. `active` is true when any
+    Returns {active, accounts, formulas: {id: {standing, videos, accounts,
+    figures}}, openings: [{type, label, standing, videos}]}. `figures` is the
+    most posts with a figure the formula has on any one account; `videos`
+    counts the distinct videos behind its counted groups and `accounts` the
+    accounts those groups are on. The top-level `accounts` counts the accounts
+    with a baseline. `active` is true when any
     formula has a counted group.
     """
     now = now or datetime.now(timezone.utc)
@@ -292,6 +294,7 @@ def domain_evidence(con, project_id: str, now: datetime | None = None) -> dict:
             (row["formula_id"] or "", row["hook_type"] or "", row["video_id"], share))
 
     groups = {"formula": {}, "hook": {}}  # key -> {"standings": [], "videos": set(), "figures": 0}
+    # standings holds one entry per account where the group counted.
     accounts = 0
     for posts in by_account.values():
         per = {"formula": {}, "hook": {}}
@@ -317,6 +320,7 @@ def domain_evidence(con, project_id: str, now: datetime | None = None) -> dict:
 
     def summary(entry):
         return {"standing": _combined(entry["standings"]), "videos": len(entry["videos"]),
+                "accounts": len(entry["standings"]),
                 "figures": entry["figures"]}
 
     formulas = {key: summary(entry) for key, entry in groups["formula"].items()}
@@ -326,6 +330,7 @@ def domain_evidence(con, project_id: str, now: datetime | None = None) -> dict:
     openings.sort(key=lambda o: (STANDINGS.index(o["standing"]), -o["videos"], o["type"]))
     for opening in openings:
         del opening["figures"]
+        del opening["accounts"]
     return {"active": any(f["standing"] != THIN for f in formulas.values()),
             "accounts": accounts, "formulas": formulas, "openings": openings}
 
@@ -357,7 +362,7 @@ def routing_learning(con, project_id: str, video_id: str, enabled: bool,
     every candidate then gets 0 points and routing is as it was before.
     """
     off = {"active": False, "mode": "", "measure": LEARN_MEASURE,
-           "min_group": WATCH_MIN_GROUP, "openings": [], "formulas": {}}
+           "min_group": WATCH_MIN_GROUP, "accounts": 0, "openings": [], "formulas": {}}
     if not enabled or not project_id:
         return off
     evidence = domain_evidence(con, project_id, now)
@@ -366,9 +371,10 @@ def routing_learning(con, project_id: str, video_id: str, enabled: bool,
     mode = learning_mode(con, project_id, video_id)
     formulas = {}
     for fid in tformulas.FORMULAS:
-        entry = evidence["formulas"].get(fid, {"standing": THIN, "videos": 0, "figures": 0})
+        entry = evidence["formulas"].get(fid, {"standing": THIN, "videos": 0, "accounts": 0})
         formulas[fid] = {"points": points(entry["standing"], mode),
-                         "standing": entry["standing"], "videos": entry["videos"]}
+                         "standing": entry["standing"], "videos": entry["videos"],
+                         "accounts": entry["accounts"]}
     return {"active": True, "mode": mode, "measure": LEARN_MEASURE,
             "min_group": WATCH_MIN_GROUP, "accounts": evidence["accounts"],
             "openings": evidence["openings"], "formulas": formulas}
@@ -377,7 +383,9 @@ def routing_learning(con, project_id: str, video_id: str, enabled: bool,
 def candidate_learning(learning: dict, formula_id: str) -> dict:
     """One candidate's `learned`: {points, standing, videos}."""
     entry = learning.get("formulas", {}).get(formula_id)
-    return dict(entry) if entry else {"points": 0, "standing": "", "videos": 0}
+    if not entry:
+        return {"points": 0, "standing": "", "videos": 0}
+    return {k: entry[k] for k in ("points", "standing", "videos")}
 
 
 def evidence_record(learning: dict, formula_id: str) -> str:
@@ -385,9 +393,9 @@ def evidence_record(learning: dict, formula_id: str) -> str:
     formula" row reads, or "" when the pick was made with no evidence."""
     if not learning.get("active"):
         return ""
-    entry = candidate_learning(learning, formula_id)
+    entry = learning["formulas"][formula_id]
     return json.dumps({"formula": formula_id, "mode": learning["mode"],
                        "measure": learning["measure"], "standing": entry["standing"],
                        "points": entry["points"], "videos": entry["videos"],
-                       "accounts": learning.get("accounts", 0),
+                       "accounts": entry["accounts"],
                        "min_group": learning["min_group"]}, sort_keys=True)

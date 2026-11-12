@@ -95,7 +95,7 @@ One row per video, from proposed topic to published file.
 | `formula_pick` | TEXT NOT NULL | `''` | The formula the script is written in, decided before the script. `''` means not decided. See [How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked) |
 | `formula_runner_up` | TEXT NOT NULL | `''` | The formula that came second, offered as a switch at `SCRIPT_READY`, or `''` |
 | `formula_reason` | TEXT NOT NULL | `''` | One sentence on why the formula was picked |
-| `formula_evidence` | TEXT NOT NULL | `''` | JSON the server writes at the pick: what the install's watch figures said about the agent's formula (`formula`, `mode`, `measure`, `standing`, `points`, `videos`, `accounts`, `min_group`). `''` means the pick was made without them. See [Learned routing](08-scripting-and-voice.md#learned-routing) |
+| `formula_evidence` | TEXT NOT NULL | `''` | JSON the server writes at the pick: what the install's watch figures said about the picked formula (`formula`, `mode`, `measure`, `standing`, `points`, `videos`, `accounts`, `min_group`). `''` means the pick was made without them or a person chose the formula. See [Learned routing](08-scripting-and-voice.md#learned-routing) |
 | `tts_text` | TEXT NOT NULL | `''` | The text sent to ElevenLabs, after pronunciation substitution |
 | `voice_id` | TEXT NOT NULL | `''` | The video's voice. `''` means the install default |
 | `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |

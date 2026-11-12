@@ -303,8 +303,8 @@ Once your videos are published and Tubematic reads their analytics, Auto also le
 formulas and openings hold viewers in each domain. It reads the share of each video viewers
 watched, on each account separately, from posts at least a week old. A formula counts once at
 least 20 of the domain's videos with figures use it on one account. A formula that holds viewers
-clearly better than the domain's other videos is favoured, and one that holds them clearly worse
-counts against it.
+clearly better than the domain's videos as a whole is favoured, and one that holds them clearly
+worse counts against it.
 
 Auto only weighs these figures among formulas that already fit the topic, so a topic never gets a
 formula that does not suit it because that formula did well elsewhere. Every fourth pick in a
@@ -331,7 +331,8 @@ have picked, with its reason.
 In the video's window, **Formula** names the formula and **Why this formula** gives the reason and
 the runner-up. The formula's name follows the word Auto when the agent picked it. When Auto read
 your watch figures for the pick, a line under the reason says whether the pick leaned on them or
-was a trial pick, and how many videos and accounts were behind them.
+was a trial pick, and how many videos and accounts were behind them. A formula you chose shows no
+such line, because the script is written in your choice whatever the figures say.
 
 - **Switch to <runner-up>** has the script rewritten in the runner-up formula. On a video whose
   formula you chose, the runner-up is the formula Auto would have picked, or Auto's second choice

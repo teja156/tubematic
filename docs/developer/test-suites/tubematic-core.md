@@ -254,7 +254,8 @@ Covers the rule of [Learned routing](../08-scripting-and-voice.md#learned-routin
 - A group well above the account's median is `better`, well below is `worse`, and inside
   `LEARN_MARGIN` is `even`. One outlier cannot lift a group's median.
 - Across accounts, better on one and even on another is `better`, and a disagreement is `mixed`
-  with no points. A video posted to two accounts counts once in `videos`.
+  with no points. A video posted to two accounts counts once in `videos`, and a formula's
+  `accounts` counts only the accounts where its group counted.
 - Openings are ranked better first, list only counted types, and carry only type, label,
   standing and videos. A script with no recorded formula counts toward the baseline only.
 - The points per mode, the every-fourth trial pick counted from stored records only (the video

@@ -68,7 +68,7 @@ def test_the_skill_reads_every_field_the_candidates_carry():
 def test_the_skill_calls_the_tool_with_its_real_arguments_and_limit():
     text = _text()
     assert "choose_script_formula(video_id, formula=" in text
-    for arg in ("reason=", "runner_up=", "repeat_reason="):
+    for arg in ("reason=", "runner_up=", "repeat_reason=", "learned_mode="):
         assert arg in text, arg
     assert f"at most {tf.REASON_MAX_CHARS} characters" in text
     for key in ("`formula_pick`", "`chosen_by`", "`reference`"):
@@ -92,7 +92,8 @@ def test_a_persons_choice_is_routed_around_never_overridden():
 def test_the_skill_handles_every_refusal_the_tool_makes():
     text = _text()
     for case in ("already picked", "the style is not decided", "not available",
-                 "a recent formula with no `repeat_reason`", "has no `formula_routing`"):
+                 "a recent formula with no `repeat_reason`", "has no `formula_routing`",
+                 "the domain's watch figures changed since you read `get_video`"):
         assert case in text, case
 
 
@@ -175,7 +176,7 @@ def test_the_skill_states_the_points_the_server_gives():
     text = _text()
     assert watch.LEARNED_POINTS == {"better": 2, "worse": -1} and watch.EXPLORE_POINTS == 2
     assert watch.EXPLORE_EVERY == 4
-    assert "clearly better than its other\n  videos has 2" in text
+    assert "clearly better than the domain's\n  videos as a whole has 2" in text
     assert "clearly worse has -1" in text
     assert "every fourth pick in a domain with figures" in text
     for standing in (*watch.STANDINGS, watch.THIN):

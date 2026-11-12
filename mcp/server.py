@@ -3604,7 +3604,7 @@ def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str =
 
 @mcp.tool
 def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: str = "",
-                          repeat_reason: str = "") -> dict:
+                          repeat_reason: str = "", learned_mode: str = "") -> dict:
     """Record the script formula for a video, before its script is written.
 
     Call this from the tubematic-formula-routing skill, once, at
@@ -3640,15 +3640,26 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
     formula_id both ""), to give it one. Returns formula_pick (the formula to write in), formula_runner_up,
     chosen_by ("auto" or "person"), the formula's label and word band, and
     reference: the file to read in the script-writing skill's directory.
+    learned_mode: get_video().formula_routing.learned.mode when learned.active
+    is true and you added the candidates' learned points ("learned" or
+    "explore"), else "". The tool works the figures out again when it records
+    the pick and refuses when the mode has changed since your read (another
+    video in the domain was picked in between): read get_video again and
+    decide again.
+
     It also returns learned: what the domain's watch figures said about your
-    formula ({mode, standing, points, videos, accounts, ...}), or {} when the
-    pick was made without them. The tool works this out itself and stores it
-    for the dashboard; you do not pass it.
+    formula ({mode, standing, points, videos, accounts, ...}), stored for the
+    dashboard, or {} when the pick was made without them (learned_mode "", or
+    a person chose the formula).
     """
     formula = (formula or "").strip()
     runner_up = (runner_up or "").strip()
     reason = " ".join((reason or "").split())
     repeat_reason = " ".join((repeat_reason or "").split())
+    learned_mode = (learned_mode or "").strip()
+    if learned_mode not in ("", "learned", "explore"):
+        return {"error": f"Invalid learned_mode {learned_mode!r}. Pass "
+                         "get_video().formula_routing.learned.mode, or \"\""}
     ids = list(tformulas.FORMULAS)
     if formula not in tformulas.FORMULAS:
         return {"error": f"Invalid formula {formula!r}. Must be one of: {', '.join(ids)}"}
@@ -3706,9 +3717,22 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
             style, _experimental_formulas_allowed(),
             _recent_domain_formulas(row["project_id"], video_id)["formulas"], choice)}
         # Read under the same lock as the write, so the exploration count
-        # cannot move between this read and the record it sets.
-        evidence = twatch.evidence_record(
-            _routing_learning(con, row["project_id"], video_id), formula)
+        # cannot move between this read and the record it sets. A record is
+        # kept only for a pick the agent scored with these figures: with a
+        # person's choice the script is not in the agent's formula and nothing
+        # leaned on them, and a pick made without learned_mode (an older skill,
+        # or learning off when the agent read) added no points.
+        evidence = ""
+        if learned_mode:
+            learning = _routing_learning(con, row["project_id"], video_id)
+            if not learning["active"] or learning["mode"] != learned_mode:
+                now_mode = learning["mode"] if learning["active"] else "inactive"
+                return {"error": f"This domain's watch figures changed since you read get_video "
+                                 f"(learned mode was {learned_mode!r}, is now {now_mode!r}): "
+                                 "another pick was recorded in between. Read get_video again "
+                                 "and decide again from its formula_routing."}
+            if not choice:
+                evidence = twatch.evidence_record(learning, formula)
         for role, fid in (("formula", formula), ("runner_up", runner_up)):
             if fid and not candidates[fid]["available"]:
                 return {"error": f"{role} {fid!r} ({candidates[fid]['label']}) is not available: "

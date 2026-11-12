@@ -122,11 +122,11 @@ export function formulaEvidenceLine(raw: string | undefined, names: ScriptFormul
   }
   switch (ev.standing) {
     case "better":
-      return `Leaned on this install's watch figures: ${label} held more of each video than this domain's other videos (${behind}).`;
+      return `Leaned on this install's watch figures: ${label} held more of each video than this domain's videos as a whole (${behind}).`;
     case "worse":
-      return `This install's watch figures were read: ${label} held less of each video than this domain's other videos (${behind}). It was picked because it fits the topic best.`;
+      return `This install's watch figures were read: ${label} held less of each video than this domain's videos as a whole (${behind}). It was picked because it fits the topic best.`;
     case "even":
-      return `This install's watch figures were read: ${label} held about as much of each video as this domain's other videos (${behind}).`;
+      return `This install's watch figures were read: ${label} held about as much of each video as this domain's videos as a whole (${behind}).`;
     case "mixed":
       return `This install's watch figures were read: for ${label} the accounts disagree (${behind}), so they did not count.`;
     default:

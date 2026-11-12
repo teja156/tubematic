@@ -112,7 +112,7 @@ def test_posts_younger_than_the_minimum_age_are_left_out(con):
     ev = _ev(con)
     assert A not in ev["formulas"]
     on = watch.routing_learning(con, "dom", "new", True, NOW)
-    assert on["formulas"][A] == {"points": 0, "standing": watch.THIN, "videos": 0}
+    assert on["formulas"][A] == {"points": 0, "standing": watch.THIN, "videos": 0, "accounts": 0}
 
 
 def test_a_post_without_a_published_time_is_left_out(con):
@@ -190,6 +190,17 @@ def test_better_on_one_account_and_even_on_another_is_better(con):
     assert ev["formulas"][A]["standing"] == "better"
     assert ev["accounts"] == 2
     assert ev["formulas"][A]["videos"] == 2 * MIN
+    assert ev["formulas"][A]["accounts"] == 2
+
+
+def test_the_record_counts_the_accounts_behind_the_formula_not_the_domains(con):
+    _many(con, A, 60, MIN, account="yt1")
+    _many(con, B, 40, MIN, account="yt1")
+    _many(con, B, 50, MIN, account="yt2")   # A is not on yt2 at all
+    on = watch.routing_learning(con, "dom", "new", True, NOW)
+    assert on["accounts"] == 2
+    assert json.loads(watch.evidence_record(on, A))["accounts"] == 1
+    assert watch.candidate_learning(on, A) == {"points": 2, "standing": "better", "videos": MIN}
 
 
 def test_accounts_that_disagree_are_mixed_and_add_no_points(con):
@@ -279,6 +290,7 @@ def test_disabled_or_no_evidence_gives_no_points_to_any_formula(con):
     _many(con, B, 40, MIN)
     off = watch.routing_learning(con, "dom", "new", False, NOW)
     assert off["active"] is False and off["formulas"] == {} and off["openings"] == []
+    assert off["accounts"] == 0 and off["mode"] == ""
     assert watch.candidate_learning(off, A) == {"points": 0, "standing": "", "videos": 0}
     assert watch.evidence_record(off, A) == ""
     empty = watch.routing_learning(con, "other", "new", True, NOW)
@@ -291,9 +303,9 @@ def test_active_learning_gives_every_formula_its_points(con):
     on = watch.routing_learning(con, "dom", "new", True, NOW)
     assert on["active"] is True and on["mode"] == "learned"
     assert set(on["formulas"]) == set(tf.FORMULAS)
-    assert on["formulas"][A] == {"points": 2, "standing": "better", "videos": MIN}
+    assert on["formulas"][A] == {"points": 2, "standing": "better", "videos": MIN, "accounts": 1}
     assert on["formulas"][B]["points"] == -1
-    assert on["formulas"][C] == {"points": 0, "standing": watch.THIN, "videos": 0}
+    assert on["formulas"][C] == {"points": 0, "standing": watch.THIN, "videos": 0, "accounts": 0}
     record = json.loads(watch.evidence_record(on, A))
     assert record == {"formula": A, "mode": "learned", "measure": "watched_pct",
                       "standing": "better", "points": 2, "videos": MIN, "accounts": 1,
