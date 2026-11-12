@@ -161,6 +161,8 @@ def test_learned_points_go_only_to_formulas_that_already_fit():
     assert "decided by the Step 3\npoints alone, before this step" in text
     assert text.index("A candidate is a **clear fit**") < text.index("## Step 3b")
     assert "- [ ] `learned.points` added to the clear fits only, and to nothing else" in text
+    assert ("- [ ] Two clear fits within 1 point decided first by `learned.standing` in "
+            "`\"learned\"` mode") in text
 
 
 def test_the_skill_knows_both_learning_modes_and_an_older_server():

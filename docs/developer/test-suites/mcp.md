@@ -821,11 +821,11 @@ Covers [Learned routing](../08-scripting-and-voice.md#learned-routing) through t
   videos and empties the openings list. A trial pick's openings stay empty after later picks in
   the domain move the count, and a pick with no record keeps its openings when the count sits on a
   trial position. A return to `TOPIC_PROPOSED` clears the record with the pick.
-- What the figures can decide, with the agent's fit scores given and the skill's Step 3b and 4.1
-  rule applied in the test (`_skill_decides`, pinned to the skill's wording): two clear fits tied
-  on fit go to the figures' better formula, which is picked and recorded as `better` with 2 points.
-  With the widest swing (2 against -1) the figures decide only at a fit gap of 0 or 1, because the
-  skill's tie-break reads no figures.
+- What the figures can decide, with the agent's fit scores given and the skill's Steps 3b, 4.1
+  and 5 applied in the test (`_skill_decides`, pinned to the skill's wording): a worse formula
+  leading by 3 on fit loses to the better one, which is picked and recorded as `better` with 2
+  points. With the widest swing (2 against -1) the figures decide up to a fit gap of 4, and from 5
+  the better fit keeps the pick. On a trial pick the standing breaks no tie.
 
 Trap: the record is worked out by the server under the pick's write lock, and only for a pick the
 agent scored with the same stamp. Without that check, a session that read two videos before

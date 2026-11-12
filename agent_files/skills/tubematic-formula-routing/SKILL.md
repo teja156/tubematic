@@ -153,13 +153,18 @@ or `thin` (too few videos); `learned.videos` is how many videos are behind it.
 
 ## Step 5: Break ties, in this order
 
-1. **The opening.** The candidate whose opening this topic can fill most concretely with the real
+1. **The figures.** In `"learned"` mode, the candidate whose `learned.standing` ranks higher:
+   `better`, then `even`, `mixed` and `thin` alike, then `worse`. This is how the domain's viewers
+   decide between two formulas that fit the topic about equally well. Skip it in `"explore"` mode,
+   where the points already went to the formulas with too few videos, and when learning is not
+   active.
+2. **The opening.** The candidate whose opening this topic can fill most concretely with the real
    facts from Step 1.
-2. **A person's hint.** The domain's description or a comment asks for a structure one candidate
+3. **A person's hint.** The domain's description or a comment asks for a structure one candidate
    has.
-3. **The style.** `suits_style` is `true`.
-4. **Length.** The shorter band (the lower maximum in `words`).
-5. **Order.** The earlier candidate in the list.
+4. **The style.** `suits_style` is `true`.
+5. **Length.** The shorter band (the lower maximum in `words`).
+6. **Order.** The earlier candidate in the list.
 
 ## Step 6: Choose a runner-up
 
@@ -268,6 +273,7 @@ service was down. `formula_routing.recent.formulas` is `["case-timeline", "belie
       out
 - [ ] Points counted by meaning from `best_for`, `also_for`, the angle, `signals` and the style
 - [ ] `learned.points` added to the clear fits only, and to nothing else
+- [ ] Two clear fits within 1 point decided first by `learned.standing` in `"learned"` mode
 - [ ] A `recent` formula passed over for another clear fit, or kept with `repeat_reason`
 - [ ] Your own best formula passed, also when a person chose one
 - [ ] `choose_script_formula` called with a one-sentence reason and a runner-up

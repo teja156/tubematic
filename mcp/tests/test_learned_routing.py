@@ -288,25 +288,36 @@ def test_a_pick_with_no_record_keeps_its_openings_at_a_trial_position(evidence):
 
 
 # ── what the figures can decide ──────────────────────────────────────────────
-# The server never picks: the agent applies the routing skill's Steps 3b and 4.1
-# to its own fit scores and the server's points. `_skill_decides` is that rule as
-# the skill writes it (pinned below), so these tests run the real server end to
-# end with the agent's scoring given: points from get_video, the decision, the
-# pick and its record through choose_script_formula. The Step 5 tie-break reads
-# no figures, so a tie here falls to the earlier candidate (Step 5's last rule).
+# The server never picks: the agent applies the routing skill's Steps 3b, 4.1
+# and 5 to its own fit scores and the server's points. `_skill_decides` is that
+# rule as the skill writes it (pinned below), so these tests run the real server
+# end to end with the agent's scoring given: points from get_video, the
+# decision, the pick and its record through choose_script_formula. Of Step 5's
+# rules only the first (the figures) and the last (list order) are mechanical;
+# the ones between need the agent's judgement and are left out here.
 
 SKILL = (__import__("pathlib").Path(__file__).resolve().parents[2]
          / "agent_files/skills/tubematic-formula-routing/SKILL.md")
 CLEAR_FIT = 3  # the skill's clear fit: 3 or more fit points
+RANK = {"better": 2, "even": 1, "mixed": 1, watch.THIN: 1, "worse": 0}
 
 
-def _skill_decides(fit, points, order):
-    """Step 3b: learned points go to clear fits only; Step 4.1: the most points
-    wins, and two within 1 point go to the tie-break (here, list order)."""
-    total = {f: s + (points[f] if s >= CLEAR_FIT else 0) for f, s in fit.items() if s >= CLEAR_FIT}
+def _skill_decides(fit, learned, order, mode="learned"):
+    """Step 3b: learned points go to clear fits only. Step 4.1: the most points
+    wins; two within 1 point go to Step 5, whose first rule in learned mode is
+    the standing, then (here) list order."""
+    total = {f: s + (learned[f]["points"] if s >= CLEAR_FIT else 0)
+             for f, s in fit.items() if s >= CLEAR_FIT}
     best = max(total.values())
     tied = [f for f in order if f in total and best - total[f] <= 1]
+    if mode == "learned":
+        top = max(RANK[learned[f]["standing"] or watch.THIN] for f in tied)
+        tied = [f for f in tied if RANK[learned[f]["standing"] or watch.THIN] == top]
     return tied[0]
+
+
+def _learned(vid="vid_1"):
+    return {f: c["learned"] for f, c in _candidates(server.get_video(vid)["formula_routing"]).items()}
 
 
 def test_the_rule_in_these_tests_is_the_one_the_skill_states():
@@ -314,20 +325,24 @@ def test_the_rule_in_these_tests_is_the_one_the_skill_states():
     assert "**only to the clear fits**" in text
     assert ("Take the clear fit with the most points, counting Step 3b. When two are within "
             "1 point, break the tie (Step 5).") in text
-    assert "figures" not in text.split("## Step 5")[1].split("## Step 6")[0]
+    step5 = text.split("## Step 5")[1].split("## Step 6")[0]
+    assert step5.index("1. **The figures.**") < step5.index("2. **The opening.**")
+    assert ("`better`, then `even`, `mixed` and `thin` alike, then `worse`") in step5
+    assert "Skip it in `\"explore\"` mode" in step5
+    assert "6. **Order.** The earlier candidate in the list." in step5
 
 
-def test_the_figures_flip_a_tie_on_fit_and_the_record_says_so(evidence):
-    # Two clear fits tied on fit, the figures' worse formula first in the list:
-    # without the figures the tie-break takes it, with them the better one wins.
-    fit = {POOR: 6, GOOD: 6}
+def test_the_figures_flip_a_close_call_and_the_record_says_so(evidence):
+    # The figures' worse formula leads on fit by 3 and comes first in the list:
+    # without the figures it wins, with them the better one is picked.
+    fit = {POOR: 7, GOOD: 4}
     order = [POOR, GOOD]
     _video()
-    points = {f: c["learned"]["points"]
-              for f, c in _candidates(server.get_video("vid_1")["formula_routing"]).items()}
-    assert (points[GOOD], points[POOR]) == (2, -1)
-    assert _skill_decides(fit, {f: 0 for f in points}, order) == POOR
-    pick = _skill_decides(fit, points, order)
+    learned = _learned()
+    assert (learned[GOOD]["points"], learned[POOR]["points"]) == (2, -1)
+    off = {f: {"points": 0, "standing": ""} for f in learned}
+    assert _skill_decides(fit, off, order, mode="") == POOR
+    pick = _skill_decides(fit, learned, order)
     assert pick == GOOD
     out = server.choose_script_formula("vid_1", pick, REASON, runner_up=POOR,
                                        learned_stamp=_stamp())
@@ -336,13 +351,22 @@ def test_the_figures_flip_a_tie_on_fit_and_the_record_says_so(evidence):
     assert (record["mode"], record["standing"], record["points"]) == ("learned", "better", 2)
 
 
-@pytest.mark.parametrize("gap, flips", [(0, True), (1, True), (2, False), (3, False)])
-def test_the_figures_decide_only_when_the_fit_gap_is_under_two(evidence, gap, flips):
-    # better +2 against worse -1 is the widest swing, 3. A follower that ends 1
-    # point ahead is still a tie for Step 5, which reads no figures, so the
-    # figures decide only where the two were 0 or 1 apart on fit.
+@pytest.mark.parametrize("gap, flips", [(0, True), (2, True), (4, True), (5, False), (8, False)])
+def test_the_figures_decide_up_to_a_fit_gap_of_four(evidence, gap, flips):
+    # better +2 against worse -1 is the widest swing, 3. A gap of 4 ends 1 point
+    # apart, a tie the standing breaks; from 5 the better fit keeps the pick.
     _video()
-    points = {f: c["learned"]["points"]
-              for f, c in _candidates(server.get_video("vid_1")["formula_routing"]).items()}
-    fit = {POOR: 6 + gap, GOOD: 6}
-    assert (_skill_decides(fit, points, [POOR, GOOD]) == GOOD) is flips
+    fit = {POOR: 4 + gap, GOOD: 4}
+    assert (_skill_decides(fit, _learned(), [POOR, GOOD]) == GOOD) is flips
+
+
+def test_on_a_trial_pick_the_standing_breaks_no_tie(evidence):
+    for n in range(3):
+        vid = _video(f"v{n}")
+        server.choose_script_formula(vid, OTHER, REASON, repeat_reason=REPEAT,
+                                     learned_stamp=_stamp(vid))
+    _video()
+    learned = _learned()
+    assert server.get_video("vid_1")["formula_routing"]["learned"]["mode"] == "explore"
+    assert learned[GOOD]["points"] == 0
+    assert _skill_decides({POOR: 6, GOOD: 6}, learned, [POOR, GOOD], mode="explore") == POOR

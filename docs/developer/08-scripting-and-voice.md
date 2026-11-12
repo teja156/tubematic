@@ -263,10 +263,13 @@ ever more certain.
 The routing skill adds the points only to the formulas that are a clear fit by the topic's own
 points, so that a formula that does not fit is not picked for its numbers. That rule is the
 skill's: `choose_script_formula` accepts any available candidate. Rotation then runs on the
-totals as before, and the figures are never a `repeat_reason`. Two clear fits within 1 point of
-each other go to the skill's tie-break, which reads no figures, so with a widest swing of 3 points
-(2 against -1) the figures decide a pick only between two clear fits that were 0 or 1 points apart
-on fit. `get_video` reads the figures only
+totals as before, and the figures are never a `repeat_reason`. Two clear fits that end within 1
+point of each other go to the skill's tie-break, whose first rule in `learned` mode is the
+standing (`better`, then `even`, `mixed` and `thin` alike, then `worse`). With the widest swing of
+3 points (2 against -1), the figures therefore decide between two clear fits up to 4 points apart
+on fit. The standing comes first in the tie-break because two formulas that both fit a topic are
+rarely scored within 1 point, so the 3 points alone would decide almost no pick. A trial pick
+skips the rule. `get_video` reads the figures only
 at `TOPIC_APPROVED` and `REVISION_REQUESTED`, where a formula is picked or a script written.
 
 The script-writing skill reads `formula_routing.learned.openings`, the opening types with a
