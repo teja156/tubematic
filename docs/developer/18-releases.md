@@ -351,8 +351,8 @@ on demand).
 - `e2e` needs no secrets: the test stack passes the literal string `test` for every API key. It
   stays off pull requests because `global-setup.ts` builds the backend and dashboard images from
   nothing, which takes 12 to 20 minutes.
-- `e2e` is non-blocking (`continue-on-error: true`). The comment above the job in `ci.yml` states
-  the condition for making it blocking.
+- `e2e` blocks like every other job. `scripts/tests/test_workflows.py` fails if any job in `ci.yml`
+  or `release.yml` sets `continue-on-error`.
 
 ### `release.yml`: version tags
 
@@ -369,7 +369,8 @@ flowchart LR
 1. `preflight` derives the version from the tag (without the `v`) and the lower-cased owner, and
    runs `scripts/check_release.py`. Its "VERSION matches" check is the assertion that the tag
    matches `VERSION`.
-2. `ci` reuses `ci.yml` through `workflow_call`, with the `e2e` job enabled.
+2. `ci` reuses `ci.yml` through `workflow_call`, with the `e2e` job enabled. A failed job here,
+   `e2e` included, stops the run before any image is pushed.
 3. `push-images` builds and pushes `tubematic-backend` and `tubematic-dashboard` to GHCR, each
    under the bare tag `X.Y.Z`.
 4. `build-tarball` stamps the owner into the remote renderer script, builds the tarball, copies

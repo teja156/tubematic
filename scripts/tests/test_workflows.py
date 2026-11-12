@@ -201,39 +201,19 @@ def test_the_e2e_job_never_runs_on_a_pull_request(jobs):
     assert "refs/tags" in condition
 
 
-def test_the_e2e_comment_does_not_overclaim_verification(ci_text):
-    """The comment above the e2e job reports a real, but local, Kasm-session
-    run of the underlying commands, and infers that its 8 failures trace to
-    a fix already on main. Both of those are one step short of "verified":
-    the *workflow* has never executed on GitHub at all (see this file's own
-    module docstring), and the fork-point diagnosis has not been confirmed
-    by actually rebasing past the fix and rerunning. A prior draft of this
-    comment stated the diagnosis as settled fact -- pin the hedge so that
-    overclaim can't quietly creep back in."""
-    lines = ci_text.splitlines()
-    e2e_line = next(i for i, line in enumerate(lines) if line.strip() == "e2e:")
-    comment_lines = []
-    i = e2e_line - 1
-    while i >= 0 and lines[i].strip().startswith("#"):
-        comment_lines.append(lines[i])
-        i -= 1
-    comment = "\n".join(reversed(comment_lines))
-
-    assert comment, "expected a comment block directly above the e2e job"
-    assert "re-verified" in comment, (
-        "the e2e comment must say the fork-point diagnosis has not been "
-        "re-verified -- dropping this hedge restates it as settled fact"
-    )
-    for overclaim in (
-        "settled fact",
-        "has been verified",
-        "confirmed by rerunning",
-        "workflow has run",
-        "workflow has been verified",
-    ):
-        assert overclaim not in comment, (
-            f"the e2e comment overclaims verification with {overclaim!r}"
-        )
+def test_no_job_can_fail_without_stopping_the_release(jobs, release_jobs):
+    """A failed job must stop everything after it. `continue-on-error` on a
+    job reports its failure as a success to every job that needs it, which is
+    how v2.1.0's tag run pushed images and built the tarball after a red e2e
+    job. release.yml runs ci.yml through workflow_call, so both files count;
+    a step-level continue-on-error (cleanup that must not mask the result)
+    is a different thing and is not checked here."""
+    for workflow, workflow_jobs in (("ci.yml", jobs), ("release.yml", release_jobs)):
+        for name, job in workflow_jobs.items():
+            assert "continue-on-error" not in job, (
+                f"{workflow} job {name!r} sets continue-on-error, so its "
+                f"failure would not stop the release"
+            )
 
 
 def test_ci_is_callable_and_dispatchable(ci):

@@ -141,7 +141,9 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
 - A video flagged stuck through `POST /videos/<id>/agent-outcome`, the route the poller reports to,
   shows STUCK on its card, and **Retry agent** clears the flag without changing the status.
 - A `PARTIALLY_PUBLISHED` video sits in the Published column tagged PARTIAL, and **Mark as
-  published** moves it to `PUBLISHED`.
+  published** moves it to `PUBLISHED`. The test serves the video's publication rows (one posted,
+  one failed) with `page.route`, because the button stays disabled until the rows load and the
+  stack cannot post.
 - A video whose style Auto picked shows the reason, and **Switch to …** moves it to
   `TOPIC_APPROVED` with the runner-up as its style. The pick is seeded in the API container with
   `docker compose exec`, because only the agent's `choose_visual_style` writes one and the test
@@ -315,7 +317,8 @@ dashboard runs.
 
 ## Known gaps
 
-- CI runs this suite only on a release tag and on a manual dispatch, and the job does not block
+- CI runs this suite only on a release tag and on a manual dispatch, so a failure first shows up
+  when a release is tagged, and it stops that release
   ([Releases: `ci.yml`](../18-releases.md#ciyml-pull-requests-and-pushes)). Run it yourself after a
   change to `ActionPane`, `VideoModal`, `TopBar` or the Settings page.
 - No spec drives a topic through scripting, voicing, rendering and review. The suite tests the

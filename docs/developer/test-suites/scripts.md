@@ -541,6 +541,9 @@ files are parsed with PyYAML and checked for structure, since GitHub Actions run
   version tag or a full SHA.
 - `ci.yml`: the Python matrix equals the suite directories on disk, and the e2e job has no path to
   `pull_request`.
+- No job in `ci.yml` or `release.yml` sets `continue-on-error`. That setting reports a failed job as
+  a success to every job that needs it, so a red e2e run would let the release push its images and
+  publish.
 - `release.yml` triggers on `v*.*.*` tags only and reuses `ci.yml`. Both images are pushed under the
   bare version tag. The Release step sets `prerelease` from a `-` in the version, because the
   action's default would publish a release candidate that GitHub can list as Latest.
