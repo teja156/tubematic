@@ -18,7 +18,18 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
    session started before the upgrade keeps the old ones.
 2. To go back to 2.2.x after upgrading, restore the database backup the upgrade took. 2.2.x cannot
    read the new voice speed column, and it reads a voice list with a speed on an `eleven_v3` or
-   `eleven_v4` voice as empty.
+   `eleven_v4` voice as empty. Restoring the backup also returns the videos the upgrade sent back to
+   Auto (point 4) to their 2.2.x state, and any script written for them since is lost.
+3. Run this upgrade without `--no-stop`. `upgrade.py` refuses `--no-stop` for it, because old and new
+   containers running side by side could pick System Flow or Terminal Doc again for the videos the
+   upgrade moves.
+4. System Flow and Terminal Doc are now insert styles, never a style for a whole video (see Changed). On upgrade, a
+   video in one of them that is not voiced yet (a topic waiting for approval, an approved topic, or a
+   script waiting at Script Ready) goes back to Auto: its agent picks a new style and writes a new
+   script, which costs one agent session and no voice credits. The script waiting at Script Ready is
+   discarded, so approve it before you upgrade if you want to keep it as it is. A video already voiced
+   finishes in its old style. A domain whose default style was System Flow or Terminal Doc now
+   defaults to Auto. Each video that moved has a comment saying so.
 
 ### Added
 
@@ -40,8 +51,30 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   [Where you choose](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#where-you-choose)
   has the details.
 
+- Insert scenes: a video can carry a few short scenes, a few seconds each, in another look inside its
+  style, where the narration reaches something that look shows best: a **System Flow** diagram for a
+  request crossing a network, a **Terminal Doc** string for a password being hashed or a command
+  being typed. The video's style keeps the opening, the answer and the ending, the captions stay on
+  screen through an insert, and an insert follows the video's canvas, so on a white video it is drawn
+  dark on paper. The agent decides after it picks the style, and many videos get none.
+  [Insert scenes](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#insert-scenes) has
+  the details.
+- An **Inserts** setting (Auto or None) sits beside the style wherever you choose one: a topic waiting
+  for approval, New Video, and a domain's defaults, which every new video in the domain starts with.
+  The video's window shows the agent's decision and its reason in an **Inserts** row, and the Script
+  tab marks the parts of the script an insert shows.
+
 ### Changed
 
+- System Flow and Terminal Doc are insert styles now, used only inside another style's video. A whole
+  video in one of them was plain, and Auto picked them for more than half of its picks. Neither can be
+  chosen for a video or as a domain's default. Topics about how a system works now
+  usually go to Stick Explainer, with the request's path as a System Flow insert.
+- Motion Graphics is now called **Photo Explainer** and is for real, specific things the viewer came to
+  see as full-frame pictures: products, buildings, artworks, machines, named people and places, and
+  real events. It draws no diagram scenes of its own: a diagram in it is a System Flow insert. Auto
+  picks it less often, and when another style fits a topic just as well, Auto picks the other style.
+  Videos that already have the style keep it under its new name.
 - A voice's speed in **Settings → Voice** now works on `eleven_v3` and `eleven_v4` voices, which
   includes both voices a new install starts with. Before, the speed was greyed out at 1.00x on those
   models, because ElevenLabs ignores its own speed setting there. Tubematic now records them at
@@ -54,7 +87,7 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 - Auto picked a text or diagram style, such as Terminal Doc or Whiteboard, for a real failure with
   a technical cause, such as a rocket destroyed by a software bug or a trading firm ruined by one
   server. The video showed numbers and boxes and never the rocket or the firm. Auto now picks a
-  style that can show the real thing, usually Motion Graphics, and rules out any style that cannot
+  style that can show the real thing, usually Photo Explainer, and rules out any style that cannot
   show what the topic needs. A video whose style was already picked keeps it.
   [How Auto picks a style](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#what-auto-does)
   has the details.
