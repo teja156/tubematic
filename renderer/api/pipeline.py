@@ -4607,7 +4607,8 @@ def create_pipeline_blueprint() -> Blueprint:
         # call, the recording is kept for the retry.
         native_path = preview_dir / f"{_key(native)}.mp3"
         credits = 0
-        if stretch != 1.0 and native_path.exists():
+        from_cache = stretch != 1.0 and native_path.exists()
+        if from_cache:
             audio = native_path.read_bytes()
         else:
             import httpx as _httpx
@@ -4642,6 +4643,11 @@ def create_pipeline_blueprint() -> Blueprint:
             try:
                 audio, _ = taudio.stretch(ffmpeg, audio, stretch)
             except Exception as e:
+                # A cached recording that cannot be stretched is unreadable: it
+                # goes, so the next request records a new one. A fresh one is
+                # kept once, in case the stretch only timed out.
+                if from_cache:
+                    native_path.unlink(missing_ok=True)
                 return jsonify({"error": f"the preview was generated but could not be sped up: {e}",
                                 "credits": credits}), 502
             preview_dir.mkdir(parents=True, exist_ok=True)

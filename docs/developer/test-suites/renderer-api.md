@@ -440,7 +440,7 @@ Covers a voice's speed in `POST /settings` and in voice previews, and a video's 
   speed makes a new preview. On `eleven_v4` the preview is recorded at 1.0 and stretched, a native
   preview is not stretched, and one that needs a stretch with no `ffmpeg` is a `503` before any
   call. A new speed for a v4 preview whose 1.0 recording is cached costs no call, and a stretch that
-  fails keeps the recording for the retry.
+  fails keeps the recording for the retry, once: a cached one that fails again is deleted.
 - A person sets a video's `voice_speed` at `SCRIPT_READY`, and `null` gives it back to the voice.
   The approving `PATCH` may carry it. Out of range is a `400`, any other status a `409`, and a
   status change racing the write leaves the speed unset.

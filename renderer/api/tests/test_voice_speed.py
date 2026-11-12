@@ -293,3 +293,16 @@ def test_a_failed_preview_stretch_keeps_the_recording_for_the_retry(client, prev
     monkeypatch.setattr(pipeline.taudio, "stretch", good)
     r, sent = _preview(client, json={"speed": 1.1})
     assert r.status_code == 200 and sent is None
+
+
+def test_a_cached_recording_that_cannot_be_stretched_is_dropped(client, preview_env, stretched, monkeypatch):
+    client.post("/settings", json={"elevenlabs_voices": [{**_roster()[0], "model_id": "eleven_v4"}]})
+
+    def unreadable(ffmpeg, audio, factor):
+        raise RuntimeError("Invalid data found when processing input")
+    monkeypatch.setattr(pipeline.taudio, "stretch", unreadable)
+    _preview(client, json={"speed": 1.1})                # paid; the recording is kept once
+    r, sent = _preview(client, json={"speed": 1.1})      # from the cache, fails, dropped
+    assert r.status_code == 502 and sent is None
+    r, sent = _preview(client, json={"speed": 1.1})      # a new recording
+    assert sent is not None

@@ -496,8 +496,9 @@ it resets when the voice or model it is given changes.
   fresh sample, and the human-typed `voice_id` is not used in a file path.
 - The speed follows the same [speed plan](#speed) as a voicing: the native part is sent, and the
   rest is a stretch of the sample before it is cached. The recording at the native speed is cached
-  too, under its own key, so a stretched preview starts from it when it exists (no call) and a
-  stretch that fails keeps it for the retry. A sample that needs a stretch is refused with a `503`
+  too, under its own key, so a stretched preview starts from it when it exists (no call). A stretch
+  that fails keeps a fresh recording for the retry and deletes a cached one, which `ffmpeg` could
+  not read. A sample that needs a stretch is refused with a `503`
   before the call when the API container has no `ffmpeg`.
 - Its credits are recorded with no video. The usage ledger treats that as a normal case, and the
   preview appears in the Analytics page's Spend tab. Do not invent a video id for it.
