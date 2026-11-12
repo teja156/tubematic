@@ -749,7 +749,7 @@ only in the pre-migration backup.
 | `0025_formula_pick.sql` | Adds `videos.formula_choice`, `formula_pick`, `formula_runner_up` and `formula_reason` and `projects.default_formula_id`, `''` on every existing row | No |
 | `0026_topic_angle.sql` | Adds `videos.angle`, `angle_kind` and `angle_score`, empty and 0 on every existing video | No |
 | `0028_formula_evidence.sql` | Adds `videos.formula_evidence`, `''` on every existing video | No |
-| `0029_voice_speed.sql` | Adds `videos.voice_speed`, `NULL` (the voice's roster speed) on every existing video | No |
+| `0030_voice_speed.sql` | Adds `videos.voice_speed`, `NULL` (the voice's roster speed) on every existing video | No |
 
 `0001_baseline.py` is Python because SQLite has no `ADD COLUMN IF NOT EXISTS`, and a `.sql` file
 cannot express an `ALTER TABLE` guarded by a pragma check. Every statement in it is idempotent, so

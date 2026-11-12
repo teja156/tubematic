@@ -633,7 +633,7 @@ Covers `audio_speed.py`, the pitch-keeping stretch of a voice recording
 
 ### `test_voice_speed_migration.py`
 
-Covers migration `0029`, `videos.voice_speed`. An existing voiced video keeps its voice and files
+Covers migration `0030`, `videos.voice_speed`. An existing voiced video keeps its voice and files
 and has no speed of its own, a second run changes nothing, and a new video starts with none.
 
 ### `test_youtube.py`

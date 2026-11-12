@@ -1,4 +1,4 @@
--- 0029 — a video's own voice speed (TMDEV-227).
+-- 0030 — a video's own voice speed (TMDEV-227).
 --
 -- The agent picks a speed for each video with its script (0.9 to 1.25), and a
 -- person may change it at Script Ready. It replaces the roster speed of every

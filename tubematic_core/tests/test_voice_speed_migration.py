@@ -1,4 +1,4 @@
-"""The 0029 migration (TMDEV-227): videos.voice_speed, a video's own speed.
+"""The 0030 migration (TMDEV-227): videos.voice_speed, a video's own speed.
 
 No backfill: NULL means each voice speaks at its roster speed, which is how
 every video voiced before the upgrade was made. What matters is that existing
@@ -22,11 +22,11 @@ def _backups_in_tmp(tmp_path, monkeypatch):
     monkeypatch.setenv("TUBEMATIC_BACKUPS_DIR", str(tmp_path / "backups"))
 
 
-def _db_before_0029(tmp_path) -> pathlib.Path:
-    older = tmp_path / "migrations_before_0029"
+def _db_before_0030(tmp_path) -> pathlib.Path:
+    older = tmp_path / "migrations_before_0030"
     older.mkdir()
     for mig in tdb.discover():
-        if mig.version < 29:
+        if mig.version < 30:
             shutil.copy(mig.path, older / mig.path.name)
     db = tmp_path / "data" / "tubematic.db"
     db.parent.mkdir(parents=True)
@@ -49,7 +49,7 @@ def _rows(db, cols) -> dict:
 
 
 def test_an_existing_video_keeps_its_voicing_and_has_no_speed_of_its_own(tmp_path):
-    db = _db_before_0029(tmp_path)
+    db = _db_before_0030(tmp_path)
     before = _rows(db, KEPT)
     tdb.migrate(db)
     tdb.migrate(db)  # every process migrates on start; a second run is a no-op
@@ -58,7 +58,7 @@ def test_an_existing_video_keeps_its_voicing_and_has_no_speed_of_its_own(tmp_pat
 
 
 def test_a_new_video_starts_with_no_speed_of_its_own(tmp_path):
-    db = _db_before_0029(tmp_path)
+    db = _db_before_0030(tmp_path)
     tdb.migrate(db)
     con = sqlite3.connect(db)
     con.execute("INSERT INTO videos (id, topic, status, created_at, updated_at) VALUES "
