@@ -301,7 +301,8 @@ Covers the per-video Inserts setting and the HTTP side of insert scenes
   means `auto` (the route is a full replace) and a bad value is refused.
 - An insert style is refused as a domain default on a change only, as a New Video style and on
   `POST /videos`. New Video takes the setting, or the manual domain's default.
-- A switch to the runner-up clears the inserts chosen for the old main style.
+- A switch to the runner-up clears the inserts chosen for the old main style, and a return to the
+  topic gives an insert style a person chose back to Auto (a person's main style is kept).
 - The review prompt names each insert's times with its style's insert review text, never a main
   style's; with no inserts it adds nothing.
 - `GET /visual-styles` marks insert styles and which styles host inserts.

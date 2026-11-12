@@ -573,10 +573,16 @@ STYLE_REASON_MAX_CHARS = 300
 # video on "auto": it is routed again at its next approval, so a renderer
 # recorded for its old scenes (a "cartoon_3d" from before Auto picked styles)
 # would otherwise refuse a mascot at that approval and outlive the new pick.
+# An insert style a person chose before it became one (TMDEV-224) goes back
+# to Auto too: a revised topic gets a new script, and a whole video in an
+# insert style is never written again.
+_INSERT_STYLE_SQL = "(" + ", ".join(f"'{s}'" for s in INSERT_STYLES) + ")"
 _BACK_TO_AUTO = ("(COALESCE(style_pick, '') != '' "
-                 "OR COALESCE(NULLIF(visual_style, ''), 'auto') = 'auto')")
+                 "OR COALESCE(NULLIF(visual_style, ''), 'auto') = 'auto' "
+                 f"OR visual_style IN {_INSERT_STYLE_SQL})")
 AUTO_PICK_RESET_SET = (
-    "visual_style = CASE WHEN COALESCE(style_pick, '') != '' THEN 'auto' ELSE visual_style END, "
+    "visual_style = CASE WHEN COALESCE(style_pick, '') != '' "
+    f"OR visual_style IN {_INSERT_STYLE_SQL} THEN 'auto' ELSE visual_style END, "
     f"resolved_renderer = CASE WHEN {_BACK_TO_AUTO} THEN '' ELSE resolved_renderer END, "
     f"resolved_visual_style = CASE WHEN {_BACK_TO_AUTO} THEN '' ELSE resolved_visual_style END, "
     "style_pick = '', style_runner_up = '', style_reason = '', "

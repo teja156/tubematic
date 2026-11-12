@@ -107,3 +107,16 @@ def test_dump_round_trips():
 def test_every_transition_has_a_frame_count():
     assert set(ti.TRANSITION_FRAMES) == set(ti.TRANSITIONS)
     assert ti.TRANSITION_FRAMES["cut"] == 0
+
+
+def test_the_segment_that_opens_the_payoff_cannot_be_an_insert():
+    from tubematic_core import formulas as tf
+    formula = next(fid for fid in tf.FORMULAS if "payoff" in tf.beat_roles(fid).values())
+    payoff = next(n for n, r in tf.beat_roles(formula).items() if r == "payoff")
+    segs = _segs("", "system_flow", "", "")
+    segs[1]["beat"] = payoff
+    errors = ti.mark_errors(segs, insert_mode="auto", allowed=["system_flow"], insert_styles=STYLES,
+                            formula_id=formula)
+    assert any("opens the payoff" in e for e in errors), errors
+    assert ti.payoff_index(segs, formula) == 1
+    assert ti.mark_errors(segs, insert_mode="auto", allowed=["system_flow"], insert_styles=STYLES) == []

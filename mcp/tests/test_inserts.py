@@ -450,3 +450,54 @@ def test_the_inserts_skills_worked_example_passes():
     words = list(range(600, 900, 10))
     assert system_flow.check_insert(entry, FPS, words, ICONS) == []
     assert entry["durationInFrames"] <= tinserts.TARGET_SECONDS * FPS
+
+
+# ── review round 1 ───────────────────────────────────────────────────────────
+
+def test_a_segment_ending_on_the_next_ones_first_frame_does_not_capture_the_insert():
+    """With no pause between segments, one's endFrame equals the next one's
+    startFrame; the insert belongs to the segment that starts there."""
+    touching = [{"id": "s1", "startFrame": 0, "endFrame": 300}, {"id": "s2", "startFrame": 300, "endFrame": 600},
+                {"id": "s3", "startFrame": 600, "endFrame": 900}, {"id": "s4", "startFrame": 900, "endFrame": 1200},
+                {"id": "s5", "startFrame": 1200, "endFrame": 1500}]
+    assert _check(_config(_sf_insert(start=600)), segments=touching) == []
+    # And an insert starting a frame or two before its segment's first word.
+    assert _check(_config(_sf_insert(start=600)), segments=[{**s, "startFrame": s["startFrame"] + 1}
+                                                             if s["id"] == "s3" else s for s in touching]) == []
+
+
+def test_props_that_are_not_an_object_are_refused_with_a_sentence():
+    errors = _check(_config({**_sf_insert(), "props": ["x"]}))
+    assert any("props must be an object" in e for e in errors)
+
+
+def test_captions_near_the_middle_that_the_shift_cannot_clear_are_refused():
+    cfg = {**_config(_sf_insert()), "subtitles": {"position": 0.62, "fontSize": 62}}
+    errors = ins.check(cfg, fps=FPS, word_starts=WORD_STARTS, segments=SEGMENTS, marks={"s3": "system_flow"},
+                       insert_mode="auto", allowed=["system_flow"], host={"host": True, "transition": "cut"},
+                       host_message="", style_checks={}, subtitles=cfg["subtitles"])
+    assert any("cannot clear them" in e for e in errors), errors
+    assert ins.caption_clash("system_flow", {"position": 0.78, "fontSize": 62}) == ""
+    assert ins.caption_clash("terminal_doc", {"position": 0.19, "fontSize": 64}) == ""
+
+
+def test_a_main_scene_starting_on_the_inserts_first_frame_is_refused_like_the_other_validators_do():
+    scenes = [{"type": "generated", "src": "vid/A", "startFrame": 0, "durationInFrames": 600},
+              {"type": "generated", "src": "vid/B", "startFrame": 600, "durationInFrames": 900}]
+    assert any("Scene 2 starts at frame 600" in e for e in _check(_config(_sf_insert(), scenes=scenes)))
+
+
+def test_an_insert_in_the_segment_that_opens_the_payoff_is_refused_anywhere_in_it():
+    segments = [dict(s) for s in SEGMENTS]
+    segments[2]["role"] = "payoff"
+    errors = _check(_config(_sf_insert(start=620, dur=200)), segments=segments)
+    assert any("opens the payoff" in e for e in errors), errors
+
+
+def test_a_system_flow_inserts_last_events_are_read_before_the_hosts_transition_out():
+    import system_flow
+    late = _sf_insert()
+    late["props"]["systemFlow"]["boards"][0]["events"][-1]["at"] = 800  # chip, read for 30 frames
+    assert system_flow.check_insert(late, FPS, WORD_STARTS, ICONS, exit_frames=0) == []
+    errors = system_flow.check_insert(late, FPS, WORD_STARTS, ICONS, exit_frames=12)
+    assert any("chip event at 800" in e for e in errors), errors

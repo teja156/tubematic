@@ -81,7 +81,22 @@ def mark_of(segment) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def mark_errors(segments, *, insert_mode: str, allowed, insert_styles: tuple) -> list[str]:
+def payoff_index(segments, formula_id: str) -> int | None:
+    """The index of the segment that opens the payoff: the first segment of the
+    formula beat whose role is "payoff", as get_timeline labels it. None when
+    the formula has no payoff beat or the script names none."""
+    # Imported here: formulas imports visual_styles, which imports this module.
+    from . import formulas as tformulas
+    payoff = {tformulas.beat_key(name) for name, role in tformulas.beat_roles(formula_id).items()
+              if role == "payoff"}
+    for i, seg in enumerate(segments if isinstance(segments, list) else []):
+        if isinstance(seg, dict) and tformulas.beat_key(seg.get("beat")) in payoff:
+            return i
+    return None
+
+
+def mark_errors(segments, *, insert_mode: str, allowed, insert_styles: tuple,
+                formula_id: str = "") -> list[str]:
     """Why a script's insert marks are refused, or [] when they are fine.
 
     segments: the script_segments list being written.
@@ -89,6 +104,8 @@ def mark_errors(segments, *, insert_mode: str, allowed, insert_styles: tuple) ->
     allowed: the insert styles the video may use (its stored insert_styles),
         or None while that is undecided.
     insert_styles: every insert style id (visual_styles.INSERT_STYLES).
+    formula_id: the formula the script is written in, whose payoff beat
+        belongs to the main style.
     """
     if not isinstance(segments, list):
         return []
@@ -119,6 +136,10 @@ def mark_errors(segments, *, insert_mode: str, allowed, insert_styles: tuple) ->
         errors.append("The first segment cannot be an insert: the main style carries the opening.")
     if len(marks) > 1 and marks[-1]:
         errors.append("The last segment cannot be an insert: the main style carries the ending.")
+    pay = payoff_index(segments, formula_id)
+    if pay is not None and marks[pay]:
+        errors.append(f"script_segments[{pay}] opens the payoff, which belongs to the main style: it cannot "
+                      "be an insert. Mark another segment.")
     for i in range(1, len(marks)):
         if marks[i] and marks[i - 1]:
             errors.append(f"script_segments[{i - 1}] and [{i}] are both inserts: inserts never come "

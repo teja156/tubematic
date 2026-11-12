@@ -168,3 +168,25 @@ def test_a_video_reports_the_inserts_its_scene_config_holds(client, tmp_path, mo
         {"style": "terminal_doc", "startFrame": 900, "durationInFrames": 150}]}))
     assert client.get(f"/videos/{vid}").get_json()["insert_summary"] == {
         "count": 2, "seconds": 13.0, "styles": ["system_flow", "terminal_doc"]}
+
+
+def test_a_return_to_the_topic_gives_a_legacy_insert_style_back_to_auto(client, db_path):
+    """A person chose System Flow before it became an insert style: a revised
+    topic gets a new script, which is never a whole System Flow video."""
+    con = sqlite3.connect(db_path)
+    con.execute(
+        "INSERT INTO videos (id, topic, status, visual_style, style_pick, resolved_renderer, created_at, "
+        "updated_at) VALUES ('v2', 't', 'REVISION_REQUESTED', 'system_flow', '', 'dom', "
+        "'2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')")
+    con.execute(
+        "INSERT INTO videos (id, topic, status, visual_style, style_pick, created_at, updated_at) "
+        "VALUES ('v3', 't', 'REVISION_REQUESTED', 'whiteboard', '', '2026-01-01T00:00:00Z', "
+        "'2026-01-01T00:00:00Z')")
+    con.commit()
+    con.close()
+    for vid in ("v2", "v3"):
+        r = client.patch(f"/videos/{vid}", json={"status": "TOPIC_PROPOSED"})
+        assert r.status_code == 200, r.get_json()
+    v2, v3 = client.get("/videos/v2").get_json(), client.get("/videos/v3").get_json()
+    assert (v2["visual_style"], v2["resolved_renderer"]) == ("auto", "")
+    assert v3["visual_style"] == "whiteboard"  # a person's main style is kept

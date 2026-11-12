@@ -940,6 +940,12 @@ Covers `mcp/inserts.py`, the insert half of `write_scene_config`, `choose_insert
   only. A domain cannot default to an insert style, and its `default_insert_mode` seeds new videos.
 - The text audit samples each insert's boards and beats and names them as inserts.
 
+- An insert belongs to the segment that starts at or before it, also when the previous segment's
+  last word ends on that frame; non-object `props` are refused with a sentence; captions the
+  shift cannot clear are refused; a main scene starting on an insert's first frame is refused; an
+  insert anywhere in the segment that opens the payoff is refused; a System Flow insert's last events
+  are read before the main style's transition out.
+
 Trap: `BLOCKS` in `inserts.py` is where each insert style draws on the frame; a test reads System
 Flow's band from `camera.ts`, so a layout change there that moves the block fails until the shift is
 recomputed.

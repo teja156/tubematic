@@ -80,7 +80,8 @@ def shift_for(style: str, subtitles) -> int:
 
 
 def check(config: dict, *, fps: int, word_starts: list[int], segments: list[dict], marks: dict,
-          insert_mode: str, allowed, host: dict, host_message: str, style_checks: dict) -> list[str]:
+          insert_mode: str, allowed, host: dict, host_message: str, style_checks: dict,
+          subtitles=None) -> list[str]:
     """Every problem with a config's `inserts`, one sentence each (at most
     MAX_ERRORS), or [] when they may be written.
 
@@ -91,6 +92,7 @@ def check(config: dict, *, fps: int, word_starts: list[int], segments: list[dict
         styles (None while undecided).
     host: the main style's `inserts` block; host_message: why it takes none.
     style_checks: insert style id -> a function(entry) -> list of problems.
+    subtitles: the config's captions, which an insert must stay clear of.
     """
     entries = config.get("inserts")
     errors: list[str] = []
@@ -128,6 +130,9 @@ def check(config: dict, *, fps: int, word_starts: list[int], segments: list[dict
         if extra:
             err(f"{where} has unknown keys {sorted(extra)}; an insert is {{style, startFrame, "
                 "durationInFrames, props}.")
+        if not isinstance(e.get("props"), dict):
+            err(f"{where}: props must be an object holding the insert style's data under its props key.")
+            continue
         style = e.get("style")
         if style not in tvs.INSERT_STYLES:
             err(f"{where}: style {style!r} is not an insert style (insert styles: "
@@ -154,9 +159,13 @@ def check(config: dict, *, fps: int, word_starts: list[int], segments: list[dict
             nearest = min(snaps, key=lambda w: abs(start - w))
             err(f"{where} starts at frame {start}, which is not on a word; start it on a word (the nearest "
                 f"word starts at {nearest}).")
-        seg_i = next((i for i, s in enumerate(segments)
-                      if s.get("startFrame", 0) - tinserts.WORD_SNAP_FRAMES <= start <= s.get("endFrame", -1)),
-                     None)
+        # The segment the insert starts in: the last one whose first word is at
+        # or before the insert's start. A segment's endFrame can equal the next
+        # one's startFrame when the narration has no pause, so the end cannot
+        # decide it.
+        starting = [i for i, s in enumerate(segments)
+                    if _int(s.get("startFrame")) and s["startFrame"] - tinserts.WORD_SNAP_FRAMES <= start]
+        seg_i = starting[-1] if starting else None
         if seg_i is None or marks.get(segments[seg_i].get("id")) != style:
             err(f"{where} does not start inside a segment the script marked as a {style} insert. An insert "
                 "covers part of a segment marked \"insert\": \"" + style + "\".")
@@ -170,11 +179,17 @@ def check(config: dict, *, fps: int, word_starts: list[int], segments: list[dict
             if seg_i == 0 or seg_i == len(segments) - 1:
                 err(f"{where} is in the {'first' if seg_i == 0 else 'last'} segment; the main style carries "
                     "the opening and the ending.")
+            if seg.get("role") == "payoff":
+                err(f"{where} is in the segment that opens the payoff; the payoff belongs to the main style. "
+                    "Mark another segment as the insert.")
         for s in segments:
             if s.get("role") == "payoff" and start <= s.get("startFrame", -1) < end:
                 err(f"{where} covers the first word of the payoff (frame {s['startFrame']}); the payoff "
                     "belongs to the main style. End the insert before it.")
         spans.append((start, end, k))
+        clash = caption_clash(style, subtitles)
+        if clash:
+            err(f"{where}: {clash}")
         check_one = style_checks.get(style)
         if check_one:
             for p in check_one(e):
@@ -199,7 +214,7 @@ def check(config: dict, *, fps: int, word_starts: list[int], segments: list[dict
     for i, sc in enumerate(config.get("scenes") or []):
         sf = sc.get("startFrame") if isinstance(sc, dict) else None
         for a, b, k in spans:
-            if _int(sf) and a < sf < b:
+            if _int(sf) and sf > 0 and a <= sf < b:
                 err(f"Scene {i + 1} starts at frame {sf}, inside insert {k + 1} ({a}-{b - 1}), where the main "
                     f"style is hidden; start it at frame {b}, when the insert ends.")
     share = sum(b - a for a, b, _ in spans)
@@ -211,6 +226,23 @@ def check(config: dict, *, fps: int, word_starts: list[int], segments: list[dict
             err(f"Segment {s.get('id')!r} is marked as a {marks[s['id']]} insert but no insert covers it: "
                 "add one, starting on one of its words.")
     return errors
+
+
+def caption_clash(style: str, subtitles) -> str:
+    """Why the captions still cover the insert once it has moved by
+    shift_for, or "". The shift is bounded so the insert stays in the frame,
+    so captions placed near the middle can leave no room."""
+    if style not in BLOCKS:
+        return ""
+    box = caption_box(subtitles)
+    if box is None:
+        return ""
+    top, bottom = BLOCKS[style]
+    shift = shift_for(style, subtitles)
+    if top + shift < box[1] and bottom + shift > box[0]:
+        return ("the captions (subtitles.position) sit where this insert draws, and moving the insert "
+                "cannot clear them. Put the captions in the lower or the upper part of the frame.")
+    return ""
 
 
 def cue_errors(cues, spans: list[tuple[int, int]]) -> list[str]:

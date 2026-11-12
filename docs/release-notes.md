@@ -24,8 +24,9 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
    containers running side by side could pick System Flow or Terminal Doc again for the videos the
    upgrade moves.
 4. System Flow and Terminal Doc are now insert styles, never a style for a whole video (see Changed). On upgrade, a
-   video in one of them that is not voiced yet (a topic waiting for approval, an approved topic, or a
-   script waiting at Script Ready) goes back to Auto: its agent picks a new style and writes a new
+   video in one of them that is not voiced yet (a topic waiting for approval, an approved topic, a
+   script waiting at Script Ready, or a script sent back for revision before it was voiced) goes back
+   to Auto: its agent picks a new style and writes a new
    script, which costs one agent session and no voice credits. The script waiting at Script Ready is
    discarded, so approve it before you upgrade if you want to keep it as it is. A video already voiced
    finishes in its old style. A domain whose default style was System Flow or Terminal Doc now

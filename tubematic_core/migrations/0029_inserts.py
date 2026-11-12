@@ -17,10 +17,11 @@ New columns:
 
 Data changes:
 - A domain whose default style is system_flow or terminal_doc gets 'auto'.
-- A video not yet voiced (TOPIC_PROPOSED, TOPIC_APPROVED, SCRIPT_READY) whose
-  style is system_flow or terminal_doc goes back to Auto, as the dashboard's
-  switch-style does: its style pick, recorded renderer and canvas, and formula
-  pick are cleared, and one at SCRIPT_READY returns to TOPIC_APPROVED so its
+- A video not yet voiced (TOPIC_PROPOSED, TOPIC_APPROVED, SCRIPT_READY, or
+  REVISION_REQUESTED with no voice file) whose style is system_flow or
+  terminal_doc goes back to Auto, as the dashboard's switch-style does: its
+  style pick, recorded renderer and canvas, and formula pick are cleared, and
+  one at SCRIPT_READY or REVISION_REQUESTED returns to TOPIC_APPROVED so its
   agent picks a main style and writes a new script. Nothing has been voiced, so
   no voice credit is lost. A comment on the video says why.
 - A video already voiced or later keeps its style and finishes as a
@@ -66,9 +67,13 @@ def up(con):
     con.execute(f"UPDATE projects SET default_visual_style = 'auto' "
                 f"WHERE default_visual_style IN ({marks})", _INSERT_STYLES)
 
+    # A table adopted from before the baseline can lack voice_file_path; with
+    # no column there is no voice, so a revision counts as unvoiced.
+    unvoiced_revision = ("COALESCE(voice_file_path, '') = ''" if "voice_file_path" in videos else "1")
     rows = con.execute(
         f"SELECT id, visual_style, status FROM videos WHERE visual_style IN ({marks}) "
-        f"AND status IN ({unvoiced}) AND archived_at IS NULL",
+        f"AND (status IN ({unvoiced}) OR (status = 'REVISION_REQUESTED' "
+        f"AND {unvoiced_revision})) AND archived_at IS NULL",
         _INSERT_STYLES + _UNVOICED).fetchall()
     for vid, style, status in rows:
         con.execute(
@@ -76,12 +81,13 @@ def up(con):
             "style_reason = '', resolved_renderer = '', resolved_visual_style = '', "
             "formula_pick = '', formula_runner_up = '', formula_reason = '', formula_evidence = '', "
             "insert_styles = '', insert_reason = '', "
-            "status = CASE WHEN status = 'SCRIPT_READY' THEN 'TOPIC_APPROVED' ELSE status END, "
+            "status = CASE WHEN status IN ('SCRIPT_READY', 'REVISION_REQUESTED') THEN 'TOPIC_APPROVED' "
+            "ELSE status END, "
             "agent_no_progress_count = 0, agent_stuck_at = NULL, updated_at = ? WHERE id = ?",
             (now, vid))
         label = _LABELS[style]
         then = ("Its agent picks a main style and writes a new script; the old script is discarded."
-                if status == "SCRIPT_READY" else "Auto picks its main style when it is approved."
+                if status in ("SCRIPT_READY", "REVISION_REQUESTED") else "Auto picks its main style when it is approved."
                 if status == "TOPIC_PROPOSED" else "Its agent picks a main style before the script.")
         con.execute(
             "INSERT INTO comments (video_id, author, content, created_at) VALUES (?, 'human', ?, ?)",

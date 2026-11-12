@@ -391,7 +391,8 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
     start, dur = entry.get("startFrame"), entry.get("durationInFrames")
     if not (_int(start) and _int(dur) and dur > 0):
         return ["The insert needs whole-number startFrame and durationInFrames."]
-    data = (entry.get("props") or {}).get(PROPS_KEY)
+    props = entry.get("props")
+    data = props.get(PROPS_KEY) if isinstance(props, dict) else None
     if not isinstance(data, dict):
         return [f"The insert's props must hold {PROPS_KEY!r}: its beats."]
     head = []
@@ -886,8 +887,11 @@ def _event_problem(e: dict, t: str, custom: dict) -> str:
 
 def insert_beat_windows(entry: dict) -> list[tuple[int, int]]:
     """(start, end) of every beat of one Terminal Doc insert, for the text audit."""
-    data = (entry.get("props") or {}).get(PROPS_KEY) or {}
-    starts = [b.get("start") for b in data.get("beats") or [] if isinstance(b, dict) and _int(b.get("start"))]
+    props = entry.get("props")
+    data = props.get(PROPS_KEY) if isinstance(props, dict) else None
+    data = data if isinstance(data, dict) else {}
+    beats = data.get("beats") if isinstance(data.get("beats"), list) else []
+    starts = [b.get("start") for b in beats if isinstance(b, dict) and _int(b.get("start"))]
     s, d = entry.get("startFrame"), entry.get("durationInFrames")
     end = s + d if _int(s) and _int(d) else 0
     return [(a, b) for a, b in zip(starts, starts[1:] + [end]) if b > a]

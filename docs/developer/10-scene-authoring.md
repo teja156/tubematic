@@ -297,7 +297,8 @@ written (`mcp/inserts.py::check`).
 | An insert is one script segment marked `"insert": "<style id>"`, with a style the video chose | Script write, scene write |
 | Never the first or the last segment, never two marked segments in a row | Script write, scene write |
 | A window starts within `WORD_SNAP_FRAMES` (2) of a word, lasts 2 to `MAX_SECONDS` (9) seconds, and ends by the next segment's first word; the skills aim for `TARGET_SECONDS` (8) | Scene write |
-| Never over the payoff segment's first word | Scene write |
+| Never in the segment that opens the payoff (the first segment of the formula's payoff beat) | Script write, scene write |
+| Never under the captions: an insert moves clear of them (`shift_for`), and captions placed where no move can clear them are refused (`caption_clash`) | Scene write |
 | At least `MIN_MAIN_GAP_SECONDS` (1.5) of the main style before the first insert, after the last, and between two | Scene write |
 | Inserts together take at most `MAX_SHARE` (a third) of `totalFrames` | Scene write |
 | A marked segment whose words would run past 8 seconds | A script warning, `insert_long` |
@@ -382,7 +383,8 @@ re-composites every frame.
 
 - `mcp/inserts.py::check` runs each window against the marks, the timeline and the limits, then the
   insert style's own check over the window: `system_flow.check_insert` (at most 3 boards, the first on
-  the insert's first frame) and `terminal_doc.check_insert` (at most 3 beats, no custom moves, no
+  the insert's first frame, the last board's events read before the main style's transition out
+  begins) and `terminal_doc.check_insert` (at most 3 beats, no custom moves, no
   skin). `server.py::_INSERT_CHECKS` maps each insert style to its check.
 - The main style's validator gets the windows as `quiet` spans (`mcp/quiet_windows.py`): nothing of
   the main style starts inside one (no cut, no event), and its stillness rule skips them. Case File

@@ -218,7 +218,8 @@ Covers `tubematic_core/inserts.py`: the rules a script's insert marks are held t
 
 - A mark in the middle of the script is fine, and a script with no marks is fine whatever the
   video's settings.
-- A mark on the first or the last segment, or on two segments in a row, is refused.
+- A mark on the first or the last segment, on two segments in a row, or on the segment that opens
+  the formula's payoff beat is refused.
 - Marks are refused when the video's Inserts setting is None, when inserts are not decided yet
   (the message names the insert-routing skill), when the style is not one the video chose, and
   when it is not an insert style at all.
@@ -584,6 +585,7 @@ Covers `0029`: the insert columns, and what still held an insert style as its ma
 - A video not yet voiced (Topic Proposed, Topic Approved, Script Ready) in one of those styles goes
   back to Auto: one at Script Ready returns to Topic Approved, its style pick, renderer, canvas and
   formula pick are cleared, a person's formula choice is kept, and a comment says why.
+- A video at Revision Requested with no voice file moves the same way, back to Topic Approved.
 - A voiced or later video, and an archived one, keeps its style.
 - Every video past Topic Approved is marked as having no inserts; one before it starts undecided.
 - A second run changes nothing, and a new video starts undecided with inserts on Auto.

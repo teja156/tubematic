@@ -181,27 +181,32 @@ def check(config: dict, fps: int, word_starts: list[int], icons: list[str]) -> l
 MAX_INSERT_BOARDS = 3
 
 
-def check_insert(entry: dict, fps: int, word_starts: list[int], icons: list[str]) -> list[str]:
+def check_insert(entry: dict, fps: int, word_starts: list[int], icons: list[str],
+                 exit_frames: int = 0) -> list[str]:
     """Every problem with one System Flow insert (an entry of the config's
     `inserts`, TMDEV-224): its boards run from the insert's first frame to its
     last, on the video's own frames. The window itself (length, placement) is
-    checked by mcp/inserts.py. [] when it is sound."""
+    checked by mcp/inserts.py. exit_frames is how long the host style's
+    transition takes on the way out (inserts.TRANSITION_FRAMES): the last
+    board's events must be read before it starts. [] when it is sound."""
     start, dur = entry.get("startFrame"), entry.get("durationInFrames")
     if not (_int(start) and _int(dur) and dur > 0):
         return ["The insert needs whole-number startFrame and durationInFrames."]
-    flow = (entry.get("props") or {}).get(PROPS_KEY)
+    props = entry.get("props")
+    flow = props.get(PROPS_KEY) if isinstance(props, dict) else None
     head = []
     if isinstance(flow, dict) and isinstance(flow.get("boards"), list) \
             and len(flow["boards"]) > MAX_INSERT_BOARDS:
         head.append(f"A System Flow insert holds at most {MAX_INSERT_BOARDS} boards; it lasts a few "
                     "seconds, so show one diagram, or two.")
     # The insert goes out with the main style's transition, so its last board
-    # is read before its last frames as any board is before a cut.
-    return _check_flow(flow, start, start + dur, fps, word_starts, icons, head, last_fades=True)
+    # is read before that transition starts, as any board is before a cut.
+    return _check_flow(flow, start, start + dur, fps, word_starts, icons, head, last_fades=True,
+                       exit_frames=exit_frames)
 
 
 def _check_flow(flow, span_start: int, span_end: int, fps: int, word_starts: list[int],
-                icons: list[str], head: list[str], *, last_fades: bool) -> list[str]:
+                icons: list[str], head: list[str], *, last_fades: bool, exit_frames: int = 0) -> list[str]:
     errs: list[str] = list(head)
 
     def err(msg: str) -> None:
@@ -238,7 +243,12 @@ def _check_flow(flow, span_start: int, span_end: int, fps: int, word_starts: lis
         # The last frame an event can still be seen at full strength: a board
         # that is not the last fades out over its final frames, and the last
         # board's final frame is end - 1.
-        visible_until = end - TIMING["boardFade"] if (i + 1 < len(boards) or last_fades) else end - 1
+        if i + 1 < len(boards):
+            visible_until = end - TIMING["boardFade"]
+        elif last_fades:
+            visible_until = end - max(TIMING["boardFade"], exit_frames)
+        else:
+            visible_until = end - 1
         _check_board(board, where, start, end, visible_until, still, icons, err)
         if len(errs) >= MAX_ERRORS:
             break
@@ -440,6 +450,7 @@ def insert_board_windows(entry: dict) -> list[tuple[int, int]]:
     """(start, end) of each board of one System Flow insert, for the text audit."""
     try:
         boards = entry["props"][PROPS_KEY]["boards"]
+        boards = [b for b in boards if isinstance(b, dict)]
         end = entry["startFrame"] + entry["durationInFrames"]
         starts = [b["startFrame"] for b in boards]
     except (KeyError, IndexError, TypeError):

@@ -807,9 +807,9 @@ outside the list would make every `generate_image` call refuse.
 
 - sets a domain's `default_visual_style` of `system_flow` or `terminal_doc` to `auto`
 - sets a live video in either style that is not voiced yet (`TOPIC_PROPOSED`, `TOPIC_APPROVED`,
-  `SCRIPT_READY`) back to `auto`, clears its style pick, recorded renderer and canvas and formula
-  pick, moves one at `SCRIPT_READY` back to `TOPIC_APPROVED` for a new script, and adds a `human`
-  comment saying why
+  `SCRIPT_READY`, or `REVISION_REQUESTED` with no voice file) back to `auto`, clears its style pick,
+  recorded renderer and canvas and formula pick, moves one at `SCRIPT_READY` or `REVISION_REQUESTED`
+  back to `TOPIC_APPROVED` for a new script, and adds a `human` comment saying why
 - sets `insert_styles` to `[]` on every video not at `TOPIC_PROPOSED` or `TOPIC_APPROVED`, because
   its script was written without insert marks
 
