@@ -150,14 +150,29 @@ the narration. The character's head is the same in every video.
 
 Once you approve the topic, the style is fixed.
 
+Click the style field to open the list. **Auto** comes first, then the 2D styles, then the 3D
+styles. A style marked **EXP** is experimental. A style marked **GPU** renders on a GPU only. The
+eye button on a row plays a few seconds of that style in a window, with **Prev** and **Next** to
+step through the others and **Use this style** to pick the one you are watching. Picking a style
+there does not approve the topic.
+
+At the bottom of the list, **Inserts** are styles used for a few seconds inside another style, such
+as a diagram of a mechanism. You can watch their preview, and you cannot choose one for a whole
+video.
+
+After the topic is approved, the eye button beside **Visual style** in the video's window plays the
+preview of the style the video uses.
+
 ### When a style is greyed out
 
-- **Illustrated (needs an OpenAI key)**, **Under the Hood (experimental) (needs an OpenAI key)** or
-  **Case File Story (experimental) (needs an OpenAI key)**: no OpenAI key is stored. Add one on **Settings → API Keys**.
-- **Cartoon 3D (experimental) (needs a working GPU)**: no renderer has passed its GPU test. See
+A style the install cannot make stays in the list, greyed out, with the reason under its name:
+
+- **needs an OpenAI key** (Illustrated, Under the Hood, Case File Story): no OpenAI key is stored.
+  Add one on **Settings → API Keys**.
+- **needs a working GPU** (Cartoon 3D): no renderer has passed its GPU test. See
   [GPU Rendering](10-gpu-rendering.md).
-- **Cartoon 3D (experimental) (GPU not tested yet)**: the renderer has not finished its first test.
-  Wait a minute, or press **Test GPU** on its card under **Settings → Rendering**.
+- **GPU not tested yet** (Cartoon 3D): the renderer has not finished its first test. Wait a minute,
+  or press **Test GPU** on its card under **Settings → Rendering**.
 
 A topic that already holds a greyed-out style cannot be approved until you pick another.
 

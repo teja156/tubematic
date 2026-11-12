@@ -438,6 +438,26 @@ The style list comes from [`GET /visual-styles`](05-http-api.md#get-visual-style
 changes only with the installed version. Until it loads, a picker offers only the value it holds.
 The rules are in `lib/visualStyles.ts`.
 
+Every place that chooses a style (a domain's defaults on Topics, New Video, the video window at
+Topic Proposed, Quick Actions) uses `components/StylePicker.tsx`. A native `<select>` cannot show a
+preview, so the picker is a button that opens a listbox in a popover (`@base-ui/react`'s Popover):
+
+- `styleGroups` orders the rows: Auto (and a "No style" row where a domain may have none), the 2D
+  styles, the 3D styles, then the insert styles. The group comes from the pack's `dimension`, the
+  GPU tag from `needs.gpu`, and a style whose `role` is `insert` is listed but cannot be picked. A
+  style an older API sends without these fields counts as a 2D main style.
+- Each row carries an EXP tag for an experimental style, a GPU tag for one that needs a GPU, the
+  reason it cannot be made here, and an eye button that opens the style's preview.
+- The preview window (`StylePreviewDialog`) plays the [preview loop](10-scene-authoring.md#style-previews)
+  muted, with Prev and Next over every style and **Use this style** when the style can be picked.
+  With reduced motion on it shows the poster and the player's controls instead of playing.
+- Keyboard: the button opens the list on Enter, Space or Down with the chosen row focused; Up, Down,
+  Home and End move; typing jumps to a name; Enter or Space picks; Right opens the preview; Escape
+  closes.
+- Once the style is frozen, the video window's style row keeps an eye button
+  (`StylePreviewButton`) for the style `videoStyleId` resolves: the chosen style, Auto's pick, or
+  Cartoon 3D; none while Auto has not chosen or kept mixed scenes.
+
 - A style whose pack needs an OpenAI key (Illustrated) is disabled, labelled "needs an OpenAI key",
   while no key is stored. The page reads `GET /settings`, whose masked `openai_api_key` is `""` when
   no key is set, so the key never reaches the browser.
@@ -445,7 +465,8 @@ The rules are in `lib/visualStyles.ts`.
   labelled "needs a working GPU", or "GPU not tested yet" when `GET /render/gpu` says `unknown`.
 - Each page loads the settings and the GPU status itself, so a key added in Settings counts on the
   next page without a reload.
-- A style marked experimental in its pack is labelled "(experimental)".
+- A style marked experimental in its pack carries an EXP tag in the picker and "(experimental)" in
+  its label on cards.
 - Settings or GPU status that have not loaded count as available. The API refuses the style either
   way.
 - A video that already holds a disabled style still shows it selected, so the person can see why its
@@ -685,6 +706,7 @@ Components that a section above covers are left out of this table.
 | `MiningSources.tsx` | Adds and removes YouTube URLs for mining. It mirrors the API's URL rule and adds a URL in the canonical `watch?v=` form. See [Mining sources](05-http-api.md#mining-sources) |
 | `TimeZoneProvider.tsx` | Fetches the host's timezone once and provides it through context. See [Time](#time) |
 | `VisualStylesProvider.tsx` | Fetches the visual-style list once and provides it through context. See [Visual-style picker](#visual-style-picker) |
+| `StylePicker.tsx` | The style picker, its preview window and the eye button beside a frozen style. See [Visual-style picker](#visual-style-picker) |
 | `Toast.tsx` | `useToasts()` and a stack renderer. Success toasts dismiss after 3 s. Error toasts stay. A toast can carry an action (**Undo**); it then stays 8 s, and clicking the action does not reach the toast's dismiss-on-click first |
 | `SaveStatus.tsx` | `SaveStatus`, the "Saving…" / "✓ Saved" / "Not saved: reason" text beside a field, and `SavesSummaryLine`, the Settings page's line. See [The settings page](#the-settings-page) |
 | `SummaryStrip.tsx` | Six stat tiles: Topics Awaiting, Scripts Ready, Videos Ready, In Pipeline, Published, Failed |

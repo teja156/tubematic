@@ -20,6 +20,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { VideoModal } from "@/components/VideoModal";
 import type { Agent, ScriptSegment, Video, VideoStatus } from "@/lib/types";
+import { disabledStyleValues, pickStyle, styleOption } from "./stylePickerHelpers";
 
 // Fixed to America/New_York so the Created/Updated date-rendering test below
 // has a deterministic, non-UTC expected value.
@@ -1400,10 +1401,24 @@ describe("VideoModal — picker labels", () => {
     render(<VideoModal video={video} illustratedAvailable={false}
       onClose={() => {}} onAction={() => {}} />);
     await screen.findByText("Approve Topic");
-    const select = screen.getByTestId("video-modal-style-select") as HTMLSelectElement;
-    const illustrated = [...select.options].find((o) => o.value === "illustrated")!;
-    expect(illustrated.disabled).toBe(true);
+    const illustrated = styleOption("video-modal-style-select", "illustrated");
+    expect(illustrated.getAttribute("aria-disabled")).toBe("true");
     expect(illustrated.textContent).toMatch(/needs an OpenAI key/);
+  });
+
+  it("puts a preview eye beside a frozen style, and none before Auto has picked", async () => {
+    const video = { ...makeVideo("SCRIPT_READY"), visual_style: "whiteboard" as const };
+    mockFetchFor(video);
+    const { unmount } = render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    fireEvent.click(await screen.findByTestId("video-modal-style-preview"));
+    expect(screen.getByTestId("style-preview-title").textContent).toBe("Whiteboard");
+    expect(screen.queryByTestId("style-preview-use")).toBeNull();
+    unmount();
+    const auto = { ...makeVideo("SCRIPT_READY"), visual_style: "auto" as const };
+    mockFetchFor(auto);
+    render(<VideoModal video={auto} onClose={() => {}} onAction={() => {}} />);
+    await screen.findAllByText(/Auto/);
+    expect(screen.queryByTestId("video-modal-style-preview")).toBeNull();
   });
 
   it("leaves Illustrated enabled by default", async () => {
@@ -1411,8 +1426,7 @@ describe("VideoModal — picker labels", () => {
     mockFetchFor(video);
     render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
     await screen.findByText("Approve Topic");
-    const select = screen.getByTestId("video-modal-style-select") as HTMLSelectElement;
-    expect([...select.options].some((o) => o.disabled)).toBe(false);
+    expect(disabledStyleValues("video-modal-style-select")).toEqual([]);
   });
 
   it("labels the voice picker at the script checkpoint", async () => {
@@ -1792,7 +1806,7 @@ describe("VideoModal — mascot picker", () => {
     render(<VideoModal video={video} mascots={MASCOTS} gpu={gpu("working")} onClose={() => {}} onAction={onAction} />);
     const select = (await screen.findByTestId("video-modal-mascot-select")) as HTMLSelectElement;
     expect(select.value).toBe("tubi");
-    fireEvent.change(screen.getByTestId("video-modal-style-select"), { target: { value: "cartoon_3d" } });
+    pickStyle("video-modal-style-select", "cartoon_3d");
     expect(select.value).toBe("");
     expect(select.disabled).toBe(true);
     fireEvent.click(screen.getByText("Approve Topic"));
@@ -1805,7 +1819,7 @@ describe("VideoModal — mascot picker", () => {
     const onAction = vi.fn();
     render(<VideoModal video={video} mascots={MASCOTS} gpu={gpu("working")} onClose={() => {}} onAction={onAction} />);
     const select = (await screen.findByTestId("video-modal-mascot-select")) as HTMLSelectElement;
-    fireEvent.change(screen.getByTestId("video-modal-style-select"), { target: { value: "under_the_hood" } });
+    pickStyle("video-modal-style-select", "under_the_hood");
     expect(select.value).toBe("");
     expect(select.disabled).toBe(true);
     fireEvent.click(screen.getByText("Approve Topic"));

@@ -36,6 +36,15 @@ export interface VisualStyleInfo {
   mascot?: boolean;
   available?: boolean;
   unavailable_reason?: string;
+  /** The picker's group (TMDEV-226): "2d" or "3d"; null for Auto. Absent from an older API. */
+  dimension?: "2d" | "3d" | null;
+  /** Stem of /style-previews/<stem>.mp4 and .webp; null for Auto. */
+  preview?: string | null;
+  /** One line under the preview: what the style is for. */
+  tagline?: string;
+  /** "insert" for a style used only as scenes inside another style: listed apart and never
+   *  offered as a video's style. Absent (an API without inserts) means a main style. */
+  role?: "main" | "insert";
 }
 /** Which renderer `auto` settled on (videos.resolved_renderer): "" until the agent chose. */
 export type ResolvedRenderer = "" | "dom" | "cartoon_3d";

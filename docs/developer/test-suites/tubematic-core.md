@@ -113,10 +113,20 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
 - A malformed pack is refused with the field at fault, `auto` cannot be a pack, and every shipped
   pack passes. The optional `routing.images`, `routing.moods` and `script` are checked when
   present, and a pack without them still loads.
+- Every pack names its picker group (`dimension`), its preview stem and its tagline, and
+  `public_list` passes them on, `null` for Auto. Cartoon 3D is the 3D style and the one whose
+  `needs.gpu` gives the GPU tag.
+- Every pack's [preview](../10-scene-authoring.md#style-previews) exists as a loop and a poster in
+  `dashboard/public/style-previews/`, each within its cap, and the folder stays within its budget.
+  Every file there comes as a loop and a poster pair.
 
 Trap: each answer in the truth table decides what an agent may draw or what the AI review is told is
 intended, so a changed answer shows up only after a render. Change the table only when a style's
 rules are meant to change.
+
+Trap: the preview caps are part of every install's download, since the dashboard image carries the
+files. Raise one only after weighing that cost; `scripts/make_style_preview.py` encodes a loop
+again at a lower quality until it fits.
 
 ### `test_angles.py`
 

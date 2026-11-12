@@ -111,6 +111,9 @@ Covers [the pipeline board](../15-dashboard.md#the-pipeline-board) and
   `400`.
 - The style picker offers the list `GET /visual-styles` serves and nothing else, System Flow and Whiteboard
   included, and a System Flow pick is stored with the approval.
+- The picker groups Cartoon 3D under 3D with its GPU tag, and a style's preview loop is served and
+  plays (`readyState` 2 or more). **Use this style** sets the picker and sends nothing until
+  **Approve**.
 - A status pill that hides a group keeps it hidden across a poll.
 - At 1280px the `TOPIC_PROPOSED` row's buttons stay on screen and the title keeps its width.
 - A `TOPIC_PROPOSED` row shows the topic's angle with its kind and score. At 1280px a long angle
@@ -119,6 +122,10 @@ Covers [the pipeline board](../15-dashboard.md#the-pipeline-board) and
 
 Trap: assert a disabled `<option>` with `toHaveJSProperty("disabled", true)`. Playwright's
 `toBeDisabled()` reports a disabled option inside an enabled `<select>` as enabled.
+
+Trap: the style picker's list is in a popover rendered outside the action card, so its rows are
+found on the page (`style-select-<id>-option-<value>`), not inside the card. An unavailable row has
+`aria-disabled="true"`.
 
 Trap: the read-only style case runs at `SCRIPT_READY`. Quick Actions lists only videos at a human
 checkpoint, so at `TOPIC_APPROVED` no card renders and an assertion about it passes with the feature

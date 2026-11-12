@@ -9,6 +9,19 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ---
 
+## v2.3.0
+
+### Added
+
+- Every place you choose a visual style (a topic waiting for approval, New Video, a domain's
+  defaults) now opens a list with a short preview of each style. The eye button on a style plays a
+  few seconds of it, and you can step through the others and pick one from there. The list groups
+  the styles into 2D and 3D, and marks a style that renders on a GPU only with **GPU**. Styles used
+  only for a few seconds inside another style are listed apart and cannot be chosen for a whole
+  video. After approval, the video's window plays the preview of its style.
+  [Where you choose](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#where-you-choose)
+  has the details.
+
 ## v2.2.0
 
 2.2.0 adds seven visual styles: System Flow, which turns a video into a diagram that builds itself

@@ -847,8 +847,10 @@ A generated preview is recorded in the usage ledger with no video, with credits 
 Returns `{"styles": [...]}`: `auto` first, then every [style pack](10-scene-authoring.md#style-packs)
 in its pack order. Each entry has `id`, `label`, `experimental`, `canvas` (the canvas the style fixes,
 or `null`), `needs` (`openai_key`, `gpu`), `mascot` (false when the style's videos take no mascot),
-and `available` with `unavailable_reason` for this install
-now: `needs an OpenAI key`, `needs a working GPU` or `GPU not tested yet`. The dashboard builds its
+`dimension` (`2d` or `3d`), `preview` (the stem of the style's
+[preview files](10-scene-authoring.md#style-previews)), `tagline`, and `available` with
+`unavailable_reason` for this install now: `needs an OpenAI key`, `needs a working GPU` or
+`GPU not tested yet`. `auto` has `null` for `dimension` and `preview`. The dashboard builds its
 style pickers from it. The write routes still refuse an unavailable style themselves.
 
 ### `GET /script-formulas`

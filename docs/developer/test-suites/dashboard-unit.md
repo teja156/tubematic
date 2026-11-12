@@ -856,11 +856,16 @@ per-segment conflicts.
 
 Covers `lib/visualStyles.ts` ([Visual-style picker](../15-dashboard.md#visual-style-picker)).
 
-- The options are the fetched style list in pack order, `auto` first. A style whose pack needs an
-  OpenAI key or a GPU is disabled with the reason, and an experimental one is labelled.
+- `styleGroups` lists Auto, then the 2D, 3D and insert styles, each group in pack order, from the
+  pack fields `dimension`, `role` and `needs.gpu`. A style whose pack needs an OpenAI key or a GPU,
+  and every insert style, cannot be picked, with the reason. A style an older API sends without a
+  dimension or role counts as a 2D main style. `previewableRows` is the order the preview window
+  steps through, and `previewUrls` names the served files.
+- `videoStyleId` names the style a frozen video's preview plays: the chosen one, Auto's pick or
+  Cartoon 3D, and none before Auto has picked or under mixed scenes.
 - `illustratedAvailable` reads the masked `openai_api_key`, where `""` means unset, so the key
   never reaches the browser.
-- `cartoon3dAvailable` is true only while the GPU probe says working, and `styleOptions` tells an
+- `cartoon3dAvailable` is true only while the GPU probe says working, and `styleGroups` tells an
   untested GPU apart from a missing one.
 - Before the list loads, a picker offers only the value it holds, and a label shows the raw id.
 - `videoStyleLabel` names the world an Auto video settled on, and marks a style Auto picked before
@@ -872,6 +877,24 @@ of the list.
 
 Trap: settings and GPU status that have not loaded count as available, so the API gives the refusal
 and a page that loads neither does not grey an option out wrongly.
+
+### `style-picker.test.tsx`
+
+Covers `components/StylePicker.tsx` ([Visual-style picker](../15-dashboard.md#visual-style-picker)).
+
+- The button names the chosen style with its EXP and GPU tags. The list shows the 2D, 3D and insert
+  groups, with the GPU tag only on a style that needs a GPU.
+- A click picks a row and closes the list. An insert style, or one the install cannot make, is never
+  picked, and its reason shows. A "No style" row, where the caller asks for one, picks `""`.
+- Keyboard: arrows and Home move, typing jumps to a name, Enter picks.
+- The eye opens the preview without picking: the muted loop and poster from `/style-previews/`, Prev
+  and Next, and **Use this style**, which picks and closes. An insert or an unavailable style shows
+  its preview, says why, and offers no **Use this style**.
+- `StylePreviewButton` opens a frozen style's preview without a way to pick it, and renders nothing
+  for a style with no preview.
+
+`stylePickerHelpers.ts` drives the picker the way a person does (open the list, click a row) for
+every page test that picks a style.
 
 ### `visual-styles-provider.test.tsx`
 

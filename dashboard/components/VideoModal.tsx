@@ -30,7 +30,8 @@ import {
   effectiveAgent, effortLabel, effortOptionLabel, initialEffort, isUsable, modelLabel,
   pickedAgent, resolvedModel, topicApprovalPayload,
 } from "@/lib/agents";
-import { routeLabel, styleOptions, videoStyleLabel } from "@/lib/visualStyles";
+import { routeLabel, videoStyleId, videoStyleLabel } from "@/lib/visualStyles";
+import { StylePicker, StylePreviewButton } from "@/components/StylePicker";
 import { MascotPicker } from "@/components/MascotPicker";
 import { formatRenderDuration } from "@/lib/renderers";
 import { approvalMascot, showMascotPicker, styleTakesMascot } from "@/lib/mascots";
@@ -1464,20 +1465,20 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                   {!archived && video.status === "TOPIC_PROPOSED" && (
                     <>
                       <PickerField label="Visual style">
-                        <select
-                          data-testid="video-modal-style-select"
-                          value={selectedStyle}
-                          onChange={(e) => {
-                            setSelectedStyle(e.target.value as Video["visual_style"]);
-                            if (!styleTakesMascot(e.target.value, visualStyles)) setSelectedMascot("");
+                        <StylePicker
+                          testId="video-modal-style-select"
+                          styles={visualStyles}
+                          canUseOpenAI={illustratedAvailable}
+                          gpu={gpu}
+                          value={selectedStyle ?? "auto"}
+                          onChange={(next) => {
+                            setSelectedStyle(next as Video["visual_style"]);
+                            if (!styleTakesMascot(next, visualStyles)) setSelectedMascot("");
                           }}
                           title="Visual register for this video"
-                          className="w-full rounded border border-[#2a2a42] bg-[#131325] px-3 py-2 text-sm text-[#f0f0ff]"
-                        >
-                          {styleOptions(visualStyles, illustratedAvailable, gpu, selectedStyle).map((o) => (
-                            <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
-                          ))}
-                        </select>
+                          buttonStyle={{ width: "100%", borderColor: "#2a2a42", background: "#131325", color: "#f0f0ff",
+                                         padding: "8px 12px", fontSize: 14 }}
+                        />
                       </PickerField>
                       {showMascotPicker(mascots, video.mascot_id ?? "") && (
                         <PickerField label="Mascot (experimental)">
@@ -1805,7 +1806,13 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                         />
                       </>
                     )}
-                    <MetaRow label="Visual style" value={videoStyleLabel(video, visualStyles)} />
+                    <MetaRow label="Visual style" value={
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span>{videoStyleLabel(video, visualStyles)}</span>
+                        <StylePreviewButton styleId={videoStyleId(video)} styles={visualStyles}
+                                            testId="video-modal-style-preview" />
+                      </span>
+                    } />
                     {(video.style_pick ?? "") !== "" && (
                       <MetaRow
                         label="Why this style"
