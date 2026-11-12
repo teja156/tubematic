@@ -98,6 +98,7 @@ One row per video, from proposed topic to published file.
 | `formula_evidence` | TEXT NOT NULL | `''` | JSON the server writes at the pick: what the install's watch figures said about the picked formula (`formula`, `mode`, `measure`, `standing`, `points`, `videos`, `accounts`, `min_group`). `''` means the pick was made without them or a person chose the formula. See [Learned routing](08-scripting-and-voice.md#learned-routing) |
 | `tts_text` | TEXT NOT NULL | `''` | The text sent to ElevenLabs, after pronunciation substitution |
 | `voice_id` | TEXT NOT NULL | `''` | The video's voice. `''` means the install default |
+| `voice_speed` | REAL | `NULL` | The video's own voice speed, 0.9 to 1.25. `NULL` means each voice speaks at its roster speed. See [Speed](08-scripting-and-voice.md#speed) |
 | `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |
 | `script_profile_id` | TEXT NOT NULL | `''` | The script profile. `''` means the generic style |
 | `visual_style` | TEXT NOT NULL | `auto` | `auto` or a [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `system_flow`, `bean_explainer`, `cartoon_3d`, `whiteboard`, `storybook_atlas`, `terminal_doc`, `under_the_hood` or `case_file_story`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
@@ -748,6 +749,7 @@ only in the pre-migration backup.
 | `0025_formula_pick.sql` | Adds `videos.formula_choice`, `formula_pick`, `formula_runner_up` and `formula_reason` and `projects.default_formula_id`, `''` on every existing row | No |
 | `0026_topic_angle.sql` | Adds `videos.angle`, `angle_kind` and `angle_score`, empty and 0 on every existing video | No |
 | `0028_formula_evidence.sql` | Adds `videos.formula_evidence`, `''` on every existing video | No |
+| `0029_voice_speed.sql` | Adds `videos.voice_speed`, `NULL` (the voice's roster speed) on every existing video | No |
 
 `0001_baseline.py` is Python because SQLite has no `ADD COLUMN IF NOT EXISTS`, and a `.sql` file
 cannot express an `ALTER TABLE` guarded by a pragma check. Every statement in it is idempotent, so

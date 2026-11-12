@@ -183,6 +183,48 @@ describe("VideoModal — reject vs. revise", () => {
     expect(onAction).toHaveBeenCalledWith(video.id, "approve-script", video, { voice_id: "def456" });
   });
 
+  it("SCRIPT_READY: shows the video's speed, sends it only when changed, and null for the voice's own", async () => {
+    const voices = [
+      { name: "Narrator", voice_id: "abc123", model_id: "eleven_v4", speed: 1.05 },
+      { name: "Energetic", voice_id: "def456", model_id: "eleven_multilingual_v2" },
+    ];
+    const video = { ...makeVideo("SCRIPT_READY"), voice_id: "abc123", voice_speed: 1.15 };
+    mockFetchFor(video);
+    const onAction = vi.fn();
+    const { unmount } = render(<VideoModal video={video} onClose={() => {}} onAction={onAction}
+      voices={voices} defaultVoiceId="abc123" />);
+    const speed = await screen.findByTestId("video-modal-speed-select") as HTMLSelectElement;
+    expect(speed.value).toBe("1.15");
+    expect([...speed.options].map((o) => o.text)).toEqual(
+      ["Voice default (1.05x)", "0.90x", "0.95x", "1.00x", "1.05x", "1.10x", "1.15x", "1.20x", "1.25x"]);
+    fireEvent.click(screen.getByText("Approve Script"));
+    expect(onAction.mock.calls[0][3]).not.toHaveProperty("voice_speed");
+    unmount();
+
+    mockFetchFor(video);
+    render(<VideoModal video={video} onClose={() => {}} onAction={onAction} voices={voices} defaultVoiceId="abc123" />);
+    fireEvent.change(await screen.findByTestId("video-modal-speed-select"), { target: { value: "1.25" } });
+    fireEvent.click(screen.getByText("Approve Script"));
+    expect(onAction.mock.calls[1][3]).toMatchObject({ voice_speed: 1.25 });
+    fireEvent.change(screen.getByTestId("video-modal-speed-select"), { target: { value: "" } });
+    fireEvent.click(screen.getByText("Approve Script"));
+    expect(onAction.mock.calls[2][3]).toMatchObject({ voice_speed: null });
+  });
+
+  it("after voicing, shows the speed it was voiced at, and says when it is the voice's own", async () => {
+    const info = { voice_id: "abc123", name: "Narrator", model_id: "eleven_v4", model_voiced: true,
+                   roster_speed: 1.0, speed: 1.1 };
+    const video = { ...makeVideo("VOICE_READY"), voice_speed: 1.1, voice_info: info };
+    mockFetchFor(video);
+    const { unmount } = render(<VideoModal video={video} onClose={() => {}} onAction={() => {}} />);
+    expect((await screen.findByTestId("video-modal-speed")).textContent).toBe("1.10x");
+    unmount();
+    const plain = { ...makeVideo("VOICE_READY"), voice_speed: null, voice_info: { ...info, speed: 1.0 } };
+    mockFetchFor(plain);
+    render(<VideoModal video={plain} onClose={() => {}} onAction={() => {}} />);
+    expect((await screen.findByTestId("video-modal-speed")).textContent).toBe("1.00x (voice default)");
+  });
+
   it("SCRIPT_READY: renders a preview button alongside the voice select", async () => {
     const video = { ...makeVideo("SCRIPT_READY"), voice_id: "abc123" };
     mockFetchFor(video);

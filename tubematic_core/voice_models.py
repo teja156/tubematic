@@ -71,24 +71,36 @@ V3_PAUSE_MODELS = frozenset({"eleven_v3", "eleven_v4"})
 # bracketed-pause ones, which take no SSML at all.
 BREAK_TAG_COMPATIBLE_MODELS = DICTIONARY_COMPATIBLE_MODELS - V3_PAUSE_MODELS
 
-# Models that honour voice_settings.speed (TMDEV-216, probed live with paid
-# calls). On every model below, speed 1.2 made the same line 15-22% shorter and
-# the alignment timings shrank with the audio. eleven_v3 and eleven_v4 answer
-# 200 and ignore the field: across repeats their lengths at 1.0 and 1.2
-# overlap. ElevenLabs does not refuse it there, so Tubematic does — a speed a
-# person sets has to change the audio or be refused, never be dropped quietly.
-# Keep in sync with dashboard SPEED_MODELS (pinned by the cross-copy test).
-SPEED_MODELS = frozenset({
+# Models that honour voice_settings.speed natively (TMDEV-216, probed live
+# with paid calls). On every model below, speed 1.2 made the same line 15-22%
+# shorter and the alignment timings shrank with the audio. eleven_v3 and
+# eleven_v4 answer 200 and ignore the field: across repeats their lengths at
+# 1.0 and 1.2 overlap. So a speed reaches them as a stretch of the finished
+# recording instead (TMDEV-227, speed_plan): ffmpeg atempo, which keeps the
+# pitch, with every word time divided by the same factor.
+NATIVE_SPEED_MODELS = frozenset({
     "eleven_multilingual_v2",
     "eleven_flash_v2_5",
     "eleven_turbo_v2_5",
     "eleven_flash_v2",
     "eleven_turbo_v2",
 })
+# A roster voice's speed, on any model. The range is ElevenLabs' own native
+# range, kept when the speed stopped being native-only: a narrower one would
+# make every roster reader drop a stored roster that holds a value outside it.
 SPEED_MIN = 0.7
 SPEED_MAX = 1.2
 SPEED_STEP = 0.05
 DEFAULT_SPEED = 1.0
+# The most a native model is asked for; anything faster is the native maximum
+# plus a stretch of the rest.
+NATIVE_SPEED_MAX = 1.2
+# A video's own speed (TMDEV-227), picked by the agent with the script and
+# changed by a person at Script Ready. It replaces the roster speed of every
+# voice in that video. The limits are the user's: the agent works in about this
+# range, and nothing outside it is ever accepted.
+VIDEO_SPEED_MIN = 0.9
+VIDEO_SPEED_MAX = 1.25
 
 # Models that refuse previous_text / next_text, the context fields a request
 # for one run of a two-voice script carries about its neighbours (TMDEV-216,
@@ -249,22 +261,50 @@ def voice_speed(entry: dict) -> float:
     return float(entry.get("speed", DEFAULT_SPEED))
 
 
-def speed_error(speed, model_id: str, voice_label: str = "") -> str | None:
-    """Why `speed` cannot be set on a voice on model_id, or None.
+def _step_error(speed, low: float, high: float) -> str | None:
+    if isinstance(speed, bool) or not isinstance(speed, (int, float)):
+        return f"speed must be a number, got {speed!r}"
+    if not low <= speed <= high:
+        return f"speed must be between {low} and {high}, got {speed}"
+    if abs(round(speed / SPEED_STEP) * SPEED_STEP - speed) > 1e-9:
+        return f"speed must be a multiple of {SPEED_STEP}, got {speed}"
+    return None
+
+
+def speed_error(speed) -> str | None:
+    """Why `speed` cannot be a roster voice's speed, or None. Any model takes
+    one (TMDEV-227): native on NATIVE_SPEED_MODELS, a stretch on the rest.
 
     The range is ElevenLabs' own; the 0.05 step keeps a value a person can
     read, and a preview cache key that does not split on float noise."""
-    if isinstance(speed, bool) or not isinstance(speed, (int, float)):
-        return f"speed must be a number, got {speed!r}"
-    if not SPEED_MIN <= speed <= SPEED_MAX:
-        return f"speed must be between {SPEED_MIN} and {SPEED_MAX}, got {speed}"
-    if abs(round(speed / SPEED_STEP) * SPEED_STEP - speed) > 1e-9:
-        return f"speed must be a multiple of {SPEED_STEP}, got {speed}"
-    if round(speed, 2) != DEFAULT_SPEED and model_id not in SPEED_MODELS:
-        who = f"voice {voice_label!r} is on" if voice_label else "the model is"
-        return (f"{who} '{model_id}', which ignores speed; only "
-                f"{', '.join(sorted(SPEED_MODELS))} honour it. Keep it at {DEFAULT_SPEED}.")
-    return None
+    return _step_error(speed, SPEED_MIN, SPEED_MAX)
+
+
+def video_speed_error(speed) -> str | None:
+    """Why `speed` cannot be a video's own speed, or None."""
+    return _step_error(speed, VIDEO_SPEED_MIN, VIDEO_SPEED_MAX)
+
+
+def speed_plan(target: float, model_id: str) -> tuple[float, float]:
+    """How a voice on model_id reaches `target`: (native, stretch), where
+    native is the speed sent to ElevenLabs and stretch the factor the recording
+    is then sped up by (1.0 = no stretch). A native model goes as far as it can
+    natively (up to NATIVE_SPEED_MAX) and stretches the rest; eleven_v3 and
+    eleven_v4 record at 1.0 and stretch it all."""
+    target = round(float(target), 2)
+    if model_id in NATIVE_SPEED_MODELS:
+        native = min(target, NATIVE_SPEED_MAX)
+    else:
+        native = DEFAULT_SPEED
+    return native, round(target / native, 6)
+
+
+def effective_speed(video_speed, entry: dict) -> float:
+    """The speed a voice speaks at in one video: the video's own speed when it
+    has one, else the voice's roster speed."""
+    if video_speed is not None:
+        return round(float(video_speed), 2)
+    return voice_speed(entry)
 
 
 def roster_entry_error(entry) -> str | None:
@@ -282,7 +322,8 @@ def roster_entry_error(entry) -> str | None:
         return (f"voice {entry.get('name')!r} has model_id {entry['model_id']!r}; "
                 f"it must be one of {sorted(DICTIONARY_COMPATIBLE_MODELS)}")
     if "speed" in entry:
-        return speed_error(entry["speed"], entry["model_id"], str(entry.get("name", "")))
+        err = speed_error(entry["speed"])
+        return f"voice {entry.get('name')!r}: {err}" if err else None
     return None
 
 

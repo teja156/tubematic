@@ -291,6 +291,30 @@ test.describe("VideoModal", () => {
     }
   });
 
+  test("a speed picked at Script Ready goes with the approval and shows after voicing (TMDEV-227)", async ({ page }) => {
+    const video = await createVideo({ topic: `[${uid}] Voice speed` });
+    await patchVideo(video.id, { status: "SCRIPT_READY", script: "# Script content" });
+
+    await page.goto("/");
+    const card = page.getByTestId(`kanban-card-${video.id}`);
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.click();
+    const modal = page.getByTestId("video-modal");
+    const speed = modal.getByTestId("video-modal-speed-select");
+    await expect(speed).toHaveValue("");
+    await speed.selectOption("1.15");
+    await modal.getByRole("button", { name: "Approve Script" }).click();
+    await expect(modal).not.toBeVisible({ timeout: 5_000 });
+    await expect.poll(async () => (await getVideo(video.id)).status, { timeout: 10_000 }).toBe("VOICING");
+    expect((await getVideo(video.id)).voice_speed).toBe(1.15);
+
+    // The voicing is the agent's; the stack runs none, so move it on by hand.
+    await patchVideo(video.id, { status: "VOICE_READY" });
+    await page.reload();
+    await page.getByTestId(`kanban-card-${video.id}`).click();
+    await expect(page.getByTestId("video-modal").getByTestId("video-modal-speed")).toHaveText("1.15x", { timeout: 10_000 });
+  });
+
   // A voice per segment (TMDEV-216). Segments are written only by the agent's
   // update_video, and the test stack runs no agent, so they are seeded in the
   // API container. What a unit test cannot show: the real conflicts the API

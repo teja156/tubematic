@@ -57,6 +57,16 @@ A script with nothing recorded shows none of these.
 **Approve** starts the voiceover, and ElevenLabs charges from this point. **Revise** asks the agent
 to rewrite.
 
+**Voice speed** in the video's window is how fast the voiceover will be spoken. The agent picks it
+for each video, from 0.90x to 1.25x: faster for a quick list, slower for a script dense with
+numbers or a calm story. Change it before you press **Approve Script** if the pace is wrong.
+**Voice default** uses the voice's own speed from Settings. Once the video is voiced, its window
+shows the speed it was voiced at.
+
+If the finished voiceover is too fast or too slow, press **Revise** at **Video Ready** and say so.
+The agent changes the speed and speeds up or slows down the recording it already has, which costs
+no ElevenLabs credits. A video voiced before version 2.3.0 is voiced again instead.
+
 A voice is greyed out here when its model cannot speak the script as written. To use that voice,
 press **Revise** and name the voice in your comment. The agent rewrites the script for it.
 

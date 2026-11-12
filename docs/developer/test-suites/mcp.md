@@ -302,13 +302,37 @@ Trap: an explicit `voice_id=""` beside a script means the install default, and t
 is still written on the video. Otherwise a later change of the default would swap the model under
 a written script.
 
+### `test_voice_speed.py`
+
+Covers a video's [speed](../08-scripting-and-voice.md#speed) in `generate_voice`, `update_video`
+and `get_video`.
+
+- A video with no speed voices as before: no speed sent, no stretch.
+- On `eleven_v4` the speed is never sent and the recording is stretched. On a v2 voice it is sent
+  up to 1.2 and the rest stretched. A video's speed replaces the roster's. In a two-voice script
+  each run is stretched before the join.
+- The timeline follows the stretched audio, so the last word ends where the stretched audio ends.
+- A re-voice with the same words at another speed makes no ElevenLabs call and returns `credits: 0`
+  and `reused_recording: true`, also for a v2 recording made at a native speed and back to the
+  recorded speed after a re-stretch. The same words at the same speed, other words or another voice
+  are voiced again and paid.
+- No `ffmpeg` for a stretch, or a stored speed out of range, refuses before spend.
+- The agent writes `voice_speed` at `TOPIC_APPROVED` and `REVISION_REQUESTED` only, in range and on
+  the step. `get_video` reports the stored speed, the speed the voicing will use and where it comes
+  from.
+
+Trap: a re-voice with nothing changed is how a person asks for a new take of a bad recording, so
+the kept recording is used only when a speed changed. Reusing it there would hand back the same
+audio.
+
 ### `test_voice_segments.py`
 
 Covers a voice per segment and a voice's speed in `generate_voice` and `update_video`
 ([A voice per segment](../08-scripting-and-voice.md#a-voice-per-segment)).
 
 - A one-voice script is one request with the payload it had before speeds and segment voices: no
-  `speed` at 1.0 and no context fields. A voice with a speed sends it.
+  `speed` at 1.0 and no context fields. A v2 voice with a speed sends it, and a roster speed on
+  `eleven_v4` is a stretch with no speed sent.
 - A script with a second voice is voiced in runs, in play order, each with its voice's id and model,
   and `credits` is their sum. Each run's ledger row carries its voice, and `tts_text` holds every
   run.

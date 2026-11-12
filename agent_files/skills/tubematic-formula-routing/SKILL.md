@@ -192,6 +192,10 @@ choose_script_formula(video_id, formula=<id>, reason=<one sentence>, runner_up=<
   formula's `words` band and `reference`, the file to read in the script-writing skill's
   directory. `update_video` refuses a script recorded under any other formula.
 
+The formula also sets how fast the script should be spoken: the script-writing skill's Step 9b
+picks the video's voice speed from the formula's beats and the style's delivery, so a list formula
+can run brisker than a story.
+
 Then `add_comment(video_id, "agent", …)` with your Step 1 shape in one line and the top three
 candidates with their points, for example `Picked X (6) over Y (4) and Z (2)`. When Step 3b added
 points, give them separately: `Picked X (4+2 from this domain's figures) over Y (5)`. When the script is

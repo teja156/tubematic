@@ -701,17 +701,17 @@ describe("SettingsPage", () => {
       { name: "Narrator", voice_id: "abc123", model_id: "eleven_multilingual_v2" }]);
   });
 
-  it("the speed is disabled on a model that ignores it", async () => {
+  it("the speed can be set on v4 too, whose recording is stretched to it", async () => {
     stubFetch({ ...MOCK_SETTINGS, elevenlabs_voices: [
-      { name: "Teja", voice_id: "t1", model_id: "eleven_v4" }] });
+      { name: "Teja", voice_id: "t1", model_id: "eleven_v4", speed: 1.1 }] });
     await renderTab("voice");
     const speed = screen.getByTestId("voice-speed-0") as HTMLSelectElement;
-    expect(speed.disabled).toBe(true);
-    expect(speed.value).toBe("1.00");
-    expect(speed.title).toMatch(/ignores speed/);
+    expect(speed.disabled).toBe(false);
+    expect(speed.value).toBe("1.10");
+    expect(speed.title).toMatch(/sped up or slowed down after it is made/);
   });
 
-  it("moving a voice to a model that ignores speed drops its speed", async () => {
+  it("moving a voice to v4 keeps its speed", async () => {
     stubFetch({ ...MOCK_SETTINGS, elevenlabs_voices: [
       { name: "Narrator", voice_id: "abc123", model_id: "eleven_multilingual_v2", speed: 1.15 }] });
     const fetchMock = vi.mocked(fetch);
@@ -721,7 +721,7 @@ describe("SettingsPage", () => {
     });
     await flushSaves();
     expect(savedBody(fetchMock).elevenlabs_voices).toEqual([
-      { name: "Narrator", voice_id: "abc123", model_id: "eleven_v4" }]);
+      { name: "Narrator", voice_id: "abc123", model_id: "eleven_v4", speed: 1.15 }]);
   });
 
   it("a new voice is added with the speed picked beside it", async () => {

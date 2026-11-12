@@ -199,9 +199,9 @@ Covers `app/settings/page.tsx`, [the settings page](../15-dashboard.md#the-setti
   stored in seconds).
 - An API key renders as the mask the server returned. Clearing the field posts an empty string.
 - Voice: each roster row picks its own model, and a save carries the roster with no
-  `elevenlabs_model_id` or `pronunciation_mode` key. A row's speed is saved with it, 1.00 is not
-  sent, the speed is disabled on a model that ignores it, and moving a voice to such a model drops
-  its speed. A preview sends the row's model and speed.
+  `elevenlabs_model_id` or `pronunciation_mode` key. A row's speed is saved with it and 1.00 is not
+  sent. The speed works on `eleven_v4` too, its title saying the recording is stretched, and moving
+  a voice to `eleven_v4` keeps its speed. A preview sends the row's model and speed.
 - Agents: the default, default model and effort each `PATCH` at once, the weight on blur or Enter,
   and a weight outside 0 to 100 is never sent and counts as not saved on the page line. The tab
   issues no `DELETE`.
@@ -410,6 +410,12 @@ Covers `components/VideoModal.tsx`, [the video window](../15-dashboard.md#the-vi
   3D and Under the Hood.
 - Once the pickers are gone, their values show read-only. The Voice and Voice model rows come from
   `voice_info` and are hidden while the voice picker is up.
+- At Script Ready the **Voice speed** select shows the video's speed and names the voice's own as
+  **Voice default**. **Approve Script** sends `voice_speed` only when it was changed, and `null`
+  for the voice default. After voicing, Details shows the speed voiced, marked "(voice default)"
+  when the video has none of its own.
+- The frozen style row carries a preview eye for the style the video uses, and none before Auto has
+  picked.
 - The Rendered by and Render time rows show the last render's renderer with GPU or CPU, fall back to
   the renderer id when no name was recorded, and are hidden on a video with no render recorded.
 - A scheduled video says when it goes out, in the zone it was picked in. **Cancel schedule** calls

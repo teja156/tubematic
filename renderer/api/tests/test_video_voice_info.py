@@ -26,6 +26,8 @@ from tubematic_core import usage as tusage
 
 V2 = {"name": "Rachel", "voice_id": "r1", "model_id": "eleven_multilingual_v2"}
 V3 = {"name": "Adam", "voice_id": "a1", "model_id": "eleven_v3"}
+# Neither voice nor video has a speed of its own (TMDEV-227).
+SPEED_1 = {"roster_speed": 1.0, "speed": 1.0}
 
 
 @pytest.fixture
@@ -74,7 +76,7 @@ def test_a_voiced_video_reports_the_model_it_was_voiced_with_after_a_roster_edit
     # The voice's model is edited after voicing; the audio did not change.
     client.post("/settings", json={"elevenlabs_voices": [V2, {**V3, "model_id": "eleven_flash_v2"}]})
     assert _info(client) == {"voice_id": "a1", "name": "Adam",
-                             "model_id": "eleven_v3", "model_voiced": True, "other_voices": []}
+                             "model_id": "eleven_v3", "model_voiced": True, "other_voices": [], **SPEED_1}
 
 
 def test_the_latest_voicing_wins_after_a_re_voice(client, db_path):
@@ -93,7 +95,7 @@ def test_before_voicing_an_old_ledger_row_is_ignored_for_the_current_setting(cli
     _video(db_path, status=status)
     _voiced_with(db_path, "eleven_multilingual_v2")
     assert _info(client) == {"voice_id": "a1", "name": "Adam",
-                             "model_id": "eleven_v3", "model_voiced": False, "other_voices": []}
+                             "model_id": "eleven_v3", "model_voiced": False, "other_voices": [], **SPEED_1}
 
 
 def test_a_video_with_no_ledger_row_shows_the_current_setting(client, db_path):
@@ -106,18 +108,18 @@ def test_a_voice_off_the_roster_keeps_its_id_and_its_voiced_model(client, db_pat
     _video(db_path, voice_id="gone")
     _voiced_with(db_path, "eleven_v3")
     assert _info(client) == {"voice_id": "gone", "name": "",
-                             "model_id": "eleven_v3", "model_voiced": True, "other_voices": []}
+                             "model_id": "eleven_v3", "model_voiced": True, "other_voices": [], **SPEED_1}
 
 
 def test_a_voice_off_the_roster_and_never_voiced_has_no_model(client, db_path):
     _video(db_path, voice_id="gone", status="SCRIPT_READY")
-    assert _info(client) == {"voice_id": "gone", "name": "", "model_id": "", "model_voiced": False, "other_voices": []}
+    assert _info(client) == {"voice_id": "gone", "name": "", "model_id": "", "model_voiced": False, "other_voices": [], **SPEED_1}
 
 
 def test_a_blank_voice_resolves_to_the_install_default(client, db_path):
     _video(db_path, voice_id="", status="TOPIC_APPROVED")
     assert _info(client) == {"voice_id": "r1", "name": "Rachel",
-                             "model_id": "eleven_multilingual_v2", "model_voiced": False, "other_voices": []}
+                             "model_id": "eleven_multilingual_v2", "model_voiced": False, "other_voices": [], **SPEED_1}
 
 
 def test_another_videos_voicing_is_not_this_ones(client, db_path):

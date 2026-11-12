@@ -244,6 +244,7 @@ videos.
 | `claimed_by`, `claim_expires_in_secs` | The live scene-work claim, or `null` |
 | `voice` | `{voice_id, name, model_id, source}` or `null` |
 | `elevenlabs_model_id`, `pronunciation_mode` | What the script is written for. Both follow from `voice` |
+| `voice_speed`, `effective_voice_speed`, `voice_speed_source` | The video's own speed (`null` when it has none), the speed its next voicing uses, and where that comes from (`video` or `roster`). See [Speed](08-scripting-and-voice.md#speed) |
 | `illustrated_available` | `true` when an OpenAI key is stored, which Illustrated, Under the Hood and Case File Story need. The key is not returned |
 | `cartoon_3d_available`, `mascots_available` | `true` while some renderer's GPU test passed (`renderers.py::gpu_status` says `working`) |
 | `mascot` | `{id, name, version}` or `null` |
@@ -361,8 +362,8 @@ formula over a script in another. The check is repeated in the `UPDATE`'s `WHERE
 `update_video(video_id, title=…, script=…, script_segments=…, youtube_url=…, video_version=…,
 gemini_feedback=…, voice_id=…, agent_id=…, agent_model=…, agent_effort=…, script_profile_id=…,
 visual_style=…, resolved_visual_style=…, resolved_renderer=…, publish_title=…,
-publish_description=…, mascot_id=…, formula_id=…, hooks=…, angle=…, angle_kind=…, angle_score=…)`
-is a partial update. An archived video returns `video_archived`.
+publish_description=…, mascot_id=…, formula_id=…, hooks=…, angle=…, angle_kind=…, angle_score=…,
+voice_speed=…)` is a partial update. An archived video returns `video_archived`.
 
 The topic's angle:
 
@@ -404,6 +405,10 @@ Script and voice:
 - A `voice_id` whose model cannot speak the stored script is refused, except at `TOPIC_PROPOSED`,
   where the script is still to be rewritten. To move a scripted video to such a voice, pass it with
   the rewritten `script_segments` and the publish pair in one call.
+- `voice_speed` is the video's own [speed](08-scripting-and-voice.md#speed), 0.9 to 1.25 in steps
+  of 0.05. The agent writes it at `TOPIC_APPROVED` with the script and at `REVISION_REQUESTED`
+  (`VOICE_SPEED_AGENT_STATUSES`); the `UPDATE` repeats the status in its `WHERE`. A person changes it
+  at `SCRIPT_READY` through `PATCH /videos/<id>`.
 
 Fields writable only at `TOPIC_PROPOSED`:
 
@@ -607,14 +612,16 @@ ignored.
 ### `generate_voice`
 
 `generate_voice(video_id, script)` voices a video at `VOICING` and moves it to `VOICE_READY`. It
-spends ElevenLabs credits. It returns
-`{audio_path, timeline_path, credits, duration_secs, total_frames}`. See
+spends ElevenLabs credits, unless it [reuses the kept recording](08-scripting-and-voice.md#speed). It
+returns `{audio_path, timeline_path, credits, duration_secs, total_frames, voice_speed,
+reused_recording}`; `voice_speed` is a list when the runs were voiced at different speeds. See
 [Scripting and Voice](08-scripting-and-voice.md#voicing) for the text it sends and the timeline it
 writes.
 
 The request is `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/with-timestamps` with
-`{stability: 0.5, similarity_boost: 0.75}` and `output_format: "mp3_44100_128"`. A voice with a
-`speed` other than 1.0 adds it to those settings. `enable_ssml_parsing` is sent only when the
+`{stability: 0.5, similarity_boost: 0.75}` and `output_format: "mp3_44100_128"`. A run whose
+[speed plan](08-scripting-and-voice.md#speed) has a native speed other than 1.0 adds it to those
+settings; the rest of the speed is a stretch of the recording. `enable_ssml_parsing` is sent only when the
 outgoing text contains a `<phoneme` tag.
 
 A script whose segments name more than one voice is voiced in runs, one request per run of

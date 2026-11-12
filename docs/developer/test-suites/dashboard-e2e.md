@@ -165,6 +165,8 @@ Covers [the video window](../15-dashboard.md#the-video-window) against the real 
   agent's `choose_script_formula` and `update_video` write them.
 - A formula chosen in the window at `TOPIC_PROPOSED` is stored with the approval, from a picker
   that lists the real formulas with the experimental ones marked.
+- A voice speed picked at `SCRIPT_READY` is stored with **Approve Script**, and Details shows it
+  once the video is at `VOICE_READY`.
 - The Topic tab shows a topic's angle with the kind label the real `GET /angle-kinds` returns.
   **Edit** stores a new sentence and kind and clears the score. After the topic is approved the
   block has no Edit button and the API refuses the same write.
@@ -301,8 +303,8 @@ Covers [the settings page](../15-dashboard.md#the-settings-page) against the rea
   reload.
 - A voice's model is stored on that voice only, and the preview endpoint refuses an unknown model
   before any ElevenLabs call.
-- A voice's speed persists, its select is disabled on `eleven_v4`, and the API refuses a speed
-  there with a `400`.
+- A voice's speed persists on every model, `eleven_v4` included, and the API refuses one past the
+  roster range with a `400`.
 - Auto Pilot: the stored switch stays off until the confirmation dialog is confirmed, and each
   change after it saves on its own. Switching the gap's unit shows the same gap in minutes.
 - The Renderers panel shows the built-in renderer's startup probe as CPU rendering with a

@@ -425,6 +425,13 @@ comes with the single-video fetch only, so the two rows appear once that fetch a
 [`GET /videos/<id>`](05-http-api.md#get-videosvideo_id) for why the model comes from the usage
 ledger.
 
+At `SCRIPT_READY` the video window also has a **Voice speed** select: **Voice default (1.05x)**,
+which names the picked voice's roster speed and sends `null`, then 0.90x to 1.25x
+(`lib/voices.ts::VIDEO_SPEED_OPTIONS`). It shows the speed the agent picked. **Approve Script**
+sends `voice_speed` only when the select was changed, so an untouched approval keeps the agent's
+pick. Elsewhere Details shows a read-only **Voice speed** from `voice_info.speed`, marked "(voice
+default)" when the video has no speed of its own. See [Speed](08-scripting-and-voice.md#speed).
+
 Once a video has rendered, Details also shows **Rendered by** (the renderer's name at render time,
 then GPU or CPU) and **Render time** (`lib/renderers.ts::formatRenderDuration`, a dash when the
 renderer reported no time). Both come from the video's `last_render_*` columns and describe the
@@ -857,9 +864,10 @@ page body clips horizontal overflow.
   a field blurs.
 
 - On Voice, each roster row has its own model picker, speed select and preview button. The speed
-  select is disabled on a model outside `SPEED_MODELS` (copied from
-  `tubematic_core/voice_models.py` and pinned by a test), a voice moved to such a model loses its
-  speed, and a speed of 1.00 is not sent. The preview plays the row's model and speed.
+  select works on every model, and a speed of 1.00 is not sent. Its note says when the model
+  ignores ElevenLabs' speed and the recording is stretched instead; `NATIVE_SPEED_MODELS` is
+  copied from `tubematic_core/voice_models.py` for that note and pinned by a test. The preview plays
+  the row's model and speed.
 - Preferences is one textbox (`PreferencesEditor`) with a live count against the 6000-character
   cap. It keeps its own text, so the answer to an earlier save never replaces what is being typed.
   The API stores the text trimmed, and an answer that is only the box's text trimmed leaves the box

@@ -60,3 +60,13 @@ export function voiceMissing(voices: Voice[], voiceId: string): boolean {
 export function topicVoicePayload(picked: string | null): { voice_id?: string } {
   return picked === null ? {} : { voice_id: picked };
 }
+
+/** The speeds a person can give one video at Script Ready (TMDEV-227): 0.90 to
+ *  1.25 in steps of 0.05. Keep in sync: tubematic_core/voice_models.py
+ *  VIDEO_SPEED_MIN, VIDEO_SPEED_MAX and SPEED_STEP. */
+export const VIDEO_SPEED_OPTIONS = Array.from({ length: 8 }, (_, i) => Math.round((0.9 + i * 0.05) * 100) / 100);
+
+/** A speed as the dashboard writes it: "1.10x". */
+export function speedLabel(speed: number): string {
+  return `${speed.toFixed(2)}x`;
+}

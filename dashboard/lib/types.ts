@@ -88,7 +88,7 @@ export interface Voice {
    *  follows the voice. */
   model_id: string;
   /** ElevenLabs speed (TMDEV-216). Absent means 1.0; only models in
-   *  SPEED_MODELS honour it, and the API refuses it on any other. */
+   *  NATIVE_SPEED_MODELS honour it natively; on any other model the recording is stretched to it. */
   speed?: number;
 }
 
@@ -106,6 +106,10 @@ export interface VoiceInfo {
   /** The other voices this video's segments name (TMDEV-216), in script
    *  order; name and model are "" for one no longer on the roster. */
   other_voices?: { voice_id: string; name: string; model_id: string }[];
+  /** The voice's roster speed, which the Script Ready picker offers as "Voice default" (TMDEV-227). */
+  roster_speed?: number;
+  /** The speed the voicing uses: the video's own voice_speed, else roster_speed. */
+  speed?: number;
 }
 
 export interface Comment {
@@ -255,6 +259,8 @@ export interface Video {
   /** The voice and model for the modal's read-only rows (TMDEV-147). Only on
    *  single-video responses (GET/PATCH /videos/<id>), never in a list. */
   voice_info?: VoiceInfo;
+  /** The video's own voice speed (TMDEV-227), 0.9 to 1.25; null = each voice's roster speed. */
+  voice_speed?: number | null;
   created_at: string;
   updated_at: string;
   comments?: Comment[];

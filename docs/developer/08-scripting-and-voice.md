@@ -436,8 +436,9 @@ the audio against it (see [AI Review](21-ai-review.md#what-it-is-given)).
 A legacy flat script is a video with a `script` and no `script_segments`. Its voicing path strips
 bracketed text and break tags itself, and writes no `segments` to the timeline.
 
-A voice with a `speed` other than 1.0 sends it as `voice_settings.speed`. A voice at 1.0 sends no
-speed, so its request is the one sent before speeds existed. See [Speed](#speed).
+A run's speed is split into a native part, sent as `voice_settings.speed`, and a stretch of the
+recording after it comes back. A run at 1.0 sends no speed and is not stretched, so its request is
+the one sent before speeds existed. See [Speed](#speed).
 
 ### A voice per segment
 
@@ -446,9 +447,9 @@ voice. `mcp/server.py::_plan_voice_runs` groups consecutive segments with the sa
 (`voice_models.py::segment_runs`), and `generate_voice` makes one request per run, in play order. A
 script with one voice is one run, voiced with the same request as before.
 
-Before the first request, every run is checked: its voice is still in the roster, its markup suits
-its voice's model, and its speed suits that model. A script with more than one run also needs
-`ffmpeg` on the MCP container's `PATH`. Any failure returns an error and spends nothing.
+Before the first request, every run is checked: its voice is still in the roster and its markup
+suits its voice's model. A script with more than one run, or with a run that is stretched, also
+needs `ffmpeg` on the MCP container's `PATH`. Any failure returns an error and spends nothing.
 
 Each request carries `previous_text` and `next_text`, up to 200 characters of the neighbouring runs'
 authored words, so the intonation carries across the change of voice. The authored words are sent
@@ -493,8 +494,9 @@ it resets when the voice or model it is given changes.
 - The cache key is `(voice_id, model_id, speed, sample_text)`, with the speed left out at 1.0 so a
   preview cached before speeds existed is still found. A model or speed change therefore produces a
   fresh sample, and the human-typed `voice_id` is not used in a file path.
-- A speed in the body is refused with a `400` on a model outside `SPEED_MODELS`. A voice's stored
-  speed is dropped when the body names such a model.
+- The speed follows the same [speed plan](#speed) as a voicing: the native part is sent, and the
+  rest is a stretch of the sample before it is cached. A sample that needs a stretch is refused
+  with a `503` before the call when the API container has no `ffmpeg`.
 - Its credits are recorded with no video. The usage ledger treats that as a normal case, and the
   preview appears in the Analytics page's Spend tab. Do not invent a video id for it.
 
@@ -694,18 +696,45 @@ server and the Settings page). The API, the MCP server and onboarding read it wi
 
 ### Speed
 
-A voice's `speed` is ElevenLabs' `voice_settings.speed`, from `SPEED_MIN` (0.7) to `SPEED_MAX` (1.2)
-in steps of `SPEED_STEP` (0.05). Only the models in `voice_models.py::SPEED_MODELS` honour it:
-`eleven_multilingual_v2`, `eleven_flash_v2_5`, `eleven_turbo_v2_5`, `eleven_flash_v2` and
-`eleven_turbo_v2`. `eleven_v3` and `eleven_v4` answer a request with a speed and ignore it, so
-`POST /settings` refuses a speed on them with a `400`. A roster stored around that check (by hand
-in the database) reads as empty, so `generate_voice` spends nothing on it.
+A voice speaks at one speed per video. It is the video's own `videos.voice_speed` when it has one,
+else the voice's roster `speed`, else 1.0 (`voice_models.py::effective_speed`). The agent picks the
+video's speed with the script (the script-writing skill's Step 9b), and a person may change it at
+Script Ready. Every voice in a two-voice script speaks at the video's speed.
 
-A speed of 1.0 is never stored (`voice_models.py::normalize_roster_entry`). A roster in which no voice
-has a speed keeps the shape older versions read, and older versions read a roster with any other key
-as empty. On `eleven_multilingual_v2`, 1.15 brings a technical script from about 155 to about 185
-words a minute. Onboarding does not ask for a speed. It keeps one set on the dashboard, and says so
-when it drops one because the voice moved to a model that ignores speed.
+| Speed | Range | Set by |
+|---|---|---|
+| A roster voice's `speed` | `SPEED_MIN` 0.7 to `SPEED_MAX` 1.2, steps of `SPEED_STEP` 0.05 | Settings → Voice |
+| A video's `voice_speed` | `VIDEO_SPEED_MIN` 0.9 to `VIDEO_SPEED_MAX` 1.25, the same step | `update_video` at `TOPIC_APPROVED` or `REVISION_REQUESTED`, `PATCH /videos/<id>` at `SCRIPT_READY` |
+
+The roster keeps ElevenLabs' own range, so a roster stored before the video speed existed still
+reads.
+
+`voice_models.py::speed_plan` turns a speed into what each run does. The models in
+`NATIVE_SPEED_MODELS` (`eleven_multilingual_v2`, `eleven_flash_v2_5`, `eleven_turbo_v2_5`,
+`eleven_flash_v2` and `eleven_turbo_v2`) are sent the speed as `voice_settings.speed`, up to
+`NATIVE_SPEED_MAX` 1.2, and anything past it is a stretch. `eleven_v3` and `eleven_v4` answer a
+request with a speed and ignore it, so they record at 1.0 and the whole speed is a stretch.
+
+The stretch is `tubematic_core/audio_speed.py::stretch`: ffmpeg's `atempo` filter, which keeps the
+pitch, through a WAV so the run's length is the exact decoded length. `scale_words` divides every
+word time by the same factor before the runs are joined, so the timeline matches the audio. On
+`eleven_multilingual_v2`, 1.15 brings a technical script from about 155 to about 185 words a minute.
+
+Each voicing keeps the runs as they came back, before any stretch, in
+`jobs/<video_id>/voice-original/`: one `run<N>.mp3` per run and a `manifest.json` with each run's
+voice, model, text, native speed, the speed it was delivered at, its length and its words
+(`tubematic_core/jobfiles.py::voice_original_file`). `mcp/server.py::_kept_voice_runs` reuses them
+when every run has the same voice, model and text and at least one run's speed changed: the
+voicing stretches the kept recordings from their own native speed, makes no ElevenLabs call and
+returns `credits: 0` with `reused_recording: true`. The same words at the same speed are a new take
+and are paid for, because a re-voice with nothing changed asks for another recording. A video
+voiced before the kept recordings existed has none, so its first speed change is paid. The
+manifest is written last, so a half-written set is never read as a match. Render staging copies
+only the named job files and images, so the kept recordings never reach a renderer.
+
+A roster speed of 1.0 is never stored (`voice_models.py::normalize_roster_entry`). A roster in which
+no voice has a speed keeps the shape older versions read, and older versions read a roster with any
+other key as empty. Onboarding does not ask for a speed. It keeps one set on the dashboard.
 
 A fresh install starts with two voices, `tubematic_core/voice_models.py::DEFAULT_VOICES`: Teja on
 `eleven_v4` as the install default, and Adam on `eleven_v3`. Onboarding offers them as the default

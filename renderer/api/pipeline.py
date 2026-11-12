@@ -48,6 +48,7 @@ import transcripts
 try:
     from tubematic_core import logging as tlog
     from tubematic_core import angles as tangles
+    from tubematic_core import audio_speed as taudio
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
@@ -65,6 +66,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by the vqa scripts
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
     from tubematic_core import logging as tlog
     from tubematic_core import angles as tangles
+    from tubematic_core import audio_speed as taudio
     from tubematic_core import mascots as tmascots
     from tubematic_core import db as tdb
     from tubematic_core import disk_usage as tdisk
@@ -1482,6 +1484,12 @@ def _voice_info(con, video: dict, settings: dict) -> dict:
         "model_id": voiced or (entry["model_id"] if entry else ""),
         "model_voiced": bool(voiced),
         "other_voices": others,
+        # The speed the voicing uses (TMDEV-227): the video's own, else the
+        # voice's roster speed, which the Script Ready picker offers as "Voice
+        # default". Keep in sync with mcp/server.py's get_video.
+        "roster_speed": tvoice.voice_speed(entry) if entry else tvoice.DEFAULT_SPEED,
+        "speed": tvoice.effective_speed(video.get("voice_speed"),
+                                        entry or {"speed": tvoice.DEFAULT_SPEED}),
     }
 
 
@@ -3006,9 +3014,17 @@ def create_pipeline_blueprint() -> Blueprint:
             "status", "title", "script", "video_version", "youtube_url",
             "gemini_feedback", "voice_id", "agent_id", "agent_model", "agent_effort",
             "script_profile_id", "visual_style", "publish_title", "publish_description",
-            "mascot_id", "formula_choice", "angle", "angle_kind",
+            "mascot_id", "formula_choice", "angle", "angle_kind", "voice_speed",
         }
         fields = {k: v for k, v in body.items() if k in allowed}
+        # The video's own voice speed (TMDEV-227), which a person changes at
+        # SCRIPT_READY only (bound below); null clears it back to the voice's
+        # roster speed. Keep in sync with mcp/server.py's update_video.
+        if "voice_speed" in fields and fields["voice_speed"] is not None:
+            err = tvoice.video_speed_error(fields["voice_speed"])
+            if err:
+                return jsonify({"error": f"voice_speed: {err}"}), 400
+            fields["voice_speed"] = round(float(fields["voice_speed"]), 2)
         # The formula a person chooses for the video, or "" for Auto
         # (TMDEV-213). An experimental one is allowed whatever the setting
         # says: the setting is about what Auto may pick.
@@ -3292,6 +3308,14 @@ def create_pipeline_blueprint() -> Blueprint:
                     "error": "angle can only be changed while the video is at TOPIC_PROPOSED "
                              f"(this one is {row['status']})"
                 }), 409
+            # The speed is the person's at the script checkpoint: before it the
+            # agent has not picked one, after it the audio is made.
+            speed_edit = "voice_speed" in fields
+            if speed_edit and row["status"] != "SCRIPT_READY":
+                return jsonify({
+                    "error": "voice_speed can only be changed while the video is at SCRIPT_READY "
+                             f"(this one is {row['status']})"
+                }), 409
             # The agent group decides who does the *next* piece of work, so a
             # human may change it at every checkpoint (TMDEV-110). In between,
             # an agent or the renderer holds the video, and switching under it
@@ -3366,7 +3390,7 @@ def create_pipeline_blueprint() -> Blueprint:
             # statements, and a status change landing between them would let
             # a frozen field through at a status where it is frozen — after
             # the poller may already have handed the video to its agent.
-            frozen_bound = bool(topic_locked or agent_locked or voice_exempt or angle_edit)
+            frozen_bound = bool(topic_locked or agent_locked or voice_exempt or angle_edit or speed_edit)
             if frozen_bound:
                 where_sql, where_params = " AND status = ?", [row["status"]]
             # The checks above and this UPDATE are two statements, so the
@@ -4533,18 +4557,19 @@ def create_pipeline_blueprint() -> Blueprint:
 
         # The speed the preview speaks at (TMDEV-216): the body's, so Settings
         # can preview a change before it is saved, else the voice's stored
-        # one. A stored speed is dropped when the body names a model that
-        # ignores it; a speed the body asks for on such a model is refused.
+        # one. Every model takes one (TMDEV-227): a native model is asked for
+        # it, and eleven_v3/v4 (or the part past a native model's maximum) is
+        # a pitch-keeping stretch of the recording, exactly as a voicing does.
         if isinstance(body, dict) and "speed" in body:
             speed = body["speed"]
-            err = tvoice.speed_error(speed, model_id, voice["name"])
+            err = tvoice.speed_error(speed)
             if err:
                 return jsonify({"error": err}), 400
             speed = round(float(speed), 2)
         else:
             speed = tvoice.voice_speed(voice)
-            if model_id not in tvoice.SPEED_MODELS:
-                speed = tvoice.DEFAULT_SPEED
+        native, stretch = tvoice.speed_plan(speed, model_id)
+        ffmpeg = shutil.which("ffmpeg") if stretch != 1.0 else None
 
         api_key = _secret(settings, "elevenlabs_api_key", "ELEVENLABS_API_KEY")
         if not api_key:
@@ -4565,6 +4590,9 @@ def create_pipeline_blueprint() -> Blueprint:
 
         if preview_path.exists():
             return jsonify({"path": container_path, "cached": True, "credits": 0})
+        if stretch != 1.0 and not ffmpeg:
+            return jsonify({"error": "ffmpeg must be on PATH in the API container to preview "
+                                     f"{model_id} at speed {speed:.2f}"}), 503
 
         import httpx as _httpx
         payload = {
@@ -4573,8 +4601,8 @@ def create_pipeline_blueprint() -> Blueprint:
             "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
             "output_format": "mp3_44100_128",
         }
-        if speed != tvoice.DEFAULT_SPEED:
-            payload["voice_settings"]["speed"] = speed
+        if native != tvoice.DEFAULT_SPEED:
+            payload["voice_settings"]["speed"] = native
         headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
         try:
             with _httpx.Client(timeout=60) as client:
@@ -4592,8 +4620,15 @@ def create_pipeline_blueprint() -> Blueprint:
                             operation="voice_preview", units={"credits": credits},
                             request_id=resp.headers.get("request-id"), estimated=estimated)
 
+        audio = resp.content
+        if stretch != 1.0:
+            try:
+                audio, _ = taudio.stretch(ffmpeg, audio, stretch)
+            except Exception as e:
+                return jsonify({"error": f"the preview was generated but could not be sped up: {e}",
+                                "credits": credits}), 502
         preview_dir.mkdir(parents=True, exist_ok=True)
-        preview_path.write_bytes(resp.content)
+        preview_path.write_bytes(audio)
         return jsonify({"path": container_path, "cached": False, "credits": credits})
 
     # ── /pipeline/pause ───────────────────────────────────────────────────────
