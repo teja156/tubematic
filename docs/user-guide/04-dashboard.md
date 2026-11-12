@@ -119,7 +119,7 @@ Two notices can appear on this page:
 
 ### The video window
 
-![The video window on its Video tab. The player is on the left. The side panel has the approval buttons, the video's details and its cost by service](../images/video-window.png)
+![The video window on its Video tab. The player is on the left, paused inside a Terminal Doc insert in a Whiteboard video. The side panel has the approval buttons and the video's details, including its Inserts row](../images/video-window.png)
 
 Click a card or a row to open the video. The left side has tabs:
 

@@ -167,7 +167,7 @@ Click the style field to open the list. **Auto** comes first, then the 2D styles
 styles. A style marked **EXP** is experimental. A style marked **GPU** renders on a GPU only. A
 style this install cannot make is greyed out, with the reason under its name.
 
-![The visual style list open on the New Video page: Auto, then the 2D styles, each with an eye button; Whiteboard is chosen, three styles are marked EXP, and three are greyed out with "needs an OpenAI key" under their names](../images/style-picker.png)
+![The visual style list open on the New Video page: the 2D styles, each with an eye button, with Whiteboard chosen and four styles marked EXP; under 3D, Cartoon 3D is greyed out with "needs a working GPU"; under Inserts, System Flow is greyed out because an insert style is never a whole video](../images/style-picker.png)
 
 The eye button on a row plays a few seconds of that style in a window, with **Prev** and **Next**
 to step through the others and **Use this style** to pick the one you are watching. Picking a style
