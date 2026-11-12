@@ -16,19 +16,17 @@ corner unless you turn it off on **Settings → Rendering**.
 | Style | What you get | Needs |
 |---|---|---|
 | **Auto** | The agent picks the style that suits the topic before it writes the script, or mixes treatments when no style fits. See [What Auto does](#what-auto-does) | Nothing |
-| **Motion Graphics** | A dark canvas. Generated images with slow camera moves, and animated diagrams. No drawn figures | Nothing |
+| **Photo Explainer** | A dark canvas. Full-frame generated pictures of the real things the video is about, with slow camera moves. No drawn figures | Nothing |
 | **Stick Explainer** | A white canvas. Black hand-drawn line art, with stick figures for roles such as "the user" or "an attacker" | Nothing |
 | **Illustrated** | Generated cartoon or rendered characters that stay the same from scene to scene | An OpenAI key |
-| **System Flow** | A dark canvas with one diagram per subject. Components appear as line icons in boxes, connectors draw between them, and points of light travel along the connectors while the narration explains each step. No people and no images | Nothing |
 | **Bean Explainer (experimental)** | A bald cartoon character with a thick outline reacts pose by pose to the narration on a bright colour field, while props and short handwritten labels build up beside it. No images | Nothing |
 | **Storybook Atlas (experimental)** | A vintage picture book told in chapters, each opened by a plaque over a hand-drawn room or landscape. A small mouse guide walks beside the story while its people, named by printed tags, and hatched objects arrive on the narrator's words. No images | Nothing |
-| **Terminal Doc** | A dark, mostly empty screen where the text is the picture: monospace capitals that scramble, rearrange and resolve out of noise, and quoted sources with citations. An amber CRT look suits retro computing topics. Captions are typed into a log strip. No images | Nothing |
 | **Under the Hood (experimental)** | A dark canvas and close-up photographs of one physical object. Short capital labels point at its parts, gold arcs show fields and flows, numbers tick, and a cartoon presenter reacts in the bottom corner | An OpenAI key. Up to 12 generated photographs per video |
 | **Case File Story (experimental)** | A suspense story in painted pictures that puts the viewer inside a scheme or a money dilemma. One blank-faced character stands in for the viewer, meters change with the plot, cards count the numbers out, and it ends on a choice between two buttons | An OpenAI key. Up to 16 generated pictures per video, and one reference picture |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
 | **Whiteboard** | One big white board. A floating marker writes and draws each step just after the narrator says it, and the camera glides between parts of the board. It ends on the whole board, each part numbered. No people and no images | Nothing |
 
-Motion Graphics, Stick Explainer and Illustrated set the canvas and how people are drawn. They do not limit what a scene can show. A Stick
+Photo Explainer, Stick Explainer and Illustrated set the canvas and how people are drawn. They do not limit what a scene can show. A Stick
 Explainer video still draws a process as a diagram, and still shows a generated image for a real
 place or person, inside a panel on the white canvas.
 
@@ -38,15 +36,14 @@ background would flash, and a viewer reads that as a broken render.
 ### Picking one
 
 - Choose **Auto** when you have no preference.
-- Choose **Motion Graphics** for subjects you can photograph or diagram: places, machines, events,
-  how data moves.
+- Choose **Photo Explainer** for real, specific things the viewer came to see: products, buildings,
+  artworks, machines, named people and places, or a real event and the machine or company it
+  happened to.
 - Choose **Stick Explainer** for a process acted out by generic people in roles: what a user clicks,
-  what an attacker tries, how a kitchen team gets an order out, what a rescuer does in CPR.
+  what an attacker tries, how a kitchen team gets an order out, what a rescuer does in CPR. It also
+  suits how a system works, such as a request crossing a network, with its parts acting as roles.
 - Choose **Illustrated** when the video follows the same characters through several scenes. Each new
   pose is one more OpenAI image call, so this style costs more per video than the two above.
-- Choose **System Flow** for how a system works: a request crossing a network, the steps of a
-  protocol, a data pipeline, where an attack is stopped. The script is written as a walk through
-  the system, one component and one step at a time.
 - Choose **Bean Explainer** for relatable, conversational topics: habits, health, money mistakes,
   how people behave, and "every X explained" lists, where each item gets its own section. The props
   come from a fixed library of everyday objects, so it suits subjects a phone, a coin, a clock or a
@@ -56,9 +53,6 @@ background would flash, and a viewer reads that as a broken render.
   they made. The script is written as a calm story in three to five chapters, and people appear as
   picture-book figures recognised by their name and clothes, never by their face. It suits history
   better than a list of tips or a mechanism explained part by part. It is experimental.
-- Choose **Terminal Doc** for topics that turn on a word, a key or a number: ciphers and codes,
-  passwords and hashes, encodings, famous unsolved codes, what a computer does with text. It has no
-  pictures of real things or people, so it does not suit places or life stories.
 - Choose **Under the Hood** for how one physical thing works inside: a touchscreen, a battery, a
   lock, an SSD, a fridge, or the price of a part. The script goes one layer deeper per scene and
   quotes real numbers, which become labels, counters and charts. Each photograph is an OpenAI image
@@ -81,7 +75,7 @@ background would flash, and a viewer reads that as a broken render.
 ### What Auto does
 
 When you approve a topic left on Auto, the agent picks a style before it writes the script, because
-the script is written for the style: a System Flow script walks through a system one step at a time,
+the script is written for the style: a Whiteboard script works an idea out one step at a time,
 for example. It reads what each style is made for and avoids, compares that with the topic, and
 picks the style that clearly fits. It considers every style this install can make: Illustrated only
 while an OpenAI key is stored, Under the Hood and Case File Story only while an OpenAI key is stored
@@ -92,7 +86,7 @@ variety: the same kind of topic gets the same style every time.
 The agent keeps **mixed scenes** when the topic needs two things no single style has, such as
 full-frame pictures of a real bank next to stick figures acting out the run on it, or when no style
 clearly fits.
-A real event told only through its pictures and diagrams goes to Motion Graphics. So does a real
+A real event told through its pictures goes to Photo Explainer. So does a real
 failure with a technical cause, such as a rocket lost to a software bug: the agent rules out any
 style that cannot show the real rocket, however much of the topic is about a number or a line of
 code. The agent then
@@ -100,7 +94,7 @@ chooses a dark or a white canvas for the whole video once the voice exists (dark
 the video, white when roles, processes and diagrams do), and draws each part of the script in
 whatever way suits it: an image, a diagram, line-art figures or generated characters. A mixed video can combine what the named
 styles keep apart. One on a dark canvas can use line-art figures for "the user" and "the server",
-which Motion Graphics leaves out. The agent uses generated characters only for a character the
+which Photo Explainer leaves out. The agent uses generated characters only for a character the
 viewer must recognise across scenes, and only while an OpenAI key is stored.
 
 The video's window shows the choice under **Visual style**, after the word Auto: the picked style's
@@ -115,9 +109,7 @@ a new video nothing has been paid for at this point; for a video you sent back f
 was voiced, the new script is voiced again when you approve it. To give the style back to Auto entirely, request a revision of the
 topic: a revised topic returns to Auto, and the agent picks again after you approve it.
 
-A System Flow video has a fixed look, so its pick is the whole decision: the agent lays out the
-diagrams and times them to the narration, but it does not change the canvas or add images. A Bean
-Explainer video works the same way: the agent picks the background colour, the character's
+A Bean Explainer video has a fixed look, so its pick is the whole decision: the agent picks the background colour, the character's
 accessory and the props, and times every pose to the narration. When the library has nothing for an
 object the video needs, the agent draws that prop itself in the same style and checks the drawing
 before the video renders. A Whiteboard video is the same again: the agent picks what to write and
@@ -127,10 +119,6 @@ an object such as a bicycle.
 A Storybook Atlas video works the same way too: the agent splits the narration into chapters, picks
 each chapter's room or landscape, dresses the people of the story, and times every walk, object and
 plate to the narration, drawing an object of its own when the library lacks one.
-
-A Terminal Doc video too: the agent picks the house look or the amber CRT
-look and times every word, number and bracket to the narration, and for a transformation no shipped
-animation shows (a letter shift, two strings combined) it writes one and checks it first.
 
 An Under the Hood video works the same way: the agent makes the photographs, looks at each one and
 makes it again if it shows the wrong thing, pins the labels to the parts, and times the labels,
@@ -143,15 +131,37 @@ It looks at each painting and makes it again if the character changed or the pic
 wrong thing. It then chooses the meters and times the pictures, the cards and the two buttons to
 the narration. The character's head is the same in every video.
 
+### Insert scenes
+
+An insert is a short scene, a few seconds long, in another look inside a video's style, where the
+narration reaches something that look shows best. The video's style carries everything else: the
+opening, the answer it builds to, and the ending. The captions stay on screen through an insert,
+and the video goes back to its style right after it.
+
+| Insert | What it shows |
+|---|---|
+| **System Flow** | A diagram of parts: components appear as line icons in boxes, connectors draw between them, and points of light travel along the connectors, for a request crossing a network or the steps of a protocol |
+| **Terminal Doc** | Text as the picture: a password being hashed, letters scrambled into a cipher, a command typed and what it prints, a large number resolving out of noise |
+
+An insert follows the video's canvas, so on a white video it is drawn dark on paper. A Cartoon 3D
+video takes no inserts.
+
+The **Inserts** setting decides whether a video may have them. On **Auto** the agent decides, after
+it picks the style and before it writes the script; many videos get none. On **None** the video has
+none. The video's window shows the decision in the **Inserts** row, with the agent's reason, and the
+Script tab marks each part of the script an insert shows.
+
+Videos voiced before System Flow and Terminal Doc became inserts keep their whole-video look.
+
 ### Where you choose
 
 | Where | What it sets |
 |---|---|
-| A topic waiting for approval, on its Quick Actions row or in its window | That video's style |
-| The **New Video** page | The style of the video you are creating |
-| **Edit defaults** on a domain's row on the **Topics** page | The style its curriculum topics arrive with. You can still change it on each topic |
+| A topic waiting for approval, on its Quick Actions row or in its window | That video's style and its **Inserts** setting |
+| The **New Video** page | The style and the **Inserts** setting of the video you are creating |
+| **Edit defaults** on a domain's row on the **Topics** page | The style its curriculum topics arrive with, and the **Inserts** setting every new video in it starts with. You can still change both on each topic |
 
-Once you approve the topic, the style is fixed.
+Once you approve the topic, the style and the **Inserts** setting are fixed.
 
 Click the style field to open the list. **Auto** comes first, then the 2D styles, then the 3D
 styles. A style marked **EXP** is experimental. A style marked **GPU** renders on a GPU only. A
