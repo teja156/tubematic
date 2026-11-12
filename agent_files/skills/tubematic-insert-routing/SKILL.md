@@ -1,6 +1,6 @@
 ---
 name: tubematic-insert-routing
-description: Decide whether a video's script will use short insert scenes (a System Flow diagram, a Terminal Doc string) inside its main style, and which insert styles — read the candidates from get_video's insert_routing, list the beats the narration will reach, keep only beats an insert shows clearly better than the main style, and record the choice with choose_inserts
+description: Decide whether a video's script will use short insert scenes (a diagram of parts, a string on screen) inside its main style, and which insert styles — read the candidates from get_video's insert_routing, list the beats the narration will reach, keep only beats an insert shows clearly better than the main style, and record the choice with choose_inserts
 ---
 
 # Tubematic insert routing skill
@@ -20,7 +20,7 @@ video's Inserts setting is None, or its main style takes no inserts.
 A video has one **main style**. It carries the opening, the payoff and the ending, and almost every
 second of the video. An **insert** is a short scene (at most about 8 seconds) in another look, shown
 over the main style where the narration reaches something that look shows best: a request travelling
-between components (System Flow), a password being hashed or a command being typed (Terminal Doc).
+between components, a password being hashed or a command being typed.
 The main style's captions stay on screen through it, and the video goes back to the main style after
 it.
 
@@ -78,7 +78,7 @@ choose_inserts(video_id, inserts=[<ids>], reason=<one sentence>)
 ```
 
 `reason` is one sentence of at most 300 characters for the person who approves the script: the beat
-an insert shows ("The request's path from browser to server is a System Flow insert.") or why none
+an insert shows ("The request's path from browser to server is a diagram insert.") or why none
 helps ("A personal story with nothing to diagram or type.").
 
 Then `add_comment(video_id, "agent", …)` with your beat list in one line and the insert beats you

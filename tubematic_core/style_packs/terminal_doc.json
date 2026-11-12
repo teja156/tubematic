@@ -49,29 +49,23 @@
   },
   "routing": {
     "best_for": [
-      "cryptography, ciphers and codes",
-      "passwords, hashes, keys and encodings",
-      "a string, key or number transformed step by step (encoded, encrypted, hashed, scrambled)",
-      "unsolved codes and famous ciphers",
-      "what a computer does with text and numbers under the hood",
-      "computing history told through one command, message or number"
+      "one string, password, key or hash transformed step by step (hashed, encoded, encrypted, shifted)",
+      "a command typed at a terminal and what it prints",
+      "a large number that is the punchline: a keyspace, a count, a limit, a time to crack",
+      "letters scrambled, shifted or rearranged into another word",
+      "a short quoted message, line of code or source shown as text"
     ],
     "avoid_for": [
-      "components passing requests, packets or messages between each other (System Flow draws those)",
-      "arithmetic or reasoning worked out step by step by hand (Whiteboard fits it)",
-      "real, named things the viewer came to see as pictures (Motion Graphics)",
-      "lists of everyday habits or behaviours one person reacts to (Bean Explainer)",
-      "places, journeys and geography",
-      "people's life stories and characters the viewer must recognise",
-      "a real-world event or accident caused by a bug: the machine, the place and the moment are the story (Motion Graphics fits it)"
+      "components passing requests or messages between each other (System Flow shows them)",
+      "a real object, place, event or person the viewer must see",
+      "a calculation worked through by hand",
+      "the opening or the payoff of the video, which belong to the main style"
     ],
     "cannot_show": "any picture of a real thing: no photographs, machines, places or people, only text, numbers and simple glyphs on a screen",
     "signals": [
-      "the script turns on one word, password, key, hash or string",
-      "something is encoded, encrypted or transformed letter by letter",
-      "one large number is the punchline (a keyspace, a count, a time to crack)",
-      "the script quotes a source, a message or a date as evidence",
-      "a command typed at a terminal and what it prints"
+      "the sentence names the exact string, number or command the viewer should watch",
+      "something is encoded, hashed or transformed letter by letter",
+      "one big number is the point of the sentence"
     ],
     "moods": [
       "sober",

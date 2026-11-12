@@ -32,7 +32,8 @@
   "routing": {
     "best_for": [
       "a process acted out step by step by generic people or roles (a kitchen team, a rescuer, the user and an attacker)",
-      "how a thing works when people, animals or cells carry the steps as roles"
+      "how a thing works when people, animals or cells carry the steps as roles",
+      "how a system, a network or a protocol works, told with its parts as roles (the browser asks, the server answers); its component-diagram beats become System Flow inserts"
     ],
     "avoid_for": [
       "stories that need recurring, recognisable characters"
@@ -41,7 +42,8 @@
     "signals": [
       "people in the script are roles, not named individuals",
       "each beat is someone doing one step of the process",
-      "the beats are animation-led diagrams and line art"
+      "the beats are animation-led diagrams and line art",
+      "the script walks a request or a message through the parts of a system"
     ],
     "moods": [
       "playful",

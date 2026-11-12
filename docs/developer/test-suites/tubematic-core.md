@@ -241,7 +241,8 @@ the fixed topic set in `tests/fixtures/style_routing_cases.json`
   is not working or not tested, a mascot on a style that takes none (a 3D world, Under the Hood, Case File Story).
   `scenes` is always available.
 - Every topic names only real outcomes, and every outcome is the first expectation of at least
-  three topics.
+  three topics. No topic expects an insert style as its main style; every insert style is expected
+  as an insert in at least three topics (`inserts_expect`), and at least three topics expect none.
 
 Trap: the three-topic minimum fails CI for a new pack until its ticket adds topics for it. That is
 what keeps the topic set growing with the packs, so the hand-run eval

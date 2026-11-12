@@ -17,9 +17,14 @@ Each case is:
 | `ok` | Outcomes that are acceptable but not the best |
 | `future` | A coming style expected to take the topic over once its pack ships, or `""` |
 | `note` | Why the expectation is what it is, when that is not obvious |
+| `inserts_expect` | The insert styles the insert step should choose for the picked main style, `[]` for none, or `"any"` (also when absent) |
+| `inserts_ok` | Insert styles that are also acceptable |
 
 `tubematic_core/tests/test_style_routing.py` checks it in CI: every id is a real outcome, and every
-pack and `scenes` is the first expectation of at least three topics.
+main pack and `scenes` is the first expectation of at least three topics. An insert style is never a
+topic's main expectation; it is expected as an insert in at least three topics, and at least three
+topics expect no inserts, so the eval can see an insert added for variety
+([Main styles and inserts](../10-scene-authoring.md#main-styles-and-inserts)).
 
 Most topics probe a pair of styles that could be confused (Bean Explainer and Storybook Atlas, Under
 the Hood and Whiteboard, a story style and Illustrated), or an older style next to a newer neighbour

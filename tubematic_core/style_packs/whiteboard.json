@@ -49,7 +49,7 @@
       "a mental model, a rule of thumb or a definition"
     ],
     "avoid_for": [
-      "components passing requests, packets or data between them (System Flow draws those)",
+      "components passing requests, packets or data between them (Stick Explainer acts them out, with System Flow inserts)",
       "real, named things the viewer should see as pictures (Motion Graphics)",
       "generic roles acting out a scene (Stick)",
       "emotional or people-centred stories",

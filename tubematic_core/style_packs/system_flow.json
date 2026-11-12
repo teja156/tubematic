@@ -47,25 +47,23 @@
   },
   "routing": {
     "best_for": [
-      "networking and protocols",
-      "system design",
-      "security flows and attacks",
-      "data pipelines",
-      "how a request is handled",
-      "supply chains as flows"
+      "a request, packet, message or signal travelling between named components (a browser, a resolver, a server)",
+      "the parts of a system and how they connect: a pipeline, a queue, a cache in front of a database",
+      "a protocol exchange or a handshake, step by step between two or three parties",
+      "an attack or a defence shown as a path through components"
     ],
     "avoid_for": [
-      "emotional or narrative stories",
-      "topics with no structure to diagram",
-      "a real company's or machine's failure told as an event (Motion Graphics fits it)"
+      "a person acting out a step: the main style's figures do it",
+      "a real object, place, event or company the viewer must see",
+      "a number or a calculation worked out by hand",
+      "one string, password or hash being transformed (Terminal Doc shows it)",
+      "the opening or the payoff of the video, which belong to the main style"
     ],
     "cannot_show": "any picture of a real object, place or person: only labelled boxes, icons and the arrows between them",
     "signals": [
-      "the script names components that talk to each other",
-      "the subject is a path a request, packet or signal travels",
-      "the script walks through the steps of a pipeline",
-      "latency, throughput or a bottleneck is the point",
-      "the topic is an architecture or a protocol"
+      "the sentence names two or more components and something that moves between them",
+      "the narration says a part sends, forwards, asks, replies or routes",
+      "a value worth reading travels with it: an address, a port, a status code"
     ],
     "moods": [
       "precise",
