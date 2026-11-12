@@ -249,7 +249,7 @@ Then:
    When that still leaves two, read `formula_routing.learned.openings`: the types of opening
    with enough of this domain's videos to read, each with its `standing` (`better`, `even`,
    `mixed` or `worse` at holding this domain's viewers) and `videos`. Keep the one whose type
-   stands better there, counting a type that is not in the list as `even`. The list is empty on a
+   stands better there, counting a type that is not in the list, and a `mixed` one, as `even`. The list is empty on a
    trial pick, and then nothing breaks the tie but the order of your drafts. The list only breaks
    a tie: an opening that is weaker for this topic never wins because its type did well on other
    videos.

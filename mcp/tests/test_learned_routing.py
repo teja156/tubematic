@@ -257,3 +257,17 @@ def test_a_return_to_the_topic_clears_the_record_with_the_pick(evidence):
     out = server.set_video_status("vid_1", "TOPIC_PROPOSED")
     assert "error" not in out
     assert _evidence() == ""
+
+
+def test_a_trial_picks_openings_stay_aside_after_later_picks_move_the_count(evidence):
+    for n in range(3):
+        vid = _video(f"v{n}")
+        server.choose_script_formula(vid, OTHER, REASON, repeat_reason=REPEAT,
+                                     learned_stamp=_stamp(vid))
+    _video()
+    assert server.choose_script_formula("vid_1", OTHER, REASON, repeat_reason=REPEAT,
+                                        learned_stamp=_stamp())["learned"]["mode"] == "explore"
+    vid = _video("v_after")
+    server.choose_script_formula(vid, GOOD, REASON, learned_stamp=_stamp(vid))
+    # The script of the trial pick is still to be written: no openings.
+    assert server.get_video("vid_1")["formula_routing"]["learned"]["openings"] == []

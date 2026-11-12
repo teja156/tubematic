@@ -404,9 +404,11 @@ test.describe("VideoModal", () => {
       "visual_style = 'system_flow', formula_pick = 'follow-the-flow', formula_runner_up = 'scene-story', "
         + "formula_reason = 'A request moves through fixed stages.', formula_id = 'follow-the-flow', "
         // What the watch figures said about the pick; the switch clears it.
-        + "formula_evidence = '{\"formula\": \"follow-the-flow\", \"mode\": \"learned\", "
-        + "\"standing\": \"better\", \"points\": 2, \"videos\": 24, \"accounts\": 1, \"min_group\": 20}'",
-      "()");
+        // The JSON goes in as a bound parameter: its quotes would end the
+        // Python string the SQL is written into.
+        + "formula_evidence = ?",
+      "(json.dumps({'formula': 'follow-the-flow', 'mode': 'learned', 'standing': 'better', "
+        + "'points': 2, 'videos': 24, 'accounts': 1, 'min_group': 20}),)");
 
     await page.goto("/");
     const card = page.getByTestId(`kanban-card-${video.id}`);

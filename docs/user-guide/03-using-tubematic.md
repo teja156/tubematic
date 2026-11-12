@@ -306,8 +306,8 @@ least 20 of the domain's videos with figures use it on one account. A formula th
 clearly better than the domain's videos as a whole is favoured, and one that holds them clearly
 worse counts against it.
 
-Auto only weighs these figures among formulas that already fit the topic, so a topic never gets a
-formula that does not suit it because that formula did well elsewhere. Every fourth pick in a
+Auto is told to weigh these figures only among formulas that already fit the topic, so that a
+topic does not get a formula that does not suit it because that formula did well elsewhere. Every fourth pick in a
 domain is a trial pick, which favours formulas the domain has too few videos of, so Auto keeps
 learning about the formulas it has not tried. When two openings the agent drafts are equally
 strong, it keeps the type that holds the domain's viewers better.

@@ -171,7 +171,7 @@ def test_the_domains_figures_only_break_a_tie_between_openings():
     assert "The list only breaks\n   a tie" in part
     assert "never wins because its type did well on other\n   videos" in part
     # A trial pick empties the list; an unlisted type ranks as even.
-    assert "counting a type that is not in the list as `even`" in part
+    assert "counting a type that is not in the list, and a `mixed` one, as `even`" in part
     assert "The list is empty on a\n   trial pick" in part
 
 

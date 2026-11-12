@@ -69,19 +69,27 @@ def _with_learning(candidates: list, given) -> tuple:
     """The candidates with their learned points, and formula_routing.learned,
     as the server sends them. A case with no `learned` is a domain with no
     figures: every candidate has 0 points. A case's `learned` is
-    {"mode": "learned" | "explore", "points": {formula id: points}}; a formula
-    it does not name has 0."""
+    {"mode": "learned" | "explore", "points": {formula id: points}}. In
+    "learned" mode a formula it does not name is thin with 0 points; in
+    "explore" mode a formula with the trial points is thin and every other one
+    is counted."""
     if not given:
         for c in candidates:
             c["learned"] = {"points": 0, "standing": "", "videos": 0}
         return candidates, {"active": False, "mode": "", "stamp": "", "measure": twatch.LEARN_MEASURE,
-                            "min_group": twatch.WATCH_MIN_GROUP, "openings": []}
-    standing = {2: "better", -1: "worse"} if given["mode"] == "learned" else {2: twatch.THIN}
+                            "min_group": twatch.WATCH_MIN_GROUP, "accounts": 0, "openings": []}
+    counted = {"points": 0, "standing": "even", "videos": twatch.WATCH_MIN_GROUP + 4}
+    thin = {"points": 0, "standing": twatch.THIN, "videos": 0}
     for c in candidates:
+        named = c["id"] in given["points"]
         pts = given["points"].get(c["id"], 0)
-        c["learned"] = {"points": pts, "standing": standing.get(pts, "even"),
-                        "videos": 0 if standing.get(pts) == twatch.THIN else
-                        twatch.WATCH_MIN_GROUP + 4}
+        if given["mode"] == "learned":
+            # As the server: a formula the figures name is counted, the rest are thin.
+            base = {2: "better", -1: "worse"}.get(pts, "even") if named else twatch.THIN
+            c["learned"] = {**(counted if named else thin), "points": pts, "standing": base}
+        else:
+            # A trial pick: the points go to the thin formulas, every other one is counted.
+            c["learned"] = {**thin, "points": pts} if pts == twatch.EXPLORE_POINTS else dict(counted)
     return candidates, {"active": True, "mode": given["mode"], "stamp": f"{given['mode']}-eval",
                         "measure": twatch.LEARN_MEASURE,
                         "min_group": twatch.WATCH_MIN_GROUP, "accounts": 1, "openings": []}

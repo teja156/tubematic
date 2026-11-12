@@ -1411,10 +1411,11 @@ def _learning_enabled() -> bool:
             and _get_setting("publishing_enabled", "false").strip().lower() == "true")
 
 
-def _routing_learning(con, project_id, video_id: str) -> dict:
+def _routing_learning(con, project_id, video_id: str, pick_mode: str = "") -> dict:
     """What the domain's watch figures add to formula routing
     (tubematic_core.watch.routing_learning)."""
-    return twatch.routing_learning(con, project_id or "", video_id, _learning_enabled())
+    return twatch.routing_learning(con, project_id or "", video_id, _learning_enabled(),
+                                   pick_mode=pick_mode)
 
 
 def _recent_domain_formulas(project_id, video_id: str) -> dict:
@@ -1511,8 +1512,11 @@ def _formula_routing(video: dict) -> dict:
     # so only those statuses pay for reading them.
     learning = {"active": False}
     if status in ("TOPIC_APPROVED", "REVISION_REQUESTED"):
+        # With a pick decided, the writer's openings follow the mode the pick
+        # was made in, never the domain's count since.
+        held = twatch.record_mode(video.get("formula_evidence")) if pick else ""
         with _conn() as con:
-            learning = _routing_learning(con, video.get("project_id"), video["id"])
+            learning = _routing_learning(con, video.get("project_id"), video["id"], held)
     if ((status == "TOPIC_APPROVED" and not pick)
             or (status == "REVISION_REQUESTED" and not (pick and choice))):
         candidates = tformulas.routing_candidates(

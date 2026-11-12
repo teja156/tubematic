@@ -818,8 +818,8 @@ Covers [Learned routing](../08-scripting-and-voice.md#learned-routing) through t
 - A stamp that differs from the one worked out under the lock is refused and nothing is written:
   a pick recorded in between, new figures, and learning switched off each change it.
 - Every fourth pick in a domain is a trial pick, which gives the points to formulas with too few
-  videos and empties the openings list. A return to `TOPIC_PROPOSED` clears the record with the
-  pick.
+  videos and empties the openings list. A trial pick's openings stay empty after later picks in
+  the domain move the count. A return to `TOPIC_PROPOSED` clears the record with the pick.
 
 Trap: the record is worked out by the server under the pick's write lock, and only for a pick the
 agent scored with the same stamp. Without that check, a session that read two videos before

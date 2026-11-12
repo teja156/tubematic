@@ -261,6 +261,9 @@ Covers the rule of [Learned routing](../08-scripting-and-voice.md#learned-routin
 - The points per mode, the every-fourth trial pick counted from stored records only (the video
   itself and other domains left out), and the trial pick moving the points to thin formulas.
 - Learning off or a domain with no evidence gives every formula 0 points and stores no record.
+- A dropped formula does not switch learning on. Openings reach the writer before any formula
+  counts, are emptied on a trial pick, and follow the mode stored with a decided pick. The stamp
+  changes with the mode and with any formula's points.
 
 Trap: the comparison is inside one account only. Pooling accounts would compare one audience's
 share with another's and read the difference as the formula's.

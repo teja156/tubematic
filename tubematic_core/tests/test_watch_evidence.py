@@ -364,3 +364,22 @@ def test_the_stamp_changes_with_the_mode_and_with_any_formulas_points(con):
     assert second != first and second.startswith("learned-")
     _picked(con, 3)
     assert watch.routing_learning(con, "dom", "new", True, NOW)["stamp"].startswith("explore-")
+
+
+def test_openings_follow_the_mode_stored_with_the_pick(con):
+    _many(con, A, 60, MIN, hook="question")
+    _many(con, B, 40, MIN, hook="problem")
+    # The domain's count says learned; a pick made as a trial keeps its openings aside.
+    held = watch.routing_learning(con, "dom", "new", True, NOW, pick_mode="explore")
+    assert held["mode"] == "learned" and held["openings"] == []
+    _picked(con, 3)
+    # The count now says trial; a pick made as learned keeps its openings.
+    kept = watch.routing_learning(con, "dom", "new", True, NOW, pick_mode="learned")
+    assert kept["mode"] == "explore" and kept["openings"]
+
+
+def test_the_mode_of_a_stored_record():
+    assert watch.record_mode(json.dumps({"mode": "explore"})) == "explore"
+    assert watch.record_mode(json.dumps({"mode": "learned"})) == "learned"
+    for raw in ("", None, "{broken", "[]", json.dumps({"mode": "other"})):
+        assert watch.record_mode(raw) == ""

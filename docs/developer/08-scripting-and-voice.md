@@ -261,13 +261,14 @@ ever more certain.
 | `explore` | 2 for `thin`, 0 for the rest |
 
 The routing skill adds the points only to the formulas that are a clear fit by the topic's own
-points, so a formula that does not fit is never picked for its numbers. Rotation then runs on the
+points, so that a formula that does not fit is not picked for its numbers. That rule is the
+skill's: `choose_script_formula` accepts any available candidate. Rotation then runs on the
 totals as before, and the figures are never a `repeat_reason`. `get_video` reads the figures only
 at `TOPIC_APPROVED` and `REVISION_REQUESTED`, where a formula is picked or a script written.
 
 The script-writing skill reads `formula_routing.learned.openings`, the opening types with a
 counted group, ranked. It is the last tie-break between two openings, after the quality of the
-opening and after the domain's recent types, and an unlisted type ranks as `even`. Opening types
+opening and after the domain's recent types, and an unlisted or `mixed` type ranks as `even`. Opening types
 are few, so they gather enough videos before any formula does: the list is filled whenever learning
 is on, also while no formula counts. A trial pick empties it, so the favoured opening type does not
 gather videos and certainty the way an unchecked formula would.

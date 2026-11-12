@@ -774,8 +774,10 @@ model is called.
   answer key still works.
 - The report counts best, acceptable and failed picks overall and by formula, and lists the wrong
   ones. Every topic in the set builds a prompt.
-- A topic with no `learned` reaches the skill with learning inactive and 0 points everywhere, and
-  one with `learned` hands its points over as the server would.
+- A topic with no `learned` reaches the skill with the server's inactive shape and 0 points
+  everywhere. One with `learned` hands its points over as the server would: in learned mode an
+  unnamed formula is thin, and in a trial pick the formulas with the points are thin and the rest
+  counted.
 
 ### `test_eval_style_routing.py`
 

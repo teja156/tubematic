@@ -354,7 +354,7 @@ def _stamp(mode: str, formulas: dict) -> str:
 
 
 def routing_learning(con, project_id: str, video_id: str, enabled: bool,
-                     now: datetime | None = None) -> dict:
+                     now: datetime | None = None, pick_mode: str = "") -> dict:
     """get_video's formula_routing.learned, before the candidates take their
     points: {active, mode, stamp, measure, min_group, accounts, openings,
     formulas}.
@@ -366,6 +366,11 @@ def routing_learning(con, project_id: str, video_id: str, enabled: bool,
     trial pick sets the figures aside for openings too, so `openings` is []
     there: otherwise the favoured type would be used more and look ever more
     certain, the loop the trial picks exist to break.
+
+    pick_mode: the mode stored with the video's decided pick (its
+    formula_evidence), or "". The writer's openings follow it: other picks in
+    the domain move the trial count after this one, and a trial pick's script
+    stays a trial for its openings however long it takes to write.
     """
     off = {"active": False, "mode": "", "stamp": "", "measure": LEARN_MEASURE,
            "min_group": WATCH_MIN_GROUP, "accounts": 0, "openings": [], "formulas": {}}
@@ -373,7 +378,8 @@ def routing_learning(con, project_id: str, video_id: str, enabled: bool,
         return off
     evidence = domain_evidence(con, project_id, now)
     if not evidence["active"]:
-        return {**off, "accounts": evidence["accounts"], "openings": evidence["openings"]}
+        return {**off, "accounts": evidence["accounts"],
+                "openings": [] if pick_mode == "explore" else evidence["openings"]}
     mode = learning_mode(con, project_id, video_id)
     formulas = {}
     for fid in tformulas.FORMULAS:
@@ -384,8 +390,19 @@ def routing_learning(con, project_id: str, video_id: str, enabled: bool,
     return {"active": True, "mode": mode, "stamp": _stamp(mode, formulas),
             "measure": LEARN_MEASURE, "min_group": WATCH_MIN_GROUP,
             "accounts": evidence["accounts"],
-            "openings": [] if mode == "explore" else evidence["openings"],
+            "openings": [] if (pick_mode or mode) == "explore" else evidence["openings"],
             "formulas": formulas}
+
+
+def record_mode(raw) -> str:
+    """The mode of a stored formula_evidence, or "" for none or a record that
+    does not parse."""
+    try:
+        record = json.loads(raw) if raw else {}
+    except (TypeError, ValueError):
+        return ""
+    mode = record.get("mode") if isinstance(record, dict) else ""
+    return mode if mode in ("learned", "explore") else ""
 
 
 def candidate_learning(learning: dict, formula_id: str) -> dict:

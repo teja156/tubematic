@@ -102,4 +102,17 @@ def test_a_learned_case_hands_over_its_points_as_the_server_does():
     assert cands["scene-story"]["learned"]["points"] == 2
     assert cands["scene-story"]["learned"]["standing"] == "better"
     assert cands["follow-the-flow"]["learned"]["standing"] == "worse"
-    assert cands["incident-file"]["learned"] == {"points": 0, "standing": "even", "videos": 24}
+    assert cands["incident-file"]["learned"] == {"points": 0, "standing": "thin", "videos": 0}
+    assert routing["learned"]["accounts"] == 1
+
+
+def test_a_trial_case_gives_its_points_to_thin_formulas_and_counts_the_rest():
+    case = {**CASE, "learned": {"mode": "explore", "points": {"scene-story": 2}}}
+    cands = {c["id"]: c for c in _video(case)["formula_routing"]["candidates"]}
+    assert cands["scene-story"]["learned"] == {"points": 2, "standing": "thin", "videos": 0}
+    assert cands["follow-the-flow"]["learned"] == {"points": 0, "standing": "even", "videos": 24}
+
+
+def test_an_inactive_case_has_the_servers_inactive_shape():
+    learned = _video(CASE)["formula_routing"]["learned"]
+    assert learned["accounts"] == 0 and learned["stamp"] == "" and learned["openings"] == []
