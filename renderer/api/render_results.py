@@ -100,6 +100,32 @@ def _setting(key: str, default: str) -> str:
     return os.getenv(key.upper(), default)
 
 
+def _narration_voices(row) -> list[str]:
+    """The names of the voices a video's narration is spoken in (TMDEV-216),
+    in the order they first speak. A voice no longer on the roster reads as
+    its id."""
+    try:
+        roster = {v["voice_id"]: v.get("name") or v["voice_id"]
+                  for v in json.loads(_setting("elevenlabs_voices", "[]"))}
+    except (ValueError, TypeError, KeyError, AttributeError):
+        roster = {}
+    video_voice = row["voice_id"] or _setting("elevenlabs_voice_id", "")
+    try:
+        segments = json.loads(row["script_segments"]) if row["script_segments"] else []
+    except ValueError:
+        segments = []
+    if not isinstance(segments, list) or not segments:
+        return [roster.get(video_voice, video_voice)] if video_voice else []
+    # The voices that actually speak: a video whose every segment names
+    # another voice is spoken by that voice alone.
+    ids = []
+    for vid, _ in pipeline.tvoice.segment_runs(
+            [s for s in segments if isinstance(s, dict)], video_voice):
+        if vid and vid not in ids:
+            ids.append(vid)
+    return [roster.get(vid, vid) for vid in ids]
+
+
 def max_render_retries() -> int:
     try:
         return int(_setting("max_render_retries", "1"))
@@ -419,7 +445,8 @@ def finish_render(video_id: str) -> None:
             )
             row = con.execute(
                 "SELECT ai_review_count, script, tts_text, visual_style, "
-                "resolved_visual_style, resolved_renderer FROM videos WHERE id = ?", (video_id,)
+                "resolved_visual_style, resolved_renderer, voice_id, script_segments "
+                "FROM videos WHERE id = ?", (video_id,)
             ).fetchone()
             new_count = row["ai_review_count"] if row else 1
             # VQA-6: the review's pronunciation reference. script is the
@@ -428,6 +455,9 @@ def finish_render(video_id: str) -> None:
             # column existed — the review degrades to the script alone).
             script_text = (row["script"] if row else "") or ""
             tts_text = (row["tts_text"] if row else "") or ""
+            # TMDEV-216: the names of the voices the narration is spoken in,
+            # so a second voice on purpose is not reported as a defect.
+            review_voices = _narration_voices(row) if row else []
             # TMDEV-101: the canvas the video was deliberately painted on, and
             # whether it may contain figures, so the reviewer judges it against
             # its own intended look. The two are independent — an "auto" video
@@ -479,7 +509,8 @@ def finish_render(video_id: str) -> None:
                                                 figures=has_figures,
                                                 line_art=has_line_art,
                                                 cartoon_3d=is_cartoon_3d,
-                                                style_block=style_block)
+                                                style_block=style_block,
+                                                voices=review_voices)
         # Every paid review is recorded — a second loop costs a second row, and
         # a reply that failed to parse was still billed (TMDEV-107).
         review_usage = result_review.get("usage")

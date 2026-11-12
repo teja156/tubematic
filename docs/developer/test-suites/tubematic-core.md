@@ -161,8 +161,9 @@ Covers `tubematic_core/formulas.py` and the files in `tubematic_core/formulas/`
 - The files hold no ticket id and no link, because they are rendered into skill files that ship in
   the release archive.
 
-Trap: no formula may need a second voice. A video has one voice, so a dialogue formula would
-produce a script that cannot be voiced.
+Trap: no formula may need a second voice yet. A dialogue formula needs a second roster voice, and
+no formula field says so, so on an install with one voice routing could pick a script that cannot
+be voiced. The field comes with the first formula that needs it.
 
 ### `test_script_checks.py`
 
@@ -552,6 +553,21 @@ video's current model. When a voice's model is edited in Settings, the edited mo
 current one and the target, and an exemption would pass the edit through to a paid voicing. A video
 voice that has left the roster resolves to nothing, because a fallback would spend on a voice nobody
 chose.
+
+### `test_voice_speed_and_segments.py`
+
+Covers the speed and segment-voice rules in `voice_models.py`
+([Speed](../08-scripting-and-voice.md#speed),
+[A voice per segment](../08-scripting-and-voice.md#a-voice-per-segment)).
+
+- `SPEED_MODELS` is the catalog without `eleven_v3` and `eleven_v4`. A speed in range on the step is
+  allowed there; on `eleven_v3` or `eleven_v4` only 1.0 is.
+- A roster entry may carry `speed` and nothing else beyond its three keys. A speed of 1.0 is not
+  stored, and others are rounded.
+- A segment voice equal to the video's is dropped, consecutive segments with one voice form a run,
+  and each segment's markup is checked against its own voice.
+- A change of the video's voice checks only the segments it speaks, and still refuses markup it
+  cannot speak.
 
 ### `test_youtube.py`
 

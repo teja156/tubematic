@@ -76,6 +76,10 @@ If you go back to 2.1.x later:
   before you go back.
 - A domain whose default style is System Flow, Bean Explainer, Whiteboard, Storybook Atlas, Terminal
   Doc, Under the Hood or Case File Story starts its new videos on Auto under 2.1.x.
+- If any voice in **Settings → Voice** has a speed other than 1.00x, 2.1.x reads the whole voice
+  list as empty and stops voicing. Set every speed back to 1.00x before you go back. A script that
+  gives lines to a second voice is voiced entirely in the video's voice on 2.1.x, or refused before
+  voicing when a line's pause or pronunciation markup does not suit that voice.
 
 ### Added
 
@@ -221,6 +225,17 @@ If you go back to 2.1.x later:
   **Add Domain**. On the **New Video** page, **Automatic** uses the Manual Videos domain's agent
   when it has one. See
   [Choose which agent makes a video](https://docs.tubematic.ai/user-guide/agents#choose-which-agent-makes-a-video).
+- A speed for each voice, from 0.70x to 1.20x, in **Settings → Voice**, heard in the voice's
+  preview. It works on `eleven_multilingual_v2`, `eleven_flash_v2_5`, `eleven_turbo_v2_5`,
+  `eleven_flash_v2` and `eleven_turbo_v2`. `eleven_v3` and `eleven_v4` ignore speed, so it stays at
+  1.00x on those voices, including the two a new install starts with. Every voice starts at 1.00x,
+  so nothing sounds different until you change it. See
+  [Voice](https://docs.tubematic.ai/user-guide/settings#voice).
+- A second voice in one video. The agent can give some lines of a script to another voice from your
+  list, for example a viewer's objection spoken aloud, and at Script Ready you can pick the voice of
+  each line on the **Script** tab. It needs at least two voices in **Settings → Voice**, and costs no
+  extra credits. See
+  [Read and approve scripts](https://docs.tubematic.ai/user-guide/using-tubematic#3-read-and-approve-scripts).
 
 ### Changed
 
@@ -260,6 +275,9 @@ If you go back to 2.1.x later:
   first. Before, it ranked ideas by the topic score alone.
 - `/tubematic-submit-new-job` finds the angle of the topic you give it and files it with the video.
 - The Discord message for new topics shows each topic's angle and angle score.
+- The agent writes for a synthetic voice: sentences of 6 to 14 words, numbers and symbols written the
+  way they are said ("two hundred milliseconds", "control z"), and a pause every three or four
+  sentences, before the payoff and never in the middle of an explanation.
 
 ### Fixed
 

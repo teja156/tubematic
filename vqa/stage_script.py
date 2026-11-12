@@ -99,18 +99,17 @@ def stage_script(video_id: str, root: Path, mcp_server=None) -> tuple[Path, Path
     if voice is None:
         raise SystemExit(f"Video {video_id} has no voice in the roster — set a default voice "
                          "(vqa/edit_settings.py) or give the video one.")
-    model_id, label = voice["model_id"], voice["name"]
-    mode = mcp_server._pronunciation_mode_for_model(model_id)
     lexicon = mcp_server._get_lexicon()
 
-    joined = mcp_server._join_segment_voice(segments)
-    # Same refusal generate_voice makes before spend — staging IPA it would
-    # never send would make tts_text.txt show text that is never spoken.
-    err = (mcp_server._check_ipa_model(joined, model_id, label)
-           or mcp_server._check_phoneme_model(joined, model_id, label))
-    if err:
-        raise SystemExit(err)
-    tts_text = mcp_server._build_tts_text(joined, mode, lexicon)
+    # The same runs generate_voice voices (TMDEV-216: a segment may name its
+    # own voice, whose model decides its markup), and the same refusals it
+    # makes before spend — staging text it would never send would make
+    # tts_text.txt show words that are never spoken.
+    roster = {v["voice_id"]: v for v in mcp_server._get_voices()}
+    runs = mcp_server._plan_voice_runs(segments, voice, roster, lexicon)
+    if isinstance(runs, str):
+        raise SystemExit(runs)
+    tts_text = " ".join(run["tts_text"] for run in runs)
 
     # Derived through the shared path layer, never joined by hand: the row
     # was found, but an id filed before ids were checked (`../outside`, an

@@ -978,16 +978,13 @@ def _coerce_setting(key: str, raw) -> tuple:
             raise ValueError(f"{key} allows at most {MAX_VOICES} voices, got {len(parsed)}")
         names, ids = set(), set()
         for entry in parsed:
-            if not isinstance(entry, dict) or set(entry) != {"name", "voice_id", "model_id"}:
-                raise ValueError(f"Each entry in {key} must be {{name, voice_id, model_id}}, "
-                                 f"got {entry!r}")
+            # Shape, model and speed (TMDEV-216): the rules every roster
+            # reader shares. A speed on a model that ignores it is refused
+            # here, so a stored speed always changes the audio.
+            err = tvoice.roster_entry_error(entry)
+            if err:
+                raise ValueError(f"{key}: {err}")
             name, voice_id = entry["name"], entry["voice_id"]
-            # Type first: a list or dict is unhashable, and a TypeError here
-            # would escape both this 400 and _read_all_settings' fallback.
-            if not isinstance(entry["model_id"], str) \
-                    or entry["model_id"] not in DICTIONARY_COMPATIBLE_MODELS:
-                raise ValueError(f"Voice {name!r} in {key} has model_id {entry['model_id']!r}; "
-                                 f"it must be one of {sorted(DICTIONARY_COMPATIBLE_MODELS)}")
             if not isinstance(name, str) or not name.strip():
                 raise ValueError(f"Each voice name in {key} must be a non-empty string")
             if not isinstance(voice_id, str) or not voice_id.strip():
@@ -998,6 +995,9 @@ def _coerce_setting(key: str, raw) -> tuple:
                 raise ValueError(f"Duplicate voice_id {voice_id!r} in {key}")
             names.add(name)
             ids.add(voice_id)
+        # A speed of 1.0 is never stored: a roster nobody gave a speed keeps
+        # the exact shape older versions read, so a rollback still finds it.
+        parsed = [tvoice.normalize_roster_entry(e) for e in parsed]
         return (parsed, _json.dumps(parsed))
 
     if typ == "lexicon":
@@ -1400,10 +1400,46 @@ def _voice_state(video: dict, settings: dict) -> tuple:
     conflicts = {}
     if (segments or script) and video.get("status") != "TOPIC_PROPOSED":
         for v in roster:
-            err = tvoice.markup_conflict(segments, script, v["model_id"], voice_label=v["name"])
+            # Only the segments the video's voice speaks: a segment with its
+            # own voice (TMDEV-216) keeps it whatever the video's voice is.
+            err = tvoice.video_voice_conflict(segments, script, v["model_id"],
+                                              voice_label=v["name"])
             if err:
                 conflicts[v["voice_id"]] = err
     return (current["voice_id"] if current else ""), conflicts
+
+
+def _segment_voice_conflicts(video: dict, settings: dict) -> dict:
+    """{segment id: {voice_id: reason}} for every roster voice that cannot
+    speak a segment's markup (TMDEV-216): what the Script tab's per-segment
+    picker greys out, computed by the same rule the segment_voices PATCH
+    refuses on. Only at SCRIPT_READY, the one status the picker shows at."""
+    segments = video.get("script_segments")
+    if video.get("status") != "SCRIPT_READY" or not segments:
+        return {}
+    out = {}
+    for seg in segments:
+        if not isinstance(seg, dict):
+            continue
+        reasons = {}
+        for v in settings["elevenlabs_voices"]:
+            err = tvoice.markup_conflict([seg], "", v["model_id"], voice_label=v["name"])
+            if err:
+                reasons[v["voice_id"]] = err
+        if reasons:
+            out[str(seg.get("id"))] = reasons
+    return out
+
+
+def _script_voice_conflict(video: dict, settings: dict, voice_id: str) -> str | None:
+    """Why the script cannot be voiced as it stands with the video on
+    voice_id ("" = the install default), every segment against the voice that
+    speaks it (TMDEV-216), or None. The check at approval to VOICING: a
+    segment's own voice may have had its model edited since scripting."""
+    roster = settings["elevenlabs_voices"]
+    video_voice = tvoice.resolve_voice(voice_id or "", settings["elevenlabs_voice_id"], roster)
+    return tvoice.script_markup_conflict(video.get("script_segments"),
+                                         video.get("script") or "", video_voice, roster)
 
 
 # Statuses before a video's audio exists. A video here may still hold a ledger
@@ -1425,14 +1461,27 @@ def _voice_info(con, video: dict, settings: dict) -> dict:
     """
     voice_id = video.get("voice_id") or settings["elevenlabs_voice_id"] or ""
     entry = next((v for v in settings["elevenlabs_voices"] if v["voice_id"] == voice_id), None)
+    # The other voices its segments name (TMDEV-216), in script order, by
+    # their roster entry; a voice that has left the roster reads as its id.
+    roster = {v["voice_id"]: v for v in settings["elevenlabs_voices"]}
+    other_ids = []
+    for seg in video.get("script_segments") or []:
+        vid = tvoice.segment_voice_id(seg)
+        if vid and vid != voice_id and vid not in other_ids:
+            other_ids.append(vid)
     voiced = None
     if video.get("status") not in _PRE_VOICE_STATUSES:
-        voiced = tusage.last_voice_model(con, video["id"])
+        voiced = tusage.last_voice_model(con, video["id"], voice_id, other_ids)
+    others = [{"voice_id": vid,
+               "name": roster[vid]["name"] if vid in roster else "",
+               "model_id": roster[vid]["model_id"] if vid in roster else ""}
+              for vid in other_ids]
     return {
         "voice_id": voice_id,
         "name": entry["name"] if entry else "",
         "model_id": voiced or (entry["model_id"] if entry else ""),
         "model_voiced": bool(voiced),
+        "other_voices": others,
     }
 
 
@@ -2755,6 +2804,70 @@ def create_pipeline_blueprint() -> Blueprint:
         video["effective_voice_id"], video["voice_conflicts"] = _voice_state(video, settings)
         return video
 
+    def _patch_segment_voices(video_id: str, changes):
+        """Give script segments their own voice, or back the video's (TMDEV-216).
+
+        changes maps a segment id to a roster voice_id, or "" for the video's
+        voice. Only at SCRIPT_READY: before it there is no script to voice,
+        after it the voice is spent. The spoken words do not change, so the
+        script, its record and its warnings stay as they are. The UPDATE is
+        bound to the segments it read, so a write that landed in between is
+        never overwritten.
+        """
+        if not isinstance(changes, dict) or not changes or not all(
+                isinstance(k, str) and isinstance(v, str) for k, v in changes.items()):
+            return jsonify({"error": "segment_voices must map segment ids to a voice_id "
+                                     "(or \"\" for the video's voice)"}), 400
+        with _conn() as con:
+            row = con.execute("SELECT status, archived_at, voice_id, script_segments "
+                              "FROM videos WHERE id = ?", (video_id,)).fetchone()
+            if not row:
+                return jsonify({"error": "Video not found"}), 404
+            if row["archived_at"]:
+                return jsonify({"error": "Video is archived and can no longer be changed"}), 409
+            if row["status"] != "SCRIPT_READY":
+                return jsonify({"error": "A segment's voice can only be changed at SCRIPT_READY "
+                                         f"(this video is {row['status']})"}), 409
+            raw = row["script_segments"]
+            segments = _json.loads(raw) if raw else None
+            if not segments:
+                return jsonify({"error": "This video's script has no segments"}), 409
+            known = {str(seg.get("id")) for seg in segments if isinstance(seg, dict)}
+            unknown = sorted(set(changes) - known)
+            if unknown:
+                return jsonify({"error": f"No segment with id {', '.join(unknown)}"}), 400
+            settings = _read_all_settings(con)
+            roster = settings["elevenlabs_voices"]
+            roster_ids = {v["voice_id"] for v in roster}
+            for vid in changes.values():
+                if vid and vid not in roster_ids:
+                    return jsonify({"error": f"voice_id {vid!r} is not in elevenlabs_voices"}), 400
+            video_voice = tvoice.resolve_voice(row["voice_id"] or "",
+                                               settings["elevenlabs_voice_id"], roster)
+            if video_voice is None:
+                return jsonify({"error": "This video has no voice in the roster; pick one first"}), 409
+            updated = []
+            for seg in segments:
+                seg = dict(seg)
+                if str(seg.get("id")) in changes:
+                    seg["voice_id"] = changes[str(seg.get("id"))]
+                updated.append(seg)
+            updated = tvoice.normalize_segment_voices(updated, video_voice["voice_id"])
+            changed = [seg for seg in updated if str(seg.get("id")) in changes]
+            err = tvoice.script_markup_conflict(changed, "", video_voice, roster)
+            if err:
+                return jsonify({"error": f"That voice can't speak this segment: {err}",
+                                "voice_conflict": True}), 409
+            cur = con.execute(
+                "UPDATE videos SET script_segments = ?, updated_at = ? WHERE id = ? "
+                "AND status = 'SCRIPT_READY' AND archived_at IS NULL AND script_segments = ?",
+                (_json.dumps(updated), _now(), video_id, raw))
+            if cur.rowcount == 0:
+                return jsonify({"error": "The script changed while this was being saved; "
+                                         "reload and pick again"}), 409
+            video = _video_with_comments(con, video_id)
+        return jsonify(video)
+
     def _video_with_comments(con, video_id: str) -> dict | None:
         row = con.execute("SELECT * FROM videos WHERE id = ?", (video_id,)).fetchone()
         if not row:
@@ -2762,6 +2875,7 @@ def create_pipeline_blueprint() -> Blueprint:
         settings = _read_all_settings(con)
         video = _with_voice(_parse_video(dict(row)), settings)
         video["voice_info"] = _voice_info(con, video, settings)
+        video["segment_voice_conflicts"] = _segment_voice_conflicts(video, settings)
         # Never clipped here — this is the route the dashboard's "read more"
         # and every agent-facing read resolve to.
         video["gemini_feedback_truncated"] = False
@@ -2867,6 +2981,14 @@ def create_pipeline_blueprint() -> Blueprint:
     def patch_video(video_id: str):
         body = request.get_json(force=True) or {}
         only_if = body.pop("onlyIfCurrentStatus", None)
+
+        # The Script tab's per-segment voice picker (TMDEV-216) has its own
+        # path: it rewrites one key inside script_segments, at SCRIPT_READY
+        # only, and nothing else may ride along.
+        if "segment_voices" in body:
+            if set(body) != {"segment_voices"} or only_if is not None:
+                return jsonify({"error": "segment_voices is sent on its own"}), 400
+            return _patch_segment_voices(video_id, body["segment_voices"])
 
         # The four job-path columns are written only by the code that writes
         # the files (generate_voice, write_scene_config, the worker) and are
@@ -3055,6 +3177,24 @@ def create_pipeline_blueprint() -> Blueprint:
                         "error": f"This script can't be voiced with that voice: "
                                  f"{conflicts[target]} Keep the current voice, or request a "
                                  f"revision so the script is rewritten for the new one.",
+                        "voice_conflict": True,
+                    }), 409
+
+            # Approval checks every segment against the voice that speaks it
+            # (TMDEV-216), with or without a voice in the PATCH: a segment's
+            # own voice is not covered by the check above, and its model may
+            # have been edited in Settings since scripting.
+            if fields.get("status") == "VOICING" and row["status"] == "SCRIPT_READY":
+                settings = _read_all_settings(con)
+                current = _parse_video(dict(con.execute(
+                    "SELECT status, voice_id, script, script_segments FROM videos WHERE id = ?",
+                    (video_id,)).fetchone()))
+                voice_after = fields["voice_id"] if "voice_id" in fields else current["voice_id"]
+                err = _script_voice_conflict(current, settings, voice_after or "")
+                if err:
+                    return jsonify({
+                        "error": f"This script can't be voiced as it stands: {err} Pick "
+                                 "another voice for that segment, or request a revision.",
                         "voice_conflict": True,
                     }), 409
 
@@ -4391,6 +4531,21 @@ def create_pipeline_blueprint() -> Blueprint:
                          f"got {model_id!r}"
             }), 400
 
+        # The speed the preview speaks at (TMDEV-216): the body's, so Settings
+        # can preview a change before it is saved, else the voice's stored
+        # one. A stored speed is dropped when the body names a model that
+        # ignores it; a speed the body asks for on such a model is refused.
+        if isinstance(body, dict) and "speed" in body:
+            speed = body["speed"]
+            err = tvoice.speed_error(speed, model_id, voice["name"])
+            if err:
+                return jsonify({"error": err}), 400
+            speed = round(float(speed), 2)
+        else:
+            speed = tvoice.voice_speed(voice)
+            if model_id not in tvoice.SPEED_MODELS:
+                speed = tvoice.DEFAULT_SPEED
+
         api_key = _secret(settings, "elevenlabs_api_key", "ELEVENLABS_API_KEY")
         if not api_key:
             return jsonify({
@@ -4398,8 +4553,11 @@ def create_pipeline_blueprint() -> Blueprint:
                          "access. Add it on the Settings page."
             }), 503
 
+        # The key names the speed only when it is not the default, so every
+        # preview cached before speeds existed is still found.
+        speed_part = "" if speed == tvoice.DEFAULT_SPEED else f"|{speed:.2f}"
         cache_key = hashlib.sha256(
-            f"{voice_id}|{model_id}|{VOICE_PREVIEW_SAMPLE_TEXT}".encode()
+            f"{voice_id}|{model_id}{speed_part}|{VOICE_PREVIEW_SAMPLE_TEXT}".encode()
         ).hexdigest()[:16]
         preview_dir = OUTPUT_DIR / "voice-previews"
         preview_path = preview_dir / f"{cache_key}.mp3"
@@ -4415,6 +4573,8 @@ def create_pipeline_blueprint() -> Blueprint:
             "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
             "output_format": "mp3_44100_128",
         }
+        if speed != tvoice.DEFAULT_SPEED:
+            payload["voice_settings"]["speed"] = speed
         headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
         try:
             with _httpx.Client(timeout=60) as client:

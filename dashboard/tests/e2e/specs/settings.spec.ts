@@ -261,6 +261,38 @@ test.describe("Settings page", () => {
     expect(settings).not.toHaveProperty("pronunciation_mode");
   });
 
+  test("a voice's speed persists, is disabled on v4, and the API refuses one there (TMDEV-216)", async ({ page }) => {
+    await setSettings({
+      elevenlabs_voices: [
+        { name: "Narrator", voice_id: "voice-abc123", model_id: "eleven_multilingual_v2" },
+        { name: "Teja", voice_id: "voice-t1", model_id: "eleven_v4" },
+      ],
+    });
+    try {
+      await gotoTab(page, "voice");
+      await expect(page.getByTestId("voice-speed-0")).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByTestId("voice-speed-1")).toBeDisabled();
+
+      await page.getByTestId("voice-speed-0").selectOption("1.15");
+      await save(page, "voice");
+      expect((await getSettings()).elevenlabs_voices).toEqual([
+        { name: "Narrator", voice_id: "voice-abc123", model_id: "eleven_multilingual_v2", speed: 1.15 },
+        { name: "Teja", voice_id: "voice-t1", model_id: "eleven_v4" },
+      ]);
+
+      // eleven_v4 ignores speed, so a speed there is refused, never stored.
+      const refused = await fetch(`${BASE}/settings`, {
+        method: "POST",
+        headers: { ...API_AUTH, "Content-Type": "application/json" },
+        body: JSON.stringify({ elevenlabs_voices: [
+          { name: "Teja", voice_id: "voice-t1", model_id: "eleven_v4", speed: 1.1 }] }),
+      });
+      expect(refused.status).toBe(400);
+    } finally {
+      await setSettings({ elevenlabs_voices: [], elevenlabs_voice_id: "" });
+    }
+  });
+
   test("the Images tab offers the OpenAI catalog and no provider", async ({ page }) => {
     await setSettings({ image_model: "gpt-image-2.5-flare" });
     await gotoTab(page, "images");

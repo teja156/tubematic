@@ -279,6 +279,61 @@ test.describe("VideoModal", () => {
     }
   });
 
+  // A voice per segment (TMDEV-216). Segments are written only by the agent's
+  // update_video, and the test stack runs no agent, so they are seeded in the
+  // API container. What a unit test cannot show: the real conflicts the API
+  // computes, and the segment_voices PATCH landing in the database.
+  test("Script tab: a segment's voice is picked from the roster and saved", async ({ page }) => {
+    await setSettings({
+      elevenlabs_voices: [
+        { name: "Narrator", voice_id: `${uid}-n`, model_id: "eleven_v4" },
+        { name: "Skeptic", voice_id: `${uid}-s`, model_id: "eleven_multilingual_v2" },
+      ],
+      elevenlabs_voice_id: `${uid}-n`,
+    });
+    try {
+      const video = await createVideo({ topic: `[${uid}] Segment voices` });
+      await patchVideo(video.id, { status: "SCRIPT_READY", script: "So here. Wait, really?" });
+      const repoRoot = path.resolve(__dirname, "../../../..");
+      execSync(
+        `docker compose -f "${path.join(repoRoot, "docker-compose.test.yml")}" exec -T tubematic-api-test python3 -`,
+        {
+          cwd: repoRoot,
+          input: [
+            "import json, sqlite3",
+            "segs = [{'id': 's1', 'voice': 'So [pause] here.', 'visual': ''},",
+            "        {'id': 's2', 'voice': 'Wait, really?', 'visual': ''}]",
+            "con = sqlite3.connect('/data/tubematic.db')",
+            "con.execute('UPDATE videos SET script_segments = ? WHERE id = ?', "
+              + `(json.dumps(segs), '${video.id}'))`,
+            "con.commit()",
+          ].join("\n"),
+          stdio: ["pipe", "inherit", "inherit"],
+        },
+      );
+
+      await page.goto("/");
+      const card = page.getByTestId(`kanban-card-${video.id}`);
+      await expect(card).toBeVisible({ timeout: 10_000 });
+      await card.click();
+      const modal = page.getByTestId("video-modal");
+
+      // [pause] is v3/v4 markup, which the Skeptic's model cannot speak.
+      const s1 = modal.getByTestId("segment-voice-s1");
+      await expect(s1).toBeVisible({ timeout: 10_000 });
+      await expect(s1.locator(`option[value="${uid}-s"]`)).toHaveJSProperty("disabled", true);
+
+      await modal.getByTestId("segment-voice-s2").selectOption(`${uid}-s`);
+      await expect.poll(async () => {
+        const v = await getVideo(video.id) as unknown as { script_segments: { voice_id?: string }[] };
+        return v.script_segments[1].voice_id;
+      }).toBe(`${uid}-s`);
+      await expect(modal.getByTestId("segment-voice-s2")).toHaveValue(`${uid}-s`);
+    } finally {
+      await setSettings({ elevenlabs_voices: [], elevenlabs_voice_id: "" });
+    }
+  });
+
   // Auto's style pick (TMDEV-203). Only the agent's choose_visual_style writes
   // a pick, and the test stack runs no agent, so the row is seeded in the API
   // container the way stream.spec.ts seeds its files.

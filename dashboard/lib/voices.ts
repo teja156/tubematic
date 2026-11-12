@@ -16,7 +16,17 @@ import type { Video, Voice } from "@/lib/types";
 
 /** The option label: the voice's name and the model it speaks with. */
 export function voiceLabel(v: Voice): string {
-  return v.model_id ? `${v.name} · ${v.model_id}` : v.name;
+  const label = v.model_id ? `${v.name} · ${v.model_id}` : v.name;
+  // A speed is shown only when it is not the default (TMDEV-216).
+  return v.speed !== undefined && v.speed !== 1 ? `${label} · ${v.speed.toFixed(2)}x` : label;
+}
+
+/** Why voiceId cannot speak this segment's markup, or "" when it can
+ *  (TMDEV-216). Computed by the API, as voiceConflict is. */
+export function segmentVoiceConflict(
+  video: Pick<Video, "segment_voice_conflicts">, segmentId: string, voiceId: string,
+): string {
+  return video.segment_voice_conflicts?.[segmentId]?.[voiceId] ?? "";
 }
 
 /** Why this voice cannot speak the video's script, or "" when it can. */

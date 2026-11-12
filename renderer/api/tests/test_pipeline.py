@@ -1384,6 +1384,7 @@ def test_the_elevenlabs_model_sets_match_the_dashboard_copy():
     assert _models(dash_src, "PHONEME_COMPATIBLE_MODELS") == pipeline.PHONEME_COMPATIBLE_MODELS
     assert _models(dash_src, "IPA_COMPATIBLE_MODELS") == pipeline.IPA_COMPATIBLE_MODELS
     assert _models(dash_src, "DICTIONARY_COMPATIBLE_MODELS") == pipeline.DICTIONARY_COMPATIBLE_MODELS
+    assert _models(dash_src, "SPEED_MODELS") == pipeline.tvoice.SPEED_MODELS
 
 
 def test_the_api_uses_the_shared_model_sets():

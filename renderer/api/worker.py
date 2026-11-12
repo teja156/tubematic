@@ -601,6 +601,13 @@ def _auto_pilot_block_reason(con, video: dict, settings: dict) -> str:
             return (f"its script cannot be spoken by its voice: {conflicts[voice_id]} "
                     "Pick another voice and approve the script yourself, or request "
                     "a revision.")
+        # Every segment against the voice that speaks it (TMDEV-216), the same
+        # check the approving PATCH makes: a segment's own voice may have had
+        # its model edited, or left the roster, since scripting.
+        err = pipeline._script_voice_conflict(video, settings, video.get("voice_id") or "")
+        if err:
+            return (f"its script cannot be voiced as it stands: {err} Pick another voice "
+                    "for that segment and approve the script yourself, or request a revision.")
     return ""
 
 
