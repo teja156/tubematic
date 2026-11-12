@@ -291,6 +291,26 @@ test.describe("VideoModal", () => {
     }
   });
 
+  test("a speed picked at Script Ready goes with the approval (TMDEV-227)", async ({ page }) => {
+    const video = await createVideo({ topic: `[${uid}] Voice speed` });
+    await patchVideo(video.id, { status: "SCRIPT_READY", script: "# Script content" });
+
+    await page.goto("/");
+    const card = page.getByTestId(`kanban-card-${video.id}`);
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.click();
+    const modal = page.getByTestId("video-modal");
+    const speed = modal.getByTestId("video-modal-speed-select");
+    await expect(speed).toHaveValue("");
+    await speed.selectOption("1.15");
+    await modal.getByRole("button", { name: "Approve Script" }).click();
+    await expect(modal).not.toBeVisible({ timeout: 5_000 });
+    await expect.poll(async () => (await getVideo(video.id)).status, { timeout: 10_000 }).toBe("VOICING");
+    expect((await getVideo(video.id)).voice_speed).toBe(1.15);
+    // The speed shown after voicing is the one generate_voice records, and the
+    // stack runs no agent to voice: the unit tests cover that row.
+  });
+
   // A voice per segment (TMDEV-216). Segments are written only by the agent's
   // update_video, and the test stack runs no agent, so they are seeded in the
   // API container. What a unit test cannot show: the real conflicts the API

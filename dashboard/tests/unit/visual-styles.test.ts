@@ -9,7 +9,7 @@
  * set-versus-unset is readable without seeing the key.
  */
 import { describe, expect, it } from "vitest";
-import { cartoon3dAvailable, illustratedAvailable, routeLabel, styleLabel, styleOptions, videoStyleLabel } from "@/lib/visualStyles";
+import { cartoon3dAvailable, illustratedAvailable, previewableRows, previewUrls, routeLabel, styleGroups, styleLabel, videoStyleId, videoStyleLabel } from "@/lib/visualStyles";
 import { PACK_STYLES } from "./packStyles";
 
 describe("illustratedAvailable", () => {
@@ -28,34 +28,82 @@ describe("illustratedAvailable", () => {
   });
 });
 
-describe("styleOptions", () => {
-  it("offers every style, Auto first, in pack order", () => {
-    const values = styleOptions(PACK_STYLES, true).map((o) => o.value);
-    expect(values[0]).toBe("auto");
-    expect(values).toEqual(PACK_STYLES.map((s) => s.id));
-    expect(values).toEqual(expect.arrayContaining(["motion_graphics", "stick", "illustrated", "cartoon_3d", "system_flow"]));
+const values = (gs: ReturnType<typeof styleGroups>) => gs.flatMap((g) => g.rows.map((r) => r.value));
+const unchoosable = (gs: ReturnType<typeof styleGroups>) => gs.flatMap((g) => g.rows).filter((r) => !r.choosable).map((r) => r.value);
+const row = (gs: ReturnType<typeof styleGroups>, v: string) => gs.flatMap((g) => g.rows).find((r) => r.value === v)!;
+
+describe("styleGroups", () => {
+  it("lists every style: Auto first, then 2D, then 3D, each group in pack order", () => {
+    const gs = styleGroups(PACK_STYLES, true);
+    expect(gs.map((g) => g.key)).toEqual(["top", "2d", "3d"]);
+    expect(gs[0].rows.map((r) => r.value)).toEqual(["auto"]);
+    const pack = PACK_STYLES.filter((s) => s.id !== "auto");
+    expect(gs[1].rows.map((r) => r.value)).toEqual(pack.filter((s) => s.dimension === "2d").map((s) => s.id));
+    expect(gs[2].rows.map((r) => r.value)).toEqual(pack.filter((s) => s.dimension === "3d").map((s) => s.id));
+    expect([...values(gs)].sort()).toEqual(PACK_STYLES.map((s) => s.id).sort());
   });
 
-  it("disables only the styles that need an OpenAI key, and says why, without one", () => {
-    const opts = styleOptions(PACK_STYLES, false);
+  it("takes the group and the GPU tag from the pack fields, never a list here", () => {
+    const gs = styleGroups(PACK_STYLES, true, { status: "working" });
+    expect(gs.find((g) => g.key === "3d")!.rows.map((r) => r.value)).toEqual(["cartoon_3d"]);
+    expect(gs.flatMap((g) => g.rows).filter((r) => r.gpu).map((r) => r.value))
+      .toEqual(PACK_STYLES.filter((s) => s.needs.gpu).map((s) => s.id));
+    expect(row(gs, "cartoon_3d").experimental).toBe(true);
+    expect(row(gs, "system_flow").experimental).toBe(false);
+    expect(row(gs, "storybook_atlas").preview).toBe("storybook_atlas");
+    expect(row(gs, "auto").preview).toBeNull();
+  });
+
+  it("lists insert styles in their own group, last, and never lets them be picked", () => {
+    const styles = PACK_STYLES.map((s) => (s.id === "system_flow" || s.id === "terminal_doc" ? { ...s, role: "insert" as const } : s));
+    const gs = styleGroups(styles, true, { status: "working" });
+    expect(gs.map((g) => g.key)).toEqual(["top", "2d", "3d", "insert"]);
+    expect(gs[3].rows.map((r) => r.value).sort()).toEqual(["system_flow", "terminal_doc"]);
+    expect(gs[1].rows.map((r) => r.value)).not.toContain("system_flow");
+    expect(unchoosable(gs).sort()).toEqual(["system_flow", "terminal_doc"]);
+    expect(row(gs, "system_flow").preview).toBe("system_flow");
+  });
+
+  it("counts a style an older API sends without a dimension or role as a 2D main style", () => {
+    const old = PACK_STYLES.map(({ dimension: _d, role: _r, ...rest }) => rest);
+    const gs = styleGroups(old, true);
+    expect(gs.map((g) => g.key)).toEqual(["top", "2d"]);
+    expect(unchoosable(gs)).toEqual([]);
+  });
+
+  it("makes the styles that need an OpenAI key unpickable, and says why, without one", () => {
+    const gs = styleGroups(PACK_STYLES, false);
     const needKey = PACK_STYLES.filter((s) => s.needs.openai_key).map((s) => s.id);
     expect(needKey).toEqual(expect.arrayContaining(["illustrated", "under_the_hood"]));
-    expect(opts.filter((o) => o.disabled).map((o) => o.value)).toEqual(needKey);
-    expect(opts.find((o) => o.value === "illustrated")!.label).toMatch(/needs an OpenAI key/);
+    expect(unchoosable(gs).sort()).toEqual([...needKey].sort());
+    expect(row(gs, "illustrated").why).toBe("needs an OpenAI key");
   });
 
   it("changes nothing when everything is available", () => {
-    expect(styleOptions(PACK_STYLES, true, { status: "working" }).every((o) => !o.disabled)).toBe(true);
-  });
-
-  it("marks an experimental style in its label", () => {
-    expect(styleOptions(PACK_STYLES, true).find((o) => o.value === "cartoon_3d")!.label).toBe("Cartoon 3D (experimental)");
-    expect(styleOptions(PACK_STYLES, true).find((o) => o.value === "system_flow")!.label).toBe("System Flow");
+    expect(unchoosable(styleGroups(PACK_STYLES, true, { status: "working" }))).toEqual([]);
   });
 
   it("offers only the value it holds until the list has loaded", () => {
-    expect(styleOptions(null, true, null, "stick")).toEqual([{ value: "stick", label: "stick", disabled: false }]);
-    expect(styleOptions(null, true, null, "")).toEqual([]);
+    const gs = styleGroups(null, true, null, "stick");
+    expect(values(gs)).toEqual(["stick"]);
+    expect(gs[0].rows[0].label).toBe("stick");
+    expect(styleGroups(null, true, null, "")).toEqual([]);
+  });
+});
+
+describe("previewableRows", () => {
+  it("is every style with a preview, in picker order, inserts included", () => {
+    const styles = PACK_STYLES.map((s) => (s.id === "system_flow" ? { ...s, role: "insert" as const } : s));
+    const rows = previewableRows(styleGroups(styles, true));
+    expect(rows.map((r) => r.value)).not.toContain("auto");
+    expect(rows[rows.length - 1].value).toBe("system_flow");
+    expect(rows).toHaveLength(PACK_STYLES.length - 1);
+  });
+});
+
+describe("previewUrls", () => {
+  it("points at the files the dashboard serves", () => {
+    expect(previewUrls("whiteboard")).toEqual({ video: "/style-previews/whiteboard.mp4", poster: "/style-previews/whiteboard.webp" });
   });
 });
 
@@ -73,25 +121,25 @@ describe("cartoon3dAvailable", () => {
   });
 });
 
-describe("styleOptions with the GPU status", () => {
-  it("disables the GPU-only styles and says why without a working GPU", () => {
-    const opts = styleOptions(PACK_STYLES, true, { status: "not_usable" });
-    expect(opts.filter((o) => o.disabled).map((o) => o.value)).toEqual(["cartoon_3d"]);
-    expect(opts.find((o) => o.value === "cartoon_3d")!.label).toMatch(/needs a working GPU/);
+describe("styleGroups with the GPU status", () => {
+  it("makes the GPU-only styles unpickable and says why without a working GPU", () => {
+    const gs = styleGroups(PACK_STYLES, true, { status: "not_usable" });
+    expect(unchoosable(gs)).toEqual(["cartoon_3d"]);
+    expect(row(gs, "cartoon_3d").why).toBe("needs a working GPU");
   });
 
   it("tells an untested GPU apart from a missing one", () => {
-    expect(styleOptions(PACK_STYLES, true, { status: "unknown" }).find((o) => o.value === "cartoon_3d")!.label).toMatch(/not tested yet/);
+    expect(row(styleGroups(PACK_STYLES, true, { status: "unknown" }), "cartoon_3d").why).toBe("GPU not tested yet");
   });
 
-  it("leaves GPU styles enabled while the GPU is working or the status is unloaded", () => {
-    expect(styleOptions(PACK_STYLES, true, { status: "working" }).every((o) => !o.disabled)).toBe(true);
-    expect(styleOptions(PACK_STYLES, true, null).every((o) => !o.disabled)).toBe(true);
+  it("leaves GPU styles pickable while the GPU is working or the status is unloaded", () => {
+    expect(unchoosable(styleGroups(PACK_STYLES, true, { status: "working" }))).toEqual([]);
+    expect(unchoosable(styleGroups(PACK_STYLES, true, null))).toEqual([]);
   });
 
-  it("disables every style that needs an OpenAI key or a GPU when neither is there", () => {
-    expect(styleOptions(PACK_STYLES, false, { status: "not_configured" }).filter((o) => o.disabled).map((o) => o.value))
-      .toEqual(PACK_STYLES.filter((s) => s.needs.openai_key || s.needs.gpu).map((s) => s.id));
+  it("makes every style that needs an OpenAI key or a GPU unpickable when neither is there", () => {
+    expect(unchoosable(styleGroups(PACK_STYLES, false, { status: "not_configured" })).sort())
+      .toEqual(PACK_STYLES.filter((s) => s.needs.openai_key || s.needs.gpu).map((s) => s.id).sort());
   });
 });
 
@@ -139,5 +187,17 @@ describe("videoStyleLabel with Auto's style pick (TMDEV-203)", () => {
   it("labels a routing outcome", () => {
     expect(routeLabel("scenes", PACK_STYLES)).toBe("Mixed scenes");
     expect(routeLabel("system_flow", PACK_STYLES)).toBe("System Flow");
+  });
+});
+
+describe("videoStyleId", () => {
+  it("names the style the frozen row shows, for its preview", () => {
+    expect(videoStyleId({ visual_style: "stick", resolved_renderer: "", style_pick: "" })).toBe("stick");
+    // Auto's pick is written into visual_style; a pre-pick Auto video names none yet
+    expect(videoStyleId({ visual_style: "auto", resolved_renderer: "", style_pick: "" })).toBe("");
+    expect(videoStyleId({ visual_style: "auto", resolved_renderer: "", style_pick: "whiteboard" })).toBe("whiteboard");
+    // the mixed scene system has no pack, so no preview
+    expect(videoStyleId({ visual_style: "auto", resolved_renderer: "dom", style_pick: "scenes" })).toBe("");
+    expect(videoStyleId({ visual_style: "auto", resolved_renderer: "cartoon_3d", style_pick: "" })).toBe("cartoon_3d");
   });
 });

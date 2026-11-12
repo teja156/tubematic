@@ -199,9 +199,9 @@ Covers `app/settings/page.tsx`, [the settings page](../15-dashboard.md#the-setti
   stored in seconds).
 - An API key renders as the mask the server returned. Clearing the field posts an empty string.
 - Voice: each roster row picks its own model, and a save carries the roster with no
-  `elevenlabs_model_id` or `pronunciation_mode` key. A row's speed is saved with it, 1.00 is not
-  sent, the speed is disabled on a model that ignores it, and moving a voice to such a model drops
-  its speed. A preview sends the row's model and speed.
+  `elevenlabs_model_id` or `pronunciation_mode` key. A row's speed is saved with it and 1.00 is not
+  sent. The speed works on `eleven_v4` too, its title saying the recording is stretched, and moving
+  a voice to `eleven_v4` keeps its speed. A preview sends the row's model and speed.
 - Agents: the default, default model and effort each `PATCH` at once, the weight on blur or Enter,
   and a weight outside 0 to 100 is never sent and counts as not saved on the page line. The tab
   issues no `DELETE`.
@@ -410,6 +410,12 @@ Covers `components/VideoModal.tsx`, [the video window](../15-dashboard.md#the-vi
   3D and Under the Hood.
 - Once the pickers are gone, their values show read-only. The Voice and Voice model rows come from
   `voice_info` and are hidden while the voice picker is up.
+- At Script Ready the **Voice speed** select shows the video's speed and names the voice's own as
+  **Voice default**. **Approve Script** sends `voice_speed` only when it was changed, and `null`
+  for the voice default. After voicing, Details shows the speed voiced, marked "(voice default)"
+  when the video has none of its own.
+- The frozen style row carries a preview eye for the style the video uses, and none before Auto has
+  picked.
 - The Rendered by and Render time rows show the last render's renderer with GPU or CPU, fall back to
   the renderer id when no name was recorded, and are hidden on a video with no render recorded.
 - A scheduled video says when it goes out, in the zone it was picked in. **Cancel schedule** calls
@@ -856,11 +862,16 @@ per-segment conflicts.
 
 Covers `lib/visualStyles.ts` ([Visual-style picker](../15-dashboard.md#visual-style-picker)).
 
-- The options are the fetched style list in pack order, `auto` first. A style whose pack needs an
-  OpenAI key or a GPU is disabled with the reason, and an experimental one is labelled.
+- `styleGroups` lists Auto, then the 2D, 3D and insert styles, each group in pack order, from the
+  pack fields `dimension`, `role` and `needs.gpu`. A style whose pack needs an OpenAI key or a GPU,
+  and every insert style, cannot be picked, with the reason. A style an older API sends without a
+  dimension or role counts as a 2D main style. `previewableRows` is the order the preview window
+  steps through, and `previewUrls` names the served files.
+- `videoStyleId` names the style a frozen video's preview plays: the chosen one, Auto's pick or
+  Cartoon 3D, and none before Auto has picked or under mixed scenes.
 - `illustratedAvailable` reads the masked `openai_api_key`, where `""` means unset, so the key
   never reaches the browser.
-- `cartoon3dAvailable` is true only while the GPU probe says working, and `styleOptions` tells an
+- `cartoon3dAvailable` is true only while the GPU probe says working, and `styleGroups` tells an
   untested GPU apart from a missing one.
 - Before the list loads, a picker offers only the value it holds, and a label shows the raw id.
 - `videoStyleLabel` names the world an Auto video settled on, and marks a style Auto picked before
@@ -872,6 +883,25 @@ of the list.
 
 Trap: settings and GPU status that have not loaded count as available, so the API gives the refusal
 and a page that loads neither does not grey an option out wrongly.
+
+### `style-picker.test.tsx`
+
+Covers `components/StylePicker.tsx` ([Visual-style picker](../15-dashboard.md#visual-style-picker)).
+
+- The button names the chosen style with its EXP and GPU tags. The list shows the 2D, 3D and insert
+  groups, with the GPU tag only on a style that needs a GPU.
+- A click picks a row and closes the list. An insert style, or one the install cannot make, is never
+  picked, and its reason shows. A "No style" row, where the caller asks for one, picks `""`.
+- Keyboard: arrows and Home move, typing jumps to a name, Enter picks.
+- The eye opens the preview without picking: the muted loop and poster from `/style-previews/`, Prev
+  and Next, and **Use this style**, which picks and closes. An insert or an unavailable style shows
+  its preview, says why, and offers no **Use this style**.
+- The arrows step through styles, except while the player's own controls have focus.
+- `StylePreviewButton` opens a frozen style's preview without a way to pick it, and renders nothing
+  for a style with no preview.
+
+`stylePickerHelpers.ts` drives the picker the way a person does (open the list, click a row) for
+every page test that picks a style.
 
 ### `visual-styles-provider.test.tsx`
 

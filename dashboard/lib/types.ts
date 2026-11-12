@@ -36,6 +36,15 @@ export interface VisualStyleInfo {
   mascot?: boolean;
   available?: boolean;
   unavailable_reason?: string;
+  /** The picker's group (TMDEV-226): "2d" or "3d"; null for Auto. Absent from an older API. */
+  dimension?: "2d" | "3d" | null;
+  /** Stem of /style-previews/<stem>.mp4 and .webp; null for Auto. */
+  preview?: string | null;
+  /** One line under the preview: what the style is for. */
+  tagline?: string;
+  /** "insert" for a style used only as scenes inside another style: listed apart and never
+   *  offered as a video's style. Absent (an API without inserts) means a main style. */
+  role?: "main" | "insert";
 }
 /** Which renderer `auto` settled on (videos.resolved_renderer): "" until the agent chose. */
 export type ResolvedRenderer = "" | "dom" | "cartoon_3d";
@@ -79,7 +88,7 @@ export interface Voice {
    *  follows the voice. */
   model_id: string;
   /** ElevenLabs speed (TMDEV-216). Absent means 1.0; only models in
-   *  SPEED_MODELS honour it, and the API refuses it on any other. */
+   *  NATIVE_SPEED_MODELS honour it natively; on any other model the recording is stretched to it. */
   speed?: number;
 }
 
@@ -97,6 +106,12 @@ export interface VoiceInfo {
   /** The other voices this video's segments name (TMDEV-216), in script
    *  order; name and model are "" for one no longer on the roster. */
   other_voices?: { voice_id: string; name: string; model_id: string }[];
+  /** The voice's roster speed, which the Script Ready picker offers as "Voice default" (TMDEV-227). */
+  roster_speed?: number;
+  /** Before voicing, the speed the voicing will use (the video's own voice_speed, else
+   *  roster_speed); once voiced, the speed the audio was made at, null for a video voiced
+   *  before it was recorded. */
+  speed?: number | null;
 }
 
 export interface Comment {
@@ -246,6 +261,8 @@ export interface Video {
   /** The voice and model for the modal's read-only rows (TMDEV-147). Only on
    *  single-video responses (GET/PATCH /videos/<id>), never in a list. */
   voice_info?: VoiceInfo;
+  /** The video's own voice speed (TMDEV-227), 0.9 to 1.25; null = each voice's roster speed. */
+  voice_speed?: number | null;
   created_at: string;
   updated_at: string;
   comments?: Comment[];

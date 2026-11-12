@@ -9,6 +9,46 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ---
 
+## v2.3.0
+
+### Upgrade notes
+
+1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode) after you
+   upgrade. The skills that write scripts and handle revisions changed, and a session started
+   before the upgrade keeps the old ones.
+2. To go back to 2.2.x after upgrading, restore the database backup the upgrade took. 2.2.x cannot
+   read the new voice speed column, and it reads a voice list with a speed on an `eleven_v3` or
+   `eleven_v4` voice as empty.
+
+### Added
+
+- Each video now has its own voice speed, from 0.90x to 1.25x. The agent picks it with the script:
+  faster for a quick list, slower for a script dense with numbers or a calm story. You see it and
+  can change it in the video's window before you approve the script, and the window shows the speed
+  a video was voiced at.
+  [Read and approve scripts](https://docs.tubematic.ai/user-guide/using-tubematic#3-read-and-approve-scripts)
+  has the details.
+- Asking for a finished voiceover to be faster or slower costs no ElevenLabs credits: the agent
+  speeds up or slows down the recording it already has. A video voiced before 2.3.0 has no kept
+  recording, so its first speed change is voiced again and charged.
+- Every place you choose a visual style (a topic waiting for approval, New Video, a domain's
+  defaults) now opens a list with a short preview of each style. The eye button on a style plays a
+  few seconds of it, and you can step through the others and pick one from there. The list groups
+  the styles into 2D and 3D, and marks a style that renders on a GPU only with **GPU**. Styles used
+  only for a few seconds inside another style are listed apart and cannot be chosen for a whole
+  video. After approval, the video's window plays the preview of its style.
+  [Where you choose](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#where-you-choose)
+  has the details.
+
+### Changed
+
+- A voice's speed in **Settings → Voice** now works on `eleven_v3` and `eleven_v4` voices, which
+  includes both voices a new install starts with. Before, the speed was greyed out at 1.00x on those
+  models, because ElevenLabs ignores its own speed setting there. Tubematic now records them at
+  their normal pace and speeds the recording up or slows it down, keeping the pitch. A voice
+  without a speed sounds as it did before.
+  [Voice](https://docs.tubematic.ai/user-guide/settings#voice) has the details.
+
 ## v2.2.0
 
 2.2.0 adds seven visual styles: System Flow, which turns a video into a diagram that builds itself

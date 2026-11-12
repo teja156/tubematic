@@ -70,7 +70,7 @@ research stops before you have enough to choose from.
 
 The list of ElevenLabs voices videos can use. A new install starts with two, Teja and Adam.
 
-![Settings, Voice tab: three voices, each with a name, a voice ID, a model, a speed, a default marker and a preview button; the two on eleven_v4 and eleven_v3 stay at 1.00x and the third is at 1.15x](../images/settings-voice.png)
+![Settings, Voice tab: three voices, each with a name, a voice ID, a model, a speed, a default marker and a preview button; Teja on eleven_v4 is at 1.10x, Adam on eleven_v3 at 1.00x and Narrator on eleven_multilingual_v2 at 1.15x](../images/settings-voice.png)
 
 For each voice you set:
 
@@ -83,10 +83,14 @@ Mark one voice as **default**. Videos use it unless their domain or you choose a
 button plays a sample, which spends a few ElevenLabs credits the first time you play it for a voice,
 model and speed.
 
-Speed works on `eleven_multilingual_v2`, `eleven_flash_v2_5`, `eleven_turbo_v2_5`, `eleven_flash_v2`
-and `eleven_turbo_v2`. `eleven_v3` and `eleven_v4` ignore it, so the speed stays at 1.00x on a voice
-with those models. A speed of 1.15x is close to the pace of popular narrated Shorts, about 180 words
-a minute.
+Speed works on every model. `eleven_v3` and `eleven_v4` ignore ElevenLabs' own speed setting, so
+Tubematic records those voices at their normal pace and then speeds the recording up or slows it
+down, keeping the pitch. A speed of 1.15x is close to the pace of popular narrated Shorts, about 180
+words a minute.
+
+A voice's speed is where each video starts. The agent picks a speed for every video it scripts,
+from 0.90x to 1.25x, and you can change it when you approve the script. See
+[Read and approve scripts](03-using-tubematic.md#3-read-and-approve-scripts).
 
 A script can give some of its lines to a second voice from this list, for example a viewer's
 objection spoken aloud. You need at least two voices for that. See

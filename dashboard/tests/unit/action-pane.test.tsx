@@ -21,6 +21,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ActionPane } from "@/components/ActionPane";
 import type { Agent, Video, VideoStatus, GpuStatus } from "@/lib/types";
 import { PACK_STYLES } from "./packStyles";
+import { disabledStyleValues, pickStyle, styleOption, styleOptionValues, styleValue } from "./stylePickerHelpers";
 
 // Fixed to America/New_York so the date-rendering test below has a
 // deterministic, non-UTC expected value.
@@ -683,10 +684,11 @@ describe("ActionPane — visual style picker", () => {
     // explanation.
     const video = makeVideo("TOPIC_PROPOSED");
     render(<ActionPane videos={[video]} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
-    const select = screen.getByTestId(`style-select-${video.id}`) as HTMLSelectElement;
-    expect([...select.options].map((o) => o.value)).toEqual(PACK_STYLES.map((s) => s.id));
-    expect([...select.options].map((o) => o.value)).toContain("system_flow");
-    expect(select.value).toBe("auto");
+    const id = `style-select-${video.id}`;
+    expect(styleValue(id)).toBe("auto");
+    expect([...styleOptionValues(id)].sort()).toEqual(PACK_STYLES.map((s) => s.id).sort());
+    expect(styleOptionValues(id)[0]).toBe("auto");
+    expect(styleOptionValues(id)).toContain("system_flow");
   });
 
   it("disables Cartoon 3D, saying why, while the renderer's GPU is not working", () => {
@@ -696,10 +698,9 @@ describe("ActionPane — visual style picker", () => {
     const gpu: GpuStatus = { status: "not_usable", rendering_on: "cpu", configured: true, gpu: null,
                              host_gpus: [], probe: null, requested_at: null, pending: false, waiting_for_render: false };
     render(<ActionPane videos={[video]} gpu={gpu} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
-    const select = screen.getByTestId(`style-select-${video.id}`) as HTMLSelectElement;
-    const option = [...select.options].find((o) => o.value === "cartoon_3d")!;
-    expect(option.disabled).toBe(true);
-    expect(option.text).toMatch(/needs a working GPU/);
+    const option = styleOption(`style-select-${video.id}`, "cartoon_3d");
+    expect(option.getAttribute("aria-disabled")).toBe("true");
+    expect(option.textContent).toMatch(/needs a working GPU/);
   });
 
   it("disables Illustrated, saying why, when no OpenAI key is stored", () => {
@@ -709,13 +710,13 @@ describe("ActionPane — visual style picker", () => {
     const video = makeVideo("TOPIC_PROPOSED");
     render(<ActionPane videos={[video]} illustratedAvailable={false} onAction={() => {}}
       onOpenModal={() => {}} {...NO_VOICES} />);
-    const select = screen.getByTestId(`style-select-${video.id}`) as HTMLSelectElement;
-    const illustrated = [...select.options].find((o) => o.value === "illustrated")!;
-    expect(illustrated.disabled).toBe(true);
+    const id = `style-select-${video.id}`;
+    const illustrated = styleOption(id, "illustrated");
+    expect(illustrated.getAttribute("aria-disabled")).toBe("true");
     expect(illustrated.textContent).toMatch(/needs an OpenAI key/);
     // every style built on OpenAI images is greyed out with it (Under the Hood too)
-    expect([...select.options].filter((o) => o.disabled).map((o) => o.value))
-      .toEqual(PACK_STYLES.filter((s) => s.needs.openai_key).map((s) => s.id));
+    expect(disabledStyleValues(id).sort())
+      .toEqual(PACK_STYLES.filter((s) => s.needs.openai_key).map((s) => s.id).sort());
   });
 
   it("leaves Illustrated enabled when key state is not given", () => {
@@ -723,8 +724,7 @@ describe("ActionPane — visual style picker", () => {
     // grey out an option that may be valid.
     const video = makeVideo("TOPIC_PROPOSED");
     render(<ActionPane videos={[video]} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
-    const select = screen.getByTestId(`style-select-${video.id}`) as HTMLSelectElement;
-    expect([...select.options].some((o) => o.disabled)).toBe(false);
+    expect(disabledStyleValues(`style-select-${video.id}`)).toEqual([]);
   });
 
   it("sends the picked register with approve-topic", async () => {
@@ -732,9 +732,7 @@ describe("ActionPane — visual style picker", () => {
     const onAction = vi.fn();
     const video = makeVideo("TOPIC_PROPOSED");
     render(<ActionPane videos={[video]} onAction={onAction} onOpenModal={() => {}} {...NO_VOICES} />);
-    fireEvent.change(screen.getByTestId(`style-select-${video.id}`), {
-      target: { value: "stick" },
-    });
+    pickStyle(`style-select-${video.id}`, "stick");
     fireEvent.click(screen.getByText("Approve"));
     await act(async () => { vi.advanceTimersByTime(600); });
     expect(onAction).toHaveBeenCalledWith(video.id, "approve-topic", video,
@@ -745,8 +743,7 @@ describe("ActionPane — visual style picker", () => {
   it("pre-selects the register the video already carries", () => {
     const video = { ...makeVideo("TOPIC_PROPOSED"), visual_style: "stick" as const };
     render(<ActionPane videos={[video]} onAction={() => {}} onOpenModal={() => {}} {...NO_VOICES} />);
-    expect((screen.getByTestId(`style-select-${video.id}`) as HTMLSelectElement).value)
-      .toBe("stick");
+    expect(styleValue(`style-select-${video.id}`)).toBe("stick");
   });
 
   it("goes read-only once the choice is frozen", () => {
@@ -1198,7 +1195,7 @@ describe("ActionPane — mascot picker", () => {
     render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={gpuWith("working")} onAction={onAction} onOpenModal={() => {}} {...NO_VOICES} />);
     const select = screen.getByTestId(`mascot-select-${video.id}`) as HTMLSelectElement;
     expect(select.value).toBe("tubi");
-    fireEvent.change(screen.getByTestId(`style-select-${video.id}`), { target: { value: "cartoon_3d" } });
+    pickStyle(`style-select-${video.id}`, "cartoon_3d");
     expect(select.value).toBe("");
     expect(select.disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
@@ -1213,7 +1210,7 @@ describe("ActionPane — mascot picker", () => {
     const video = { ...makeVideo("TOPIC_PROPOSED"), mascot_id: "tubi" };
     render(<ActionPane videos={[video]} mascots={MASCOTS} gpu={gpuWith("working")} illustratedAvailable onAction={onAction} onOpenModal={() => {}} {...NO_VOICES} />);
     const select = screen.getByTestId(`mascot-select-${video.id}`) as HTMLSelectElement;
-    fireEvent.change(screen.getByTestId(`style-select-${video.id}`), { target: { value: "under_the_hood" } });
+    pickStyle(`style-select-${video.id}`, "under_the_hood");
     expect(select.value).toBe("");
     expect(select.disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));

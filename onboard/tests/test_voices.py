@@ -156,11 +156,13 @@ def test_parse_voices_keeps_a_speed_on_a_model_that_honours_it():
     assert _parse_voices(json.dumps([entry])) == [entry]
 
 
-def test_parse_voices_drops_a_roster_with_a_speed_on_v4():
-    """The same rule as the API and MCP readers: a speed eleven_v4 would ignore
-    is malformed, so the roster reads as empty rather than half-true."""
+def test_parse_voices_keeps_a_speed_on_v4_and_drops_one_out_of_range():
+    """The same rule as the API and MCP readers: a speed on v4 is valid since
+    TMDEV-227 (it becomes a stretch), and a speed out of range makes the roster
+    read as empty rather than half-true."""
     entry = {"name": "A", "voice_id": "a", "model_id": "eleven_v4", "speed": 1.1}
-    assert _parse_voices(json.dumps([entry])) == []
+    assert _parse_voices(json.dumps([entry])) == [entry]
+    assert _parse_voices(json.dumps([{**entry, "speed": 1.3}])) == []
 
 
 class _Answer:
@@ -189,15 +191,15 @@ def test_re_entering_a_voice_keeps_the_speed_set_on_the_dashboard(monkeypatch):
     assert out == [{"name": "A", "voice_id": "a", "model_id": "eleven_multilingual_v2", "speed": 1.15}]
 
 
-def test_moving_a_voice_to_a_model_that_ignores_speed_drops_it_and_says_so(monkeypatch):
+def test_moving_a_voice_to_v4_keeps_its_speed(monkeypatch):
+    """Every model takes a speed (TMDEV-227): v3 and v4 get a stretch of the
+    recording, so moving a voice there keeps the speed a person set."""
     import onboard.prompt as prompt
-    said = []
     current = json.dumps([{"name": "A", "voice_id": "a", "model_id": "eleven_multilingual_v2",
                            "speed": 1.15}])
     queue = ["A", "a", "eleven_v4", ""]
     monkeypatch.setattr(prompt.questionary, "text", lambda *a, **k: _Answer(queue.pop(0)))
     monkeypatch.setattr(prompt.questionary, "select", lambda *a, **k: _Answer(queue.pop(0)))
-    monkeypatch.setattr(prompt, "rail", lambda text, **k: said.append(text))
+    monkeypatch.setattr(prompt, "rail", lambda text, **k: None)
     out = json.loads(prompt._ask_voices(current))
-    assert out == [{"name": "A", "voice_id": "a", "model_id": "eleven_v4"}]
-    assert any("ignores speed" in line for line in said)
+    assert out == [{"name": "A", "voice_id": "a", "model_id": "eleven_v4", "speed": 1.15}]
