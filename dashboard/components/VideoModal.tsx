@@ -1894,7 +1894,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
                           ? video.voice_info.model_id
                           : <span>{video.voice_info.model_id} <span style={{ color: "var(--dim)" }}>(current setting)</span></span>}
                     />
-                    {video.voice_info.speed !== undefined && (
+                    {typeof video.voice_info.speed === "number" && (
                       <MetaRow
                         label="Voice speed"
                         value={

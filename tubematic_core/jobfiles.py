@@ -80,12 +80,14 @@ def job_file(jobs_dir, video_id, name) -> Path:
 # instead of paying for the same recording again.
 VOICE_ORIGINAL = "voice-original"
 VOICE_ORIGINAL_MANIFEST = "manifest.json"
+VOICE_ORIGINAL_MANIFEST_TMP = "manifest.json.tmp"
 
 
 def voice_original_file(jobs_dir, video_id, name) -> Path:
-    """`<jobs_dir>/<video_id>/voice-original/<name>`: the manifest or a run's
-    mp3 (`run<N>.mp3`), refusing a symlink on the way."""
-    if name != VOICE_ORIGINAL_MANIFEST and not (
+    """`<jobs_dir>/<video_id>/voice-original/<name>`: the manifest, its
+    temporary file or a run's mp3 (`run<N>.mp3`), refusing a symlink on the
+    way."""
+    if name not in (VOICE_ORIGINAL_MANIFEST, VOICE_ORIGINAL_MANIFEST_TMP) and not (
             name.startswith("run") and name.endswith(".mp3") and name[3:-4].isdigit()):
         raise UnsafePath(f"{name!r} is not a kept voice file")
     _check_video_id(video_id)

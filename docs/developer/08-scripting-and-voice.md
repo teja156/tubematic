@@ -704,7 +704,7 @@ Script Ready. Every voice in a two-voice script speaks at the video's speed.
 | Speed | Range | Set by |
 |---|---|---|
 | A roster voice's `speed` | `SPEED_MIN` 0.7 to `SPEED_MAX` 1.2, steps of `SPEED_STEP` 0.05 | Settings → Voice |
-| A video's `voice_speed` | `VIDEO_SPEED_MIN` 0.9 to `VIDEO_SPEED_MAX` 1.25, the same step | `update_video` at `TOPIC_APPROVED` or `REVISION_REQUESTED`, `PATCH /videos/<id>` at `SCRIPT_READY` |
+| A video's `voice_speed` | `VIDEO_SPEED_MIN` 0.9 to `VIDEO_SPEED_MAX` 1.25, the same step | `update_video` at `TOPIC_APPROVED` or `REVISION_REQUESTED` (0 clears it), `PATCH /videos/<id>` at `SCRIPT_READY` (`null` clears it) |
 
 The roster keeps ElevenLabs' own range, so a roster stored before the video speed existed still
 reads.
@@ -729,7 +729,13 @@ voicing stretches the kept recordings from their own native speed, makes no Elev
 returns `credits: 0` with `reused_recording: true`. The same words at the same speed are a new take
 and are paid for, because a re-voice with nothing changed asks for another recording. A video
 voiced before the kept recordings existed has none, so its first speed change is paid. The
-manifest is written last, so a half-written set is never read as a match. Render staging copies
+recordings are kept right after the paid calls, marked as not yet delivered (no speed), and marked
+delivered once the audio is written: a stretch or join that fails in between loses nothing paid
+for, and the retry reuses it. The manifest is written last, through a temporary file that goes
+through the same symlink check as every job path, so a half-written set is never read as a match.
+
+`generate_voice` also records the speed the audio was made at in `videos.voiced_speed`. The video
+window shows that once the video is voiced, because a roster speed can be edited afterwards. Render staging copies
 only the named job files and images, so the kept recordings never reach a renderer.
 
 A roster speed of 1.0 is never stored (`voice_models.py::normalize_roster_entry`). A roster in which

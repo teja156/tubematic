@@ -1484,12 +1484,16 @@ def _voice_info(con, video: dict, settings: dict) -> dict:
         "model_id": voiced or (entry["model_id"] if entry else ""),
         "model_voiced": bool(voiced),
         "other_voices": others,
-        # The speed the voicing uses (TMDEV-227): the video's own, else the
-        # voice's roster speed, which the Script Ready picker offers as "Voice
-        # default". Keep in sync with mcp/server.py's get_video.
+        # The speed (TMDEV-227). Before voicing, the one the voicing will use:
+        # the video's own, else the voice's roster speed, which the Script
+        # Ready picker offers as "Voice default" (keep in sync with
+        # mcp/server.py's get_video). Once voiced, the one the audio was made
+        # at, which generate_voice records: the roster can be edited after
+        # voicing. None for a video voiced before it was recorded.
         "roster_speed": tvoice.voice_speed(entry) if entry else tvoice.DEFAULT_SPEED,
-        "speed": tvoice.effective_speed(video.get("voice_speed"),
-                                        entry or {"speed": tvoice.DEFAULT_SPEED}),
+        "speed": (tvoice.effective_speed(video.get("voice_speed"),
+                                         entry or {"speed": tvoice.DEFAULT_SPEED})
+                  if video.get("status") in _PRE_VOICE_STATUSES else video.get("voiced_speed")),
     }
 
 

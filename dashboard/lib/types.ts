@@ -108,8 +108,10 @@ export interface VoiceInfo {
   other_voices?: { voice_id: string; name: string; model_id: string }[];
   /** The voice's roster speed, which the Script Ready picker offers as "Voice default" (TMDEV-227). */
   roster_speed?: number;
-  /** The speed the voicing uses: the video's own voice_speed, else roster_speed. */
-  speed?: number;
+  /** Before voicing, the speed the voicing will use (the video's own voice_speed, else
+   *  roster_speed); once voiced, the speed the audio was made at, null for a video voiced
+   *  before it was recorded. */
+  speed?: number | null;
 }
 
 export interface Comment {

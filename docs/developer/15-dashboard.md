@@ -429,8 +429,9 @@ At `SCRIPT_READY` the video window also has a **Voice speed** select: **Voice de
 which names the picked voice's roster speed and sends `null`, then 0.90x to 1.25x
 (`lib/voices.ts::VIDEO_SPEED_OPTIONS`). It shows the speed the agent picked. **Approve Script**
 sends `voice_speed` only when the select was changed, so an untouched approval keeps the agent's
-pick. Elsewhere Details shows a read-only **Voice speed** from `voice_info.speed`, marked "(voice
-default)" when the video has no speed of its own. See [Speed](08-scripting-and-voice.md#speed).
+pick. Elsewhere Details shows a read-only **Voice speed** from `voice_info.speed` (once voiced,
+the speed the audio was made at), marked "(voice default)" when the video has no speed of its own,
+and no row for a video voiced before the speed was recorded. See [Speed](08-scripting-and-voice.md#speed).
 
 Once a video has rendered, Details also shows **Rendered by** (the renderer's name at render time,
 then GPU or CPU) and **Render time** (`lib/renderers.ts::formatRenderDuration`, a dash when the

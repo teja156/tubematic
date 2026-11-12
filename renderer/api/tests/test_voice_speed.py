@@ -253,3 +253,20 @@ def test_the_speed_write_is_bound_to_script_ready(client, db_path, monkeypatch):
     monkeypatch.setattr(sqlite3, "connect", real_connect)
     assert r.status_code == 409
     assert _get(client)["voice_speed"] is None
+
+
+def test_once_voiced_the_window_shows_the_speed_the_audio_was_made_at(client, db_path):
+    """The roster can be edited after voicing; the recorded speed cannot."""
+    import sqlite3
+    _video(db_path, status="VOICE_READY")
+    con = sqlite3.connect(db_path)
+    con.execute("UPDATE videos SET voiced_speed = 1.0 WHERE id = 'vid-1'")
+    con.commit()
+    con.close()
+    client.post("/settings", json={"elevenlabs_voices": _roster(speed=1.2)})
+    assert _get(client)["voice_info"]["speed"] == 1.0
+
+
+def test_a_video_voiced_before_the_speed_was_recorded_shows_none(client, db_path):
+    _video(db_path, status="VIDEO_READY")
+    assert _get(client)["voice_info"]["speed"] is None

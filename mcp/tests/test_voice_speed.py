@@ -207,3 +207,52 @@ def test_a_pacing_revision_may_change_the_speed(job_db, recorder):
     job_db("v1", status="REVISION_REQUESTED", voice_id="t1")
     assert "error" not in server.update_video("v1", voice_speed=0.95)
     assert server.get_video("v1")["voice_speed"] == 0.95
+
+
+# ── review round 1 ───────────────────────────────────────────────────────────
+
+def test_a_failed_stretch_keeps_the_paid_recording_and_the_retry_reuses_it(job_db, recorder, monkeypatch):
+    job_db("v1", script_segments=[_seg("s1", "Hello there.")], voice_id="t1")
+    _set("v1", voice_speed=1.1)
+
+    def broken(ffmpeg, audio, factor):
+        raise RuntimeError("ffmpeg timed out")
+    good = server.taudio.stretch
+    monkeypatch.setattr(server.taudio, "stretch", broken)
+    out = server.generate_voice("v1", "")
+    assert "speed could not be changed" in out["error"] and len(recorder.payloads) == 1
+    monkeypatch.setattr(server.taudio, "stretch", good)
+    out = server.generate_voice("v1", "")      # still at VOICING
+    assert "error" not in out and out["reused_recording"] is True and out["credits"] == 0
+    assert len(recorder.payloads) == 1         # the retry paid nothing
+
+
+def test_a_planted_temporary_manifest_link_is_removed_not_followed(job_db, recorder, tmp_path):
+    job_db("v1", script_segments=[_seg("s1", "Hello there.")], voice_id="t1")
+    target = tmp_path / "precious.txt"
+    target.write_text("keep me")
+    kept = server.JOBS_DIR / "v1" / "voice-original"
+    kept.mkdir(parents=True)
+    (kept / "manifest.json.tmp").symlink_to(target)
+    # The safe-path check refuses the planted link: nothing is kept this time,
+    # the voicing itself still lands, and the link's target is never written.
+    assert "error" not in server.generate_voice("v1", "")
+    assert target.read_text() == "keep me"
+    assert not (kept / "manifest.json").exists()
+
+
+def test_the_speed_the_audio_was_made_at_is_recorded(job_db, recorder):
+    _roster({**TEJA, "speed": 1.05}, RACHEL, ADAM)
+    job_db("v1", script_segments=[_seg("s1", "Hello there.")], voice_id="t1")
+    server.generate_voice("v1", "")
+    with server._conn() as con:
+        assert con.execute("SELECT voiced_speed FROM videos WHERE id = 'v1'").fetchone()[0] == 1.05
+
+
+def test_zero_clears_the_video_speed_back_to_the_voice(job_db, recorder):
+    job_db("v1", status="REVISION_REQUESTED", voice_id="t1")
+    _set("v1", voice_speed=1.2)
+    out = server.update_video("v1", voice_speed=0)
+    assert out.get("updated_fields") == ["voice_speed"]
+    v = server.get_video("v1")
+    assert v["voice_speed"] is None and v["voice_speed_source"] == "roster"

@@ -54,7 +54,7 @@ def test_an_existing_video_keeps_its_voicing_and_has_no_speed_of_its_own(tmp_pat
     tdb.migrate(db)
     tdb.migrate(db)  # every process migrates on start; a second run is a no-op
     assert _rows(db, KEPT) == before
-    assert _rows(db, ("voice_speed",)) == {"voiced": (None,)}
+    assert _rows(db, ("voice_speed", "voiced_speed")) == {"voiced": (None, None)}
 
 
 def test_a_new_video_starts_with_no_speed_of_its_own(tmp_path):

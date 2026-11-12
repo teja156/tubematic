@@ -406,7 +406,7 @@ Script and voice:
   where the script is still to be rewritten. To move a scripted video to such a voice, pass it with
   the rewritten `script_segments` and the publish pair in one call.
 - `voice_speed` is the video's own [speed](08-scripting-and-voice.md#speed), 0.9 to 1.25 in steps
-  of 0.05. The agent writes it at `TOPIC_APPROVED` with the script and at `REVISION_REQUESTED`
+  of 0.05, or 0 to clear it back to the voice's roster speed. The agent writes it at `TOPIC_APPROVED` with the script and at `REVISION_REQUESTED`
   (`VOICE_SPEED_AGENT_STATUSES`); the `UPDATE` repeats the status in its `WHERE`. A person changes it
   at `SCRIPT_READY` through `PATCH /videos/<id>`.
 

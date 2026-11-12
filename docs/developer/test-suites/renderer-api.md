@@ -415,7 +415,9 @@ rows of the video modal.
   keeps its id with an empty name.
 - A `PATCH` response carries the field. `GET /videos` does not, because it would cost a ledger query
   per row.
-- It carries the voice's roster speed and the speed the video is voiced at.
+- It carries the voice's roster speed and, before voicing, the speed the voicing will use; once
+  voiced, the recorded speed, unchanged by a later roster edit, and none for a video voiced before
+  it was recorded.
 
 Trap: a voice's model can be edited in Settings after voicing, so reading the roster names a model
 the audio was not made with. The ledger is ignored from `TOPIC_PROPOSED` through `VOICING`: a

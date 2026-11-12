@@ -2767,7 +2767,8 @@ def update_video(
 
     voice_speed: how fast this video's voice speaks, 0.9 to 1.25 in steps of
     0.05; left out, the stored speed stays (none = each voice's roster speed,
-    get_pipeline_status's elevenlabs_voices). Write it with the script, chosen
+    get_pipeline_status's elevenlabs_voices); 0 clears it back to the roster
+    speed. Write it with the script, chosen
     per the script-writing skill. It replaces the roster speed of every voice
     in the video. A voice on eleven_v3 or eleven_v4 is recorded at its normal
     pace and the recording is sped up after, keeping the pitch; a v2-family
@@ -3199,7 +3200,11 @@ def update_video(
         if agent_effort and agent_effort not in AGENT_EFFORTS:
             return {"error": f"agent_effort {agent_effort!r} must be one of "
                              f"{list(AGENT_EFFORTS)}, or \"\" for the agent's own effort"}
-    if voice_speed is not None:
+    # 0 clears the video's speed back to its voice's roster speed: None
+    # already means "leave it".
+    clear_speed = (voice_speed is not None and not isinstance(voice_speed, bool)
+                   and isinstance(voice_speed, (int, float)) and voice_speed == 0)
+    if voice_speed is not None and not clear_speed:
         err = tvoice.video_speed_error(voice_speed)
         if err:
             return {"error": f"voice_speed: {err}"}
@@ -3282,6 +3287,8 @@ def update_video(
     }.items() if v is not None}
     if script_segments is not None:
         fields["script_segments"] = json.dumps(script_segments)
+    if clear_speed:
+        fields["voice_speed"] = None
     if formula_id is not None:
         stored = _stored_hooks(hooks)
         fields["formula_id"] = formula_id
@@ -5142,8 +5149,12 @@ def _kept_voice_runs(video_id: str, runs: list) -> list | None:
                     run["voice"]["voice_id"], run["voice"]["model_id"], run["tts_text"]):
                 return None
             audio = tjobs.voice_original_file(JOBS_DIR, video_id, f"run{i}.mp3").read_bytes()
+            # speed is None for a recording that was paid for but never
+            # delivered (the stretch or the join failed after the call): it is
+            # always reused, or the retry would pay for it again.
             out.append({"audio": audio, "words": k["words"], "duration": float(k["duration"]),
-                        "native": float(k["native"]), "speed": float(k["speed"])})
+                        "native": float(k["native"]),
+                        "speed": None if k["speed"] is None else float(k["speed"])})
         if all(o["speed"] == run["speed"] for o, run in zip(out, runs)):
             return None
         return out
@@ -5151,23 +5162,31 @@ def _kept_voice_runs(video_id: str, runs: list) -> list | None:
         return None
 
 
-def _keep_voice_runs(video_id: str, runs: list, voiced: list, write_audio: bool = True) -> None:
+def _keep_voice_runs(video_id: str, runs: list, voiced: list, write_audio: bool = True,
+                     delivered: bool = True) -> None:
     """Keep each run's recording as ElevenLabs returned it, before any
     stretch, with what it was made from and the speed it was last delivered
-    at. A re-stretch rewrites only the manifest (write_audio=False). The
-    manifest is written last, so a half-written set is never read back as a
-    match."""
+    at. generate_voice keeps them right after the paid calls with
+    delivered=False (speed None), so a stretch or join that fails afterwards
+    loses nothing that was paid for, then marks them delivered once the audio
+    is written. A re-stretch rewrites only the manifest (write_audio=False).
+    The manifest is written last, through a temporary file checked like every
+    other job path, so a half-written set is never read back as a match."""
     manifest_path = tjobs.voice_original_file(JOBS_DIR, video_id, tjobs.VOICE_ORIGINAL_MANIFEST)
+    tmp = tjobs.voice_original_file(JOBS_DIR, video_id, tjobs.VOICE_ORIGINAL_MANIFEST_TMP)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.unlink(missing_ok=True)
     entries = []
     for i, (run, out) in enumerate(zip(runs, voiced)):
         if write_audio:
-            tjobs.voice_original_file(JOBS_DIR, video_id, f"run{i}.mp3").write_bytes(out["audio"])
+            run_path = tjobs.voice_original_file(JOBS_DIR, video_id, f"run{i}.mp3")
+            run_path.unlink(missing_ok=True)   # never write through whatever was there
+            run_path.write_bytes(out["audio"])
         entries.append({"voice_id": run["voice"]["voice_id"], "model_id": run["voice"]["model_id"],
-                        "tts_text": run["tts_text"], "native": run["native"], "speed": run["speed"],
+                        "tts_text": run["tts_text"], "native": run["native"],
+                        "speed": run["speed"] if delivered else None,
                         "duration": out["duration"], "words": out["words"]})
-    tmp = manifest_path.with_suffix(".json.tmp")
+    tmp.unlink(missing_ok=True)                # a planted link is removed, never followed
     tmp.write_text(json.dumps({"version": 1, "runs": entries}), encoding="utf-8")
     os.replace(tmp, manifest_path)
 
@@ -5417,6 +5436,13 @@ def generate_voice(video_id: str, script: str) -> dict:
                 return {"error": out["error"]}
             voiced.append(out)
         recorded = voiced if kept is None else kept
+        if kept is None:
+            # Kept before anything that can still fail, so a retry re-uses
+            # what was paid for instead of paying again.
+            try:
+                _keep_voice_runs(video_id, runs, recorded, delivered=False)
+            except (OSError, tjobs.UnsafePath) as e:
+                log.warning("could not keep the original voice recording of %s: %s", video_id, e)
 
         # The stretch, run by run, before the join: each run's words are then
         # offset by its stretched length. Word times shrink with the audio, or
@@ -5492,7 +5518,7 @@ def generate_voice(video_id: str, script: str) -> dict:
         audio_path.write_bytes(audio_bytes)
         timeline_path.write_text(json.dumps(timeline, indent=2), encoding="utf-8")
         try:
-            _keep_voice_runs(video_id, runs, recorded, write_audio=kept is None)
+            _keep_voice_runs(video_id, runs, recorded, write_audio=False)
         except (OSError, tjobs.UnsafePath) as e:
             # The voicing stands; only a later speed-only re-voice would pay again.
             log.warning("could not keep the original voice recording of %s: %s", video_id, e)
@@ -5502,8 +5528,12 @@ def generate_voice(video_id: str, script: str) -> dict:
         # derivation run at review time could reconstruct an instruction that
         # was never issued for this video.
         tts_text = " ".join(run["tts_text"] for run in runs)
+        # The speed the audio was made at, for the video window once the video
+        # is voiced: the video voice's runs, else the first run.
+        voiced_speed = next((r["speed"] for r in runs if r["voice"]["voice_id"] == voice["voice_id"]),
+                            runs[0]["speed"])
         _update_fields(video_id, voice_file_path=str(audio_path), timeline_path=str(timeline_path),
-                        tts_text=tts_text)
+                        tts_text=tts_text, voiced_speed=voiced_speed)
         status_advanced = _set_status(video_id, "VOICE_READY", only_if="VOICING")
 
         result = {

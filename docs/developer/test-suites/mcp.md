@@ -316,9 +316,12 @@ and `get_video`.
   and `reused_recording: true`, also for a v2 recording made at a native speed and back to the
   recorded speed after a re-stretch. The same words at the same speed, other words or another voice
   are voiced again and paid.
-- No `ffmpeg` for a stretch, or a stored speed out of range, refuses before spend.
+- No `ffmpeg` for a stretch, or a stored speed out of range, refuses before spend. A stretch that
+  fails after the paid call keeps the recording, and the retry reuses it for nothing.
+- A planted link in place of the temporary manifest is refused, never written through, and the
+  voicing still lands. The speed the audio was made at is recorded on the video.
 - The agent writes `voice_speed` at `TOPIC_APPROVED` and `REVISION_REQUESTED` only, in range and on
-  the step. `get_video` reports the stored speed, the speed the voicing will use and where it comes
+  the step, and 0 clears it. `get_video` reports the stored speed, the speed the voicing will use and where it comes
   from.
 
 Trap: a re-voice with nothing changed is how a person asks for a new take of a bad recording, so

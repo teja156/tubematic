@@ -317,9 +317,10 @@ row.
  "roster_speed": 1.0, "speed": 1.1}
 ```
 
-- `roster_speed` is the voice's speed in the roster, 1.0 when it has none, and `speed` the speed
-  the video is voiced at: its own `voice_speed`, else `roster_speed` (see
-  [Speed](08-scripting-and-voice.md#speed)).
+- `roster_speed` is the voice's speed in the roster, 1.0 when it has none. `speed` is, up to
+  `VOICING`, the speed the voicing will use (the video's own `voice_speed`, else `roster_speed`),
+  and once voiced the speed the audio was made at (`videos.voiced_speed`), `null` for a video
+  voiced before it was recorded (see [Speed](08-scripting-and-voice.md#speed)).
 
 - `voice_id` is the video's own voice, else the install default. It is kept when the voice has
   left the roster, and `name` is then `""`.

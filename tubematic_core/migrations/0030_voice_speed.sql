@@ -9,3 +9,9 @@
 -- speed, which is how every video voiced before this migration was made. No
 -- backfill: an existing or in-flight video voices exactly as it did.
 ALTER TABLE videos ADD COLUMN voice_speed REAL;
+
+-- The speed the audio was last made at, written by generate_voice: what the
+-- video window shows once the video is voiced. A roster speed can be edited
+-- after voicing, so the roster cannot say it. NULL = not voiced since this
+-- migration (the window then shows no speed).
+ALTER TABLE videos ADD COLUMN voiced_speed REAL;
