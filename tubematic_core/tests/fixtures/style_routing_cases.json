@@ -1147,8 +1147,7 @@
       ],
       "ok": [
         "scenes",
-        "storybook_atlas",
-        "terminal_doc"
+        "storybook_atlas"
       ],
       "future": "",
       "note": "Real crew, real footage, a computer alarm and a countdown: photographs and diagrams carry every beat."
@@ -1193,6 +1192,148 @@
       ],
       "future": "",
       "note": "Mixed-scenes probe: real photographs of a real event, and generic people whose steps are the mechanism. Motion Graphics draws no figures; Stick Explainer shows pictures only in small panels."
+    },
+    {
+      "title": "Ariane 5: A 64-Bit Number Squeezed Into 16 Bits",
+      "brief": "Why the first Ariane 5 rocket veered off course and was destroyed about 37 seconds after launch on 4 June 1996. One idea: guidance software reused from Ariane 4 converted a 64-bit floating-point value (the horizontal velocity bias) into a 16-bit signed integer. On Ariane 4 the number never got big enough to overflow; Ariane 5 was faster, the value overflowed, and the inertial reference computer shut down. The backup computer ran the same code and had already failed the same way 72 milliseconds earlier, so redundancy did not help. The main computer then read the error data as flight data and swung the nozzles hard over. Beats: the 16-bit box, the faster rocket, the overflow, the two identical failures, the change afterwards.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "storybook_atlas"
+      ],
+      "future": "",
+      "note": "Real-event probe, the brief as research writes it: one idea (a number conversion) and a beat list. The rocket is the subject; a number story it is not."
+    },
+    {
+      "title": "Why the first Ariane 5 rocket destroyed itself",
+      "brief": "The first Ariane 5 veered off course and was blown up 37 seconds after launch on 4 June 1996. Guidance software reused from Ariane 4 could not hold the faster rocket's sideways speed, both guidance computers shut down, and the main computer steered on error data. Beats: the launch, the reused software, the shutdown, the hard turn, what changed afterwards.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "storybook_atlas"
+      ],
+      "future": "",
+      "note": "Real-event probe, plain wording: a real rocket, a real launch and a chain of causes inside it."
+    },
+    {
+      "title": "The Mars probe lost to pounds and newtons",
+      "brief": "Why NASA's Mars Climate Orbiter burned up in 1999: one team's software reported thruster impulse in pound-seconds, the other read it as newton-seconds, a factor of 4.45. The small error added up over nine months and the probe arrived 170 km too low. Beats: the two teams, the number with no unit, the drift, the arrival, the fix.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "storybook_atlas"
+      ],
+      "future": "",
+      "note": "Real-event probe: a real spacecraft lost to a unit error. The arithmetic is one beat; the probe and its fate are the story."
+    },
+    {
+      "title": "Therac-25: the radiation machine with a race condition",
+      "brief": "How a software bug in a 1980s radiotherapy machine gave patients massive overdoses: an operator who typed fast enough could set the beam to full power without the metal target in place. Beats: the machine, the fast typist, the missing hardware interlock, the error message nobody understood, what changed.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "storybook_atlas"
+      ],
+      "future": "",
+      "note": "Real-event probe: a real machine and real overdoses caused by a software bug."
+    },
+    {
+      "title": "The trading firm that lost $440 million in 45 minutes",
+      "brief": "How Knight Capital went under on 1 August 2012: a deployment missed one of eight servers, an old flag switched dead code back on, and that server bought high and sold low millions of times. Beats: the eight servers, the reused flag, the runaway orders, the 45 minutes, the bill.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "storybook_atlas"
+      ],
+      "future": "",
+      "note": "Real-event probe: a real company's failure told as an event, servers and all. System Flow can draw the servers but not the firm, the trading floor or the bill."
+    },
+    {
+      "title": "Why Gangnam Style broke YouTube's view counter",
+      "brief": "In 2014 the video passed 2,147,483,647 views, the largest number a signed 32-bit integer can hold, and YouTube moved its counter to 64 bits. Beats: the counter, the 32-bit ceiling, what happens one past it, the fix, the new ceiling.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "terminal_doc"
+      ],
+      "future": "",
+      "note": "Real-event pair probe, Motion Graphics vs Terminal Doc: a real video and its counter, but the number stays on screen, so Terminal Doc is acceptable."
+    },
+    {
+      "title": "The Patriot missile that lost a third of a second",
+      "brief": "Why a Patriot battery in Dhahran failed to stop a Scud missile on 25 February 1991. One idea: the system counted time in tenths of a second, and 0.1 cannot be stored exactly in its 24-bit registers, so after 100 hours of running the clock had drifted 0.34 seconds and the radar looked in the wrong place. Beats: the battery, the tenth of a second, 100 hours of drift, the missed Scud, the patch that arrived a day later.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "storybook_atlas"
+      ],
+      "future": "",
+      "note": "Real-event probe with a number at its heart: the rounding error is one beat, the battery and the missed missile are the story."
+    },
+    {
+      "title": "How one software bug blacked out 50 million people",
+      "brief": "The Northeast blackout of 14 August 2003: a race condition froze the alarm system at an Ohio utility, operators did not see sagging power lines hitting trees, and the failure cascaded across eight US states and Ontario in minutes. Beats: the control room, the silent alarm, the first line down, the cascade, the dark cities.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "storybook_atlas"
+      ],
+      "future": "",
+      "note": "Real-event probe: a real disaster whose cause is a software race. The cascade could be a diagram, but the cities, the control room and the scale need pictures."
+    },
+    {
+      "title": "Why the Boeing 737 MAX kept pointing its nose down",
+      "brief": "How MCAS, flight software on the Boeing 737 MAX, read one faulty angle-of-attack sensor and pushed the nose down again and again, leading to the Lion Air and Ethiopian Airlines crashes in 2018 and 2019. Beats: the bigger engines, the single sensor, the repeated push, the pilots who did not know it existed, the grounding.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "storybook_atlas"
+      ],
+      "future": "",
+      "note": "Real-event probe: a real aircraft, real crashes and a software cause."
+    },
+    {
+      "title": "The update that crashed 8.5 million Windows computers",
+      "brief": "The CrowdStrike outage of 19 July 2024: one faulty content update to a security sensor crashed Windows machines worldwide, grounding flights and taking banks and hospitals offline. Beats: the update, the blue screens, the airports and hospitals, the manual fix on every machine, the bill.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "storybook_atlas"
+      ],
+      "future": "",
+      "note": "Real-event probe: a real, recent outage with real places and screens to show."
+    },
+    {
+      "title": "Why 2,147,483,647 is the biggest number in many programs",
+      "brief": "Where the number comes from: 31 bits of value and one sign bit, what happens when you add one to it, and why so many counters and timestamps are stored this way.",
+      "expect": [
+        "terminal_doc"
+      ],
+      "ok": [
+        "whiteboard"
+      ],
+      "future": "",
+      "note": "Negative control for the real-event rule: the same number as the Gangnam Style probe, with no real event. The number itself is the subject."
     }
   ]
 }
