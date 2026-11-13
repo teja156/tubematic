@@ -58,8 +58,8 @@ one thing: the process accepts connections.
 
 ### What it mounts
 
-The container mounts the database, the job directory and the generated scene tree for its tools. It
-also mounts the log directory and the backup directory, because any process may be the one that
+The container mounts the database, the job directory and the generated scene tree for its tools, and
+the sandbox spool at `/sandbox` for `run_code`. It also mounts the log directory and the backup directory, because any process may be the one that
 migrates the database and must write the backup first (see
 [Infrastructure](16-infrastructure.md#backups)).
 
@@ -78,6 +78,7 @@ tool that needs it.
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Model for topic mining |
 | `GEMINI_BASE` | `https://generativelanguage.googleapis.com/v1beta` | Gemini text endpoint |
 | `TUBEMATIC_STILLS_SERVER` | `http://tubematic-renderer:4455` (set in Compose) | Stills server for the Cartoon 3D tools |
+| `TUBEMATIC_SANDBOX_DIR` | `/sandbox` (set in Compose) | The spool folder shared with the code sandbox. Unset, `run_code` answers `sandbox_unavailable` |
 
 API keys are settings. `generate_voice` reads `elevenlabs_api_key`, `generate_image` and
 `generate_character` read `openai_api_key`, and `mine_youtube_topics` reads `gemini_api_key`, from
@@ -87,7 +88,7 @@ restart.
 
 ---
 
-## The 59 tools
+## The 60 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -137,6 +138,12 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`treat_image`](#treat_image) | Bake a style's look into a generated still, as a new PNG |
 | [`read_image`](#read_image) | Return a stored image as a picture |
 | [`preview_doodles`](#preview_doodles) | Draw a Whiteboard video's own doodles as a picture |
+
+### Code tool
+
+| Tool | Purpose |
+|---|---|
+| [`run_code`](#run_code) | Run a short Python, JavaScript or TypeScript program in the code sandbox and read its output and files |
 
 ### Scene and render tools
 
@@ -792,6 +799,39 @@ memory. `cartoon_still`, `cartoon_read_still`, `render_mascot_sheets`, `render_b
 `preview_doodles`, `render_storybook_props`, `render_paper_props`, `render_style_props`, `render_style_parts` and
 `preview_terminal_moves` also
 return pictures.
+
+### `run_code`
+
+`run_code(video_id, language, code, inputs=[], timeout_s=20)` runs a program in the code sandbox, a
+separate container with no network, no keys and no database
+([Infrastructure](16-infrastructure.md#tubematic-sandbox)). The agent has no shell, so this is its one
+way to compute a value, measure or crop a picture, or check what a snippet prints.
+
+- `language` is `python` (3 with Pillow and numpy), `javascript` or `typescript` (Node 20, with the
+  TypeScript transpiled by esbuild first). `code` is up to 64 KB. `timeout_s` is 1 to 60.
+- `inputs` lists up to 8 of the video's files by job-relative name: `timeline.json`,
+  `scene-config.json`, `images/<file>`, `images/treated/<file>` or `runs/<run_id>/<file>`. A name
+  outside that list, a symlink, a missing file, a file over 12 MB, a total over 24 MB or two files with
+  the same base name is refused with `bad_inputs`. MCP copies each into the spool, and the code reads it
+  from `./in/<base name>`.
+- The code writes results to `./out/`. MCP re-checks each file the sandbox returns (an allowed name and
+  extension, size and count limits, a picture that starts like its extension, text that decodes as UTF-8)
+  and keeps it as `<job>/runs/<run_id>/<file>`. Runs live outside `images/`, so a run's picture does not
+  count against a style's picture cap. MCP keeps the newest 20 run folders of a video.
+- The result is `run_id`, `exit_code` (null when the run was killed, with `signal`), `timed_out`,
+  `stdout`, `stderr`, `output_truncated`, `duration_ms`, `files` (`name`, `size`, `path`) and `video_id`.
+  Up to four returned pictures are shown to the agent as well, scaled to 1024 pixels.
+- It does not take [the scene-work claim](#the-scene-work-claim) and works in any status, because it
+  writes nothing the renderer reads.
+- Its refusals are `bad_language`, `bad_code`, `bad_timeout`, `bad_inputs`, `sandbox_unavailable` (no
+  heartbeat from the sandbox in the last 10 seconds, or no spool configured), `sandbox_busy` (two requests
+  already wait), `sandbox_timeout` (no result in time; the request is dropped) and `sandbox_error` (the
+  daemon rejected the request).
+
+There is no fallback that runs the code in this container: it holds the credential database, and
+`write_gif_script` was removed for running agent code here. `mcp/sandbox_client.py` only writes
+requests and reads results, and `mcp/tests/test_removed_tools.py` still pins that the container imports
+no code runner. The same client serves the Code Scenes output check ([Code Scenes](10-scene-authoring.md#code-scenes)).
 
 ### `preview_doodles`
 
@@ -1469,7 +1509,7 @@ stateDiagram-v2
   window keeps the claim, and a move out of it releases the claim.
 - Six tools take the claim: `generate_image`, `generate_character`, `treat_image`,
   `write_scene_file`, `write_scene_config` and `submit_render`.
-- Reads are exempt: `read_image`, `get_scene_config`, `read_scene_file`, `get_timeline`,
+- Reads are exempt: `read_image`, `run_code`, `get_scene_config`, `read_scene_file`, `get_timeline`,
   `validate_job`, `list_scene_files`, `get_video`. A session that looked at a video would otherwise
   hold it for the full TTL and block a second session from diagnosing it, and reads are what the
   revision loop starts with.
@@ -1510,7 +1550,7 @@ A `video_id` that becomes part of a path must be usable as one path component: n
 neither `.` nor `..`, no control characters, at most 255 bytes
 (`tubematic_core/ids.py::is_component`). Every tool that builds a path from one checks this first
 and returns `{"error"}` otherwise: `generate_voice`, `generate_image`, `generate_character`,
-`read_image`, `write_scene_file`, `write_scene_config`, `get_timeline`, `get_scene_config`,
+`read_image`, `run_code`, `write_scene_file`, `write_scene_config`, `get_timeline`, `get_scene_config`,
 `validate_job`, and `read_scene_file` and `delete_scene_file` when a `video_id` is given. The check
 makes each tool safe without the video lookup, which one of them skips.
 
@@ -1545,8 +1585,10 @@ put a request URL, and anything in it, into an exception message.
 
 ## No agent-authored Python
 
-No MCP tool runs Python that the agent wrote. The MCP container mounts the database that holds every
-API key, and Python cannot sandbox its own imports.
+No MCP tool runs code that the agent wrote inside the MCP container. That container mounts the database
+that holds every API key, and Python cannot sandbox its own imports. [`run_code`](#run_code) hands the code
+to a separate container with no network and no secrets, through a spool folder, and answers
+`sandbox_unavailable` when that container is down instead of running the code here.
 
 ---
 

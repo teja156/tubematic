@@ -429,7 +429,8 @@ Covers `gen_release_compose.py::generate`, run against the real `docker-compose.
 - Every published port is bound to `127.0.0.1`, and everything else passes through unchanged,
   `secrets:` blocks and the top-level `name:` included.
 - The release renderer has no database mount and never holds the TLS key, and the gateway port is
-  not published.
+  not published. The sandbox keeps `network_mode: none`, its read-only root, dropped capabilities and
+  single spool mount in the release file.
 - `check_version_is_tag_safe` and `invalid_version_chars` reject `+build` metadata, and `generate()`
   refuses such a version before it reads the compose file. A version goes into the image reference
   with no escaping.
@@ -942,8 +943,10 @@ Covers the `tubematic-code-scenes` skill ([Code Scenes](../10-scene-authoring.md
   (`agent_files/skills/tubematic-code-scenes/reference/example-insert.json`) passes the validator
   at the frames the skill names.
 - It keeps the boundary with Terminal Doc (a command typed at a shell goes there) and the rule that
-  output is shown only when certain, because nothing runs the code; it has one **Check and submit**
-  step; `uninstall.py` removes it.
+  output is shown only when certain for the languages the sandbox cannot run, and says that the
+  sandbox checks the others; it has one **Check and submit** step; `uninstall.py` removes it.
+- The `tubematic-run-code` skill ships, names `sandbox_unavailable` and the lack of a network, and is
+  listed in the skills README and removed by `uninstall.py`.
 
 ### `test_format_packs_skill.py`
 

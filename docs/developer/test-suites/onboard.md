@@ -268,6 +268,19 @@ Covers `apply_cron`. The read of the existing crontab is patched.
 - The log directory is created before the line is written, because the line's shell redirect
   fails without it.
 
+### `test_data_volumes_agree.py`
+
+Covers the three lists that name a data folder: the bind volumes in `docker-compose.yml`,
+`DATA_SUBDIRS` and `actions.py::_VOLUME_DEVICES`.
+
+- Every bind volume of the Compose file has its folder in `DATA_SUBDIRS` and its device in the
+  reconcile map.
+- The directories step creates the sandbox folder on a data root from a release that has none.
+
+Trap: Docker does not create the device folder of a `local` bind volume, so an upgrade from a release
+without the folder fails to start unless the directories step runs first. `upgrade.py` reaches it through
+`stack.start`.
+
 ### `test_volume_reconcile.py`
 
 Covers `actions.py::_reconcile_volume_devices`.
@@ -367,9 +380,9 @@ later `ADD COLUMN` appends and leaves the first migration's text untouched.
 Covers `docker-compose.yml` and the test stack's renderer, parsed as YAML
 ([Services](../16-infrastructure.md#services)).
 
-- Five services with one process each. The worker runs `worker.py` and the renderer
-  `render_agent.py`. The API and the MCP server start through `entrypoint.sh`, and the other two
-  bypass it.
+- Six services with one process each. The worker runs `worker.py` and the renderer
+  `render_agent.py`. The API and the MCP server start through `entrypoint.sh`, and the other
+  services bypass it.
 - Each healthcheck probes its own port with `curl -fs`. The API depends on nothing, and the MCP
   server and the worker wait for a healthy API at startup only.
 - Ports bind to loopback, and the worker and the renderer publish none. The API serves the render
@@ -381,8 +394,15 @@ Covers `docker-compose.yml` and the test stack's renderer, parsed as YAML
   `tubematic_core.auth` writes. The Dockerfile's `CMD` names a process, because `entrypoint.sh`
   ends in `exec "$@"`.
 
+- The code sandbox keeps every control the threat model names: no network and no ports, one mount
+  (its spool), no secret and no environment key, a read-only root, all capabilities dropped and
+  only the six it needs added, `no-new-privileges`, CPU, memory and process ceilings, the daemon
+  command with no entrypoint, and the spool shared with the MCP server and nobody else. No service
+  mounts the Docker socket.
+
 Trap: the mounts of the MCP server, the worker and the renderer are each asserted as an exact
-set, so a new mount is a decision. The dashboard mounts neither the logs nor the backups
+set, so a new mount is a decision. The sandbox's capability list is an exact set for the same
+reason. The dashboard mounts neither the logs nor the backups
 directory, because a backup is a copy of the database that holds every key.
 
 ### `test_gpu_step.py`
@@ -445,8 +465,8 @@ Covers `onboard/stack.py`, the stack control that `upgrade.py` and `scripts/serv
   ([Lock and heartbeat](../13-the-poller.md#lock-and-heartbeat)).
 - `start` creates the data directories and missing tokens and reconciles the volumes before
   `up`. `stop` runs `docker compose stop` and does not remove containers.
-- A service that fails its healthcheck, or a worker or renderer that is not running, fails the
-  start. `_container_command` reads the command a container was created with, which is how
+- A service that fails its healthcheck, or a worker, renderer or sandbox that is not running, fails
+  the start (the sandbox has no network, so no health URL). `_container_command` reads the command a container was created with, which is how
   `upgrade.py` tells an old renderer from a new one.
 - The status report works with no database, no crontab and no Docker. A database newer than this
   code's migrations is reported as incompatible.

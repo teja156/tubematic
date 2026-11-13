@@ -146,8 +146,8 @@ python3 scripts/service.py status
 python3 scripts/service.py logs    [service] [-f]
 ```
 
-The services are `tubematic-api`, `tubematic-mcp`, `tubematic-worker`, `tubematic-renderer` and
-`tubematic-dashboard`. Leave the service out to act on all five.
+The services are `tubematic-api`, `tubematic-mcp`, `tubematic-worker`, `tubematic-renderer`,
+`tubematic-sandbox` and `tubematic-dashboard`. Leave the service out to act on all six.
 
 Use this script in place of `docker compose`. It reads the GPU and remote-renderer choices stored
 with your data, which a bare `docker compose up` skips. A renderer started with a bare
@@ -191,7 +191,7 @@ It works through nine steps and asks before each one. `--yes` answers yes to eve
 
 | Step | Removes | Default answer |
 |---|---|---|
-| 1 | The five containers | Yes |
+| 1 | The six containers | Yes |
 | 2 | The Docker volumes. Your files in `~/.tubematic-data/` stay | Yes |
 | 3 | The database: every video's record, and your settings and API keys | No |
 | 4 | Each video's working files: audio, timing and scene list | No |

@@ -108,7 +108,7 @@ asks for:
 7. Which GPU renders, if the machine has a usable NVIDIA GPU.
 
 Press Enter to accept a default. After the last question the wizard pulls or builds the images and
-starts five containers. A source install takes longer than a release install, because it builds
+starts six containers. A source install takes longer than a release install, because it builds
 the images.
 
 If the wizard stops part-way, run `python3 onboard.py` again. It skips the steps that finished.
@@ -209,7 +209,7 @@ python3 scripts/service.py status
 python3 scripts/service.py logs tubematic-api
 ```
 
-`tubematic-api`, `tubematic-mcp`, `tubematic-worker` and `tubematic-renderer` run the same image. On
+`tubematic-api`, `tubematic-mcp`, `tubematic-worker`, `tubematic-renderer` and `tubematic-sandbox` run the same image. On
 a source install, rebuild it with `python3 onboard.py --step renderer --force`.
 
 ### The wizard says Docker is installed but not running

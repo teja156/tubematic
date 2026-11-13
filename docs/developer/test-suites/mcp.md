@@ -453,6 +453,32 @@ Covers `read_image` ([`read_image`](../06-mcp-server.md#read_image)).
 Trap: the coordinate grid is drawn on a copy in memory. The file under the job directory is the
 render input, so a grid written back to it would appear in the finished video.
 
+### `test_run_code.py`
+
+Covers `run_code` and `mcp/sandbox_client.py` ([`run_code`](../06-mcp-server.md#run_code)).
+
+The suite runs the real daemon (`sandbox/daemon.py`) in a thread against a temporary spool, as the
+current user, so a request goes through the whole protocol: the request folder, the result, the
+re-check of every returned file and the folder under the job.
+
+- A run returns stdout. An image goes in through `inputs`, a cropped picture comes back inline and
+  is stored under `runs/<run_id>/`, and a later run can read it as an input.
+- A picture that does not start like its extension, a text file that is not UTF-8 and files beyond the
+  limits are dropped. A run's files never land in `images/`.
+- An input outside the allowlist, a path with `..`, a missing file, a symlink, an oversized file and
+  two inputs with one base name are refused with `bad_inputs`. A bad language, empty or oversized code
+  and a bad timeout are refused before anything is written.
+- With no heartbeat, a stale heartbeat, no spool configured or a full queue the answer is
+  `sandbox_unavailable` or `sandbox_busy`, and nothing runs in this process.
+- A result that never arrives is dropped, odd types in a result are cleaned, and the oldest run folders
+  are pruned.
+- The validator's runner returns the real output and keeps no files, is `None` when the sandbox is not
+  there, and a wrong output pane is refused end to end.
+
+Trap: `test_removed_tools.py` still forbids MCP from importing a code runner. `sandbox_client.py` has
+no fallback, and a test that gave it one would be reversing the reason `write_gif_script` was deleted.
+What the container itself refuses is in [The code sandbox suite](sandbox.md).
+
 ### `test_treatments.py`
 
 Covers `mcp/treatments.py` and `treat_image`, the looks baked into a style's generated stills
@@ -1289,8 +1315,10 @@ text audit's per-step sampling ([Code Scenes](../10-scene-authoring.md#code-scen
   callout, and a tag and label too wide for the header row.
 - `write_scene_config` writes a Code Scenes insert with its scene, palette and shift filled, names a
   Code Scenes problem in its refusal, and refuses `CodeScenes` as one of the scenes.
-- The output check stays empty: no code runs, so the AI review checks an output pane, and a sandboxed
-  run would take over in `output_check`.
+- The output check refuses a pane that differs from what the code printed, accepts one that matches
+  (an equal pane, or the start of longer output), and refuses nothing when the run fails, times out,
+  is for a language that cannot run, has only a label or has no runner. It is checked through a fake
+  runner, so the suite needs no sandbox. `test_run_code.py` covers the real runner.
 
 ### `test_text_fit.py`
 

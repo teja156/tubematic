@@ -31,6 +31,10 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
    discarded, so approve it before you upgrade if you want to keep it as it is. A video already voiced
    finishes in its old style. A domain whose default style was System Flow or Terminal Doc now
    defaults to Auto. Each video that moved has a comment saying so.
+5. The upgrade starts one more container, `tubematic-sandbox`, and creates the folder
+   `~/.tubematic-data/sandbox` for it. It uses the same image as the others, so nothing extra is
+   downloaded. If you go back to 2.2.x afterwards, remove the leftover container with
+   `docker rm -f tubematic-sandbox`.
 
 ### Added
 
@@ -145,6 +149,18 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   whole cast is drawn characters and a mascot would be confused with them.
   [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
   details.
+- The agent can now run a short program, in Python, JavaScript or TypeScript, to get a real number,
+  measure or crop a picture it made, or check what a snippet prints. The program runs in a new
+  container, `tubematic-sandbox`, that has no network access, none of your API keys, no database and
+  none of your other videos: it sees only the files of the one video it was given. The agent still
+  has no shell and cannot write files. A program is stopped when it runs too long, uses too much
+  memory or writes too much, and with the sandbox stopped the agent carries on without it.
+  [Infrastructure](https://docs.tubematic.ai/developer/infrastructure#tubematic-sandbox) describes what
+  the container can and cannot do.
+- A Code Scenes insert's output pane is now checked by running its Python, JavaScript or TypeScript
+  code. A pane that does not match what the code prints is sent back to the agent with the output
+  the code gave, so the video does not show a made-up result. Code in other languages is still checked by
+  the AI review only.
 
 ### Changed
 

@@ -273,6 +273,22 @@ python3 onboard.py --install-agent claude     # or: codex, opencode
 
 Do this for each installed agent, then restart any open session.
 
+### The agent cannot run code ("sandbox_unavailable")
+
+The agent runs short programs in the `tubematic-sandbox` container, and a Code Scenes output pane is
+checked in it. When the container is stopped, the agent carries on without it: a pane is then checked
+by the AI review only. Start it again:
+
+```bash
+python3 scripts/service.py status
+python3 scripts/service.py start tubematic-sandbox
+python3 scripts/service.py logs tubematic-sandbox
+```
+
+The container has no network and no access to your keys or data, so nothing in its log is a
+credential problem. [Infrastructure](../developer/16-infrastructure.md#tubematic-sandbox) says what
+it can do.
+
 ---
 
 ## Publishing
