@@ -1445,6 +1445,14 @@ def apply_renderer(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> None:
     else:
         rep.warn("tubematic-renderer container is not running. Check: docker compose logs tubematic-renderer")
 
+    r_sandbox = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-sandbox"],
+                               capture_output=True, text=True)
+    if r_sandbox.stdout.strip() == "running":
+        rep.ok("tubematic-sandbox (runs the agent's code with no network) running")
+    else:
+        rep.warn("tubematic-sandbox container is not running; run_code will say sandbox_unavailable. "
+                 "Check: docker compose logs tubematic-sandbox")
+
 
 def apply_dashboard(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> None:
     mode = _install_mode(cfg)

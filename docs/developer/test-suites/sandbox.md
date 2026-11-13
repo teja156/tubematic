@@ -26,6 +26,10 @@ Covers the run loop, run as the current user with no container. It pins the prot
   uid leaves in the shared tmpfs is deleted.
 - JavaScript and TypeScript run when Node and esbuild are installed on the machine.
 
+CI does not run `test_container.py`: it would have to build the whole backend image. The compose flags are
+pinned statically in `onboard/tests/test_compose_topology.py`, which CI does run, and a branch that changes
+the sandbox runs this file by hand and in the live test before it merges.
+
 Trap: the suite runs as an ordinary user, so the process limit (`RLIMIT_NPROC`, which counts every
 process of the uid) is off. It only means something in the container, where the code has a uid of its
 own.

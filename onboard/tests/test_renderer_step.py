@@ -115,3 +115,25 @@ def test_a_sick_api_stops_before_the_mcp_wait(monkeypatch, instant, no_volume_re
     actions.apply_renderer(None, ex, rep)
     assert any("tubematic-api" in m for m in rep.fails)
     assert not any("tubematic-mcp" in m for m in rep.fails + rep.oks)
+
+
+def test_the_sandbox_is_started_and_a_dead_one_is_reported(no_volume_reconcile, monkeypatch, instant):
+    """TMDEV-242: the step brings up tubematic-sandbox and says so when it is not running."""
+    ex = Executor(dry_run=True)
+    actions.apply_renderer(None, ex, _Rep())
+    assert any("up" in i.detail and "tubematic-sandbox" in i.detail for i in ex.intents)
+
+    ex = Executor(dry_run=False)
+    monkeypatch.setattr(ex, "run", lambda *a, **k: subprocess.CompletedProcess([], 0, "", ""))
+    monkeypatch.setattr(actions, "_await_health", lambda *a, **k: True)
+    monkeypatch.setattr(actions.subprocess, "run", _health({"tubematic-worker": "running",
+                                                             "tubematic-renderer": "running"}))
+    rep = _Rep()
+    actions.apply_renderer(None, ex, rep)
+    assert any("tubematic-sandbox" in w and "sandbox_unavailable" in w for w in rep.warns), rep.warns
+    monkeypatch.setattr(actions.subprocess, "run", _health({"tubematic-worker": "running",
+                                                             "tubematic-renderer": "running",
+                                                             "tubematic-sandbox": "running"}))
+    rep = _Rep()
+    actions.apply_renderer(None, ex, rep)
+    assert not any("sandbox" in w for w in rep.warns) and any("tubematic-sandbox" in m for m in rep.oks)

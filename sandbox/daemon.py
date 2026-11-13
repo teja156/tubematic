@@ -274,6 +274,8 @@ def execute(cfg: Config, req: dict, req_dir: Path, done_tmp: Path, beat=lambda: 
             # One budget for the whole request: transpiling and running share timeout_s.
             left = timeout - (time.monotonic() - started)
             if result is not None and left <= 0:
+                # The transpile used the whole budget: the program never ran, which is a timeout, not a success.
+                result.update(timed_out=True, exit_code=None, stderr=(result["stderr"] + "\ntime ran out before the program started").strip())
                 break
             result = _run(cfg, argv, work, runner, max(left, 0.5), lang, beat)
             if result["exit_code"] != 0:

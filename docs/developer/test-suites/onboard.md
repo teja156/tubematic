@@ -298,11 +298,12 @@ path ([Volumes](../16-infrastructure.md#volumes)).
 Covers `actions.py::apply_renderer`.
 
 - One image build covers every service that runs it, and the step starts the API, the MCP server
-  and the renderer.
+  the renderer and the code sandbox.
 - It waits on the API's healthcheck and then on the MCP server's. A sick API ends the step before
   the MCP wait.
 - `_await_health` names the container that is unhealthy. A container still `starting` at the
-  timeout is a warning.
+  timeout is a warning. A sandbox that is not running is a warning that says `run_code` will answer
+  `sandbox_unavailable`; the sandbox has no network, so no healthcheck URL to wait on.
 
 ### `test_data_dir_checks.py`
 

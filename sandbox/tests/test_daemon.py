@@ -233,3 +233,14 @@ def test_wipe_also_covers_a_second_folder(cfg, tmp_path):
     cfg.wipe_also = (shm,)
     cfg.run_as = None  # wiping happens only when the code ran as another uid
     assert D.wipe_owned(shm, os.getuid()) == 1 and os.listdir(shm) == []
+
+
+def test_a_transpile_that_uses_the_whole_budget_is_a_timeout_not_a_success(cfg, monkeypatch):
+    def fake_run(cfg_, argv, work, runner, timeout, language, beat):
+        time.sleep(1.2)
+        return {"exit_code": 0, "signal": None, "timed_out": False, "output_truncated": False,
+                "stdout": "", "stderr": "", "duration_ms": 1200}
+
+    monkeypatch.setattr(D, "_run", fake_run)
+    r = submit(cfg, "const a = 1", language="typescript", timeout_s=1)
+    assert r["timed_out"] is True and r["exit_code"] is None and "program started" in r["stderr"]
