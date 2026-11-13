@@ -161,7 +161,7 @@ export const APPS = [
 /** A phone number from the ranges set aside for fiction: the UK's 07700 900000
  *  to 900999 and North America's 555-0100 to 555-0199. */
 export function isFictionNumber(raw: string): boolean {
-  const n = raw.replace(/[\s().-]/g, "");
+  const n = raw.replace(/[\s().\-/\u2010-\u2015]/g, "");
   return /^(?:\+44|0044|0)7700900\d{3}$/.test(n) || /^(?:\+?1)?(?:\d{3})?55501\d{2}$/.test(n);
 }
 

@@ -60,9 +60,15 @@ _KEYS = {
 }
 _UK = re.compile(r"^(?:\+44|0044|0)7700900\d{3}$")
 _US = re.compile(r"^(?:\+?1)?(?:\d{3})?55501\d{2}$")
-# A run that reads as a phone number: seven or more digits, joined by spaces,
-# hyphens or brackets only (so amounts with commas and dates with dots are not).
-_PHONE_RUN = re.compile(r"\+?\(?\d[\d\s()\-]{5,}\d")
+# A run that reads as a phone number: digits joined by the characters a written
+# number uses. Amounts with commas are not one; a price or a date with dots or
+# slashes has too few digits (real_looking_numbers counts them).
+_PHONE_RUN = re.compile(r"\+?\(?\d[\d\s().\-/\u2010-\u2015]{5,}\d")
+# Digits a run needs to read as a phone number: seven in text, ten in a value
+# that is a number on purpose (a strap's date and its flap), which no date or
+# price reaches.
+MIN_PHONE_DIGITS = 7
+MIN_PHONE_DIGITS_IN_VALUES = 10
 _APP_WORDS = [re.compile(r"\bX\b") if a == "X" else re.compile(rf"\b{re.escape(a)}\b", re.I) for a in APPS]
 
 
@@ -109,20 +115,39 @@ def list_height(title: str, items: list[dict]) -> int:
     return t + rows + max(0, len(items) - 1) * LAYOUT["rowGap"]
 
 
+# What joins the digits of a written phone number: spaces, hyphens and dashes,
+# dots, slashes and brackets.
+_JOINERS = r"\s().\-/\u2010-\u2015"
+
+
 def is_fiction_number(raw: str) -> bool:
-    n = re.sub(r"[\s().\-]", "", raw)
+    n = re.sub(rf"[{_JOINERS}]", "", raw)
     return bool(_UK.match(n) or _US.match(n))
 
 
-def real_looking_numbers(text: str) -> list[str]:
+def real_looking_numbers(text: str, min_digits: int = MIN_PHONE_DIGITS) -> list[str]:
     """Phone-number-like runs in `text` outside the fiction ranges."""
     out = []
     for m in _PHONE_RUN.finditer(text):
         run = m.group(0).strip()
         digits = re.sub(r"\D", "", run)
-        if 7 <= len(digits) <= 15 and not is_fiction_number(run):
+        # A dotted or slashed run is a price or a date unless it is as long as a whole number.
+        least = max(min_digits, 10) if re.search(r"[./]", run) else min_digits
+        if least <= len(digits) <= 15 and not is_fiction_number(run):
             out.append(run)
     return out
+
+
+def _overlaps(text: str, match: str, earlier: list) -> bool:
+    """Whether `match`'s first place in `text` overlaps an earlier mark's (the
+    renderer draws a mark at its match's first place and skips an overlapping
+    one, parts.tsx MarkedText)."""
+    i = text.find(match)
+    for m in earlier:
+        j = text.find(m) if isinstance(m, str) and m else -1
+        if i >= 0 and j >= 0 and i < j + len(m) and j < i + len(match):
+            return True
+    return False
 
 
 def app_names(text: str) -> list[str]:
@@ -201,13 +226,15 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
         if has_tick(s):
             err("No tick or verified mark anywhere: it reads as a verified account. Remove it.")
             break
-    # A strap's date and its flap values are numbers on purpose, not phone numbers.
-    for s in _strings({k: v for k, v in data.items() if k not in ("date", "flap")}):
-        nums = real_looking_numbers(s)
-        if nums:
-            err(f"{nums[0]!r} looks like a real phone number. Use one from the ranges kept for fiction: UK 07700 "
-                "900000 to 900999, or 555-0100 to 555-0199 in North America.")
-            break
+    # A strap's date and its flap are numbers on purpose, so only a run as long
+    # as a whole phone number counts there.
+    on_purpose = {k: v for k, v in data.items() if k in ("date", "flap")}
+    found = [n for s in _strings({k: v for k, v in data.items() if k not in ("date", "flap")})
+             for n in real_looking_numbers(s)]
+    found += [n for s in _strings(on_purpose) for n in real_looking_numbers(s, MIN_PHONE_DIGITS_IN_VALUES)]
+    if found:
+        err(f"{found[0]!r} looks like a real phone number. Use one from the ranges kept for fiction: UK 07700 "
+            "900000 to 900999, or 555-0100 to 555-0199 in North America.")
 
     def text(value, key: str, cap: int, required: bool = True) -> str:
         if value is None and not required:
@@ -263,6 +290,9 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
         if title is not None:
             title = text(title, "chat title", LIMITS["titleChars"])
             header(title, "The title")
+            if title and wrap_lines(title, CPL["title"]) > 1:
+                err(f"The chat title takes more than one line above the phone; keep it to about {CPL['title']} "
+                    "characters.")
         contact = data.get("contact")
         if not isinstance(contact, dict) or not set(contact) <= {"name", "number"}:
             err("contact is {name, number}: a generic label and, if any, a number from the fiction ranges.")
@@ -300,6 +330,9 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
                 err(f"{where}: match must be words in message {mi} as written.")
             elif len(k["match"]) > LIMITS["markChars"]:
                 err(f"{where}: match is at most {LIMITS['markChars']} characters; mark the few words that give it away.")
+            elif _overlaps(msg, k["match"], [o.get("match") for o in marks[:i]
+                                            if isinstance(o, dict) and o.get("message") == mi]):
+                err(f"{where}: its words overlap another mark on message {mi}; mark different words.")
             if k.get("label") is not None:
                 text(k.get("label"), f"{where} label", LIMITS["markLabelChars"])
                 if any(o is not k and o.get("message") == mi and o.get("label") is not None
@@ -375,6 +408,8 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
                 err(f"Mark {i + 1}: match must be words in the headline as written.")
             elif len(k["match"]) > LIMITS["markChars"]:
                 err(f"Mark {i + 1}: match is at most {LIMITS['markChars']} characters.")
+            elif _overlaps(head, k["match"], [o.get("match") for o in marks[:i]]):
+                err(f"Mark {i + 1}: its words overlap another mark on the headline; mark different words.")
             at = k.get("at")
             if not _int(at) or not start + LIMITS["markLead"] <= at <= end - LIMITS["endHold"]:
                 err(f"Mark {i + 1} needs an at inside the insert, after the headline is on screen.")
@@ -391,8 +426,13 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
                 if a and a == b:
                     err("flap.from and flap.to are the same; the board flips from one value to another.")
                 at = flap.get("at")
+                tiles = max(len(a or ""), len(b or ""))
+                flipping = max(0, tiles - 1) * TIMING["flipPerTile"] + TIMING["flip"]
                 if not _int(at) or not start + LIMITS["markLead"] <= at <= end - LIMITS["endHold"]:
                     err("flap.at must be inside the insert, after the headline is on screen.")
+                elif at + flipping > end - LIMITS["endHold"]:
+                    err(f"The flap's {tiles} tiles take {flipping} frames to flip and would still be flipping at "
+                        f"the insert's end; start it by frame {end - LIMITS['endHold'] - flipping}.")
                 else:
                     on_word(at, "The flap")
 

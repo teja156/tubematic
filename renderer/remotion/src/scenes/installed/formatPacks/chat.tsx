@@ -6,6 +6,7 @@
  * thread inside it.
  */
 import React from "react";
+import { fitFontSize } from "../fitText";
 import { LAYOUT, TIMING, type ChatData } from "./contract";
 import { MONO, SANS } from "./fonts";
 import { arrival, backOut, clamp01, easeOut, type Look } from "./draw";
@@ -27,8 +28,10 @@ export const Chat: React.FC<{ data: ChatData; frame: number; origin: number; P: 
     <>
       {data.title ? (
         <div style={{ position: "absolute", left: LAYOUT.left, top: LAYOUT.titleY, width: phoneW - 220,
-          fontFamily: SANS, fontWeight: 700, fontSize: 56, lineHeight: `${LAYOUT.titleLine}px`, color: P.title,
-          textTransform: "uppercase", letterSpacing: 1 }}>
+          fontFamily: SANS, fontWeight: 700, lineHeight: `${LAYOUT.titleLine}px`, color: P.title,
+          textTransform: "uppercase", letterSpacing: 1, whiteSpace: "nowrap",
+          // One line above the phone: the size comes down for a wide title.
+          fontSize: fitFontSize(data.title.toUpperCase(), phoneW - 220, 56, 36, 1) }}>
           {data.title}
         </div>
       ) : null}

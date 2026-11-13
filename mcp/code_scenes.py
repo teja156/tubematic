@@ -23,6 +23,7 @@ Free of the database and of I/O.
 from __future__ import annotations
 
 import math
+import unicodedata
 
 SCENE_SRC = "CodeScenes"
 PROPS_KEY = "codeScenes"
@@ -49,6 +50,14 @@ STEP_KEYS = {"at", "code", "label", "focus", "error", "output", "reveal"}
 
 def _int(v) -> bool:
     return isinstance(v, int) and not isinstance(v, bool)
+
+
+def wide_chars(text: str) -> list[str]:
+    """Characters that do not take one monospace cell: wide East Asian letters
+    and anything outside the Basic Multilingual Plane (emoji). The card places
+    every character on a column grid and the renderer counts UTF-16 units, so
+    one of these would land in the wrong place or shrink the font."""
+    return [c for c in text if ord(c) > 0xFFFF or unicodedata.east_asian_width(c) in ("W", "F")]
 
 
 def code_lines(code: str) -> list[str]:
@@ -174,6 +183,9 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
                 code = None
             elif "\t" in code:
                 err(f"{where}: the code holds a tab; indent with spaces.")
+            elif wide_chars(code):
+                err(f"{where}: the code holds {wide_chars(code)[0]!r}, which does not fit one column of the card "
+                    "(an emoji or a wide letter); use plain characters.")
             elif code == prev_code:
                 err(f"{where}: the code is the same as before; leave code out of a step that only moves the "
                     "highlight, the error or the output.")
@@ -251,6 +263,9 @@ def _output_errors(output) -> list[str]:
         out.append(f"output.lines lists at most {LIMITS['outputLines']} lines of text.")
     elif any(len(x) > LIMITS["outputChars"] for x in lines):
         out.append(f"an output line holds at most {LIMITS['outputChars']} characters.")
+    elif any(wide_chars(x) for x in lines):
+        out.append("an output line holds an emoji or a wide letter, which does not fit one column; use plain "
+                   "characters.")
     elif any(x.lstrip().startswith(("$ ", "# ", "> ")) for x in lines):
         out.append("output shows what the code prints, never a shell prompt; a command typed at a terminal is a "
                    "Terminal Doc insert.")

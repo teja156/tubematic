@@ -231,3 +231,22 @@ def test_the_text_audit_samples_each_code_step():
     steps = [p for p in passes if p["scene"] == 1]
     assert steps and all(600 <= p["first"] < 840 for p in steps)
     assert text_audit._unit_label(_config(_entry()), 1) == "insert 1 (code_scenes)"
+
+
+# ── review round 1 ──────────────────────────────────────────────────────────
+
+def test_an_emoji_or_a_wide_letter_in_the_code_is_refused():
+    # The card puts every character on one column; the renderer counts UTF-16 units.
+    errors = _check(_step(_entry(), 0, code='msg = "done \U0001F600"\nprint(msg)'))
+    assert any("does not fit one column" in m for m in errors), errors
+    errors = _check(_step(_entry(), 0, code='name = "東京"\nprint(name)'))
+    assert any("does not fit one column" in m for m in errors), errors
+
+
+def test_an_emoji_in_the_output_is_refused():
+    errors = _check(_step(_entry(), 2, output={"lines": ["ok ✅"]}))
+    assert any("emoji or a wide letter" in m for m in errors), errors
+
+
+def test_accented_letters_are_plain_characters():
+    assert cs.wide_chars('city = "Zürich"') == []

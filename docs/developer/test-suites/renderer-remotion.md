@@ -65,6 +65,13 @@ Covers `formatPacks/contract.ts` and `draw.ts` ([Format Packs](../10-scene-autho
 - Every change is listed in order with the insert's first frame first; rows ease on the card's
   curve, and marks are drawn as single paths.
 
+### `src/scenes/installed/fitText.test.ts`
+
+Covers `fitText.ts`, which sizes a one-line text down to fit its box
+([Format Packs](../10-scene-authoring.md#format-packs)): wide letters count wider than narrow ones,
+the base size is kept when the text fits, a long wide line shrinks until its estimate fits, and the
+size never goes under the minimum.
+
 ## Storybook Atlas
 
 ### `src/scenes/installed/storybookAtlas/storybookAtlas.test.ts`

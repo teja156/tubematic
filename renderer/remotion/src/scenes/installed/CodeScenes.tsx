@@ -18,6 +18,7 @@ import {
 import { morphAt, matchPieces, still, type Drawn } from "./codeScenes/morph";
 import { PALETTES, tokenize, type Palette, type Piece } from "./codeScenes/tokens";
 import { MONO, SANS, useCodeFonts } from "./codeScenes/fonts";
+import { fitFontSize } from "./fitText";
 
 /** Where an insert sits on the video (TMDEV-224); see CompositionBuilder's InsertPlacement. */
 type Placement = { origin: number; lead?: number; palette: "dark" | "light"; shift: number };
@@ -238,8 +239,10 @@ export default function CodeScenes({
           <div style={{ position: "absolute", left: textLeft - 14, width: LAYOUT.cardX + LAYOUT.cardW - textLeft - 10,
             top: codeTop + rowY(errRow) + lh + 2, height: (LAYOUT.calloutH - 14) * calloutOpen, overflow: "hidden",
             background: P.calloutBg, borderLeft: `6px solid ${P.error}`, opacity: Math.min(1, calloutOpen * 1.5) }}>
-            <div style={{ padding: "16px 20px", fontFamily: SANS, fontWeight: 700, fontSize: 34, color: P.errorText,
-              whiteSpace: "nowrap" }}>
+            <div style={{ padding: "16px 20px", fontFamily: SANS, fontWeight: 700, color: P.errorText,
+              whiteSpace: "nowrap",
+              // One line in a fixed box: the size comes down for a wide message.
+              fontSize: fitFontSize(calloutError.text, LAYOUT.cardX + LAYOUT.cardW - textLeft - 10 - 40, 34, 22) }}>
               {calloutError.text}
             </div>
           </div>

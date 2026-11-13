@@ -7,6 +7,7 @@ import React from "react";
 import { LAYOUT, TIMING, type QuizData } from "./contract";
 import { MONO, SANS } from "./fonts";
 import { arrival, backOut, clamp01, easeOut, type Look } from "./draw";
+import { fitFontSize } from "../fitText";
 
 export const Quiz: React.FC<{ data: QuizData; frame: number; origin: number; P: Look }> = ({
   data, frame, origin, P,
@@ -41,8 +42,9 @@ export const Quiz: React.FC<{ data: QuizData; frame: number; origin: number; P: 
               color: "#FFFFFF", fontFamily: SANS, fontWeight: 700, fontSize: 40, lineHeight: "70px", textAlign: "center" }}>
               {"ABCD"[i]}
             </div>
-            <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 44, lineHeight: "52px", color: ink,
-              whiteSpace: "nowrap" }}>
+            <div style={{ fontFamily: SANS, fontWeight: 700, lineHeight: "52px", color: ink, whiteSpace: "nowrap",
+              // One line in the row (padding 2x28, the letter 70, the gap 26): the size comes down for wide text.
+              fontSize: fitFontSize(o.text, width - 56 - 70 - 26 - 8, 44, 30) }}>
               {o.text}
             </div>
             {right && lock > 0 ? (

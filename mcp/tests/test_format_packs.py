@@ -271,3 +271,51 @@ def test_the_text_audit_samples_a_format_packs_insert():
     units = [p for p in passes if p["scene"] == 1]
     assert units and all(600 <= p["first"] < 840 for p in units)
     assert text_audit._unit_label(_config(_quiz()), 1) == "insert 1 (format_packs)"
+
+
+# ── review round 1 ──────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("number", ["212.867.5309", "212/867/5309", "212–867–5309", "+44 20.7946.0000"])
+def test_phone_numbers_written_with_dots_slashes_or_dashes_are_refused(number):
+    e = _chat()
+    e["props"]["formatPacks"]["messages"][0]["text"] = f"Call me on {number} now"
+    errors = _check(e)
+    assert any("looks like a real phone number" in m for m in errors), errors
+
+
+def test_prices_and_dates_with_dots_or_slashes_are_not_phone_numbers():
+    e = _chat()
+    e["props"]["formatPacks"]["messages"][0]["text"] = "It went from 1.299.000 to 12/03/2026 overnight"
+    assert not any("phone number" in m for m in _check(e))
+
+
+def test_a_phone_number_on_the_flap_is_refused():
+    e = _strap()
+    e["props"]["formatPacks"]["flap"].update({"from": "2125550000", "to": "2128675309"})
+    assert any("looks like a real phone number" in m for m in _check(e))
+
+
+def test_a_chat_title_that_wraps_above_the_phone_is_refused():
+    errors = _check(_chat(title="What a fake parcel text looks like"))
+    assert any("more than one line above the phone" in m for m in errors), errors
+
+
+def test_overlapping_marks_on_one_message_are_refused():
+    e = _chat()
+    e["props"]["formatPacks"]["marks"].append({"at": 800, "message": 2, "match": "£80", "kind": "underline"})
+    errors = _check(e)
+    assert any("overlap another mark on message 2" in m for m in errors), errors
+
+
+def test_overlapping_marks_on_the_headline_are_refused():
+    e = _strap()
+    e["props"]["formatPacks"]["marks"].append({"at": 700, "match": "goes"})
+    errors = _check(e)
+    assert any("overlap another mark on the headline" in m for m in errors), errors
+
+
+def test_a_flap_still_flipping_at_the_end_is_refused():
+    e = _strap()
+    e["props"]["formatPacks"]["flap"].update({"from": "$1,000,000", "to": "$2,500,000", "at": 800})
+    errors = _check(e)
+    assert any("would still be flipping" in m for m in errors), errors

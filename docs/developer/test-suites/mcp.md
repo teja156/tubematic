@@ -967,7 +967,8 @@ text audit's per-step sampling ([Code Scenes](../10-scene-authoring.md#code-scen
   too close, too near the end or off a word, a repeated code version, a tab, too many lines, a line
   too long, a focus or error line the code lacks, an error match not on its line or a message too
   long, an output pane too long, with a shell prompt or with no lines and no label, `reveal` on a
-  later step, typing too much or into the next step, and a still stretch in the middle or at the end.
+  later step, typing too much or into the next step, a still stretch in the middle or at the end, and
+  an emoji or a wide letter in the code or the output (accented letters pass).
 - `write_scene_config` writes a Code Scenes insert with its scene, palette and shift filled, names a
   Code Scenes problem in its refusal, and refuses `CodeScenes` as one of the scenes.
 - The output check stays empty: no code runs, so the AI review checks an output pane, and a sandboxed
@@ -984,12 +985,14 @@ text audit's sampling between changes ([Format Packs](../10-scene-authoring.md#f
 - Fiction-range phone numbers pass and real-looking ones do not; amounts and dates are not taken for
   phone numbers; app names are found as whole words, `X` only on its own.
 - A sound chat, list, quiz and strap each pass, and a strap with a source passes.
-- What passes for a real app is refused: a real-looking number in a contact or a message, a tick, an
-  app name in a contact, chat title, list title or strap kicker.
+- What passes for a real app is refused: a real-looking number in a contact or a message (written
+  with dots, slashes or dashes too) or on the flap, a tick, an app name in a contact, chat title,
+  list title or strap kicker. Prices and dates with dots or slashes pass.
 - Each other refusal names its part: wrong keys, a first item off the insert's first frame, an
   arrival off a word, too close to the one before or to the end, text over its limits, a mark on
-  words its message lacks or before its message, two labels on one message, a quiz locking too early,
-  a thread too tall for the phone, and a still stretch.
+  words its message lacks or before its message, overlapping marks on a message or the headline, two
+  labels on one message, a quiz locking too early, a flap still flipping at the end, a chat title that
+  wraps, a thread too tall for the phone, and a still stretch.
 - `write_scene_config` writes a Format Packs insert with its scene, palette and shift filled, names
   a Format Packs problem in its refusal, and refuses `FormatPacks` as one of the scenes.
 

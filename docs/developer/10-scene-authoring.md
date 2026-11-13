@@ -852,8 +852,9 @@ the font's advance. `mcp/code_scenes.py::check_insert` refuses an insert when:
   code or does not start on the insert's first frame.
 - A later step is under 45 frames after the one before, starts within 30 frames of the end, or does
   not start within 2 frames of a word.
-- The code has more than 14 lines, a line over 40 characters, or a tab; or a step repeats the code
-  before it (a step that only moves the focus leaves `code` out).
+- The code has more than 14 lines, a line over 40 characters, a tab, or an emoji or wide letter
+  (the card places every character on one column); or a step repeats the code before it (a step
+  that only moves the focus leaves `code` out).
 - `focus` or `error.line` names a line the code does not have, or `error.match` is not on its line.
 - An output pane has more than 3 lines of 40 characters, starts a line with a shell prompt, or has
   no lines and no label.
@@ -888,8 +889,10 @@ The style must never pass for a real app or a real screenshot. The component dra
 notch, island or status bar, and an EXAMPLE tag on every chat and on every strap with no `source`,
 which the data cannot remove. `mcp/format_packs.py::check_insert` refuses what data could add on
 top: a phone-number-like run outside the ranges kept for fiction (UK `07700 900000` to `900999`, US
-`555-0100` to `555-0199`), a tick or verified mark anywhere, and the name of a messaging or social
-app in a contact, title or kicker. A brand named inside a message cannot be caught by a list, so the
+`555-0100` to `555-0199`), written with spaces, hyphens, dashes, dots, slashes or brackets (a run
+with dots or slashes, and any run in a strap's date or flap, counts only at ten digits, so prices
+and dates pass), a tick or verified mark anywhere, and the name of a messaging or social app in a
+contact, title or kicker. A brand named inside a message cannot be caught by a list, so the
 skill forbids it and the pack's `insert.review` tells the AI review to report it.
 
 It also refuses an insert when:
@@ -898,9 +901,15 @@ It also refuses an insert when:
   lock is off a word, under 18 frames after the one before, or within 30 frames of the end.
 - The messages do not fit the phone together, the list does not fit the frame, or a text runs past
   its line limit (lines are counted with a characters-per-line rule both sides share).
-- A mark names words its message does not have, lands before its message, or a message carries two
-  labels; the quiz locks before its last option is read.
+- A mark names words its message does not have, lands before its message, overlaps another mark on
+  the same message or headline, or a message carries two labels; the quiz locks before its last
+  option is read; the flap's tiles, which flip one after another, would still be flipping in the
+  last 30 frames; a chat title takes more than one line above the phone.
 - Nothing changes for more than 3 seconds.
+
+A one-line text in a fixed box (a quiz option, the chat title, Code Scenes' callout) is capped by
+characters, which cannot tell narrow letters from wide ones, so the scene sizes it down to fit with
+`src/scenes/installed/fitText.ts`, an estimate on the wide side of Barlow's real widths.
 
 The renderer's side is `src/scenes/installed/FormatPacks.tsx` with `formatPacks/`: `contract.ts`
 (limits, timings, the band and the line rule), a file per format, and `draw.ts`, whose rings and
