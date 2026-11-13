@@ -47,8 +47,8 @@ WORDS_PER_SECOND = 2.9
 
 # The transitions a main style may name for going into and out of an insert.
 # Keep in sync: renderer/remotion/src/inserts/transitions.ts (frames per kind).
-TRANSITIONS = ("cut", "dip", "push", "wipe")
-TRANSITION_FRAMES = {"cut": 0, "dip": 8, "push": 12, "wipe": 12}
+TRANSITIONS = ("cut", "dip", "push", "wipe", "glitch")
+TRANSITION_FRAMES = {"cut": 0, "dip": 8, "push": 12, "wipe": 12, "glitch": 4}
 
 # Most insert styles one video may use.
 MAX_STYLES_PER_VIDEO = 2

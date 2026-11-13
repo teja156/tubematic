@@ -109,6 +109,21 @@ def test_every_transition_has_a_frame_count():
     assert ti.TRANSITION_FRAMES["cut"] == 0
 
 
+def test_the_renderer_draws_every_transition_with_the_same_frame_counts():
+    """The renderer's transitions.ts and this module name the same transitions
+    with the same lengths: a transition only one side knew would be drawn as a
+    cut while the checks reserve frames for it, or the reverse."""
+    import re
+    from pathlib import Path
+    ts = (Path(__file__).resolve().parents[2] / "renderer" / "remotion" / "src" / "inserts"
+          / "transitions.ts").read_text()
+    m = re.search(r"TRANSITION_FRAMES: Record<InsertTransition, number> = \{([^}]*)\}", ts)
+    frames = {k: int(v) for k, v in re.findall(r"(\w+): (\d+)", m.group(1))}
+    assert frames == ti.TRANSITION_FRAMES
+    union = re.search(r"export type InsertTransition = ([^;]*);", ts).group(1)
+    assert set(re.findall(r'"(\w+)"', union)) == set(ti.TRANSITIONS)
+
+
 def test_the_segment_that_opens_the_payoff_cannot_be_an_insert():
     from tubematic_core import formulas as tf
     formula = next(fid for fid in tf.FORMULAS if "payoff" in tf.beat_roles(fid).values())

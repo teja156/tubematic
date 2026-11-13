@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { TRANSITION_FRAMES, activeInsert, insertLook, insertProgress, transitionOf } from "./transitions";
+import { TRANSITION_FRAMES, activeInsert, glitchBands, insertLook, insertProgress, transitionOf } from "./transitions";
 
 describe("insert transitions", () => {
   it("reads an unknown or missing transition as a cut", () => {
     expect(transitionOf(undefined)).toBe("cut");
     expect(transitionOf("spin")).toBe("cut");
     expect(transitionOf("wipe")).toBe("wipe");
+    expect(transitionOf("glitch")).toBe("glitch");
   });
 
   it("runs the way in before the window and the way out after it, so the whole window is fully in", () => {
@@ -32,7 +33,7 @@ describe("insert transitions", () => {
   });
 
   it("covers the frame only when fully in, so the main is never hidden while it shows", () => {
-    for (const t of ["dip", "push", "wipe"] as const) {
+    for (const t of ["dip", "push", "wipe", "glitch"] as const) {
       expect(insertLook(t, 0.5).covers).toBe(false);
       expect(insertLook(t, 1).covers).toBe(true);
       expect(insertLook(t, 0).insertOpacity).toBe(0);
@@ -61,5 +62,23 @@ describe("insert transitions", () => {
     expect(activeInsert(120, windows, "cut")).toMatchObject({ index: 0, local: 20, progress: 1 });
     expect(activeInsert(459, windows, "cut")).toMatchObject({ index: 1 });
     expect(activeInsert(460, windows, "cut")).toBeNull();
+  });
+
+  it("tears the insert in over a few frames, more bands each frame, the same way every render", () => {
+    expect(TRANSITION_FRAMES.glitch).toBe(4);
+    const area = (p: number, frame: number) => {
+      const g = glitchBands(p, frame);
+      return g.path ? (g.path.match(/M /g) ?? []).length : 0;
+    };
+    // Deterministic: the same frame gives the same bands.
+    expect(glitchBands(0.6, 123)).toEqual(glitchBands(0.6, 123));
+    // More of the insert shows as the tear goes on (averaged over frames).
+    const mean = (p: number) => [...Array(40).keys()].reduce((s, f) => s + area(p, f), 0) / 40;
+    expect(mean(0.2)).toBeLessThan(mean(0.8));
+    const look = insertLook("glitch", 0.6, 1080, 200);
+    expect(look.covers).toBe(false);
+    expect(look.mainShiftX).toBe(-look.insertShiftX);
+    if (look.insertOpacity > 0) expect(look.insertClipPath).toMatch(/^path\("M /);
+    expect(insertLook("glitch", 1, 1080, 200).covers).toBe(true);
   });
 });
