@@ -39,7 +39,7 @@
     "fontSize": 64,
     "maxWords": 3
   },
-  "script": "A segment marked as a Code Scenes insert reads code to the viewer: name the line or the piece of code the viewer should look at (\"the f-string on line three\", \"the loop's last index\"), one change per sentence, in the order the code changes (the bug, what it does, the fix). Say what the code prints only when it is certain from the code itself, because it becomes the output pane. Keep it to code a viewer can read in a few seconds: about fifteen short lines at most. A command typed at a shell and what it prints is a Terminal Doc insert, not this one.",
+  "script": "A segment marked as a Code Scenes insert reads code to the viewer: name the line or the piece of code the viewer should look at (\"the f-string on line three\", \"the loop's last index\"), one change per sentence, in the order the code changes (the bug, what it does, the fix). Say what the code prints only when it is certain from the code itself, because it becomes the output pane (Python, JavaScript and TypeScript output is checked by a real run). Keep it to code a viewer can read in a few seconds: about fifteen short lines at most. A command typed at a shell and what it prints is a Terminal Doc insert, not this one.",
   "picture": {
     "opening": "Not an opening style: an insert never opens a video. Its first frame already shows the card with its code (or the first characters being typed), never an empty board.",
     "turn": "A new step on the word that names what changes: the highlight moves, the error callout opens, or the code morphs into its next version.",

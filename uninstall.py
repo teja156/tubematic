@@ -56,6 +56,7 @@ _TUBEMATIC_SKILLS = [
     "tubematic-insert-routing",
     "tubematic-inserts",
     "tubematic-code-scenes",
+    "tubematic-run-code",
     "tubematic-format-packs",
     "tubematic-formula-routing",
     "tubematic-mascot-builder",
