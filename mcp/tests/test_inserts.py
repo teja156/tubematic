@@ -574,3 +574,34 @@ def test_the_text_audit_checks_each_insert_opens_with_its_first_element():
     assert text_audit.insert_open_findings(drawn, cfg) == []
     out = text_audit.summarise({"passes": [empty]}, cfg)
     assert any("Insert 1 (system_flow) opens on an empty board" in w for w in out)
+
+
+
+def test_a_terminal_doc_push_on_the_first_frame_does_not_lengthen_the_hold():
+    import terminal_doc
+    e = _td_insert()
+    e["props"]["terminalDoc"]["beats"][0]["events"].append({"type": "push", "at": 600, "frames": 300})
+    assert terminal_doc.insert_first_frames(e) == terminal_doc.TIMING["reveal"]
+
+
+def test_the_hold_never_reaches_the_next_event():
+    import system_flow
+    import terminal_doc
+    sf = _sf_insert()
+    board = sf["props"]["systemFlow"]["boards"][0]
+    board["events"] = [{"type": "node", "node": board["nodes"][0]["id"], "at": 600},
+                       {"type": "edge", "edge": "x>y", "at": 605}]
+    assert system_flow.insert_first_frames(sf) == 5
+    td = _td_insert()
+    td["props"]["terminalDoc"]["beats"][0]["events"][1]["at"] = 604
+    assert terminal_doc.insert_first_frames(td) == 4
+
+
+def test_a_system_flow_board_with_a_headline_holds_it_even_before_its_first_node():
+    import system_flow
+    sf = _sf_insert()
+    board = sf["props"]["systemFlow"]["boards"][0]
+    assert board.get("headline")
+    for ev in board["events"]:
+        ev["at"] += 30
+    assert system_flow.insert_first_frames(sf) == system_flow.HEADLINE_FIRST_FRAMES

@@ -74,4 +74,9 @@ describe("the held first frame", () => {
     expect(heldFrame(8, 500, 60)).toBe(8 + 59);
     expect(heldFrame(8, -5, 60)).toBe(8);
   });
+  it("holds the first frame for a value that is not a number", () => {
+    expect(heldFrame(8, "abc", 60)).toBe(8);
+    expect(heldFrame(8, Number.NaN, 60)).toBe(8);
+    expect(heldFrame(8, "16", 60)).toBe(24);
+  });
 });

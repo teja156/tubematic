@@ -114,7 +114,11 @@ export function insertLook(transition: InsertTransition, progress: number, width
  *  way in, then `firstFrames` into the window, never past its last frame). The
  *  scene is frozen there while the Sequence's frame is below it, so an insert
  *  never shows an empty board (decided 2026-11-12). */
-export function heldFrame(lead: number, firstFrames: number | undefined, durationInFrames: number): number {
-  const first = Math.max(0, Math.min(Math.floor(firstFrames ?? 0), durationInFrames - 1));
+export function heldFrame(lead: number, firstFrames: unknown, durationInFrames: number): number {
+  // A config written before firstFrames existed, or one edited by hand with a
+  // value that is not a number, holds the first frame: never NaN, which
+  // Remotion's Freeze refuses even while inactive.
+  const n = Number(firstFrames ?? 0);
+  const first = Number.isFinite(n) ? Math.max(0, Math.min(Math.floor(n), durationInFrames - 1)) : 0;
   return lead + first;
 }

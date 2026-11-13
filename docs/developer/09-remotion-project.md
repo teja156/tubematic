@@ -157,8 +157,9 @@ it from the insert style's module (`server.py::_INSERT_FIRST_FRAMES`), capped at
 `tubematic_core/inserts.py::FIRST_FRAMES_MAX`. `CompositionBuilder` wraps every insert's scene in a
 Remotion `<Freeze>` at `transitions.ts::heldFrame`: until the Sequence reaches that frame, the scene
 shows the frame on which its first element has settled. The transition therefore reveals content,
-and later elements animate in as written. An event inside the held frames is shown already settled
-from the start. The text-layout audit checks the frame before the window and its first frame for
+and later elements animate in as written. The hold never reaches the insert's next event, so nothing
+timed after the first element shows early; a push, a glow or a stream of guesses on the first frame
+runs on as the insert plays and does not lengthen the hold. The text-layout audit checks the frame before the window and its first frame for
 text of the insert's own (`text_audit.insert_open_passes`).
 
 | Transition | Frames | What it looks like |
