@@ -141,13 +141,19 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
         v = data.get(key)
         if v is not None and (not isinstance(v, str) or len(v) > cap):
             err(f"codeScenes.{key} must be text of at most {cap} characters.")
-    words = [data.get("tag"), data.get("file")] + [x for s in (data.get("steps") or []) if isinstance(s, dict)
-                                                   for x in (s.get("label"), (s.get("error") or {}).get("text")
-                                                             if isinstance(s.get("error"), dict) else None)]
+    steps_in = data.get("steps") if isinstance(data.get("steps"), list) else []
+    words = [data.get("tag"), data.get("file")]
+    for s in steps_in:
+        if isinstance(s, dict):
+            words.append(s.get("label"))
+            if isinstance(s.get("error"), dict):
+                words.append(s["error"].get("text"))
+            if isinstance(s.get("output"), dict):
+                words.append(s["output"].get("label"))
     odd = [c for w in words if isinstance(w, str) for c in text_fit.unsupported_chars(w)]
     if odd:
-        err(f"{odd[0]!r} in a tag, file name, label or error message is not a character the card's fonts draw; "
-            "use plain Latin text.")
+        err(f"{odd[0]!r} in a tag, file name, label, error message or output label is not a character the card's "
+            "fonts draw; use plain Latin text.")
     steps = data.get("steps")
     if not isinstance(steps, list) or not 1 <= len(steps) <= LIMITS["maxSteps"]:
         err(f"codeScenes.steps must list 1 to {LIMITS['maxSteps']} steps.")

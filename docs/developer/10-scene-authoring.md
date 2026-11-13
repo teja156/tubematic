@@ -897,8 +897,9 @@ has a plus sign or brackets, when its digit groups have a phone number's shape (
 `020 7946 0000`), or when it has ten digits or more, whatever joins them (spaces, dashes, dots,
 slashes); a date, a price, a grouped count (`1-000-000`) or a bare short count passes.
 
-Both styles accept only the characters their bundled fonts draw, which are Latin-only: letters,
-digits, punctuation, currency signs and arrows (`text_fit.unsupported_chars`). Another script, an
+Both styles accept only the characters every one of their bundled fonts draws, read from the
+font files' Latin subsets: letters with Western European accents, digits, punctuation and the
+common currency signs (`text_fit.SUPPORTED_RANGES`, `text_fit.unsupported_chars`). Another script, an
 emoji, a combining mark or a control character would be drawn in a fallback font of another width,
 or not at all, so the validators refuse it, and the width estimate only measures characters it
 knows. A brand named inside a message cannot be caught by a list, so the

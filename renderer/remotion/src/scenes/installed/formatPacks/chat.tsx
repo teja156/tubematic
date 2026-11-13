@@ -77,7 +77,9 @@ export const Chat: React.FC<{ data: ChatData; frame: number; origin: number; P: 
             match: mk.match, kind: mk.kind, k: easeOut((frame - mk.at) / TIMING.mark),
           }));
           // A message's one label sits on its top edge, in the gap above it,
-          // and settles a few frames after its stroke lands.
+          // and settles a few frames after its stroke lands. It starts at the
+          // bubble's inner corner (left on theirs, right on yours) and grows
+          // toward the middle, so a label wider than a short bubble stays on screen.
           const labelled = msgMarks.find((mk) => mk.label);
           const labelK = labelled ? easeOut((frame - labelled.at - TIMING.mark + 3) / 6) : 0;
           const dim = anyMark && onIt.length === 0 ? 0.5 : 1;
@@ -92,7 +94,7 @@ export const Chat: React.FC<{ data: ChatData; frame: number; origin: number; P: 
                 overflowWrap: "anywhere" }}>
                 <MarkedText text={m.text} marks={onIt} color={mine ? P.outgoingText : P.incomingText} P={P} />
                 {labelled && labelK > 0 ? (
-                  <div style={{ position: "absolute", top: -19, [mine ? "left" : "right"]: 22, opacity: labelK,
+                  <div style={{ position: "absolute", top: -19, [mine ? "right" : "left"]: 22, opacity: labelK,
                     transform: `translateY(${(1 - labelK) * 6}px)`, fontFamily: SANS, fontWeight: 700, fontSize: 26,
                     letterSpacing: 1, lineHeight: "34px", textTransform: "uppercase", color: "#FFFFFF",
                     background: P.accent, borderRadius: 8, padding: "0 12px", whiteSpace: "nowrap" }}>

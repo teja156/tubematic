@@ -34,3 +34,11 @@ def test_wide_letters_are_wider_than_narrow_ones_and_emoji_wider_still():
 
 def test_a_word_wider_than_its_box_is_broken_across_lines():
     assert tf.wrap_count("W" * 40, 44, 580) >= 3
+
+
+def test_the_repertoire_is_what_every_bundled_font_draws():
+    # Read from the font files: the minus sign is there, arrows and a soft hyphen are not.
+    assert tf.unsupported_chars("a - b \u2212 c \u20ac \u00e9 \u201cq\u201d") == []
+    assert tf.unsupported_chars("\u2192") == ["\u2192"]
+    assert tf.unsupported_chars("soft\u00adhyphen") == ["\u00ad"]
+    assert tf.unsupported_chars("\u0141") == ["\u0141"]

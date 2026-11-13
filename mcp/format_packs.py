@@ -249,7 +249,7 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
     odd = [c for x in _strings(data) for c in text_fit.unsupported_chars(x)]
     if odd and not any(has_tick(x) for x in _strings(data)):
         err(f"{odd[0]!r} is not a character the format's fonts draw (they draw Latin letters, digits, punctuation, "
-            "currency signs and arrows): no emoji, other scripts or invisible characters. Rewrite it in plain text.")
+            "common currency signs): no arrows, emoji, other scripts or invisible characters. Rewrite it in plain text.")
     # Every string, the strap's date and flap included: the rule tells a date,
     # a price or a count from a phone number by its shape.
     found = [n for x in _strings(data) for n in real_looking_numbers(x)]

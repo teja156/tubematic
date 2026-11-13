@@ -282,3 +282,17 @@ def test_spacing_marks_and_control_characters_in_the_code_are_refused(code):
 def test_a_label_in_another_script_is_refused():
     e = _step(_entry(), 0, label="\u30d0\u30b0")
     assert any("not a character the card's fonts draw" in m for m in _check(e))
+
+
+
+# ── review round 4 ──────────────────────────────────────────────────────────
+
+def test_steps_that_are_not_a_list_are_refused_with_a_sentence():
+    e = _entry()
+    e["props"]["codeScenes"]["steps"] = 1
+    assert any("1 to 4 steps" in m for m in _check(e))
+
+
+def test_an_output_label_the_fonts_do_not_draw_is_refused():
+    errors = _check(_step(_entry(), 2, output={"lines": [], "label": "\u200b"}))
+    assert any("not a character the card's fonts draw" in m for m in errors), errors

@@ -1000,7 +1000,7 @@ text audit's sampling between changes ([Format Packs](../10-scene-authoring.md#f
   value on the flap, a tick, an app name in a contact, chat title, list title or strap kicker.
   Dates, prices, grouped counts and a bare short count pass. Characters the fonts do not draw
   (another script, an emoji with its variation selector, a spacing mark, a control or zero-width
-  character) are refused; accents, curly quotes, currency signs and arrows pass.
+  character, an arrow) are refused; accents, curly quotes, currency signs and the minus sign pass.
 - Each other refusal names its part: wrong keys, a first item off the insert's first frame, an
   arrival off a word, too close to the one before or to the end, text over its limits, a mark on
   words its message lacks or before its message, overlapping marks on a message or the headline, two

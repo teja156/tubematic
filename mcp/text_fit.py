@@ -18,20 +18,30 @@ SEMI = "fr()[]{}\"/\\-"
 WIDE = "MWmw@%"
 
 
+# The characters every bundled font of these styles draws: the intersection of
+# the character maps of renderer/remotion/public/fonts/ barlow-latin-600/700,
+# jetbrains-mono-latin-500/700 and ibm-plex-mono-latin-400/700, less control,
+# invisible and combining characters. Read from the font files (fontTools
+# getBestCmap); a new or changed font file means reading them again.
+SUPPORTED_RANGES = (
+    (0x0020, 0x007E), (0x00A0, 0x00AC), (0x00AE, 0x00FF), (0x0131, 0x0131), (0x0152, 0x0153),
+    (0x02BC, 0x02BC), (0x02C6, 0x02C6), (0x02DA, 0x02DA), (0x02DC, 0x02DC), (0x2013, 0x2014),
+    (0x2018, 0x201A), (0x201C, 0x201E), (0x2022, 0x2022), (0x2026, 0x2026), (0x2032, 0x2033),
+    (0x2039, 0x203A), (0x2044, 0x2044), (0x20AC, 0x20AC), (0x2122, 0x2122), (0x2212, 0x2212),
+    (0x2215, 0x2215),
+)
+
+
 def _supported(ch: str) -> bool:
     o = ord(ch)
-    if o < 0x20 or 0x7F <= o < 0xA0:
-        return False  # control characters
-    return (o <= 0x024F  # Latin, Latin-1, Latin Extended-A and -B
-            or 0x2010 <= o <= 0x2027 or 0x2030 <= o <= 0x205E  # dashes, quotes, bullets, primes
-            or 0x20A0 <= o <= 0x20CF  # currency signs
-            or o == 0x2122 or 0x2190 <= o <= 0x21FF)  # trade mark, arrows
+    return any(a <= o <= b for a, b in SUPPORTED_RANGES)
 
 
 def unsupported_chars(text: str) -> list[str]:
     """Characters the bundled fonts (Barlow, JetBrains Mono, IBM Plex Mono,
-    all Latin-only) do not draw: other scripts, emoji, combining and invisible
-    characters, control characters. The browser would draw them in a fallback
+    their Latin files) do not all draw: other scripts, emoji, arrows, most
+    letters beyond Latin-1, combining and invisible characters, control
+    characters. The browser would draw them in a fallback
     font of another width, or not at all, so these styles refuse them and the
     estimate below only ever measures characters it knows."""
     return [c for c in text if not _supported(c)]

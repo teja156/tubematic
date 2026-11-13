@@ -49,8 +49,9 @@ work around it. In the data:
 
 - Every thread is made up. Never name a real bank, courier, shop, app or person in a message, a
   contact or a title: write "your bank", "a parcel company", "Unknown number", "Mum".
-- Plain Latin text only: letters (accents are fine), digits, punctuation, currency signs and
-  arrows. No emoji, other scripts or invisible characters: the format's fonts draw Latin text only,
+- Plain Latin text only: letters (the accents of Western European languages are fine), digits,
+  punctuation and the common currency signs. No arrows, emoji, other scripts or invisible
+  characters: the format's fonts draw Latin text only,
   and the tool refuses anything else.
 - A phone number only from the ranges kept for fiction: UK `07700 900000` to `07700 900999`, US
   `555-0100` to `555-0199`. The tool refuses any other number anywhere in the data, however it is

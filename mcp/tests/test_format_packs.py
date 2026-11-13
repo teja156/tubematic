@@ -380,9 +380,9 @@ def test_characters_the_fonts_do_not_draw_are_refused(text):
     assert any("not a character the format's fonts draw" in m for m in _check(e))
 
 
-def test_accents_quotes_currency_and_arrows_pass():
+def test_accents_quotes_currency_and_the_minus_sign_pass():
     e = _chat()
-    e["props"]["formatPacks"]["messages"][1]["text"] = "Caf\u00e9 \u201cnow\u201d \u20ac50 \u2192 ok"
+    e["props"]["formatPacks"]["messages"][1]["text"] = "Caf\u00e9 \u201cnow\u201d \u20ac50 \u2212 ok"
     assert not any("fonts draw" in m for m in _check(e))
 
 
