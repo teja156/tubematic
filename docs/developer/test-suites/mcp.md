@@ -764,7 +764,7 @@ Covers `mcp/under_the_hood.py`, the checks `write_scene_config` runs on an Under
 - `generate_image` refuses a 13th new photograph on an Under the Hood video before any request goes
   out, and allows regenerating an existing one; other styles are not capped. A name being generated
   holds its slot, so a second new name cannot take the last one meanwhile, and a call that fails gives
-  the slot back.
+  the slot back. The prompt goes out as the agent wrote it, since the pack's `pictures` block only caps.
 
 Trap: a plate whose own fields are bad is skipped for every check that projects through its camera,
 including the next plate's zoom-through, or a malformed `focus` raised instead of being reported.
@@ -850,6 +850,8 @@ JSON `true` or `false` (Python reads `true` as 1); a field the event does not
   style: an empty first frame is warned about and each set start is a change frame.
 - `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
   one and refuses `PaperDiorama` on another style and other scenes on a Paper Diorama video.
+- A list or object where the config names a room, slot, level, scale, prop or item is reported as a
+  problem, never raised.
 - `generate_image` on a Paper Diorama video is refused before any request reaches the API.
 - `render_paper_props` refuses a video with no config, with no `customProps` or of another style.
   For a sound one it passes the video's own props and `PAPER_SCRIPT` to `bean_preview.render_preview`

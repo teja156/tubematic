@@ -7203,7 +7203,9 @@ def _image_plan(style: str, video_id: str, image_name: str, prompt: str,
         return {"error": "reference is only for a style painted from a reference sheet "
                          f"({', '.join(_sheet_styles())}): this video's visual_style is "
                          f"{style or 'auto'!r}. Leave it out."}
-    if not pics:
+    # A pack that only caps its pictures (Under the Hood) sends the agent's
+    # words as they are.
+    if not pics or not (sheet or pics.get("still_style") or pics.get("still_aspect")):
         return {"prompt": prompt, "aspect_ratio": aspect_ratio, "ref_path": None}
     # The agent's words end as a sentence, so the pack's text starts a new one.
     said = prompt.strip()

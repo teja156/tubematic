@@ -97,6 +97,12 @@ CRITTER_W = 11.2 * _U
 CRITTER_H = (2.6 + 7 + 2.2) * _U
 
 
+def _k(v):
+    """v when it is a string, else None: a list or object from the config
+    would raise on a dict lookup, and None is in none of them."""
+    return v if isinstance(v, str) else None
+
+
 def _int(v) -> bool:
     return isinstance(v, int) and not isinstance(v, bool)
 
@@ -338,7 +344,7 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=())
             err(f"{where} lasts {(end - start) / fps:.1f} s; a set needs at least {LIMITS['minSetSeconds']} s "
                 "to be read. Merge it with the set before or after.")
         room = s.get("room")
-        if room not in ROOMS:
+        if _k(room) not in ROOMS:
             err(f"{where}: room must be one of {list(ROOMS)}.")
             room = "diner"
         if not _text(s.get("banner"), LIMITS["bannerChars"]):
@@ -348,7 +354,7 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=())
         cr = s.get("critter")
         cr_slot = None
         if cr is not None:
-            if not isinstance(cr, dict) or set(cr) - {"slot", "face", "expr"} or cr.get("slot") not in SLOTS:
+            if not isinstance(cr, dict) or set(cr) - {"slot", "face", "expr"} or _k(cr.get("slot")) not in SLOTS:
                 err(f"{where}: critter must be null or {{slot, face, expr}} with slot one of {list(SLOTS)}.")
             else:
                 cr_slot = cr["slot"]
@@ -374,10 +380,10 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=())
             bad = sorted(set(it) - _ITEM_KEYS)
             if bad:
                 err(f"{at}: unknown field(s) {bad}; an item takes {sorted(_ITEM_KEYS)}.")
-            if it.get("prop") not in sizes:
+            if _k(it.get("prop")) not in sizes:
                 err(f"{at}: prop {it.get('prop')!r} is neither a shipped prop nor one of your customProps.")
-            if it.get("slot") not in SLOTS or it.get("level", "floor") not in LEVELS \
-                    or it.get("scale", "m") not in SCALES:
+            if _k(it.get("slot")) not in SLOTS or _k(it.get("level", "floor")) not in LEVELS \
+                    or _k(it.get("scale", "m")) not in SCALES:
                 err(f"{at}: slot must be one of {list(SLOTS)}, level one of {list(LEVELS)}, "
                     f"scale one of {list(SCALES)}.")
             if it.get("enter", "pop") not in ENTERS:
@@ -427,7 +433,7 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=())
                     err(f"{at}: this set has no critter.")
             elif kind == "expr":
                 err(f"{at}: expr changes the critter's face: target \"critter\".")
-            elif tgt not in ids:
+            elif _k(tgt) not in ids:
                 err(f"{at}: target must be an item of this set{', or the critter' if kind in _TARGETS_CRITTER else ''}.")
                 continue
             else:
@@ -436,17 +442,17 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=())
                     err(f"{at}: {tgt!r} has not entered yet (it enters at frame {it['at']}).")
                 if tgt in exits and f >= exits[tgt]:
                     err(f"{at}: {tgt!r} has already left (it exits at frame {exits[tgt]}).")
-            if kind == "exit" and tgt in ids:
+            if kind == "exit" and _k(tgt) in ids:
                 exits[tgt] = f
             if kind == "move":
-                if e.get("to") not in SLOTS or e.get("level", "floor") not in LEVELS:
+                if _k(e.get("to")) not in SLOTS or _k(e.get("level", "floor")) not in LEVELS:
                     err(f"{at}: to must be one of {list(SLOTS)} and level one of {list(LEVELS)}.")
-                elif tgt in ids:
+                elif _k(tgt) in ids:
                     moves.setdefault(tgt, []).append((f, e["to"], e.get("level", ids[tgt].get("level", "floor"))))
             if kind == "swap":
-                if e.get("prop") not in sizes:
+                if _k(e.get("prop")) not in sizes:
                     err(f"{at}: prop {e.get('prop')!r} is neither a shipped prop nor one of your customProps.")
-                elif tgt in ids and ids[tgt].get("prop") in sizes and sizes[e["prop"]] != sizes[ids[tgt]["prop"]]:
+                elif _k(tgt) in ids and _k(ids[tgt].get("prop")) in sizes and sizes[e["prop"]] != sizes[ids[tgt]["prop"]]:
                     err(f"{at}: swap to a prop of the same size ({sizes[ids[tgt]['prop']][0]:g} x "
                         f"{sizes[ids[tgt]['prop']][1]:g}), such as its other state; {e['prop']!r} is "
                         f"{sizes[e['prop']][0]:g} x {sizes[e['prop']][1]:g}.")
@@ -455,13 +461,13 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=())
             if kind == "stamp":
                 if not _text(e.get("text"), LIMITS["stampChars"]):
                     err(f"{at}: text must be 1 to {LIMITS['stampChars']} characters.")
-                if e.get("level", "shelf") not in LEVELS:
+                if _k(e.get("level", "shelf")) not in LEVELS:
                     err(f"{at}: level must be one of {list(LEVELS)}.")
             if kind == "label" and not _text(e.get("text"), LIMITS["labelChars"]):
                 err(f"{at}: text must be 1 to {LIMITS['labelChars']} characters.")
             if kind == "route":
                 src = e.get("from")
-                if src not in ids or src == tgt:
+                if _k(src) not in ids or src == tgt:
                     err(f"{at}: from must be another item of this set, the route's start.")
                 elif _int(ids[src].get("at")) and f < ids[src]["at"]:
                     err(f"{at}: {src!r} has not entered yet.")
@@ -475,8 +481,8 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=())
         if cr_slot:
             placed.append(("the critter", critter_box(room, cr_slot), start, end))
         for iid, it in ids.items():
-            if it.get("prop") not in sizes or it.get("slot") not in SLOTS \
-                    or it.get("level", "floor") not in LEVELS or it.get("scale", "m") not in SCALES:
+            if _k(it.get("prop")) not in sizes or _k(it.get("slot")) not in SLOTS \
+                    or _k(it.get("level", "floor")) not in LEVELS or _k(it.get("scale", "m")) not in SCALES:
                 continue
             k = SCALES[it.get("scale", "m")]
             w, h = sizes[it["prop"]][0] * k, sizes[it["prop"]][1] * k

@@ -143,6 +143,22 @@ def test_the_scene_is_this_styles_alone():
     assert "exactly one scene" in pd.check_scene_use("paper_diorama", two)
 
 
+@pytest.mark.parametrize("field", ["room", "slot", "level", "scale", "target", "to", "from", "prop"])
+@pytest.mark.parametrize("value", [["x"], {"x": 1}])
+def test_a_list_or_object_where_a_name_belongs_is_refused_not_raised(field, value):
+    def put(d):
+        s = d["sets"][1]
+        s["room"] = value if field == "room" else s["room"]
+        for it in s["items"]:
+            for k in ("slot", "level", "scale", "prop"):
+                if field == k:
+                    it[k] = value
+        for e in s["events"]:
+            if field in ("target", "to", "from", "level", "prop"):
+                e[field] = value
+    assert _check(_with(put))   # a list of problems, never a TypeError
+
+
 @pytest.mark.parametrize("mutate, fragment", [
     (lambda d: d["sets"][0].update(room="moon-base"), "room must be one of"),
     (lambda d: d["sets"][0].update(banner=""), "banner must be"),
