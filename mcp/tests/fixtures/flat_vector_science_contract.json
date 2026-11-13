@@ -1,0 +1,427 @@
+{
+  "_about": "Shared by renderer/remotion/src/scenes/installed/flatVector/flatVector.test.ts and mcp/tests/test_flat_vector_science.py: the constants both sides use, and cases worked out by the renderer's own contract.ts and stage.ts. Written by renderer/remotion/flatvector-tools/sync-contract.mjs; never edit it by hand.",
+  "constants": {
+    "LIMITS": {
+      "minShots": 3,
+      "maxShots": 12,
+      "maxItems": 3,
+      "maxPills": 2,
+      "maxPillParts": 2,
+      "pillChars": 18,
+      "labelChars": 14,
+      "valueChars": 12,
+      "unitChars": 4,
+      "minRungs": 2,
+      "maxRungs": 5,
+      "minLevels": 2,
+      "maxLevels": 6,
+      "minLayers": 2,
+      "maxLayers": 6,
+      "minSteps": 2,
+      "maxSteps": 5,
+      "maxCustomProps": 8,
+      "maxValue": 999999999,
+      "minShotSeconds": 1.5,
+      "maxStillSeconds": 4
+    },
+    "TIMING": {
+      "snap": 2,
+      "pop": 15,
+      "pillGrow": 9,
+      "pillReveal": 9,
+      "light": 5,
+      "roll": 24,
+      "rung": 21,
+      "lens": 18,
+      "push": 12,
+      "flash": 6,
+      "readFrames": 20
+    },
+    "GEOMETRY": {
+      "slot": {
+        "center": [
+          540,
+          930
+        ],
+        "left": [
+          300,
+          960
+        ],
+        "right": [
+          780,
+          900
+        ],
+        "top": [
+          540,
+          700
+        ],
+        "bottom": [
+          540,
+          1150
+        ]
+      },
+      "size": {
+        "s": 260,
+        "m": 460,
+        "l": 780
+      },
+      "readoutTop": 222,
+      "stripY": 1260,
+      "safeLeft": 70,
+      "safeRight": 1010,
+      "pillHeight": 76,
+      "pillText": 40,
+      "capCharWidth": 0.72,
+      "pillMaxWidth": 940
+    }
+  },
+  "data": {
+    "shots": [
+      {
+        "kind": "subject",
+        "start": 0,
+        "backdrop": "abyss",
+        "items": [
+          {
+            "what": "whale",
+            "slot": "center",
+            "size": "l"
+          },
+          {
+            "what": "diver",
+            "slot": "bottom",
+            "size": "s",
+            "at": 40
+          }
+        ],
+        "pills": [
+          {
+            "on": "center",
+            "parts": [
+              {
+                "text": "SPERM WHALE",
+                "at": 20
+              },
+              {
+                "text": "16 M",
+                "at": 60,
+                "red": true
+              }
+            ]
+          }
+        ],
+        "rule": {
+          "beside": "center",
+          "label": "16 M",
+          "at": 80
+        },
+        "counter": {
+          "label": "DEPTH",
+          "value": 2000,
+          "unit": "m",
+          "at": 10
+        }
+      },
+      {
+        "kind": "ladder",
+        "start": 200,
+        "backdrop": "night",
+        "rungs": [
+          {
+            "what": "earth",
+            "label": "EARTH",
+            "value": "12,742 KM",
+            "at": 210
+          },
+          {
+            "what": "sun",
+            "label": "SUN",
+            "value": "1.4M KM",
+            "at": 260
+          }
+        ]
+      },
+      {
+        "kind": "zoom",
+        "start": 360,
+        "backdrop": "night",
+        "cut": "lens",
+        "levels": [
+          {
+            "what": "earth",
+            "label": "10,000 KM",
+            "at": 362
+          },
+          {
+            "what": "sun",
+            "label": "1M KM",
+            "at": 420
+          }
+        ]
+      },
+      {
+        "kind": "descent",
+        "start": 520,
+        "backdrop": "ocean",
+        "cut": "flash",
+        "label": "DEPTH",
+        "unit": "m",
+        "layers": [
+          {
+            "name": "DIVER",
+            "value": 40,
+            "at": 530
+          },
+          {
+            "name": "BOTTOM",
+            "value": 10900,
+            "at": 600,
+            "red": true
+          }
+        ]
+      },
+      {
+        "kind": "stages",
+        "start": 700,
+        "backdrop": "inside",
+        "cut": "push",
+        "steps": [
+          {
+            "what": "virus",
+            "label": "ENTERS",
+            "at": 710
+          },
+          {
+            "what": "cell",
+            "label": "COPIES",
+            "at": 760
+          }
+        ]
+      }
+    ]
+  },
+  "total": 860,
+  "event_frames": [
+    [
+      0,
+      10,
+      20,
+      40,
+      60,
+      80
+    ],
+    [
+      200,
+      210,
+      260
+    ],
+    [
+      360,
+      362,
+      420
+    ],
+    [
+      520,
+      530,
+      600
+    ],
+    [
+      700,
+      710,
+      760
+    ]
+  ],
+  "quiet_spans": [
+    [
+      0,
+      10
+    ],
+    [
+      10,
+      20
+    ],
+    [
+      20,
+      40
+    ],
+    [
+      40,
+      60
+    ],
+    [
+      60,
+      80
+    ],
+    [
+      80,
+      200
+    ],
+    [
+      200,
+      210
+    ],
+    [
+      210,
+      260
+    ],
+    [
+      260,
+      360
+    ],
+    [
+      360,
+      362
+    ],
+    [
+      362,
+      420
+    ],
+    [
+      420,
+      520
+    ],
+    [
+      520,
+      530
+    ],
+    [
+      530,
+      600
+    ],
+    [
+      600,
+      700
+    ],
+    [
+      700,
+      710
+    ],
+    [
+      710,
+      760
+    ],
+    [
+      760,
+      860
+    ]
+  ],
+  "counter_value": [
+    {
+      "frame": 0,
+      "value": 500
+    },
+    {
+      "frame": 10,
+      "value": 500
+    },
+    {
+      "frame": 22,
+      "value": 1250
+    },
+    {
+      "frame": 34,
+      "value": 2000
+    },
+    {
+      "frame": 60,
+      "value": 2000
+    }
+  ],
+  "step_at": [
+    {
+      "frame": 205,
+      "index": -1,
+      "progress": 0
+    },
+    {
+      "frame": 210,
+      "index": 0,
+      "progress": 0
+    },
+    {
+      "frame": 220,
+      "index": 0,
+      "progress": 0.431918799265738
+    },
+    {
+      "frame": 231,
+      "index": 0,
+      "progress": 1
+    },
+    {
+      "frame": 259,
+      "index": 0,
+      "progress": 1
+    },
+    {
+      "frame": 260,
+      "index": 1,
+      "progress": 0
+    },
+    {
+      "frame": 300,
+      "index": 1,
+      "progress": 1
+    }
+  ],
+  "pill_width": [
+    {
+      "parts": [
+        {
+          "text": "SPERM WHALE"
+        },
+        {
+          "text": "16 M"
+        }
+      ],
+      "width": 519
+    },
+    {
+      "parts": [
+        {
+          "text": "OCEAN"
+        }
+      ],
+      "width": 204
+    }
+  ],
+  "grouped": [
+    {
+      "n": 0,
+      "text": "0"
+    },
+    {
+      "n": 40,
+      "text": "40"
+    },
+    {
+      "n": 1000,
+      "text": "1,000"
+    },
+    {
+      "n": 10900,
+      "text": "10,900"
+    },
+    {
+      "n": 1234567,
+      "text": "1,234,567"
+    }
+  ],
+  "prop_scale": [
+    {
+      "what": "whale",
+      "size": "l",
+      "scale": 0.8125
+    },
+    {
+      "what": "bus",
+      "size": "s",
+      "scale": 0.5909090909090909
+    },
+    {
+      "what": "dna",
+      "size": "m",
+      "scale": 0.8846153846153846
+    }
+  ]
+}

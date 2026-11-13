@@ -1,0 +1,383 @@
+{
+  "id": "flat_vector_science",
+  "label": "Flat Vector Science",
+  "order": 190,
+  "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "dip"
+  },
+  "dimension": "2d",
+  "preview": "flat_vector_science",
+  "tagline": "Glowing flat creatures, cells and planets drifting in the dark, showing how big, deep or far.",
+  "renderer": "dom",
+  "canvas": "dark",
+  "authoring_skill": "tubematic-flat-vector-science",
+  "allows": {
+    "figures": false,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "mascot": false,
+  "messages": {
+    "mascot": "Mascots are not available in the Flat Vector Science style: its world is drawn flat and drifting, and a mascot would crowd the one subject each shot holds. Choose another visual style, or no mascot."
+  },
+  "review": "- This video is a Flat Vector Science explainer, and the following are its intended, approved look: a dark backdrop (a near-black teal abyss, an ocean that darkens with depth, a navy night sky, the inside of a body, layered rock) with small specks drifting slowly; flat, outline-free subjects (creatures, cells, organs, planets, rockets, a bus or a person for scale) shaded in two tones with a lighter rim, drifting and bobbing gently, lights with a soft halo; dark rounded pills whose words light up white as they are spoken, on a thin leader line to the thing they name; a rolling counter near the top; a measuring rule beside a subject; a ladder where each larger thing grows in from beyond the frame while the last shrinks to a small mark; a zoom whose scale bar shrinks and snaps to the next power of ten; a descent with a depth gauge on the left; exactly one red number or word in a shot; small white captions in the lower part of the frame. Do NOT report any of these as defects, and do not suggest photographs, outlines, textures or real likenesses: their absence is the style. A subject drifting a few pixels while it is named is intended.\n- Do report: a pill or a label overlapping another, text cut off at the frame edge, text too small to read on a phone, a number on screen that differs from the narration, a subject that is a different thing from the one the narration names, more than one red number or word in a shot, a pill that names the wrong subject, and a stretch of more than about four seconds where nothing new appears.\n",
+  "captions": {
+    "background": "shadow",
+    "position": 0.78,
+    "color": "#F9FCFB",
+    "fontFamily": "Fredoka, system-ui, sans-serif",
+    "fontSize": 64,
+    "maxWords": 3
+  },
+  "script": "Every beat's `visual` is a **shot** brief: the one subject on screen (a creature, a cell, a planet, a mountain, from the style's library or a prop drawn for the video), what it is compared with, and the one number shown (a depth, a size, a distance, a temperature with its unit). Where the narration steps through sizes, depths or powers of ten, say so: those are this style's ladder, descent and zoom shots.\n\nThe narration is a calm, curious science voice. Ask one question at the start (\"How deep does the ocean really go?\"), then answer it with numbers that carry units, one comparison per sentence, building to the most surprising one. Say every number the viewer should see out loud, since it lights up on screen as it is spoken. Compare an unimaginable size with something familiar (a bus, a person, a skyscraper). Keep each sentence to one subject; a new shot starts on most sentences. End on the biggest number or the strangest fact, not on a summary. Never write a beat that needs a photograph, a real named person or a news event: this style has none.",
+  "picture": {
+    "opening": "Shot 1 holds the first sentence's subject on screen from frame 0 (a planet, a creature, the ocean), drifting, with its pill or counter starting on the first words. Never an empty backdrop.",
+    "turn": "A new shot on the first word of a turn or a re-opening (a cut, a lens reveal, a flash or a push), or a new rung, level, layer or stage arriving on that word.",
+    "payoff": "The biggest scale moment: the last rung of a ladder, the deepest layer, the widest zoom level or the subject with its measuring rule, its number in red.",
+    "ending": "Hold on the payoff picture to the last frame. No closing card, logo, recap or sign-off after it."
+  },
+  "routing": {
+    "best_for": [
+      "size and scale: how deep the ocean goes, how big a star is, how small a cell is",
+      "creatures and the body: deep-sea animals, cells, organs, viruses, what happens to your body somewhere",
+      "space and Earth: planets, black holes, the atmosphere, the layers of the Earth",
+      "a natural process in stages: how a storm forms, how a virus copies itself",
+      "what would happen to you in nature or in space, told with numbers"
+    ],
+    "avoid_for": [
+      "real, named products, buildings, people or places the viewer came to see as pictures (Photo Explainer fits them)",
+      "a quantity or a formula worked out step by step on paper (Whiteboard fits it)",
+      "how a device you can hold works inside, part by part (Under the Hood fits it)",
+      "components passing requests or data between them (Stick Explainer acts it out, with System Flow inserts)",
+      "history, news, stories with characters, or a list of everyday habits",
+      "a real accident or disaster told with its real machine or place (Photo Explainer fits it)"
+    ],
+    "cannot_show": "photographs, real likenesses or named people: every subject is a flat drawn shape from its library or drawn for the video",
+    "signals": [
+      "the script compares sizes, depths, distances or temperatures",
+      "the subject is a creature, a cell, an organ, a planet or a particle",
+      "the script steps through orders of magnitude or down through layers",
+      "numbers in the script carry units",
+      "the topic asks what would happen to you in nature or in space"
+    ],
+    "moods": [
+      "curious",
+      "awe",
+      "calm",
+      "ominous"
+    ],
+    "images_per_video": "0",
+    "images": 0
+  },
+  "extra": {
+    "props": {
+      "sea": [
+        "whale",
+        "shark",
+        "squid",
+        "jellyfish",
+        "anglerfish",
+        "fish",
+        "fish_school",
+        "diver",
+        "submarine",
+        "shipwreck",
+        "coral"
+      ],
+      "body": [
+        "cell",
+        "red_blood_cell",
+        "neuron",
+        "virus",
+        "bacterium",
+        "dna",
+        "heart",
+        "lungs",
+        "brain",
+        "eye",
+        "mitochondrion"
+      ],
+      "space": [
+        "sun",
+        "star",
+        "earth",
+        "moon",
+        "mars",
+        "jupiter",
+        "saturn",
+        "black_hole",
+        "galaxy",
+        "comet",
+        "rocket",
+        "astronaut",
+        "satellite"
+      ],
+      "earth": [
+        "mountain",
+        "volcano",
+        "cloud",
+        "raindrop",
+        "lightning",
+        "iceberg",
+        "tree",
+        "rock"
+      ],
+      "scale": [
+        "bus",
+        "person",
+        "skyscraper",
+        "plane",
+        "car"
+      ]
+    },
+    "boxes": {
+      "whale": [
+        960,
+        300
+      ],
+      "shark": [
+        700,
+        260
+      ],
+      "squid": [
+        420,
+        620
+      ],
+      "jellyfish": [
+        320,
+        420
+      ],
+      "anglerfish": [
+        360,
+        300
+      ],
+      "fish": [
+        140,
+        70
+      ],
+      "fish_school": [
+        420,
+        200
+      ],
+      "diver": [
+        520,
+        140
+      ],
+      "submarine": [
+        300,
+        180
+      ],
+      "shipwreck": [
+        700,
+        420
+      ],
+      "coral": [
+        300,
+        260
+      ],
+      "cell": [
+        440,
+        440
+      ],
+      "red_blood_cell": [
+        300,
+        200
+      ],
+      "neuron": [
+        560,
+        320
+      ],
+      "virus": [
+        320,
+        320
+      ],
+      "bacterium": [
+        380,
+        180
+      ],
+      "dna": [
+        220,
+        520
+      ],
+      "heart": [
+        320,
+        320
+      ],
+      "lungs": [
+        380,
+        360
+      ],
+      "brain": [
+        360,
+        300
+      ],
+      "eye": [
+        340,
+        220
+      ],
+      "mitochondrion": [
+        360,
+        200
+      ],
+      "sun": [
+        440,
+        440
+      ],
+      "star": [
+        200,
+        200
+      ],
+      "earth": [
+        400,
+        400
+      ],
+      "moon": [
+        260,
+        260
+      ],
+      "mars": [
+        300,
+        300
+      ],
+      "jupiter": [
+        460,
+        460
+      ],
+      "saturn": [
+        560,
+        300
+      ],
+      "black_hole": [
+        480,
+        480
+      ],
+      "galaxy": [
+        520,
+        400
+      ],
+      "comet": [
+        460,
+        180
+      ],
+      "rocket": [
+        220,
+        520
+      ],
+      "astronaut": [
+        260,
+        380
+      ],
+      "satellite": [
+        440,
+        200
+      ],
+      "mountain": [
+        560,
+        360
+      ],
+      "volcano": [
+        560,
+        420
+      ],
+      "cloud": [
+        400,
+        220
+      ],
+      "raindrop": [
+        160,
+        240
+      ],
+      "lightning": [
+        200,
+        380
+      ],
+      "iceberg": [
+        440,
+        480
+      ],
+      "tree": [
+        300,
+        420
+      ],
+      "rock": [
+        300,
+        180
+      ],
+      "bus": [
+        440,
+        200
+      ],
+      "person": [
+        120,
+        340
+      ],
+      "skyscraper": [
+        200,
+        560
+      ],
+      "plane": [
+        520,
+        200
+      ],
+      "car": [
+        360,
+        170
+      ]
+    },
+    "lights": [
+      "jellyfish",
+      "anglerfish",
+      "diver",
+      "submarine",
+      "neuron",
+      "sun",
+      "star",
+      "black_hole",
+      "galaxy",
+      "comet",
+      "rocket",
+      "volcano",
+      "lightning"
+    ],
+    "shotKinds": [
+      "subject",
+      "ladder",
+      "zoom",
+      "descent",
+      "stages"
+    ],
+    "backdrops": [
+      "abyss",
+      "ocean",
+      "night",
+      "sky",
+      "strata",
+      "inside"
+    ],
+    "slots": [
+      "center",
+      "left",
+      "right",
+      "top",
+      "bottom"
+    ],
+    "sizes": [
+      "s",
+      "m",
+      "l"
+    ],
+    "cuts": [
+      "cut",
+      "lens",
+      "flash",
+      "push"
+    ]
+  }
+}
