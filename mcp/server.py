@@ -114,6 +114,7 @@ import mascot_sheets  # renders a mascot's model sheets (a Node script on softwa
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
 import terminal_preview  # renders a Terminal Doc video's own moves for the agent to look at
+import code_scenes  # the Code Scenes insert checks (TMDEV-239), the same way
 import inserts as inserts_mod  # the insert-scene checks (TMDEV-224)
 import picture_checks  # the first-frame and beat-change warnings (TMDEV-215), pure like text_audit
 
@@ -8574,6 +8575,7 @@ _INSERT_CHECKS = {
     system_flow.STYLE_ID: lambda fps, starts, words, e: system_flow.check_insert(
         e, fps, starts, tvs.pack(system_flow.STYLE_ID)["extra"]["icons"]),
     terminal_doc.STYLE_ID: lambda fps, starts, words, e: terminal_doc.check_insert(e, fps, starts, words),
+    code_scenes.STYLE_ID: lambda fps, starts, words, e: code_scenes.check_insert(e, fps, starts, words),
 }
 
 
@@ -8671,6 +8673,13 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     # main style's data is held quiet inside each one: its validator gets the
     # windows. The inserts themselves are checked once the captions are known.
     quiet = inserts_mod.windows(config)
+
+    # ── Insert-only styles (TMDEV-239) ───────────────────────────────────────
+    # Styles that were never a whole video: their scene is never one of a
+    # video's scenes.
+    only_insert_err = code_scenes.check_scene_use(scenes)
+    if only_insert_err:
+        return {"error": only_insert_err}
 
     # ── System Flow (TMDEV-196) ──────────────────────────────────────────────
     # A whole-video style: one installed SystemFlow scene whose props hold the

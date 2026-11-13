@@ -334,8 +334,10 @@ def test_the_agent_view_carries_the_style_script_guidance():
 
 # ── main styles and insert styles (TMDEV-224) ────────────────────────────────
 
-def test_system_flow_and_terminal_doc_are_insert_styles_and_the_rest_are_main():
-    assert set(tvs.INSERT_STYLES) == {"system_flow", "terminal_doc"}
+def test_the_insert_styles_are_the_insert_only_styles_and_the_rest_are_main():
+    # The user's decision (TMDEV-223): these are only ever scenes inside another
+    # style's video, never a whole video.
+    assert set(tvs.INSERT_STYLES) == {"system_flow", "terminal_doc", "code_scenes"}
     assert tvs.MAIN_STYLES == ("auto",) + tuple(s for s in tvs.PACKS if s not in tvs.INSERT_STYLES)
     # A stored legacy value still reads as a style.
     assert {"system_flow", "terminal_doc"} <= set(tvs.VISUAL_STYLES)

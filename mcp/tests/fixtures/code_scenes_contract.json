@@ -1,0 +1,27 @@
+{
+  "_about": "Shared cases for the Code Scenes contract. mcp/tests/test_code_scenes.py runs them against mcp/code_scenes.py and renderer/remotion/src/scenes/installed/codeScenes/codeScenes.test.ts against contract.ts, so the validator and the renderer agree on the limits, the font size a code block gets and which output pane each step shows.",
+  "langs": ["python", "javascript", "typescript", "sql", "c", "java", "go", "rust", "json", "yaml", "html", "css"],
+  "limits": {
+    "maxSteps": 4, "maxLines": 14, "maxCols": 40, "tagChars": 24, "fileChars": 24, "labelChars": 24,
+    "errorChars": 48, "outputLines": 3, "outputChars": 40, "outputLabelChars": 12, "typeChars": 120,
+    "minStepGap": 45, "endHold": 30, "maxStillSeconds": 3
+  },
+  "timing": {"morph": 15, "focus": 8, "callout": 10, "squiggle": 10, "outputStagger": 3, "outputIn": 8, "typePerChar": 1},
+  "band": [200, 1340],
+  "font_sizes": [
+    {"lines": 1, "cols": 10, "size": 40},
+    {"lines": 14, "cols": 40, "size": 32},
+    {"lines": 14, "cols": 20, "size": 33},
+    {"lines": 10, "cols": 36, "size": 35},
+    {"lines": 12, "cols": 30, "size": 38}
+  ],
+  "type_frames": [
+    {"code": "x = 1\nprint(x)", "frames": 13}
+  ],
+  "output_at": [
+    {"steps": [{"code": "a", "output": {"lines": ["1"]}}, {"focus": [1]}, {"code": "b"}], "from": [0, 0, null]},
+    {"steps": [{"code": "a"}, {"output": {"lines": ["1"]}}, {"focus": [1]}], "from": [null, 1, 1]},
+    {"steps": [{"code": "a", "output": {"lines": ["1"]}}, {"code": "b", "output": {"lines": ["2"]}}], "from": [0, 1]},
+    {"steps": [{"code": "a", "output": {"lines": ["1"]}}, {"code": "b"}, {"focus": [1]}], "from": [0, null, null]}
+  ]
+}
