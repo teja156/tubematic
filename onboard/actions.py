@@ -876,6 +876,7 @@ _VOLUME_DEVICES = {
     "tubematic_scenes-generated": "scenes/generated",
     "tubematic_logs-data":        "logs",
     "tubematic_backups-data":     "backups",
+    "tubematic_sandbox-spool":    "sandbox",
 }
 
 
@@ -1396,10 +1397,11 @@ def apply_renderer(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> None:
         rep.ok("Image built")
 
     ex.ensure_secrets()  # Compose refuses to start a service whose token file is missing
-    rep.info("Starting tubematic-api, tubematic-mcp, tubematic-worker and tubematic-renderer "
-             "containers…")
+    rep.info("Starting tubematic-api, tubematic-mcp, tubematic-worker, tubematic-renderer and "
+             "tubematic-sandbox containers…")
     r = ex.run([*_compose(), "up", "-d",
-                "tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer"],
+                "tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer",
+                "tubematic-sandbox"],
                cwd=REPO_ROOT)
     if r.returncode != 0:
         rep.fail("docker compose up failed")

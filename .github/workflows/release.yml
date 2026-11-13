@@ -290,7 +290,8 @@ jobs:
             "$HOME/.tubematic-data/output_videos" \
             "$HOME/.tubematic-data/scenes/generated" \
             "$HOME/.tubematic-data/logs" \
-            "$HOME/.tubematic-data/backups"
+            "$HOME/.tubematic-data/backups" \
+            "$HOME/.tubematic-data/sandbox"
 
       # The compose file mounts each service token from ~/.tubematic-data/secrets/ and, on purpose,
       # refuses to start a service whose file is missing ("bind source path does not exist"). A real
@@ -385,7 +386,7 @@ jobs:
           id || true
           ls -la "$HOME/.tubematic-data/data" || true
           echo "::endgroup::"
-          for svc in tubematic-api tubematic-mcp tubematic-worker tubematic-renderer tubematic-dashboard; do
+          for svc in tubematic-api tubematic-mcp tubematic-worker tubematic-renderer tubematic-sandbox tubematic-dashboard; do
             echo "::group::health $svc"
             docker inspect --format '{{json .State.Health}}' "$svc" 2>/dev/null | python3 -m json.tool || true
             echo "::endgroup::"

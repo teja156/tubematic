@@ -22,6 +22,7 @@ Free of the database and of I/O except the two helpers at the bottom.
 """
 from __future__ import annotations
 
+import os
 import re
 import time
 from pathlib import Path
@@ -82,7 +83,11 @@ def heartbeat_path(spool) -> Path:
 def write_heartbeat(spool, now: float | None = None) -> None:
     p = heartbeat_path(spool)
     tmp = p.with_name(".heartbeat.tmp")
-    tmp.write_text(repr(time.time() if now is None else now))
+    # 0600: the code runs as another uid and has no business in the spool, even
+    # to read a timestamp.
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(repr(time.time() if now is None else now))
     tmp.replace(p)
 
 

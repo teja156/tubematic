@@ -1,4 +1,4 @@
-"""docker-compose.yml topology — five services, one process each (TMDEV-87, TMDEV-188).
+"""docker-compose.yml topology — six services, one process each (TMDEV-87, TMDEV-188, TMDEV-242).
 
 Flask and MCP used to share the tubematic-api container: entrypoint.sh
 backgrounded Flask and exec'd MCP. When Flask died, MCP still held PID 1, so
@@ -36,10 +36,10 @@ def test_api_and_mcp_are_distinct_services(services):
     assert "tubematic-mcp" in services
 
 
-def test_the_five_runtime_services(services):
+def test_the_six_runtime_services(services):
     assert set(services) == {
         "tubematic-api", "tubematic-mcp", "tubematic-worker",
-        "tubematic-renderer", "tubematic-dashboard",
+        "tubematic-renderer", "tubematic-sandbox", "tubematic-dashboard",
     }
 
 
@@ -172,8 +172,9 @@ def _mounts(service):
     return {v.split(":")[1] for v in service["volumes"]}
 
 
-def test_mcp_mounts_exactly_the_five_it_needs(services):
-    """TUBEMATIC_DB, TUBEMATIC_JOBS_DIR, the generated scene tree, /logs, /backups.
+def test_mcp_mounts_exactly_the_six_it_needs(services):
+    """TUBEMATIC_DB, TUBEMATIC_JOBS_DIR, the generated scene tree, /logs, /backups,
+    and /sandbox (the spool run_code hands code to the sandbox through, TMDEV-242).
 
     Deliberately an exact set: the standing instruction is that MCP gets no
     volume it does not use, and an exact assertion is what forces a yes/no
@@ -183,7 +184,7 @@ def test_mcp_mounts_exactly_the_five_it_needs(services):
     could not would fail closed on every start.
     """
     assert _mounts(services["tubematic-mcp"]) == {
-        "/data", "/jobs", "/app/remotion/src/scenes/generated", "/logs", "/backups",
+        "/data", "/jobs", "/app/remotion/src/scenes/generated", "/logs", "/backups", "/sandbox",
     }
 
 
@@ -336,6 +337,72 @@ def test_no_service_reintroduces_env_file(services):
     exposes no secrets. A new service is the easy place to lose that."""
     for name, service in services.items():
         assert "env_file" not in service, name
+
+
+# ── The code sandbox (TMDEV-242) ───────────────────────────────────────────
+# It runs code an agent wrote after reading untrusted pages. Every line of its
+# service definition is a control in the threat model
+# (docs/developer/16-infrastructure.md), so each is pinned here: a change that
+# loosens one has to change a test and say why.
+
+@pytest.fixture(scope="module")
+def sandbox(services):
+    return services["tubematic-sandbox"]
+
+
+def test_the_sandbox_has_no_network(sandbox):
+    assert sandbox["network_mode"] == "none"
+    assert "networks" not in sandbox and "ports" not in sandbox and "expose" not in sandbox
+
+
+def test_the_sandbox_mounts_only_its_spool(sandbox):
+    assert _mounts(sandbox) == {"/spool"}
+    assert [v.split(":")[0] for v in sandbox["volumes"]] == ["sandbox-spool"]
+    assert sandbox["volumes"] == ["sandbox-spool:/spool"]
+
+
+def test_the_sandbox_holds_no_secret_and_no_environment_keys(sandbox):
+    assert "secrets" not in sandbox and "env_file" not in sandbox
+    assert sandbox["environment"] == ["SANDBOX_SPOOL=/spool"]
+
+
+def test_the_sandbox_is_locked_down(sandbox):
+    assert sandbox["read_only"] is True
+    assert sandbox["cap_drop"] == ["ALL"]
+    assert set(sandbox["cap_add"]) == {"CHOWN", "DAC_OVERRIDE", "FOWNER", "KILL", "SETUID", "SETGID"}
+    assert sandbox["security_opt"] == ["no-new-privileges:true"]
+    assert not sandbox.get("privileged") and "pid" not in sandbox and "ipc" not in sandbox
+    assert all(t.startswith("/tmp:") and "size=" in t for t in sandbox["tmpfs"])
+
+
+def test_the_sandbox_has_resource_ceilings(sandbox):
+    assert sandbox["cpus"] <= 2 and sandbox["pids_limit"] <= 512
+    assert sandbox["mem_limit"] in ("512m", "1g", "2g")
+
+
+def test_the_sandbox_runs_its_daemon_without_the_entrypoint(sandbox):
+    """entrypoint.sh waits for a database this container does not have."""
+    assert sandbox["command"] == "python3 /app/sandbox/daemon.py"
+    assert sandbox["image"] == "tubematic-renderer-image" and "build" not in sandbox
+
+
+def test_the_spool_is_shared_with_mcp_and_nobody_else(services):
+    holders = [n for n, s in services.items() if any(v.startswith("sandbox-spool:") for v in s.get("volumes", []))]
+    assert sorted(holders) == ["tubematic-mcp", "tubematic-sandbox"]
+
+
+def test_no_service_mounts_the_docker_socket(services):
+    """No container may start containers or read the daemon (TMDEV-192 stated it
+    in a comment; the code sandbox is why it is a test now): a socket is
+    root on the host, and the agent's code runs one hop from MCP."""
+    for name, service in services.items():
+        for v in service.get("volumes", []):
+            assert "docker.sock" not in v and "/var/run" not in v.split(":")[0], name
+
+
+def test_the_sandbox_volume_binds_the_data_root_sandbox_folder():
+    volumes = yaml.safe_load(COMPOSE.read_text())["volumes"]
+    assert volumes["sandbox-spool"]["driver_opts"]["device"] == "${HOME}/.tubematic-data/sandbox"
 
 
 # ── Dockerfile default ─────────────────────────────────────────────────────

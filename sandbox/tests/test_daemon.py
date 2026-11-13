@@ -197,3 +197,12 @@ def test_typescript_is_transpiled_then_run(cfg):
     assert r["exit_code"] == 0 and r["stdout"] == "10\n", r
     r = submit(cfg, "const n: number = ;", language="typescript", rid="9" * 16)
     assert r["exit_code"] != 0 and r["stderr"]
+
+
+def test_wipe_owned_removes_only_what_the_uid_owns(tmp_path):
+    (tmp_path / "mine.txt").write_text("x")
+    (tmp_path / "dir").mkdir()
+    (tmp_path / "dir" / "f").write_text("x")
+    assert D.wipe_owned(tmp_path, os.getuid()) == 2 and os.listdir(tmp_path) == []
+    (tmp_path / "other").write_text("x")
+    assert D.wipe_owned(tmp_path, os.getuid() + 1) == 0 and os.listdir(tmp_path) == ["other"]

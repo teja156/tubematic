@@ -45,6 +45,11 @@ RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
 COPY mcp/ .
 
+# ── Code sandbox daemon (TMDEV-242) ───────────────────────────
+# Run by the tubematic-sandbox service; stdlib only, imports tubematic_core
+# from /app/lib below.
+COPY sandbox/daemon.py /app/sandbox/daemon.py
+
 # ── Shared library ────────────────────────────────────────────
 # /app/lib rather than /app, and the difference matters: /app also holds api/,
 # mcp/ and remotion/, so putting it on the path would make all of them

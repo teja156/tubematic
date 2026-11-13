@@ -470,8 +470,19 @@ def test_a_worker_that_exited_fails_the_start(monkeypatch):
 
 def test_a_healthy_start_succeeds(monkeypatch):
     ex = _live_start(monkeypatch, {"tubematic-worker": ("running", ""),
-                                   "tubematic-renderer": ("running", "")})
+                                   "tubematic-renderer": ("running", ""),
+                                   "tubematic-sandbox": ("running", "")})
     stack.start(ex, _Rep(), [], confirm_down=lambda n: True)
+
+
+def test_a_sandbox_that_exited_fails_the_start(monkeypatch):
+    """No network means no healthcheck URL either, so the running state is the
+    only signal that the code sandbox came up (TMDEV-242)."""
+    ex = _live_start(monkeypatch, {"tubematic-worker": ("running", ""),
+                                   "tubematic-renderer": ("running", ""),
+                                   "tubematic-sandbox": ("exited", "")})
+    with pytest.raises(RuntimeError):
+        stack.start(ex, _Rep(), [], confirm_down=lambda n: True)
 
 
 # ── Review fixes: a database newer than this code is not healthy ─────────────

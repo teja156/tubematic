@@ -245,7 +245,7 @@ def _install_config() -> dict[str, str]:
 def stop_containers() -> None:
     header(
         1, "Stop & remove containers",
-        "Stops the five Tubematic containers and removes them. "
+        "Stops the six Tubematic containers and removes them. "
         "This does NOT delete the Docker images — a future 'docker compose up' "
         "will reuse the cached image without rebuilding.",
     )
@@ -872,7 +872,7 @@ def remove_data_root() -> None:
     # Declined: prune what is provably empty so the leftovers are only the
     # things actually worth keeping, and say where they are.
     pruned = []
-    for sub in ("data", "jobs", "output_videos", "logs", "scenes/generated", "scenes"):
+    for sub in ("data", "jobs", "output_videos", "logs", "sandbox", "scenes/generated", "scenes"):
         d = DATA_ROOT / sub
         try:
             if d.is_dir() and not any(d.iterdir()):

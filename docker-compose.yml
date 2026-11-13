@@ -59,6 +59,14 @@ volumes:
       type: none
       o: bind
       device: ${HOME}/.tubematic-data/backups
+  # The code sandbox's spool (TMDEV-242): the ONLY thing tubematic-sandbox
+  # mounts, shared with tubematic-mcp. Requests go in, results come out.
+  sandbox-spool:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/.tubematic-data/sandbox
 
 # Service tokens (TMDEV-152), one file each under ~/.tubematic-data/secrets/,
 # written by onboarding and upgrade.py (tubematic_core/auth.py). Compose mounts
@@ -185,6 +193,7 @@ services:
       - scenes-generated:/app/remotion/src/scenes/generated
       - logs-data:/logs
       - backups-data:/backups
+      - sandbox-spool:/sandbox
     networks:
       - tubematic-net
     # No env_file — same reason as tubematic-api above.
@@ -192,6 +201,9 @@ services:
       - TUBEMATIC_DB=/data/tubematic.db
       - TUBEMATIC_JOBS_DIR=/jobs
       - MCP_PORT=4100
+      # Where run_code hands code to tubematic-sandbox (TMDEV-242). MCP never
+      # runs it itself: with the sandbox down, run_code answers sandbox_unavailable.
+      - TUBEMATIC_SANDBOX_DIR=/sandbox
       - TUBEMATIC_SECRETS_DIR=/run/secrets
       # The Cartoon 3D tools post their gate and preview stills to the
       # built-in renderer's stills server, on the GPU when there is one (TMDEV-179);
@@ -307,6 +319,51 @@ services:
     depends_on:
       tubematic-api:
         condition: service_healthy
+
+  # ── Code sandbox ─────────────────────────────────────────────────────────
+  # Runs the code the agent hands MCP's run_code tool (TMDEV-242), and nothing
+  # else. The agent has no shell and no file writes, and the MCP container holds
+  # the credential database, so the code runs HERE, in a container that has:
+  # - no network at all (network_mode: none), so not even MCP can be dialled;
+  #   the two talk through the spool folder, the only mount;
+  # - no database, no secrets and no env keys (no env_file, no `secrets:`);
+  # - a read-only root, a size-capped tmpfs for its work folders, no Docker
+  #   socket, no privilege escalation, and only the six capabilities the
+  #   daemon needs to drop the code to uid 65534 and clean up after it
+  #   (CHOWN, SETUID, SETGID, KILL; DAC_OVERRIDE and FOWNER to read and delete
+  #   what that uid wrote and to use the spool folder);
+  # - a CPU, memory and process ceiling for the whole container.
+  # Same image as the backend (no second build); the command bypasses
+  # entrypoint.sh, which waits for a database this container does not have.
+  # Its health is a heartbeat file in the spool, read by MCP: with no network
+  # there is no URL to probe.
+  tubematic-sandbox:
+    image: tubematic-renderer-image
+    container_name: tubematic-sandbox
+    restart: unless-stopped
+    command: python3 /app/sandbox/daemon.py
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    cpus: 1
+    mem_limit: 1g
+    pids_limit: 256
+    volumes:
+      - sandbox-spool:/spool
+    environment:
+      - SANDBOX_SPOOL=/spool
 
   # ── Dashboard ──────────────────────────────────────────────────────────────
   # Deliberately no /etc/localtime mount and no env_file here: the dashboard

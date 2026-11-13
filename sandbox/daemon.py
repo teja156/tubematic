@@ -26,6 +26,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -82,6 +83,41 @@ def kill_leftovers(uid: int) -> int:
     return n
 
 
+def reap_zombies() -> int:
+    """Collect every exited orphan. The daemon is PID 1 of its container, so a
+    process the code started and left behind (a fork bomb's children, killed
+    with the run) is re-parented to it and stays a zombie until someone waits
+    for it; enough of them would fill the container's process limit."""
+    n = 0
+    while True:
+        try:
+            pid, _ = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            return n
+        if pid == 0:
+            return n
+        n += 1
+
+
+def wipe_owned(root: Path, uid: int) -> int:
+    """Delete everything directly under `root` that `uid` owns: what a run left
+    on the shared tmpfs outside its own work folder, so the next run cannot find
+    it. Returns how many entries it removed."""
+    n = 0
+    for entry in os.scandir(root):
+        try:
+            if entry.stat(follow_symlinks=False).st_uid != uid:
+                continue
+            if entry.is_dir(follow_symlinks=False):
+                shutil.rmtree(entry.path, ignore_errors=True)
+            else:
+                os.unlink(entry.path)
+            n += 1
+        except OSError:
+            continue
+    return n
+
+
 def _limiter(cpu_seconds: int, language: str, nproc: int | None):
     def apply():
         os.setsid()
@@ -130,6 +166,8 @@ def _run(cfg: Config, argv: list[str], work: Path, runner: Path, timeout: float,
     _kill_group(proc.pid)
     if cfg.run_as is not None:
         kill_leftovers(cfg.run_as[0])
+        time.sleep(0.2)
+    reap_zombies()
     code = proc.returncode
     sig = -code if code < 0 else None
     streams = {}
@@ -160,7 +198,7 @@ def _stage(cfg: Config, req: dict, req_dir: Path, work: Path) -> None:
     (work / P.SOURCE_NAME[req["language"]]).write_text(req["code"], encoding="utf-8")
     for p in [work, *work.rglob("*")]:
         _chown(p, cfg)
-    os.chmod(work, 0o700)
+    # mkdtemp made `work` 0700; without CAP_FOWNER root could not chmod it after the chown.
 
 
 def _validate(req) -> str | None:
@@ -239,6 +277,8 @@ def execute(cfg: Config, req: dict, req_dir: Path, done_tmp: Path, beat=lambda: 
     finally:
         shutil.rmtree(work, ignore_errors=True)
         shutil.rmtree(runner, ignore_errors=True)
+        if cfg.run_as is not None:
+            wipe_owned(cfg.work_root, cfg.run_as[0])
 
 
 def _error_result(rid: str, message: str) -> dict:
@@ -261,7 +301,7 @@ def process_request(cfg: Config, req_dir: Path, beat=lambda: None) -> None:
             problem = _validate(req)
             result = _error_result(rid, problem) if problem else execute(cfg, req, req_dir, tmp, beat)
     except Exception as e:  # a bad run must never stop the loop
-        _log(f"request {rid} failed: {e!r}")
+        _log(f"request {rid} failed: {e!r}\n{traceback.format_exc()}")
         shutil.rmtree(tmp / "out", ignore_errors=True)
         result = _error_result(rid, f"sandbox error: {type(e).__name__}")
     result["id"] = rid
@@ -301,6 +341,12 @@ def sweep(cfg: Config, now: float | None = None) -> None:
 
 
 def prepare(cfg: Config) -> None:
+    # The code runs as another uid: nobody may write into the spool's top
+    # level but its owner (and the heartbeat/req/done are 0700 or root's).
+    try:
+        os.chmod(cfg.spool, 0o755)
+    except OSError:
+        pass
     for sub in ("req", "done"):
         d = cfg.spool / sub
         d.mkdir(exist_ok=True)
@@ -327,6 +373,7 @@ def main() -> None:
         P.write_heartbeat(cfg.spool)
         if not serve_once(cfg):
             time.sleep(POLL_S)
+        reap_zombies()
         if time.time() - last_sweep > 60:
             sweep(cfg)
             last_sweep = time.time()
