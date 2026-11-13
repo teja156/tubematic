@@ -1289,6 +1289,8 @@ text audit's per-step sampling ([Code Scenes](../10-scene-authoring.md#code-scen
   callout, and a tag and label too wide for the header row.
 - `write_scene_config` writes a Code Scenes insert with its scene, palette and shift filled, names a
   Code Scenes problem in its refusal, and refuses `CodeScenes` as one of the scenes.
+- The header row ends at the watermark's keep-out line (the fixture's `keep_out_x`, 18 px left of the
+  mark), and a tag and step label that would reach it are refused.
 - The output check stays empty: no code runs, so the AI review checks an output pane, and a sandboxed
   run would take over in `output_check`.
 
@@ -1327,6 +1329,8 @@ text audit's sampling between changes ([Format Packs](../10-scene-authoring.md#f
   stretch.
 - `write_scene_config` writes a Format Packs insert with its scene, palette and shift filled, names
   a Format Packs problem in its refusal, and refuses `FormatPacks` as one of the scenes.
+- Every top-row text (the EXAMPLE tag, list title, question, headline) ends at or left of the
+  watermark's keep-out line, as the fixture's `top_text_right` says.
 
 ### `test_system_flow.py`
 

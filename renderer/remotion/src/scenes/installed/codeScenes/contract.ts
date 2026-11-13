@@ -15,6 +15,8 @@
  * advance (0.6 of its size): the validator never needs the tokeniser.
  */
 
+import { KEEP_OUT_X } from "../../../watermarkBox";
+
 export const W = 1080;
 export const H = 1920;
 
@@ -61,6 +63,9 @@ export const TIMING = {
  * The pack's insert.block is [BAND.top, BAND.bottom].
  */
 export const BAND = { top: 200, bottom: 1340 } as const;
+/** The header row (tag, step counter and label) ends at KEEP_OUT_X, left of the
+ *  watermark: a lifted insert puts it beside the mark's rows. */
+export const HEADER_RIGHT = KEEP_OUT_X;
 export const LAYOUT = {
   headerY: 200,
   headerH: 56,

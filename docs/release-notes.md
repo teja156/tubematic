@@ -176,6 +176,9 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   show what the topic needs. A video whose style was already picked keeps it.
   [How Auto picks a style](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#what-auto-does)
   has the details.
+- In a Code Scenes insert, the step label at the top right (such as "1/3 · the default") could be
+  cut off under the watermark, and the same could happen to the EXAMPLE tag and the first line of
+  a Format Packs insert. Their top rows now end to the left of the watermark.
 
 ## v2.2.0
 

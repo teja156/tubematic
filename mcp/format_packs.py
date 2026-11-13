@@ -47,8 +47,14 @@ TIMING = {"bubbleIn": 7, "dots": 14, "rowIn": 14, "optionIn": 10, "lock": 10, "m
 # capitals, as the components draw it: a bubble 44 px in 640 less its padding,
 # a list title 56 px capitals, an item 36 px beside its number, the question
 # 52 px in the quiz card, the headline 60 px beside the strap's bar.
-WRAP = {"bubble": (44, 580, False), "title": (56, 796, True), "item": (36, 686, False),
-        "question": (52, 768, False), "headline": (60, 756, False)}
+WRAP = {"bubble": (44, 580, False), "title": (56, 736, True), "item": (36, 686, False),
+        "question": (52, 744, False), "headline": (60, 728, False)}
+# The watermark's keep-out line (renderer/remotion/src/watermarkBox.ts): the
+# right edge of every text in a top row, which a lifted insert puts beside the
+# mark. TOP_TEXT_RIGHT adds each box to where its text starts.
+KEEP_OUT_X = 900
+TOP_TEXT_RIGHT = {"exampleTag": KEEP_OUT_X, "listTitle": 120 + 22 + 736 + 22, "question": 120 + 2 + 34 + 744,
+                  "headline": 120 + 14 + 34 + 728}
 # One-line texts that shrink to fit their box (fitText.ts), down to a smallest
 # size the validator holds them to: the chat title (capitals, spacing 1) and a
 # quiz option.
@@ -56,6 +62,9 @@ ONE_LINE = {"chatTitle": (36, 620, 1, True), "option": (30, 680, 0, False)}
 # Texts that must fit one line at their own size: a list item's lead (44 px in
 # the row beside its number) and the contact name (40 px beside the avatar).
 LEAD_BOX = (44, 686)
+# The strap's kicker (40 px capitals, letter spacing 2, in a pill with 18 px of
+# padding each side) must end left of the watermark's keep-out line.
+KICKER_BOX = (40, KEEP_OUT_X - 120 - 36, 2)
 CONTACT_BOX = (40, 640)
 BAND = (200, 1330)
 LAYOUT = {"threadBudget": 760, "bubbleLine": 54, "bubblePadY": 22, "bubbleGap": 22, "listBudget": 1100,
@@ -421,6 +430,8 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
             on_word(lock, "The answer")
     else:  # strap
         kicker = text(data.get("kicker"), "kicker", LIMITS["kickerChars"])
+        if kicker and not text_fit.fits_at(kicker.upper(), KICKER_BOX[1], KICKER_BOX[0], KICKER_BOX[2]):
+            err("The kicker does not fit the room left of the watermark; shorten it (wide letters take more room).")
         header(kicker, "The kicker")
         head = text(data.get("headline"), "headline", LIMITS["headlineChars"])
         if head and wrap_lines(head, "headline") > LIMITS["headlineLines"]:
