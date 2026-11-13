@@ -6,6 +6,7 @@ import { TextLayoutProbe } from "./audit/TextLayoutProbe";
 import { MascotSheetComposition } from "./mascot/MascotSheet";
 import { BeanPropSheet, SHEET_PAGES } from "./scenes/installed/beanExplainer/BeanPropSheet";
 import { StorybookSheet, SHEET_PAGES as STORYBOOK_SHEET_PAGES } from "./scenes/installed/storybookAtlas/StorybookSheet";
+import { MidcenturySheet, SHEET_PAGES as MIDCENTURY_SHEET_PAGES } from "./scenes/installed/midcenturyHowTo/MidcenturySheet";
 import { PresenterSheet } from "./scenes/installed/underTheHood/PresenterSheet";
 
 // Text-layout audit composition (VQA-9). Renders exactly what "Composition"
@@ -125,6 +126,19 @@ export const RemotionRoot: React.FC = () => {
         id="PresenterSheet"
         component={PresenterSheet}
         durationInFrames={1}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{}}
+      />
+
+      {/* The Mid-century How-To model sheet: one page per frame (the presenter's
+          poses and faces, then the object library), for a person to approve
+          the style's presenter and objects. No video uses it. */}
+      <Composition
+        id="MidcenturySheet"
+        component={MidcenturySheet}
+        durationInFrames={MIDCENTURY_SHEET_PAGES}
         fps={30}
         width={1080}
         height={1920}

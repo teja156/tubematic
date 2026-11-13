@@ -110,6 +110,7 @@ import bean_explainer  # the Bean Explainer checks (TMDEV-198), the same way
 import storybook_atlas  # the Storybook Atlas checks (TMDEV-200), the same way
 import under_the_hood  # the Under the Hood checks (TMDEV-201), the same way
 import case_file_story  # the Case File Story checks (TMDEV-202), the same way
+import character_styles  # the code-drawn character styles' checks (TMDEV-232..235), the same way
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
@@ -6117,6 +6118,7 @@ def validate_job(video_id: str) -> dict:
         if "scene_config" in dir() and isinstance(scene_config, dict):
             errors.extend(_bean_custom_prop_errors(video_id, scene_config))
             errors.extend(_storybook_custom_prop_errors(video_id, scene_config))
+            errors.extend(_character_custom_prop_errors(video_id, scene_config))
     except Exception as e:
         errors.append(f"Custom prop check failed: {e}")
     # A Terminal Doc video's own moves (TMDEV-199), for the same reason.
@@ -8310,6 +8312,95 @@ def _storybook_custom_prop_errors(video_id: str, config) -> list[str]:
     return [f"Custom prop: {e}" for e in errs]
 
 
+def _character_custom_prop_errors(video_id: str, config) -> list[str]:
+    """validate_job's re-check of a code-drawn character style's own props
+    (TMDEV-232..235) against their files as they are now; [] when the config
+    is not one of those styles or has none."""
+    scenes = config.get("scenes") if isinstance(config, dict) else None
+    mod = character_styles.for_scene(scenes[0]) if isinstance(scenes, list) and scenes else None
+    if mod is None:
+        return []
+    try:
+        custom = config["scenes"][0]["props"][mod.PROPS_KEY].get("customProps") or []
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return []
+    if not isinstance(custom, list) or not custom:
+        return []
+    errs, _, _ = mod.custom_prop_errors(custom, video_id, tvs.pack(mod.STYLE_ID)["extra"][mod.LIBRARY_KEY],
+                                        _bean_custom_sources(video_id, config, mod.PROPS_KEY))
+    return [f"Custom prop: {e}" for e in errs]
+
+
+@mcp.tool
+def render_style_props(video_id: str):
+    """Look at the props you drew for a Mid-century How-To, Process Cast, Comic
+    Panels or Puppet History video before you submit it.
+
+    Renders the props listed in the video's scene-config `customProps` (so
+    write_scene_config first): each at rest and after its first act, its
+    declared box outlined in red, with a library item of the style beside them
+    for line weight and size. Ink outside the red line means the drawing is
+    bigger than its w and h: it is cut off in the video, and the layout checks
+    miss what it covers, so enlarge the box or shrink the drawing. Rewrite a
+    prop with write_scene_file and call this again; it reads the files as they
+    are now. It renders on the CPU and waits its turn behind other heavy
+    checks, so it can take a minute or two.
+
+    Returns {video_id, props} followed by the picture, or {"error": ...} (a
+    render failure carries the renderer's error output, often a type error in
+    a prop file: fix it and call again).
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    mod = character_styles.BY_ID.get(row["visual_style"] or "")
+    if mod is None:
+        return {"error": "render_style_props is for Mid-century How-To, Process Cast, Comic Panels and Puppet "
+                         f"History videos; this video's visual_style is {row['visual_style'] or 'auto'!r}."}
+    label = tvs.pack(mod.STYLE_ID)["label"]
+    try:
+        config = json.loads(tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG).read_text(encoding="utf-8"))
+        data = config["scenes"][0]["props"][mod.PROPS_KEY]
+    except (tjobs.UnsafePath, OSError, ValueError, KeyError, IndexError, TypeError):
+        return {"error": f"This video has no {label} scene-config yet: write it with write_scene_config "
+                         "(customProps listing your props) first."}
+    custom = data.get("customProps") or [] if isinstance(data, dict) else []
+    if not custom:
+        return {"error": "The scene-config lists no customProps, so there is nothing of yours to preview."}
+    spec = {"style": mod.STYLE_ID,
+            "props": [{**c, "sample": mod.sample_text(data, c.get("id"))} for c in custom if isinstance(c, dict)]}
+    if not _heavy_checks_lock.acquire(timeout=HEAVY_CHECK_WAIT_SECS):
+        return {"error": f"Other checks kept the renderer busy for {HEAVY_CHECK_WAIT_SECS}s. Nothing is wrong "
+                         "with this video; call render_style_props again."}
+    try:
+        with tempfile.TemporaryDirectory(prefix="tubematic-style-props-") as tmp:
+            out_png = Path(tmp) / "props.png"
+            try:
+                bean_preview.render_preview(_MASCOT_REMOTION, spec, out_png, script=bean_preview.CHARACTER_SCRIPT)
+            except bean_preview.BeanPreviewError as e:
+                return {"error": str(e)}
+            from PIL import Image as PILImage
+            from fastmcp.utilities.types import Image as MCPImage
+            with PILImage.open(out_png) as src:
+                src.load()
+                img = src.convert("RGB")
+    finally:
+        _heavy_checks_lock.release()
+    longest = max(img.size)
+    if longest > _READ_IMAGE_MAX_EDGE:
+        ratio = _READ_IMAGE_MAX_EDGE / longest
+        img = img.resize((max(1, round(img.size[0] * ratio)), max(1, round(img.size[1] * ratio))), PILImage.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    meta = {"video_id": video_id, "props": [c.get("id") for c in custom if isinstance(c, dict)]}
+    return [json.dumps(meta, indent=2), MCPImage(data=buf.getvalue(), format="png")]
+
+
 @mcp.tool
 def render_bean_props(video_id: str):
     """Look at the props you drew for a Bean Explainer video before you submit it.
@@ -8795,6 +8886,26 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         given = config.get("subtitles")
         if given is None or isinstance(given, dict):
             config["subtitles"] = {**tvs.pack(case_file_story.STYLE_ID)["captions"], **(given or {})}
+
+    # ── the code-drawn character styles (TMDEV-232..235) ─────────────────────
+    # Mid-century How-To, Process Cast, Comic Panels and Puppet History: the
+    # same shape again (one installed scene whose props hold the video as data,
+    # with the video's own props from customProps), one module each in
+    # character_styles, checked here before it costs a render.
+    for char_mod in character_styles.STYLES:
+        use_err = char_mod.check_scene_use(row["visual_style"], scenes)
+        if use_err:
+            return {"error": use_err}
+        if (row["visual_style"] or "") == char_mod.STYLE_ID:
+            fps, word_starts = _timeline_word_starts(video_id)
+            pack = tvs.pack(char_mod.STYLE_ID)
+            problems = char_mod.check(config, fps, word_starts, _timeline_words(video_id), pack["extra"], video_id,
+                                      _bean_custom_sources(video_id, config, char_mod.PROPS_KEY), quiet=quiet)
+            if problems:
+                return {"error": f"The {pack['label']} video has problems: " + " ".join(problems)}
+            given = config.get("subtitles")
+            if given is None or isinstance(given, dict):
+                config["subtitles"] = {**pack["captions"], **(given or {})}
 
     # ── subtitles (TMDEV-101) ────────────────────────────────────────────────
     # Absent means on with defaults, so nothing is filled in here: writing the

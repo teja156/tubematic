@@ -41,6 +41,7 @@ _TUBEMATIC_SKILLS = [
     "tubematic-terminal-doc",
     "tubematic-under-the-hood",
     "tubematic-case-file-story",
+    "tubematic-midcentury-howto",
     "tubematic-style-routing",
     "tubematic-insert-routing",
     "tubematic-inserts",

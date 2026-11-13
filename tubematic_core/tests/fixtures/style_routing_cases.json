@@ -1465,6 +1465,89 @@
       "inserts_ok": [
         "terminal_doc"
       ]
+    },
+    {
+      "title": "How to turn on two-factor login",
+      "brief": "Step by step: open your account's security settings, choose an authenticator app, scan the QR code, type the six-digit code, save the backup codes. Why a stolen password is then not enough.",
+      "expect": [
+        "midcentury_howto"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick"
+      ],
+      "future": "",
+      "note": "A numbered procedure a viewer follows on their own phone: Mid-century How-To. Bean Explainer is for a list of named items with no order to follow.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Back up your phone in three steps",
+      "brief": "How to make sure your photos survive a lost or broken phone: turn on cloud backup in settings, plug in on wifi overnight, then check the date of the last backup.",
+      "expect": [
+        "midcentury_howto"
+      ],
+      "ok": [
+        "bean_explainer"
+      ],
+      "future": "",
+      "note": "A short procedure with a done state at the end.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Set up a password manager in four steps",
+      "brief": "Install a password manager, make one strong master password, import the passwords saved in your browser, then turn on autofill so you never type one again.",
+      "expect": [
+        "midcentury_howto"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick"
+      ],
+      "future": "",
+      "note": "Setting something up from start to done.",
+      "inserts_expect": []
+    },
+    {
+      "title": "What to do when a pan catches fire",
+      "brief": "The safe steps when cooking oil catches fire: turn off the heat, slide a lid over the pan, never pour water on it, and leave it covered until it cools. Why water makes it explode.",
+      "expect": [
+        "midcentury_howto"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick"
+      ],
+      "future": "",
+      "note": "A safety rule told as steps to follow, the 1950s safety-film register.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Check a link before you click it",
+      "brief": "How to spot a fake link in a message: hold your finger on it to see the real address, read the domain from right to left, look for swapped letters, and open the site yourself instead.",
+      "expect": [
+        "midcentury_howto"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick"
+      ],
+      "future": "",
+      "note": "Pair probe with Bean Explainer's scam lists: these are steps a viewer does in order, not a catalogue of tricks.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Five password mistakes everyone makes",
+      "brief": "Reusing one password everywhere, using your pet's name, adding 1 at the end, writing it on a sticky note, and never turning on two-factor login: each mistake and why it gets you hacked.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "midcentury_howto",
+        "stick"
+      ],
+      "future": "",
+      "note": "Pair probe with Mid-century How-To: a list of named mistakes, one section each, is Bean Explainer's even though the topic is security advice.",
+      "inserts_expect": []
     }
   ]
 }

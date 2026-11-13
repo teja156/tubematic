@@ -616,6 +616,9 @@ blank-faced lead, and every brief is a place with what you are doing in it, or a
 is a situation the viewer steps into, not an incident reported as real, so rule 14 bears on its
 laws, limits and terms, which must all be real. The amounts in the story and its meters' values
 are part of the invented situation.
+`midcentury_howto` has no photographs either: a named product, app or setting there is a flat
+object with its name on its screen or label, exactly as the real menu names it, and the presenter is
+the only person in it.
 A segment marked as an insert has no photographs either, and neither has a legacy whole
 `system_flow` or `terminal_doc` video (one voiced before they became insert styles). In System Flow
 a named person or place is a labelled component (`"Alice's laptop"` as a `user` or `phone` node),

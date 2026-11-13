@@ -160,7 +160,7 @@ def test_under_the_hood():
     assert tvs.effective_canvas("under_the_hood", "light") == "dark"
     # its own presenter stands where a mascot would: no mascot, like Cartoon 3D
     assert p["mascot"] is False and "presenter" in p["messages"]["mascot"]
-    assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood", "case_file_story"}
+    assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood", "case_file_story", "midcentury_howto"}
     rows = {r["id"]: r for r in tvs.public_list(openai_key_set=True, gpu_status="working")}
     assert rows["under_the_hood"]["mascot"] is False and rows["cartoon_3d"]["mascot"] is False
     assert rows["auto"]["mascot"] is True and rows["stick"]["mascot"] is True
@@ -462,3 +462,25 @@ def test_yields_ties_is_checked_when_present():
     data["routing"] = {**data["routing"], "yields_ties": "yes"}
     with pytest.raises(tvs.PackError, match=r"routing\.yields_ties"):
         tvs._check_pack(pathlib.Path("stick.json"), data)
+
+
+def test_midcentury_howto():
+    p = tvs.pack("midcentury_howto")
+    assert p["renderer"] == "dom" and p["canvas"] == "light" and p["dimension"] == "2d"
+    assert p["authoring_skill"] == "tubematic-midcentury-howto"
+    assert p["experimental"] is True and p["order"] == 160 and p["role"] == "main"
+    assert p["inserts"] == {"host": True, "transition": "wipe"}
+    # its presenter and objects are drawn in code: no generated characters or line art, no keys, no GPU
+    assert tvs.figures_allowed("midcentury_howto") is True
+    assert tvs.line_art_allowed("midcentury_howto") is False
+    assert tvs.characters_allowed("midcentury_howto") is False
+    assert tvs.needs_openai_key("midcentury_howto") is False and tvs.needs_gpu("midcentury_howto") is False
+    assert p["routing"]["images"] == 0
+    assert p["captions"]["background"] == "label"
+    # its presenter holds the stage a mascot would take: no mascot (user, 2026-11-12)
+    assert p["mascot"] is False and "presenter" in p["messages"]["mascot"]
+    rows = {r["id"]: r for r in tvs.public_list(openai_key_set=False, gpu_status="not_configured")}
+    assert rows["midcentury_howto"]["mascot"] is False and rows["midcentury_howto"]["available"] is True
+    # the script names the steps by number, so each gets its own medallion
+    assert "opened by its number" in p["script"] and "never invent a menu" in p["script"]
+

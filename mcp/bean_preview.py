@@ -1,10 +1,11 @@
 """Renders the preview of the props an agent drew for one Bean Explainer video
-(TMDEV-198), or one Storybook Atlas video (`script=STORYBOOK_SCRIPT`): the
-picture render_bean_props and render_storybook_props hand back so the agent
+(TMDEV-198), one Storybook Atlas video (`script=STORYBOOK_SCRIPT`), or one
+video of a code-drawn character style (`script=CHARACTER_SCRIPT`): the
+picture render_bean_props, render_storybook_props and render_style_props hand back so the agent
 sees its drawings before it submits.
 
 The renderer is a Node script (renderer/remotion/bean-tools/render-props.mjs,
-or storybook-tools/render-props.mjs), run as
+storybook-tools/render-props.mjs or character-tools/render-props.mjs), run as
 `node render-props.mjs <spec_json> <out_png>`. It runs on software GL
 inside this server's container, so the GPU stays free for videos. Success is
 exit 0 AND the PNG existing.
@@ -23,6 +24,8 @@ from pathlib import Path
 
 _SCRIPT = Path("bean-tools") / "render-props.mjs"
 STORYBOOK_SCRIPT = Path("storybook-tools") / "render-props.mjs"
+# The code-drawn character styles' one preview script (TMDEV-232..235); the spec names the style.
+CHARACTER_SCRIPT = Path("character-tools") / "render-props.mjs"
 STDERR_TAIL_LINES = 8
 # Under server.py's HEAVY_CHECK_WAIT_SECS (300): the preview holds the heavy-check
 # lock, and a validate_job queued behind it must not give up first.

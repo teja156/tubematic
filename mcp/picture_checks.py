@@ -27,6 +27,7 @@ import re
 import bean_explainer
 import cartoon
 import case_file_story
+import character_styles
 import storybook_atlas
 import system_flow
 import terminal_doc
@@ -95,7 +96,7 @@ def style_of(config: dict) -> str | None:
     scenes = config.get("scenes") if isinstance(config, dict) else None
     if not isinstance(scenes, list) or not scenes:
         return None
-    for mod in _STYLES:
+    for mod in _STYLES + character_styles.STYLES:
         if any(isinstance(s, dict) and s.get("src") == mod.SCENE_SRC for s in scenes):
             return mod.STYLE_ID
     # A Cartoon 3D scene is generated TSX named "<video_id>/CartoonShort", so
@@ -159,6 +160,9 @@ def _first_frame_problem(style: str, config: dict) -> str | None:
     """Why this data-driven video's first frame shows nothing but a headline,
     a blank stage or text, or None when it shows a subject."""
     early = FIRST_FRAME_WINDOW
+    if style in character_styles.BY_ID:
+        mod = character_styles.BY_ID[style]
+        return mod.first_frame_problem(_props(config, mod))
     if style == system_flow.STYLE_ID:
         boards = _list(_props(config, system_flow), "boards")
         events = _list(boards[0], "events") if boards else []
@@ -236,6 +240,9 @@ def change_frames(style: str, config: dict) -> list[int]:
 def _change_frames(style: str, config: dict) -> list[int]:
     if style == MIXED:
         return _ints(s.get("startFrame") for s in _list(config, "scenes"))
+    if style in character_styles.BY_ID:
+        mod = character_styles.BY_ID[style]
+        return _ints(mod.change_frames(_props(config, mod)))
     subtle = _SUBTLE.get(style, set())
     if style == system_flow.STYLE_ID:
         boards = _list(_props(config, system_flow), "boards")
@@ -288,6 +295,11 @@ def _change_frames(style: str, config: dict) -> list[int]:
     return []
 
 
+def _fix(style: str) -> str:
+    mod = character_styles.BY_ID.get(style)
+    return mod.CHANGE_FIX if mod else _CHANGE_FIX[style]
+
+
 def _clock(frame: int, fps: int) -> str:
     secs = int(frame // max(1, fps))
     return f"{secs // 60}:{secs % 60:02d}"
@@ -318,7 +330,7 @@ def change_warnings(config: dict, segments: list, script_segments: list, fps: in
             f"The {ROLE_NAMES[role]} at {_clock(start, fps)} (segment {seg.get('id')}, beat "
             f"\"{seg.get('beat')}\": \"{_quote(voices.get(seg.get('id'), ''))}\") has nothing new "
             f"on screen within {CHANGE_WINDOW} frames of its first word (frame {start}). "
-            f"{_CHANGE_FIX[style][0].upper()}{_CHANGE_FIX[style][1:]}.")
+            f"{_fix(style)[0].upper()}{_fix(style)[1:]}.")
     return out
 
 
