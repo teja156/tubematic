@@ -297,7 +297,7 @@ path ([Volumes](../16-infrastructure.md#volumes)).
 
 Covers `actions.py::apply_renderer`.
 
-- One image build covers every service that runs it, and the step starts the API, the MCP server
+- One image build covers every service that runs it, and the step starts the API, the MCP server,
   the renderer and the code sandbox.
 - It waits on the API's healthcheck and then on the MCP server's. A sick API ends the step before
   the MCP wait.
