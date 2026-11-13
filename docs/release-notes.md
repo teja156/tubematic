@@ -166,6 +166,9 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ### Fixed
 
+- In an Isometric Infographic video, the labels of two buildings that stand close together could be
+  drawn on top of each other. The labels now sit on opposite sides or one above the other, and stay in
+  place while the camera moves.
 - Auto picked a text or diagram style, such as Terminal Doc or Whiteboard, for a real failure with
   a technical cause, such as a rocket destroyed by a software bug or a trading firm ruined by one
   server. The video showed numbers and boxes and never the rocket or the firm. Auto now picks a
