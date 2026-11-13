@@ -128,9 +128,25 @@ def event_frames(b: dict) -> list[int]:
     return sorted(set(out))
 
 
+_LASTS = {"routes": "draw", "movers": "move", "pins": "pin", "camera": "glide", "lifts": "lift",
+          "cutaways": "cut", "explodes": "cut"}
+
+
+def settle_frames(b: dict) -> list[int]:
+    """The frame each of a board's changes has finished: a landing, a route drawn, a mover arrived, a pin
+    built, a glide, a lift, a cutaway or an explode done."""
+    out = [b["start"]]
+    out += [p["enter"] for p in b.get("props") or [] if isinstance(p, dict) and _int(p.get("enter"))]
+    for key, t in _LASTS.items():
+        out += [x["at"] + TIMING[t] for x in b.get(key) or [] if isinstance(x, dict) and _int(x.get("at"))]
+    return out
+
+
 def quiet_spans(data: dict, total: int) -> list[list[int]]:
     boards = data["boards"]
-    extra = [s["at"] for s in (data.get("readout") or {}).get("steps") or [] if isinstance(s, dict) and _int(s.get("at"))]
+    ro = data.get("readout") if isinstance(data.get("readout"), dict) else {}
+    steps = ro.get("steps") if isinstance(ro.get("steps"), list) else []
+    extra = [s["at"] for s in steps if isinstance(s, dict) and _int(s.get("at"))]
     leg = data.get("legend")
     if isinstance(leg, dict) and _int(leg.get("at")):
         extra.append(leg["at"])
@@ -187,6 +203,16 @@ def _solid_error(sd, colors) -> str:
     return ""
 
 
+def footprint(solids: list) -> float:
+    """Half the side of the square a prop's solids stand on, in tiles at scale 1 (kit.ts::footprint)."""
+    h = 0.0
+    for s in solids:
+        hx = s["w"] / 2 if "w" in s else s["r"]
+        hy = s["d"] / 2 if "d" in s else hx
+        h = max(h, abs(s["x"]) + hx, abs(s["y"]) + hy)
+    return round(h * 100) / 100
+
+
 def custom_prop_errors(custom, library, colors) -> tuple[list[str], dict]:
     errs: list[str] = []
     parts: dict[str, float] = {}
@@ -217,7 +243,7 @@ def custom_prop_errors(custom, library, colors) -> tuple[list[str], dict]:
         if bad:
             errs.append(f"{where} ({cid}) solid {bad[0] + 1}: {bad[1]}")
             continue
-        parts[cid] = c["height"]
+        parts[cid] = footprint(solids)
     return errs, parts
 
 
@@ -258,6 +284,7 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
     for e in cerrs:
         err(e)
     names = library | set(custom)
+    halves = {**(extra.get("footprints") or {}), **custom}
     rooms = set(extra.get("rooms") or [])
     stacks = set(extra.get("stacks") or [])
 
@@ -299,13 +326,14 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
         extra_keys = sorted(set(b) - _BOARD_KEYS)
         if extra_keys:
             err(f"{where}: unknown field(s) {extra_keys}; a board takes {sorted(_BOARD_KEYS)}.")
-        _check_board(b, where, starts[i], ends[i], names, rooms, stacks, colors, timed, err, set(extra.get("areas") or []))
+        _check_board(b, where, starts[i], ends[i], names, rooms, stacks, colors, timed, err, set(extra.get("areas") or []), halves)
         sound.append(found[0] == before)
 
     ro = data.get("readout")
     if ro is not None:
         if not isinstance(ro, dict) or set(ro) - {"label", "unit", "steps", "cubes"}:
             err("readout takes label, unit, steps and cubes.")
+            ro = None
         else:
             if not _text(ro.get("label"), LIMITS["labelChars"]):
                 err(f"readout.label must be 1 to {LIMITS['labelChars']} characters.")
@@ -323,6 +351,8 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
                         continue
                     if not (_num(s.get("value")) and 0 <= s["value"] <= LIMITS["maxValue"]):
                         err(f"{w}: value must be a number from 0 to {LIMITS['maxValue']}.")
+                    if "red" in s and not isinstance(s["red"], bool):
+                        err(f"{w}: red must be true or false.")
                     if timed(s, "at", w, prev + 1, total, "the frame it rolls to its value"):
                         prev = s["at"]
                     reds += bool(s.get("red"))
@@ -360,15 +390,16 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
                     f"scene is hidden; time it to a word at {w[1]} or later, or before {w[0]}.")
                 break
     for i, b in enumerate(boards):
-        last = max(event_frames(b))
+        last = max(settle_frames(b))
         if ends[i] - last < TIMING["readFrames"]:
-            err(f"Board {i + 1}: its last change is at frame {last}, {ends[i] - last} frames before the board ends; "
-                f"leave at least {TIMING['readFrames']} frames to see it.")
-    late = [s["at"] for s in (ro or {}).get("steps") or [] if isinstance(s, dict) and _int(s.get("at"))]
+            err(f"Board {i + 1}: its last change settles at frame {last}, {ends[i] - last} frames before the board "
+                f"ends; leave at least {TIMING['readFrames']} frames to see it.")
+    late = [s["at"] for s in ((ro or {}).get("steps") if isinstance((ro or {}).get("steps"), list) else [])
+            if isinstance(s, dict) and _int(s.get("at"))]
     late += [leg["at"]] if isinstance(leg, dict) and _int(leg.get("at")) else []
-    if late and total - max(late) < TIMING["readFrames"]:
+    if late and total - max(late) < TIMING["readFrames"] + TIMING["roll"]:
         err(f"The readout or the legend changes at frame {max(late)}, {total - max(late)} frames before the video "
-            f"ends; leave at least {TIMING['readFrames']} frames to read it.")
+            f"ends; leave at least {TIMING['readFrames'] + TIMING['roll']} frames (its roll and the time to read it).")
     for f in [s.get("at") for s in (ro or {}).get("steps") or [] if isinstance(s, dict)] + ([leg.get("at")] if isinstance(leg, dict) else []):
         w = window_at(f, quiet) if _int(f) else None
         if w:
@@ -387,7 +418,8 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
     return errors
 
 
-def _check_board(b, where, start, end, names, rooms, stacks, colors, timed, err, area_kinds=()) -> None:
+def _check_board(b, where, start, end, names, rooms, stacks, colors, timed, err, area_kinds=(), halves=None) -> None:
+    halves = halves or {}
     L = LIMITS
     areas = b.get("areas")
     if not isinstance(areas, list) or len(areas) > L["maxAreas"]:
@@ -421,15 +453,26 @@ def _check_board(b, where, start, end, names, rooms, stacks, colors, timed, err,
         if not (isinstance(at, list) and len(at) == 2 and all(_num(v) and 0.4 <= v <= BOARD - 0.4 for v in at)):
             err(f"{w} ({pid}): at must be [x, y] in tiles, from 0.4 to {BOARD - 0.4} (on the board).")
             continue
-        if any(abs(q["at"][0] - at[0]) < 0.6 and abs(q["at"][1] - at[1]) < 0.6 for q in ids.values()):
-            err(f"{w} ({pid}) stands on the same tile as another prop; move it at least 0.6 tiles away.")
+        scale = p.get("scale", 1)
+        if "scale" in p and not (_num(scale) and 0.6 <= scale <= 1.6):
+            err(f"{w} ({pid}): scale must be from 0.6 to 1.6.")
+            scale = 1
+        # how far the prop reaches from its tile's centre: its footprint at its scale. Two props may share a
+        # quarter tile of their squares, since a prop rarely fills its square to the corners.
+        reach = halves.get(p.get("what"), 0.4) * scale
+        if not all(reach <= v <= BOARD - reach for v in at):
+            err(f"{w} ({pid}) reaches {reach:.2f} tiles from its centre and would hang off the board; move it "
+                "inward or make it smaller.")
+        for qid, q in ids.items():
+            near = max(0.6, q["_reach"] + reach - 0.25)
+            if abs(q["at"][0] - at[0]) < near and abs(q["at"][1] - at[1]) < near:
+                err(f"{w} ({pid}) stands on {qid}'s ground; move it at least {near:.1f} tiles away from it.")
+                break
         if "color" in p and p["color"] not in colors:
             err(f"{w} ({pid}): color must be one of {sorted(colors)}.")
-        if "scale" in p and not (_num(p["scale"]) and 0.6 <= p["scale"] <= 1.6):
-            err(f"{w} ({pid}): scale must be from 0.6 to 1.6.")
         if "enter" in p:
             timed(p, "enter", f"{w} ({pid})", start, end, "the frame it lands on")
-        ids[pid] = p
+        ids[pid] = {**p, "_reach": reach}
     routes = b.get("routes", [])
     rids: set[str] = set()
     if not isinstance(routes, list) or len(routes) > L["maxRoutes"]:
@@ -462,8 +505,10 @@ def _check_board(b, where, start, end, names, rooms, stacks, colors, timed, err,
             err(f"{w}: what {m.get('what')!r} is not a library prop or one of this video's customProps.")
         if "color" in m and m["color"] not in colors:
             err(f"{w}: color must be one of {sorted(colors)}.")
+        if "back" in m and not isinstance(m["back"], bool):
+            err(f"{w}: back must be true or false.")
         ra = route_at.get(m["route"])
-        if timed(m, "at", w, start, end, "the frame it sets off") and _int(ra) and m["at"] < ra and not m.get("back"):
+        if timed(m, "at", w, start, end, "the frame it sets off") and _int(ra) and m["at"] < ra:
             err(f"{w} sets off at frame {m['at']}, before its route starts to draw at {ra}: the line leads every move.")
     pins = b.get("pins", [])
     if not isinstance(pins, list) or len(pins) > L["maxPins"]:
@@ -482,7 +527,10 @@ def _check_board(b, where, start, end, names, rooms, stacks, colors, timed, err,
             err(f"{w}: unit must be at most {L['unitChars']} characters.")
         if "side" in p and p["side"] not in ("left", "right"):
             err(f"{w}: side must be \"left\" or \"right\".")
-        timed(p, "at", w, start, end, "the frame it builds")
+        if timed(p, "at", w, start, end, "the frame it builds"):
+            lands = ids[p["on"]].get("enter")
+            if _int(lands) and p["at"] < lands:
+                err(f"{w} builds at frame {p['at']}, before {p['on']} lands at {lands}; a pin names a prop on the board.")
     cams = b.get("camera", [])
     if not isinstance(cams, list) or len(cams) > L["maxCamera"]:
         err(f"{where}: camera must list at most {L['maxCamera']} moves.")

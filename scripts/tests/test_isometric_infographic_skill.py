@@ -56,7 +56,7 @@ def test_the_skill_states_the_validators_limits():
                    f"at least {L['minBoardSeconds']} s", f"within {T['snap']} frames of a word's start",
                    f"up to {L['maxAreas']} areas, 1 to {L['maxProps']} props, up to {L['maxRoutes']} routes of 2 to {L['maxRoutePoints']} points",
                    f"up to {L['maxMovers']} movers", f"up to {L['maxPins']} pins", f"up to {L['maxCamera']} camera moves",
-                   "at least 0.6 tiles from each other", "the line leads every move",
+                   "do not stand on each other's ground", "the line leads every move",
                    f"a label of 1 to {L['labelChars']} characters, a value of 1 to {L['valueChars']}, a unit of up to {L['unitChars']}",
                    f"at a zoom from 1 to {iso.GEOMETRY['zoomMax']}", f"1 to {L['maxReadoutSteps']} steps",
                    f"at most {L['maxCubes']}", f"1 to {L['legendItems']} entries of 1 to {L['legendChars']} characters",

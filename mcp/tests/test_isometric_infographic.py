@@ -81,7 +81,7 @@ def test_the_example_passes():
     (lambda d: _b(d)["areas"].append({"kind": "land", "rect": [5, 5, 4, 6]}), "x0 < x1"),
     (lambda d: _b(d)["props"][0].update(what="spaceship"), "is not a library prop"),
     (lambda d: _b(d)["props"][0].update(at=[12, 1]), "on the board"),
-    (lambda d: _b(d)["props"][1].update(at=_b(d)["props"][0]["at"]), "same tile as another prop"),
+    (lambda d: _b(d)["props"][1].update(at=_b(d)["props"][0]["at"]), "ground; move it"),
     (lambda d: _b(d)["props"][0].update(color="purple"), "color must be one of"),
     (lambda d: _b(d)["props"][0].update(scale=3), "scale must be from"),
     (lambda d: _b(d)["routes"][0]["points"].append([11, 3]), "points"),
@@ -96,6 +96,10 @@ def test_the_example_passes():
     (lambda d: d["readout"]["steps"][0].update(red=True), "turns red once"),
     (lambda d: d["readout"]["cubes"].update(per=1), "per is too small"),
     (lambda d: d["readout"]["cubes"].update(per=0.5), "a number of 1 or more"),
+    (lambda d: d.update(readout="bad"), "readout takes"),
+    (lambda d: d["readout"]["steps"][0].update(red="false"), "red must be true or false"),
+    (lambda d: _b(d)["movers"][0].update(back="no"), "back must be true or false"),
+    (lambda d: _b(d)["props"][0].update(what="crane", at=[0.6, 5], scale=1.4), "hang off the board"),
     (lambda d: d["legend"]["items"].extend([{"color": "red", "label": "ANOTHER ONE"}] * 3), "legend"),
 ])
 def test_a_broken_config_is_refused(mutate, fragment):
@@ -169,7 +173,7 @@ def test_the_last_change_on_a_board_and_the_last_readout_step_are_left_on_screen
     cfg = copy.deepcopy(EXAMPLE)
     _data(cfg)["legend"]["at"] = total - 3
     problems = iso.check(cfg, 30, WORD_STARTS + [total - 3], EXTRA, "vid_example")
-    assert any("frames to read it" in p for p in problems), problems
+    assert any("the time to read it" in p for p in problems), problems
 
 
 def test_the_scene_use_rule_and_the_audit_windows():
@@ -234,3 +238,43 @@ def test_render_style_parts_sends_the_compositions(make_video, monkeypatch):
     out = server.render_style_parts(vid)
     assert json.loads(out[0])["parts"] == ["kiosk"]
     assert seen["spec"]["style"] == "isometric_infographic" and seen["spec"]["parts"][0]["id"] == "kiosk"
+
+
+def test_the_footprint_matches_the_renderer():
+    for case in CASES["footprint"]:
+        assert iso.footprint(case["solids"]) == case["half"]
+    assert EXTRA["footprints"]["crane"] > EXTRA["footprints"]["person"]
+
+
+def test_two_large_props_cannot_share_their_ground():
+    def crowd(d):
+        props = _b(d)["props"]
+        props[0].update(what="warehouse")
+        props[1].update(what="data_centre", at=[props[0]["at"][0] + 0.9, props[0]["at"][1]])
+    assert any("ground; move it" in p for p in _check(_with(crowd)))
+
+
+def test_a_mover_going_back_still_waits_for_its_route():
+    def early(d):
+        r, m = _b(d)["routes"][0], _b(d)["movers"][0]
+        m["back"] = True
+        r["at"], m["at"] = m["at"], r["at"]
+    assert any("the line leads every move" in p for p in _check(_with(early)))
+
+
+def test_a_pin_waits_for_its_prop_to_land():
+    cfg = copy.deepcopy(EXAMPLE)
+    b = _b(_data(cfg))
+    prop = next(p for p in b["props"] if "enter" in p)
+    b["pins"][0].update(on=prop["id"], at=prop["enter"] - 30)
+    problems = iso.check(cfg, 30, WORD_STARTS + [prop["enter"] - 30], EXTRA, "vid_example")
+    assert any("before " + prop["id"] + " lands" in p for p in problems), problems
+
+
+def test_a_move_still_running_at_the_board_end_is_refused():
+    cfg = copy.deepcopy(EXAMPLE)
+    d = _data(cfg)
+    end = _b(d, 1)["start"]
+    _b(d)["movers"][0]["at"] = end - 25
+    problems = iso.check(cfg, 30, WORD_STARTS + [end - 25], EXTRA, "vid_example")
+    assert any("settles at frame" in p for p in problems), problems

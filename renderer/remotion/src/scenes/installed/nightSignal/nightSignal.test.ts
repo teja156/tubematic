@@ -7,6 +7,7 @@ import {
   ANIMAL_NAMES, BUBBLES, CAMERA, CUTS, GEOMETRY, LIMITS, MARKS, OBJECT_NAMES, PEOPLE, SCENE_KINDS, SCREENS, SETTINGS, SHAPES,
   SLOTS, TIMING, TONES, eventFrames, fitFontSize, timecode, type NightSignalData,
 } from "./contract";
+import { clockText } from "./draw";
 import { libraryShapes, shapesBox } from "./parts";
 import { itemAt, pushAt, quietSpans, sceneIndexAt, tearAt } from "./stage";
 
@@ -72,6 +73,12 @@ describe("the pack", () => {
 });
 
 describe("the stage", () => {
+  it("runs a camera clock on through its minutes and hours", () => {
+    expect(clockText("03:12", 0, 30)).toBe("3:12:00 AM");
+    expect(clockText("03:12", 30 * 60, 30)).toBe("3:13:00 AM");
+    expect(clockText("11:59", 30 * 60, 30)).toBe("12:00:00 PM");
+  });
+
   it("knows which scene is on screen", () => {
     expect(sceneIndexAt(DATA, 0)).toBe(0);
     expect(sceneIndexAt(DATA, DATA.scenes[2].start)).toBe(2);

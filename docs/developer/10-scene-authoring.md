@@ -673,8 +673,8 @@ with `FIRST_FRAME_WINDOW` as the early limit):
 - Terminal Doc: beat 1 has nothing on stage by frame 3.
 - Storybook Atlas: nothing moves in chapter 1 by frame 3.
 - Under the Hood: plate 1 has no photograph.
-- Flat Vector Science: shot 1 is a `subject` with no item on screen by frame 3, or a ladder, zoom, descent
-  or stages shot whose first rung, level, layer or stage arrives after frame 3.
+- Flat Vector Science: shot 1 is a `subject` with no item on screen by frame 3. A ladder, zoom, descent or
+  stages shot shows its first picture from its start, so it never opens empty.
 
 Case File Story's validator already requires a shot first, Night Signal's requires a picture scene at
 frame 0, Isometric Infographic's requires board 1 at frame 0, and Cartoon 3D is not checked.
@@ -1579,8 +1579,8 @@ The renderer's side is `src/scenes/installed/IsometricInfographic.tsx` with `iso
 
 A board is a few hundred flat faces, which as SVG paths cost about 1.7 times System Flow, so the
 board is a canvas. Redrawing every face each frame still cost about twice System Flow, so the still
-part (slab, areas, scenery) is drawn once into a `BoardCache` and reused until the camera, a prop or a
-dimming changes. Routes are drawn as dashes segment by segment, never with `stroke-dasharray`.
+part (slab, areas, routes, scenery and settled props) is drawn once into a `BoardCache` and reused until
+the camera, a prop, a dimming or a route drawing on changes. Routes lie under the props and the movers. Routes are drawn as dashes segment by segment, never with `stroke-dasharray`.
 Measured on the CPU renderer over the whole example video, the style costs about 1.6 times System
 Flow's example.
 
@@ -1593,18 +1593,21 @@ Flow's example.
   seconds.
 - A frame the config gives is outside its board or off a word.
 - A board has more areas, props, routes, route points, movers, pins, camera moves, lifts, cutaways or
-  explodes than its limit, a prop stands off the board (0.4 to 9.6) or within 0.6 tiles of another or
-  shares an id, or a route leaves the board.
-- A mover sets off before its route starts to draw, or names no route of the board.
-- A pin names no prop of its board, or its label (1 to 12), value (1 to 8) or unit (4) is over its limit.
+  explodes than its limit, a prop stands off the board (0.4 to 9.6), its footprint at its scale (from the
+  pack's `extra.footprints`, written from `kit.ts::footprint`) hangs off the board or stands on another
+  prop's ground, it shares an id, or a route leaves the board.
+- A mover sets off before its route starts to draw (going `back` or not), or names no route of the board.
+- A pin names no prop of its board or builds before that prop lands, or its label (1 to 12), value (1 to
+  8) or unit (4) is over its limit.
 - A camera move's zoom is outside 1 to 2 or its focus is not a prop of the board, a cutaway opens a
   building with no inside or shows other than 1 to 3 props, or an explode separates something that is
   not a stack.
 - The readout has more than 8 steps or turns red more than once, its cubes count fewer than 1 unit each
   or would need more than 12, or the legend has more than 5 entries of 12 characters or does not fit the
   frame.
-- A board's last change comes less than 20 frames before the board ends, or the readout or the legend
-  changes in the video's last 20 frames.
+- A board's last change finishes (a route drawn, a mover arrived, a pin built, a glide, a lift, a cutaway
+  or an explode done) less than 20 frames before the board ends, or the readout or the legend changes in
+  the video's last 38 frames (its roll plus 20).
 - A custom prop breaks the solid, footprint (a solid's size counts, not only its centre) or count rules.
 - Nothing new arrives for more than 4 seconds. The drift, the clouds and things already moving do not
   count.

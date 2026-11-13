@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { AREA_KINDS, COLOR_NAMES, GEOMETRY, LIMITS, PROP_NAMES, ROOMS, STACKS, TIMING, eventFrames, grouped, type IsometricData } from "./contract";
-import { PROPS, drawSolid, project, tones } from "./kit";
+import { PROPS, drawSolid, footprint, project, tones } from "./kit";
 import { dropAt, projAt, quietSpans, readoutAt, viewAt, WHOLE } from "./stage";
 
 const ROOT = path.resolve(__dirname, "../../../../../..");
@@ -18,6 +18,7 @@ describe("the shared contract", () => {
     expect(data.boards.map((b) => eventFrames(b))).toEqual(CASES.event_frames);
     expect(quietSpans(data, CASES.total)).toEqual(CASES.quiet_spans);
     for (const c of CASES.readout_at) expect(readoutAt(data, c.frame)).toEqual({ value: c.value, red: c.red, shown: c.shown });
+    for (const c of CASES.footprint) expect(footprint(c.solids)).toBe(c.half);
     for (const c of CASES.view_at) expect(viewAt(data.boards[0], c.frame)).toEqual({ x: c.x, y: c.y, zoom: c.zoom });
     for (const c of CASES.grouped) expect(grouped(c.n)).toBe(c.text);
   });

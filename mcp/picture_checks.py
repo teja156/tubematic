@@ -210,14 +210,11 @@ def _first_frame_problem(style: str, config: dict) -> str | None:
     elif style == flat_vector_science.STYLE_ID:
         shots = _list(_props(config, flat_vector_science), "shots")
         first = shots[0] if shots else {}
-        frames = flat_vector_science.event_frames(first) if first.get("kind") != "subject" else []
         items = _list(first, "items")
         if first.get("kind") == "subject" and not any(not _int(it.get("at")) or it["at"] <= early for it in items):
             return (f"shot 1 has no subject on screen until after frame {early}, so the video opens on an empty "
                     "backdrop. Leave `at` out of the first sentence's subject so it is there from frame 0")
-        if first.get("kind") in ("ladder", "zoom", "descent", "stages") and not (len(frames) > 1 and frames[1] <= early):
-            return (f"shot 1's first rung, level, layer or stage arrives after frame {early}, so the video opens on "
-                    "an empty backdrop. Time it to the first word")
+        # a ladder, zoom, descent or stages shot shows its first picture from its start (stage.ts::pictureAts)
     elif style == under_the_hood.STYLE_ID:
         plates = _list(_props(config, under_the_hood), "plates")
         if not plates or not plates[0].get("image"):
@@ -312,6 +309,12 @@ def _change_frames(style: str, config: dict) -> list[int]:
                 frames += isometric_infographic.event_frames(board)
             except (KeyError, TypeError):
                 frames.append(board.get("start"))
+        # the readout rolling to a new value and the legend rising are changes on screen too
+        data = _props(config, isometric_infographic)
+        ro = data.get("readout") if isinstance(data, dict) and isinstance(data.get("readout"), dict) else {}
+        frames += [s.get("at") for s in _list(ro, "steps")]
+        leg = data.get("legend") if isinstance(data, dict) else None
+        frames += [leg.get("at")] if isinstance(leg, dict) else []
         return _ints(frames)
     if style == flat_vector_science.STYLE_ID:
         frames = []

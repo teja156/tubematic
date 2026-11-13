@@ -77,6 +77,7 @@ export const TIMING = {
   light: 5,
   // A counter rolls to its new value over this many frames.
   roll: 24,
+  ruleDraw: 12,
   // A ladder rung, a zoom level, a descent layer and a stage take this long to arrive.
   rung: 21,
   // Shot transitions into the shot, in frames before its start (lens, push) or around it (flash).

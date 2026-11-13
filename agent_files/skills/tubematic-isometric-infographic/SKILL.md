@@ -43,17 +43,20 @@ board and which field:
 - Every frame you give is inside its board and within 2 frames of a word's start.
 - A board holds up to 8 areas, 1 to 14 props, up to 3 routes of 2 to 8 points, up to 4 movers, up to 4
   pins, up to 8 camera moves and up to 3 lifts, cutaways and explodes each.
-- Props stand on the board (`at` from 0.4 to 9.6) and at least 0.6 tiles from each other; each has an id
-  of its own. Routes stay on the board.
-- A mover sets off no earlier than its route starts to draw: the line leads every move.
-- A pin names a prop of its board: a label of 1 to 12 characters, a value of 1 to 8, a unit of up to 4.
+- Props stand on the board (`at` from 0.4 to 9.6) with all of their footprint at their `scale` on it, and
+  do not stand on each other's ground (big buildings need more room: a `warehouse` and a `data_centre`
+  sit about 1.2 tiles apart, two houses 0.6); each has an id of its own. Routes stay on the board.
+- A mover sets off no earlier than its route starts to draw, `back` or not: the line leads every move.
+- A pin names a prop of its board and builds no earlier than that prop lands: a label of 1 to 12
+  characters, a value of 1 to 8, a unit of up to 4.
 - A camera move centres on a prop (`focus`) or the whole board, at a zoom from 1 to 2, in order.
 - A cutaway opens a building that has an inside (`house`, `office`, `factory`, `warehouse`, `data_centre`, `shop`, `bank`, `hospital`, `school`, `power_plant`), with 1 to 3 props shown inside; an
   explode separates a stack (`server_rack`, `container_stack`).
 - The readout has 1 to 8 steps in order, red at most once; its cubes count one per `per` units (`per`
   1 or more), at most 12.
-- A board's last change comes at least 20 frames before the board ends, and the readout and the legend
-  change no later than 20 frames before the video ends.
+- A board's last change has finished at least 20 frames before the board ends (a route draws for 20
+  frames, a mover travels 40, a pin builds 18, a glide 24, a lift 14, a cutaway or an explode 16), and
+  the readout and the legend change no later than 38 frames before the video ends.
 - The legend has 1 to 5 entries of 1 to 12 characters and must fit the frame.
 - Nothing may sit still for more than 4 seconds: a prop, a route, a mover, a pin, a camera move, a lift,
   a cutaway, an explode, a readout step or the legend must arrive on a word within every 4-second

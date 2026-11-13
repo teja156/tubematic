@@ -266,11 +266,11 @@ function sceneryDrawables(ctx: Ctx, pr: Proj, b: Board, index: number, fade: num
 
 /**
  * Draws board `b` at `frame`. The still part of the board (the slab, the
- * ground, the scenery and every prop that is not dropping, lifting, opening or
- * separating) is drawn into `cache` only when it changes (the camera glides,
- * the rest steps back, a prop settles) and placed with the board's drift;
- * the ripples, the moving props, the movers, the routes and the clouds are
- * drawn over it every frame. A few hundred faces redrawn on every frame cost
+ * ground, the routes, the scenery and every prop that is not dropping,
+ * lifting, opening or separating) is drawn into `cache` only when it changes
+ * (the camera glides, the rest steps back, a prop settles, a route draws on)
+ * and placed with the board's drift; the ripples, the moving props, the
+ * movers and the clouds are drawn over it every frame. A few hundred faces redrawn on every frame cost
  * about twice System Flow on the CPU renderer.
  */
 export function drawBoard(ctx: Ctx, data: IsometricData, b: Board, index: number, frame: number, cache?: BoardCache) {
@@ -282,9 +282,13 @@ export function drawBoard(ctx: Ctx, data: IsometricData, b: Board, index: number
   const states = propStates(data, b, frame, dim);
   const fade = Math.round(dim.amount * 100) / 100;
   const settled = states.filter((s) => s.settled);
-  const key = [index, view.x.toFixed(4), view.y.toFixed(4), view.zoom.toFixed(4), dim.prop ?? "", fade, settled.map((s) => s.p.id).join(",")].join("|");
+  const lifted = dim.prop ? 1 - fade * 0.6 : 1;
+  const drawn = (b.routes ?? []).map((r) => ramp(frame, r.at, TIMING.draw));
+  const key = [index, view.x.toFixed(4), view.y.toFixed(4), view.zoom.toFixed(4), dim.prop ?? "", fade, settled.map((s) => s.p.id).join(","), drawn.map((d) => d.toFixed(3)).join(",")].join("|");
   const paintStill = (c: Ctx, at: Proj) => {
     slab(c, at, b);
+    // routes lie on the ground: under the props and the movers that travel them
+    (b.routes ?? []).forEach((r, i) => route(c, at, r.points, drawn[i], colorOf(r.color, PALETTE.red), lifted));
     const items = [...sceneryDrawables(c, at, b, index, fade * 0.62), ...settled.map((s) => ({ key: s.p.at[0] + s.p.at[1] + 0.01, draw: () => drawProp(c, at, data, b, s, frame) }))];
     items.sort((a, z) => a.key - z.key);
     for (const it of items) it.draw();
@@ -324,10 +328,6 @@ export function drawBoard(ctx: Ctx, data: IsometricData, b: Board, index: number
   items.sort((a, c) => a.key - c.key);
   for (const it of items) it.draw();
 
-  for (const r of b.routes ?? []) {
-    const lifted = dim.prop ? 1 - dim.amount * 0.6 : 1;
-    route(ctx, pr, r.points, ramp(frame, r.at, TIMING.draw), colorOf(r.color, PALETTE.red), lifted);
-  }
   // clouds drift over the board, faster than it (parallax)
   for (const [x, y, s, v] of [[900, 668, 0.85, -0.22], [150, 980, 0.75, 0.28]] as const) {
     const cx = x + drift.x * 1.3 + frame * v, cy = y + drift.y * 1.3;

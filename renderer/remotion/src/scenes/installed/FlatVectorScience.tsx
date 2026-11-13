@@ -262,7 +262,7 @@ const Overlay: React.FC<{ data: FlatVectorData; frame: number; total: number }> 
         const hgt = box[1] * s;
         const [cx, cy] = G.slot[item.slot];
         const x = Math.min(G.safeRight - 40, cx + (box[0] * s) / 2 + 40);
-        const k = easeOut(ramp(frame, shot.rule.at, 12));
+        const k = easeOut(ramp(frame, shot.rule.at, T.ruleDraw));
         out.push(
           <React.Fragment key="r">
             <svg width={W} height={H} style={{ position: "absolute", left: 0, top: 0 }}>

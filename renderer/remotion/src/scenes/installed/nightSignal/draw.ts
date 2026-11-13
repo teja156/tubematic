@@ -361,11 +361,13 @@ function tableau(ctx: Ctx, s: Tableau, custom: CustomPart[], frame: number, seed
   if (s.bubble) bubble(ctx, s.bubble, custom, frame);
 }
 
-function clockText(clock: string | undefined, frame: number, fps: number): string {
+/** The camera's clock: the scene's `clock` (HH:MM) running on with the video, on a 12-hour face. */
+export function clockText(clock: string | undefined, frame: number, fps: number): string {
   const m = /^(\d\d):(\d\d)$/.exec(clock ?? "") ?? ["", "03", "12"];
-  const h = Number(m[1]) % 12 || 12;
-  const sec = Math.floor(frame / fps) % 60;
-  return `${h}:${m[2]}:${String(sec).padStart(2, "0")} ${Number(m[1]) < 12 ? "AM" : "PM"}`;
+  const secs = (Number(m[1]) * 60 + Number(m[2])) * 60 + Math.floor(frame / fps);
+  const h24 = Math.floor(secs / 3600) % 24;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${h24 % 12 || 12}:${pad(Math.floor(secs / 60) % 60)}:${pad(secs % 60)} ${h24 < 12 ? "AM" : "PM"}`;
 }
 
 function camera(ctx: Ctx, s: CameraPanel, custom: CustomPart[], frame: number, fps: number, clock: string | undefined) {

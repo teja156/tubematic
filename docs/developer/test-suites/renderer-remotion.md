@@ -37,8 +37,8 @@ Covers `src/inserts/transitions.ts`, how an insert scene goes in and out over it
 - The insert covers the frame only when fully in, so the main style is never hidden while it still
   shows. A dip veils the main in the canvas colour before the insert fades up; a push moves the main
   out as the insert comes in; a wipe uncovers the insert from the right.
-- A glitch tears the insert in over 4 frames: the same frame always gives the same bands, more of the
-  insert shows as the tear goes on, the main layer jolts the other way from the insert, and the
+- A glitch tears the insert in over 4 frames: the same frame always gives the same bands, a later frame
+  never shows fewer bands than an earlier one, the main layer jolts the other way from the insert, and the
   insert covers the frame only at full progress (`glitchBands`).
 - `activeInsert` finds the window a frame falls in.
 
@@ -153,7 +153,7 @@ Covers `contract.ts`, `parts.ts` and `stage.ts`
   every part stands on the ground inside the box a custom part is held to.
 - The stage knows which scene is on screen, tears into a scene around its start and not at a hard
   cut, pushes in slowly and never past the camera's limit, pops an item in with an overshoot, walks it
-  on its step and reddens the threat on its frame.
+  on its step and reddens the threat on its frame. A camera clock runs on through its minutes and hours.
 
 ## Flat Vector Science
 
@@ -178,9 +178,11 @@ Covers `contract.ts`, `kit.ts` and `stage.ts`
 ([Isometric Infographic](../10-scene-authoring.md#isometric-infographic)).
 
 - The constants and the shared cases the validator runs
-  (`mcp/tests/test_isometric_infographic.py`) agree, and the pack lists what the kit draws and nothing else.
-- The projection is true isometric and shades three tones from one colour; the whole board is in view
-  at zoom 1 and every prop's solids stand on its footprint.
+  (`mcp/tests/test_isometric_infographic.py`) agree (the footprint of a set of solids included), and the
+  pack lists what the kit draws and nothing else.
+- The projection is true isometric and shades three tones from one colour, a solid named with a palette
+  colour shades too; the whole board is in view at zoom 1 and every prop's solids stand on its footprint.
+- A camera move that starts while another still glides starts from the view on screen, so it never jumps.
 - A prop drops in from above with a squash, and one with no `enter` stays where it is.
 
 ## System Flow

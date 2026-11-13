@@ -279,6 +279,17 @@ export const PROPS: Record<string, PropDef> = {
 
 export const PROP_NAMES = Object.keys(PROPS);
 
+/** Half the side of the square a prop's solids stand on, in tiles at scale 1: how far it reaches from its tile's centre. */
+export function footprint(solids: Solid[]): number {
+  let h = 0;
+  for (const s of solids) {
+    const hx = "w" in s ? s.w / 2 : s.r;
+    const hy = "d" in s ? s.d / 2 : "w" in s ? s.w / 2 : s.r;
+    h = Math.max(h, Math.abs(s.x) + hx, Math.abs(s.y) + hy);
+  }
+  return Math.round(h * 100) / 100;
+}
+
 /** A small screen-space isometric cube (chips, Isotype counts, the legend). */
 export function miniCube(ctx: Ctx, x: number, y: number, s: number, base: string) {
   const t = tones(base);

@@ -673,7 +673,8 @@ choices are in [Flat Vector Science](10-scene-authoring.md#flat-vector-science).
 `IsometricInfographic` draws a whole Isometric Infographic video from `props.isometric`: the board,
 its props and routes on a Canvas 2D layer, and the title, readout, pins and legend as DOM text over
 it; its helpers are in `isometric/`. It loads Jost (400, 500 and 600) from `public/fonts/` before the
-first frame; the style's captions use it. The still part of a board (slab, areas and scenery) is
+first frame; the style's captions use it. The still part of a board (slab, areas, routes, scenery and
+settled props) is
 drawn once into a `BoardCache` and reused while nothing under it changes (`isometric/draw.ts::drawBoard`).
 `IsometricPartsSheet` renders a video's own props for `render_style_parts`, and
 `isometric-tools/sync-contract.mjs` rewrites the pack's `extra` and

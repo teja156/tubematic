@@ -318,10 +318,18 @@ def test_render_style_parts_rechecks_a_prop_redrawn_after_the_config(make_video,
     assert "SVG filter" in server.render_style_parts(vid)["error"]
 
 
-def test_a_prop_file_must_export_a_function():
-    body = OCTOPUS.replace("export default function Octopus() {", "function Octopus() {") + "\nexport default null;\n"
+@pytest.mark.parametrize("tail", ["\nexport default null;\n", "\n// export default function Decoy() {}\nexport default null;\n"])
+def test_a_prop_file_must_export_a_function(tail):
+    body = OCTOPUS.replace("export default function Octopus() {", "function Octopus() {") + tail
     problems = _check(_with_octopus(), sources={"vid_example/prop-octopus": body})
     assert any("default-export the drawing as a function" in p for p in problems), problems
+
+
+def test_red_is_a_true_or_false():
+    def stringy(d):
+        shot = next(s for s in d["shots"] if s["kind"] == "subject" and s.get("pills"))
+        shot["pills"][0]["parts"][0]["red"] = "false"
+    assert any("red must be true or false" in p for p in _check(_with(stringy)))
 
 
 def test_a_subject_pill_still_lighting_at_the_cut_is_refused():
@@ -331,4 +339,4 @@ def test_a_subject_pill_still_lighting_at_the_cut_is_refused():
     end = d["shots"][d["shots"].index(shot) + 1]["start"]
     shot["pills"][0]["parts"][-1]["at"] = end - 3
     problems = fv.check(cfg, 30, WORD_STARTS + [end - 3], EXTRA, "vid_example")
-    assert any("frames after it settles" in p for p in problems), problems
+    assert any("after it settles" in p for p in problems), problems
