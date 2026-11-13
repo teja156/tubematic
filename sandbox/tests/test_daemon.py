@@ -244,3 +244,18 @@ def test_a_transpile_that_uses_the_whole_budget_is_a_timeout_not_a_success(cfg, 
     monkeypatch.setattr(D, "_run", fake_run)
     r = submit(cfg, "const a = 1", language="typescript", timeout_s=1)
     assert r["timed_out"] is True and r["exit_code"] is None and "program started" in r["stderr"]
+
+
+def test_a_request_dropped_while_listing_does_not_crash_pending(cfg, monkeypatch):
+    d = cfg.spool / "req"
+    (d / ("a" * 16)).mkdir()
+    (d / ("b" * 16)).mkdir()
+    real = D.Path.stat
+
+    def flaky(self, *a, **k):
+        if self.name == "a" * 16:
+            raise FileNotFoundError(self)
+        return real(self, *a, **k)
+
+    monkeypatch.setattr(D.Path, "stat", flaky)
+    assert [p.name for p in D.pending(cfg)] == ["b" * 16]

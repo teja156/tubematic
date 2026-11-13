@@ -330,7 +330,13 @@ def pending(cfg: Config) -> list[Path]:
         names = sorted(n for n in os.listdir(req) if P.REQUEST_ID_RE.match(n))
     except OSError:
         return []
-    return sorted((req / n for n in names), key=lambda p: p.stat().st_mtime)
+    found = []
+    for n in names:
+        try:
+            found.append(((req / n).stat().st_mtime, req / n))
+        except OSError:
+            continue  # MCP dropped a request that timed out while we were listing
+    return [p for _, p in sorted(found)]
 
 
 def sweep(cfg: Config, now: float | None = None) -> None:
@@ -383,10 +389,14 @@ def main() -> None:
     _log(f"ready, spool {cfg.spool}")
     last_sweep = 0.0
     while True:
-        P.write_heartbeat(cfg.spool)
-        if not serve_once(cfg):
-            time.sleep(POLL_S)
-        reap_zombies()
+        try:
+            P.write_heartbeat(cfg.spool)
+            if not serve_once(cfg):
+                time.sleep(POLL_S)
+            reap_zombies()
+        except Exception as e:  # nothing a request or the spool does may stop the daemon
+            _log(f"loop error: {e!r}\n{traceback.format_exc()}")
+            time.sleep(1)
         if time.time() - last_sweep > 60:
             sweep(cfg)
             last_sweep = time.time()

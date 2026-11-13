@@ -29,19 +29,20 @@ name. A healthcheck runs every 15 seconds with a 10-second timeout and 5 retries
 `tubematic-api` depends on nothing. The dashboard, the MCP server, the worker and the renderer
 declare `depends_on: tubematic-api: service_healthy`. The sandbox depends on nothing.
 
-Four containers run one image. Only `tubematic-api` declares `build:`. The MCP server, the worker
-and the renderer reuse its tag with a different `command:`, so a rebuild of `tubematic-api`
-rebuilds all four.
+Five containers run one image. Only `tubematic-api` declares `build:`. The MCP server, the worker,
+the renderer and the sandbox reuse its tag with a different `command:`, so a rebuild of
+`tubematic-api` rebuilds all five.
 
-| Mount (container path) | api | mcp | worker | renderer | dashboard |
-|---|---|---|---|---|---|
-| `output-videos` (`/output_videos`) | read-write | | read-write | | read-only |
-| `jobs-data` (`/jobs`) | read-write | read-write | read-write | read-write | |
-| `db-data` (`/data`) | read-write | read-write | read-write | | |
-| `scenes-generated` (`/app/remotion/src/scenes/generated`) | read-write | read-write | | read-write | |
-| `logs-data` (`/logs`) | read-write | read-write | read-write | read-write | |
-| `backups-data` (`/backups`) | read-write | read-write | read-write | | |
-| `/etc/localtime`, `/etc/timezone` (host files) | read-only | | read-only | read-only | |
+| Mount (container path) | api | mcp | worker | renderer | sandbox | dashboard |
+|---|---|---|---|---|---|---|
+| `output-videos` (`/output_videos`) | read-write | | read-write | | | read-only |
+| `jobs-data` (`/jobs`) | read-write | read-write | read-write | read-write | | |
+| `db-data` (`/data`) | read-write | read-write | read-write | | | |
+| `scenes-generated` (`/app/remotion/src/scenes/generated`) | read-write | read-write | | read-write | | |
+| `logs-data` (`/logs`) | read-write | read-write | read-write | read-write | | |
+| `backups-data` (`/backups`) | read-write | read-write | read-write | | | |
+| `sandbox-spool` (`/sandbox` in MCP, `/spool` in the sandbox) | | read-write | | | read-write | |
+| `/etc/localtime`, `/etc/timezone` (host files) | read-only | | read-only | read-only | | |
 
 The secret files each service mounts are listed under
 [The secrets directory](#the-secrets-directory).
