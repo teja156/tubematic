@@ -2338,10 +2338,11 @@
       "ok": [
         "storybook_atlas",
         "motion_graphics",
-        "scenes"
+        "scenes",
+        "archive_engraving"
       ],
       "future": "",
-      "note": "Why a historical event happened, with a map, a price on a contract and a reversal; the real people appear only by name.",
+      "note": "Why a historical event happened, with a map, a price on a contract and a reversal; the real people appear only by name. Pair probe with Archive and Engraving: told as a serious documentary on old maps and newspapers, that style fits too.",
       "inserts_expect": []
     },
     {
