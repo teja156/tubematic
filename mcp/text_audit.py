@@ -63,6 +63,9 @@ import editorial_collage  # station windows for the whole-video Editorial Collag
 import storybook_reveal  # page windows for the whole-video Storybook Reveal scene (TMDEV-231)
 import code_scenes  # step windows for a Code Scenes insert (TMDEV-239)
 import format_packs  # change windows for a Format Packs insert (TMDEV-240)
+import night_signal  # scene windows for the whole-video Night Signal scene (TMDEV-238)
+import flat_vector_science  # shot windows for the whole-video Flat Vector Science scene (TMDEV-236)
+import isometric_infographic  # board windows for the whole-video Isometric Infographic scene (TMDEV-237)
 import picture_checks  # which style drew a config, for the mixed-scenes first-frame pass (TMDEV-215)
 
 # ── Tunables ────────────────────────────────────────────────────────────────
@@ -323,6 +326,13 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
                      # A Storybook Reveal page the same way, once its colour has landed.
                      else storybook_reveal.page_windows(scene_config)
                      if storybook_reveal.is_reveal_scene(scene)
+                     # A Night Signal scene, a Flat Vector Science shot or an Isometric board once its text is in.
+                     else night_signal.scene_windows(scene_config)
+                     if night_signal.is_night_signal_scene(scene)
+                     else flat_vector_science.shot_windows(scene_config)
+                     if flat_vector_science.is_flat_vector_scene(scene)
+                     else isometric_infographic.board_windows(scene_config)
+                     if isometric_infographic.is_iso_scene(scene)
                      else [])
         if cfs_beats:
             for first, b_end in cfs_beats:

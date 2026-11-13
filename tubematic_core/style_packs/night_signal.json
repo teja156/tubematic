@@ -1,0 +1,185 @@
+{
+  "id": "night_signal",
+  "label": "Night Signal",
+  "order": 210,
+  "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "glitch"
+  },
+  "dimension": "2d",
+  "preview": "night_signal",
+  "tagline": "A warning told in glowing pictograms on black, with the threat in red.",
+  "renderer": "dom",
+  "canvas": "dark",
+  "authoring_skill": "tubematic-night-signal",
+  "allows": {
+    "figures": false,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "mascot": false,
+  "messages": {
+    "mascot": "Mascots are not available in the Night Signal style: its pictogram scenes keep one red threat as the only coloured figure, and a mascot would break that. Choose another visual style, or no mascot."
+  },
+  "review": "- This video is a Night Signal warning, and the following are its intended, approved look: a near-black field with lots of empty black; flat warm-white pictograms (round heads with no faces, rounded bodies, simple objects) with a soft glow, standing on one thin ground line; exactly one red thing in a scene, the threat, sometimes a faceless red figure whose head is blurred; a case-file row near the top with a FILE number, a short title, a row of small squares and a running timecode; a doorbell-camera panel with a blinking REC dot and a clock; a phone screen; a RULE card with a red prohibition ring and slash; a case card with grey redaction bars; a navy card of numbered steps; faint scanlines, grain and a dark vignette over everything; scenes changing through two to four frames of torn, colour-split horizontal slices; captions in spaced white capitals. Do NOT report any of these as defects, and do not suggest colour, photographs, faces or texture: their absence is the style. Small things that keep moving inside a held scene (stars twinkling, dots marching along a dotted line, a lamp flickering, the REC dot) are intended.\n- Do report: a pictogram overlapping another so neither reads, text cut off at the frame edge or overlapping other text, text too small to read on a phone, more than one red thing in a scene, a red thing that is not the threat the narration names, a picture that shows something different from the narration, a card that is gone before its text can be read, and a stretch of more than about five seconds where nothing new appears.\n",
+  "captions": {
+    "background": "none",
+    "uppercase": true,
+    "letterSpacing": 0.07,
+    "position": 0.7,
+    "color": "#e9e8d0",
+    "fontFamily": "Montserrat, system-ui, sans-serif",
+    "fontSize": 60,
+    "maxWords": 4
+  },
+  "script": "Every beat's `visual` is a **pictogram** brief: the small scene it shows (who stands where, what they hold, the one threat in red), or the card it is (a RULE with the thing it forbids, a case card, a phone screen and what it shows, a list of steps). People are faceless pictograms, so a role is \"you\", \"a stranger\", \"a caller\", never a named person.\n\nThe narration is a calm, deadpan warning in the second person. Open on the situation as it happens to you (\"A stranger sends you a QR code.\"), then state each rule flatly as a sentence of its own (\"Don't scan it.\"), then say why in one or two short sentences, then what to do instead. A list of rules or steps is the natural shape: number them aloud (\"Rule two.\") when there are several. Keep sentences short; a new scene starts on most sentences. Say the one thing that is the threat by name, since it is drawn in red. Never write a beat that needs a photograph, a real place or a real person's face: this style has none.",
+  "picture": {
+    "opening": "Scene 1 is a picture (a tableau, a camera panel or a phone), on screen from frame 0 with the case-file row already up: the first sentence's situation, never a card.",
+    "turn": "A glitch tear to a new scene on the first word of a turn or a re-opening, or the threat turning red (redAt) at that moment.",
+    "payoff": "The RULE card that names what to do or not do, or the scene where the one red threat is plainest.",
+    "ending": "Hold on the last scene, usually the final RULE or the steps card, to the last frame. No closing card, logo, recap or sign-off after it."
+  },
+  "routing": {
+    "best_for": [
+      "a security, privacy or scam warning told as rules: if a stranger does X, don't do Y",
+      "safety steps for a bad moment that a person or a device causes (a stolen phone, a strange call, a knock at night)",
+      "internet mysteries and creepy hypotheticals told as a case file",
+      "a device, a camera, a stranger or an intruder at the centre of a short warning"
+    ],
+    "avoid_for": [
+      "a fraud or a scheme told as a story with you inside it that ends on a choice (Case File Story fits it)",
+      "a scam message or thread read line by line with its tells marked (Stick Explainer, with a Format Packs insert showing the message itself)",
+      "how an attack or a protocol works, walked through with generic roles or systems (Stick Explainer acts it out, with System Flow inserts)",
+      "a list of unrelated tips, habits or scams with no single threat (Bean Explainer fits it)",
+      "household safety, first aid or accidents with no one behind them, told as steps (a pan fire, a cut, a fall: Mid-century How-To fits them)",
+      "warm, optimistic or nature topics",
+      "dense technical explanation, numbers worked out, or history",
+      "a real, named case, company or person"
+    ],
+    "cannot_show": "photographs, real places, faces or colour scenes: everything is a white pictogram on black, with one red threat",
+    "signals": [
+      "the script is a list of rules or steps for staying safe",
+      "a second-person warning: if X ever happens, do or don't do Y",
+      "a stranger, a caller, a link, a code, a camera or an intruder is the danger",
+      "one threat can be marked as the only red thing",
+      "an incident told as a numbered case"
+    ],
+    "moods": [
+      "dark",
+      "suspense",
+      "serious",
+      "deadpan"
+    ],
+    "images_per_video": "0",
+    "images": 0
+  },
+  "extra": {
+    "people": [
+      "person",
+      "person_walk",
+      "person_point",
+      "person_phone",
+      "person_hold",
+      "person_scared",
+      "person_hands_up",
+      "person_wave",
+      "person_sit",
+      "person_run",
+      "person_sleep"
+    ],
+    "animals": [
+      "dog",
+      "cat",
+      "bear",
+      "bird"
+    ],
+    "objects": [
+      "door",
+      "doorway",
+      "window",
+      "house",
+      "car",
+      "phone",
+      "laptop",
+      "qr",
+      "envelope",
+      "wallet",
+      "card",
+      "lock",
+      "key",
+      "lamp",
+      "tree",
+      "bed",
+      "table",
+      "atm",
+      "parcel",
+      "money",
+      "camera",
+      "router",
+      "moon",
+      "chat",
+      "warning",
+      "link"
+    ],
+    "sceneKinds": [
+      "tableau",
+      "camera",
+      "phone",
+      "rule",
+      "case",
+      "steps"
+    ],
+    "settings": [
+      "night",
+      "street",
+      "room",
+      "plain"
+    ],
+    "slots": [
+      "left",
+      "midleft",
+      "center",
+      "midright",
+      "right"
+    ],
+    "screens": [
+      "message",
+      "link",
+      "qr",
+      "call",
+      "alert"
+    ],
+    "marks": [
+      "check",
+      "cross"
+    ],
+    "cuts": [
+      "glitch",
+      "hard"
+    ],
+    "bubbles": [
+      "thought",
+      "speech"
+    ],
+    "shapes": [
+      "circle",
+      "rect",
+      "line",
+      "poly"
+    ],
+    "tones": [
+      "ink",
+      "grey",
+      "dim",
+      "core",
+      "red",
+      "hole"
+    ]
+  }
+}

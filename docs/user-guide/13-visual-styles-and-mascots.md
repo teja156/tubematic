@@ -32,6 +32,9 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Comic Panels (experimental)** | A comic page builds up panel by panel on cream newsprint, with a hero, a villain, speech balloons and sound effects like POW. The camera moves from panel to panel and pulls back to the whole page. No images | Nothing |
 | **Process Cast (experimental)** | Little drawn characters with faces, such as a packet, a cell or a byte made of cubes, act out an invisible process at stations along one ground line. They carry task cards, split and join up, and the camera glides between stations. No images | Nothing |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
+| **Flat Vector Science (experimental)** | Flat glowing creatures, cells and planets drift on a dark backdrop, named by pills whose words light up as they are spoken. Shots show scale: a dive through the ocean, a ladder of sizes, a zoom by powers of ten. No images | Nothing |
+| **Isometric Infographic (experimental)** | A small isometric world of flat blocks on cream paper. One thing travels a route that draws ahead of it, buildings drop in, pins name places with a number, and a counter keeps the running total. No images | Nothing |
+| **Night Signal (experimental)** | A calm warning told in glowing white pictograms on black, with the one danger in red: a stranger at the door, a doorbell camera, a phone screen, RULE cards and a card of steps. Scenes change through short glitches. No images | Nothing |
 | **Whiteboard** | One big white board. A floating marker writes and draws each step just after the narrator says it, and the camera glides between parts of the board. It ends on the whole board, each part numbered. No people and no images | Nothing |
 
 Photo Explainer, Stick Explainer and Illustrated set the canvas and how people are drawn. They do not limit what a scene can show. A Stick
@@ -130,6 +133,18 @@ background would flash, and a viewer reads that as a broken render.
   better. The characters are the style's own cast and have nothing to do with mascots. It is
   experimental.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
+- Choose **Flat Vector Science** for size and scale in nature and space: how deep the ocean goes, how
+  big a star is, what happens to your body somewhere extreme, how a virus copies itself. The script
+  asks one question and answers it with numbers that carry units, each compared with something
+  familiar. Its subjects come from a library of drawn creatures, organs, planets and objects, and the
+  agent can draw one more when the library lacks it. It is experimental.
+- Choose **Isometric Infographic** for one thing's journey through a system of places: a parcel from
+  a warehouse to your door, water from a reservoir to your tap, power from a plant to your socket.
+  The script follows the thing station by station and says the running number aloud. It suits
+  places and routes better than a process acted out by people. It is experimental.
+- Choose **Night Signal** for a warning: what to do, or never do, when a stranger, a call, a link or
+  a knock at night is the danger, and safety steps for a bad moment. The script is a calm list of
+  rules told to the viewer as "you". It suits a dark, serious tone only. It is experimental.
 - Choose **Whiteboard** for an idea worked out step by step: a formula built up, money arithmetic
   such as interest or a percentage, an everyday chain of causes that ends in one picture, two ideas
   side by side. The script is written like a teacher at a board, one step per sentence, ending on one
@@ -309,11 +324,14 @@ surprised, has an idea, hops, glances at something. It does not narrate and does
 Mascots are experimental and off by default. A video has one only if you pick it. They are drawn on
 the GPU, so you can pick a mascot only while a renderer's GPU test has passed. Cartoon 3D, Under
 the Hood, Case File Story, Paper Diorama, Editorial Collage, Archive and Engraving, Storybook
-Reveal, Puppet History, Mid-century How-To, Comic Panels and Process Cast videos cannot have one: Under
+Reveal, Puppet History, Mid-century How-To, Comic Panels, Process Cast, Flat Vector Science, Isometric
+Infographic and Night Signal videos cannot have one: Under
 the Hood and Mid-century How-To have their own presenter, Case File Story its own lead character, Paper
 Diorama its own critter and Storybook Reveal its own hero, Editorial Collage and Archive and Engraving
 are serious documentary pages a cartoon character would not suit, and Puppet History, Comic Panels and
-Process Cast have a whole cast of drawn characters that a mascot would be confused with.
+Process Cast have a whole cast of drawn characters that a mascot would be confused with. Flat
+Vector Science, Isometric Infographic and Night Signal draw a world a mascot would not fit, at a scale
+or in colours it would break.
 
 ![The Mascots page under Profiles: a form for a new mascot, and the built-in mascot Tubi marked READY](../images/mascots.png)
 

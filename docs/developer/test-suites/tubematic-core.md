@@ -137,7 +137,14 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   "mascot", and its routing's `avoid_for` sends a process acted out by people or roles to Stick
   Explainer. The styles that take no mascot are Cartoon 3D, Under the Hood, Case File Story,
   Paper Diorama, Archive and Engraving, Editorial Collage, Storybook Reveal, Puppet History,
-  Mid-century How-To, Comic Panels and Process Cast, and no other.
+  Mid-century How-To, Comic Panels, Process Cast, Night Signal, Flat Vector Science and Isometric
+  Infographic, and no other.
+- Night Signal, Flat Vector Science and Isometric Infographic each have their renderer, canvas, skill,
+  order and picker group pinned, allow no figures, line art or generated characters, need no OpenAI key
+  and no GPU, show no images, take no mascot (and say why) and name the transition they host inserts
+  with (`glitch`, `dip`, `push`). Night Signal's captions are upper-case with letter spacing, Isometric
+  Infographic's use the `card` background, and each library the pack carries is not empty. Night
+  Signal is available on an install with no key and an untested GPU.
 - Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its
   routing's `avoid_for` names System Flow, Stick and Photo Explainer, the styles Auto must tell it
   apart from.
@@ -269,6 +276,8 @@ Covers `tubematic_core/inserts.py`: the rules a script's insert marks are held t
 - A marked segment whose words would run past 8 seconds warns (`insert_long`), pause and
   pronunciation tags do not count as words, and a faster voice moves the limit.
 - `parse_styles` reads `''` as undecided and anything malformed as no inserts.
+- The renderer's `transitions.ts` and `inserts.py` name the same transitions with the same frame counts,
+  read from the TypeScript source, so a transition only one side knows fails here.
 
 Trap: length is only a warning here, because a segment's real length is known only once it is
 voiced; `mcp/inserts.py` measures it on the timeline when the scenes are written.
@@ -286,7 +295,8 @@ the fixed topic set in `tests/fixtures/style_routing_cases.json`
   count, and the list shares no state with the packs.
 - A candidate is unavailable for the same reasons that refuse the choice: no OpenAI key, a GPU that
   is not working or not tested, a mascot on a style that takes none (a 3D world, Under the Hood, Case File Story, Paper Diorama,
-  Archive and Engraving, Editorial Collage, Storybook Reveal, Puppet History, Mid-century How-To, Comic Panels, Process Cast).
+  Archive and Engraving, Editorial Collage, Storybook Reveal, Puppet History, Mid-century How-To, Comic Panels, Process Cast, Night Signal,
+  Flat Vector Science, Isometric Infographic).
   `scenes` is always available.
 - Every topic names only real outcomes, and every outcome is the first expectation of at least
   three topics. No topic expects an insert style as its main style; every insert style is expected

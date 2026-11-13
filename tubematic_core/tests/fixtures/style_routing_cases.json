@@ -43,7 +43,8 @@
       "ok": [
         "whiteboard",
         "scenes",
-        "motion_graphics"
+        "motion_graphics",
+        "isometric_infographic"
       ],
       "future": "",
       "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out.",
@@ -128,7 +129,8 @@
       "ok": [
         "stick",
         "scenes",
-        "illustrated"
+        "illustrated",
+        "flat_vector_science"
       ],
       "future": "",
       "note": "Immune cells are the actors of the process: Process Cast takes cells and organs as characters, Stick keeps people and roles (user, 2026-11-12)."
@@ -154,7 +156,8 @@
       ],
       "ok": [
         "scenes",
-        "case_file_story"
+        "case_file_story",
+        "night_signal"
       ],
       "future": "",
       "note": "A scam walked through as a mechanism with generic roles: Stick. Told as a story with the viewer as the victim it would be a Case File Story, so that is acceptable.",
@@ -227,7 +230,8 @@
       ],
       "ok": [
         "stick",
-        "scenes"
+        "scenes",
+        "flat_vector_science"
       ],
       "future": "",
       "note": "A chain of causes that ends in one picture (scattering, then the colour, then the sunset)."
@@ -275,7 +279,8 @@
         "motion_graphics"
       ],
       "ok": [
-        "scenes"
+        "scenes",
+        "flat_vector_science"
       ],
       "future": "",
       "note": ""
@@ -851,10 +856,11 @@
       ],
       "ok": [
         "scenes",
-        "stick"
+        "stick",
+        "night_signal"
       ],
       "future": "",
-      "note": "A near miss for Case File Story: scams, but a list of named items with no single story. Format Packs (TMDEV-240) is also acceptable as an insert: one scam text read with its tells is the beat it was made for; the list itself stays the main style's. A System Flow insert for its SIM-swap beat (an attacker's request routed through the carrier) is acceptable too, as on the SIM-swap topic.",
+      "note": "A near miss for Case File Story: scams, but a list of named items with no single story. Format Packs (TMDEV-240) is also acceptable as an insert: one scam text read with its tells is the beat it was made for; the list itself stays the main style's. A System Flow insert for its SIM-swap beat (an attacker's request routed through the carrier) is acceptable too, as on the SIM-swap topic. Night Signal (rules against one threat) is acceptable, though a list of unrelated scams has no single red threat.",
       "inserts_expect": [],
       "inserts_ok": [
         "format_packs",
@@ -927,7 +933,8 @@
       ],
       "ok": [
         "case_file_story",
-        "scenes"
+        "scenes",
+        "night_signal"
       ],
       "future": "",
       "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Pair probe, System Flow vs Case File Story: a crime, but walked through as a path between systems (carrier, phone, bank), with no one inside a story.",
@@ -957,7 +964,8 @@
       ],
       "ok": [
         "whiteboard",
-        "scenes"
+        "scenes",
+        "isometric_infographic"
       ],
       "future": "",
       "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Pair probe, System Flow vs Case File Story: money, but no scheme and no one at risk; a path between components.",
@@ -1190,7 +1198,8 @@
       "ok": [
         "cartoon_3d",
         "under_the_hood",
-        "process_cast"
+        "process_cast",
+        "isometric_infographic"
       ],
       "future": "",
       "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Pair probe, System Flow vs Stick: a physical thing travelling a path through machines. Process Cast is acceptable: the bag is a thing passing station by station.",
@@ -1262,7 +1271,8 @@
       "ok": [
         "scenes",
         "motion_graphics",
-        "stick"
+        "stick",
+        "flat_vector_science"
       ],
       "future": "",
       "note": "Pair probe, Bean Explainer vs mixed scenes: the body and what happens to it, one change per section; no roles are acted out, so Bean Explainer carries it.",
@@ -1673,10 +1683,11 @@
         "stick"
       ],
       "ok": [
-        "whiteboard"
+        "whiteboard",
+        "night_signal"
       ],
       "future": "",
-      "note": "Insert probe (TMDEV-239/240): two to four numbered points: Format Packs list, or the scam text itself.",
+      "note": "Insert probe (TMDEV-239/240): two to four numbered points: Format Packs list, or the scam text itself. Night Signal is acceptable: three rules against one fake sender.",
       "inserts_expect": [
         "format_packs"
       ]
@@ -2358,6 +2369,227 @@
       ],
       "future": "",
       "note": "Pair probe with Puppet History: a past-era daily life, but a war's suffering is a tragedy, which that style never plays for laughs. Told through pictures of the real place: Photo Explainer.",
+      "inserts_expect": []
+    },
+    {
+      "title": "If a stranger sends you a QR code, don't scan it",
+      "brief": "A second-person warning: a stranger messages you a QR code that looks like a parking ticket. Rule one: don't scan it. Why: the code hides where the link goes. What to do instead: preview the link, check the address, pay in the real app.",
+      "expect": [
+        "night_signal"
+      ],
+      "ok": [
+        "stick",
+        "bean_explainer",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A deadpan rule against one threat, told to you: Night Signal. Pair probe with Case File Story: no money story and no choice at the end.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "What to do in the first hour after your phone is stolen",
+      "brief": "Your phone is gone at 2 a.m. Four steps in the right order: lock it remotely, call your carrier before anyone swaps the SIM, change the email password from another device, warn your bank.",
+      "expect": [
+        "night_signal"
+      ],
+      "ok": [
+        "stick",
+        "bean_explainer",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Safety steps for a bad moment, numbered, second person: Night Signal.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Never answer these three kinds of calls",
+      "brief": "Three rules for calls that are traps: the missed call from an unknown country code, the 'is this you?' silence, the bank that asks you to read back a code. Each rule, why, and what to do instead.",
+      "expect": [
+        "night_signal"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Numbered rules, each against one threat: Night Signal. Pair probe with Bean Explainer, which takes a looser list of tips.",
+      "inserts_expect": []
+    },
+    {
+      "title": "If someone knocks at 3 a.m. saying they are from the gas company",
+      "brief": "A creepy hypothetical told as a case: the knock, the doorbell camera, the uniform that looks almost right. Rule: never open the door, call the company's real number, and here is why the hour gives it away.",
+      "expect": [
+        "night_signal"
+      ],
+      "ok": [
+        "stick",
+        "scenes",
+        "illustrated"
+      ],
+      "future": "",
+      "note": "A stranger at the door, a camera and one threat: Night Signal.",
+      "inserts_expect": []
+    },
+    {
+      "title": "A stranger asks you to cash a cheque for them",
+      "brief": "You are at the bank machine when a polite stranger asks you to deposit their cheque and hand them the cash. Follow what happens over the next week when the cheque bounces, and end on what you would do.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "night_signal",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe for Night Signal: a scheme told as a story with you inside it, the money moving and a choice at the end, is Case File Story; Night Signal (a warning with a red threat) is acceptable.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How deep the ocean really goes",
+      "brief": "From the surface to the bottom of the Mariana Trench: where divers stop, where sperm whales hunt, where the Titanic lies, and the 10,900 metres to the bottom, with something familiar for scale at each depth.",
+      "expect": [
+        "flat_vector_science"
+      ],
+      "ok": [
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Depths with units, creatures and a descent: Flat Vector Science. Pair probe with Photo Explainer, which takes real named things seen as pictures.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How big the biggest known star is",
+      "brief": "Start with the Earth, then the Sun, then bigger and bigger stars until the largest known one, which would swallow the orbit of Jupiter. Each step compared with the last.",
+      "expect": [
+        "flat_vector_science"
+      ],
+      "ok": [
+        "motion_graphics",
+        "whiteboard",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A ladder of sizes in space: Flat Vector Science. Whiteboard would only fit if the sizes were worked out as arithmetic.",
+      "inserts_expect": []
+    },
+    {
+      "title": "What happens to your body at the bottom of the ocean",
+      "brief": "The pressure at 11 kilometres down, what it does to air in your lungs, to your ears, to a submarine hull, with the numbers in atmospheres and a bus-on-your-thumb comparison.",
+      "expect": [
+        "flat_vector_science"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "What would happen to you in nature, told with numbers and a depth: Flat Vector Science. Pair probe with Bean Explainer, which takes everyday body topics told as a list.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "How a virus copies itself inside a cell",
+      "brief": "A virus latches onto a cell, slips inside, hijacks the machinery to build copies of itself, and bursts out: four stages, with how many copies one virus makes.",
+      "expect": [
+        "flat_vector_science"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A natural process in stages with a cell and a virus as the subjects: Flat Vector Science. Pair probe with Stick Explainer, which takes processes acted out by roles.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How many Earths fit inside the Sun",
+      "brief": "Work it out: the Sun's radius is 109 Earth radii, so its volume is 109 cubed, about 1.3 million Earths. Show the multiplication step by step.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "flat_vector_science",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe for Flat Vector Science: a quantity worked out as arithmetic is Whiteboard, even when the subject is space; Flat Vector Science is acceptable.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How a parcel gets from the warehouse to your door",
+      "brief": "Follow one parcel: the shelf in a warehouse outside the city, the truck to the sorting depot, the belts that sort it, the van for your street, and the 36 hours it takes in all.",
+      "expect": [
+        "isometric_infographic"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "One item's physical journey through a system of places, with a running count: Isometric Infographic. Pair probe with Stick Explainer, which takes a process acted out by people as roles.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "How water gets from the reservoir to your tap",
+      "brief": "The reservoir, the treatment plant, the pumping station, the water tower and the pipes under your street: where the water goes and how many kilometres it travels.",
+      "expect": [
+        "isometric_infographic"
+      ],
+      "ok": [
+        "stick",
+        "under_the_hood",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Infrastructure as places along a route: Isometric Infographic.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How electricity reaches your socket",
+      "brief": "From the power plant through the high-voltage lines, the substation and the transformer on your street to the socket in your wall, with the voltage dropping at each stop.",
+      "expect": [
+        "isometric_infographic"
+      ],
+      "ok": [
+        "stick",
+        "under_the_hood",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A path through stations with a number changing along it: Isometric Infographic. Pair probe with Under the Hood, which takes the inside of one device.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How a container ship crosses the world",
+      "brief": "One container from a factory to a port, stacked on a ship, across the ocean, unloaded by cranes and trucked to a warehouse: the stations and the days it takes.",
+      "expect": [
+        "isometric_infographic"
+      ],
+      "ok": [
+        "motion_graphics",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A supply chain followed by one item: Isometric Infographic.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How a restaurant kitchen brigade works",
+      "brief": "The chef, the sous chef, the line cooks and the dishwasher: who does what when an order comes in, and how they call out to each other.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "bean_explainer",
+        "isometric_infographic",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe for Isometric Infographic: a process carried by people as roles is Stick Explainer, even inside one building; Isometric is acceptable.",
       "inserts_expect": []
     }
   ]

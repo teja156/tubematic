@@ -1,0 +1,612 @@
+{
+ "totalFrames": 1674,
+ "fps": 30,
+ "audioDurationSeconds": 55.8,
+ "words": [
+  {
+   "word": "How",
+   "startFrame": 6,
+   "endFrame": 14
+  },
+  {
+   "word": "deep",
+   "startFrame": 16,
+   "endFrame": 26
+  },
+  {
+   "word": "does",
+   "startFrame": 28,
+   "endFrame": 38
+  },
+  {
+   "word": "the",
+   "startFrame": 40,
+   "endFrame": 48
+  },
+  {
+   "word": "ocean",
+   "startFrame": 50,
+   "endFrame": 62
+  },
+  {
+   "word": "really",
+   "startFrame": 64,
+   "endFrame": 77
+  },
+  {
+   "word": "go?",
+   "startFrame": 79,
+   "endFrame": 85
+  },
+  {
+   "word": "Divers",
+   "startFrame": 97,
+   "endFrame": 110
+  },
+  {
+   "word": "stop",
+   "startFrame": 112,
+   "endFrame": 122
+  },
+  {
+   "word": "at",
+   "startFrame": 124,
+   "endFrame": 130
+  },
+  {
+   "word": "forty",
+   "startFrame": 132,
+   "endFrame": 144
+  },
+  {
+   "word": "metres.",
+   "startFrame": 146,
+   "endFrame": 159
+  },
+  {
+   "word": "Sperm",
+   "startFrame": 171,
+   "endFrame": 183
+  },
+  {
+   "word": "whales",
+   "startFrame": 185,
+   "endFrame": 198
+  },
+  {
+   "word": "hunt",
+   "startFrame": 200,
+   "endFrame": 210
+  },
+  {
+   "word": "at",
+   "startFrame": 212,
+   "endFrame": 218
+  },
+  {
+   "word": "two",
+   "startFrame": 220,
+   "endFrame": 228
+  },
+  {
+   "word": "thousand.",
+   "startFrame": 230,
+   "endFrame": 247
+  },
+  {
+   "word": "The",
+   "startFrame": 259,
+   "endFrame": 267
+  },
+  {
+   "word": "Titanic",
+   "startFrame": 269,
+   "endFrame": 284
+  },
+  {
+   "word": "lies",
+   "startFrame": 286,
+   "endFrame": 296
+  },
+  {
+   "word": "at",
+   "startFrame": 298,
+   "endFrame": 304
+  },
+  {
+   "word": "three",
+   "startFrame": 306,
+   "endFrame": 318
+  },
+  {
+   "word": "thousand",
+   "startFrame": 320,
+   "endFrame": 337
+  },
+  {
+   "word": "eight",
+   "startFrame": 339,
+   "endFrame": 351
+  },
+  {
+   "word": "hundred.",
+   "startFrame": 353,
+   "endFrame": 368
+  },
+  {
+   "word": "And",
+   "startFrame": 380,
+   "endFrame": 388
+  },
+  {
+   "word": "the",
+   "startFrame": 390,
+   "endFrame": 398
+  },
+  {
+   "word": "bottom",
+   "startFrame": 400,
+   "endFrame": 413
+  },
+  {
+   "word": "is",
+   "startFrame": 415,
+   "endFrame": 421
+  },
+  {
+   "word": "at",
+   "startFrame": 423,
+   "endFrame": 429
+  },
+  {
+   "word": "ten",
+   "startFrame": 431,
+   "endFrame": 439
+  },
+  {
+   "word": "thousand",
+   "startFrame": 441,
+   "endFrame": 458
+  },
+  {
+   "word": "nine",
+   "startFrame": 460,
+   "endFrame": 470
+  },
+  {
+   "word": "hundred",
+   "startFrame": 472,
+   "endFrame": 487
+  },
+  {
+   "word": "metres.",
+   "startFrame": 489,
+   "endFrame": 502
+  },
+  {
+   "word": "Down",
+   "startFrame": 514,
+   "endFrame": 524
+  },
+  {
+   "word": "there",
+   "startFrame": 526,
+   "endFrame": 538
+  },
+  {
+   "word": "the",
+   "startFrame": 540,
+   "endFrame": 548
+  },
+  {
+   "word": "water",
+   "startFrame": 550,
+   "endFrame": 562
+  },
+  {
+   "word": "presses",
+   "startFrame": 564,
+   "endFrame": 579
+  },
+  {
+   "word": "like",
+   "startFrame": 581,
+   "endFrame": 591
+  },
+  {
+   "word": "a",
+   "startFrame": 593,
+   "endFrame": 598
+  },
+  {
+   "word": "bus",
+   "startFrame": 600,
+   "endFrame": 608
+  },
+  {
+   "word": "standing",
+   "startFrame": 610,
+   "endFrame": 627
+  },
+  {
+   "word": "on",
+   "startFrame": 629,
+   "endFrame": 635
+  },
+  {
+   "word": "your",
+   "startFrame": 637,
+   "endFrame": 647
+  },
+  {
+   "word": "thumb.",
+   "startFrame": 649,
+   "endFrame": 661
+  },
+  {
+   "word": "Stack",
+   "startFrame": 673,
+   "endFrame": 685
+  },
+  {
+   "word": "the",
+   "startFrame": 687,
+   "endFrame": 695
+  },
+  {
+   "word": "tallest",
+   "startFrame": 697,
+   "endFrame": 712
+  },
+  {
+   "word": "things",
+   "startFrame": 714,
+   "endFrame": 727
+  },
+  {
+   "word": "we",
+   "startFrame": 729,
+   "endFrame": 735
+  },
+  {
+   "word": "know.",
+   "startFrame": 737,
+   "endFrame": 747
+  },
+  {
+   "word": "A",
+   "startFrame": 759,
+   "endFrame": 764
+  },
+  {
+   "word": "skyscraper.",
+   "startFrame": 766,
+   "endFrame": 786
+  },
+  {
+   "word": "A",
+   "startFrame": 795,
+   "endFrame": 800
+  },
+  {
+   "word": "mountain.",
+   "startFrame": 802,
+   "endFrame": 819
+  },
+  {
+   "word": "Everest",
+   "startFrame": 828,
+   "endFrame": 843
+  },
+  {
+   "word": "itself",
+   "startFrame": 845,
+   "endFrame": 858
+  },
+  {
+   "word": "would",
+   "startFrame": 860,
+   "endFrame": 872
+  },
+  {
+   "word": "vanish",
+   "startFrame": 874,
+   "endFrame": 887
+  },
+  {
+   "word": "with",
+   "startFrame": 889,
+   "endFrame": 899
+  },
+  {
+   "word": "two",
+   "startFrame": 901,
+   "endFrame": 909
+  },
+  {
+   "word": "kilometres",
+   "startFrame": 911,
+   "endFrame": 931
+  },
+  {
+   "word": "to",
+   "startFrame": 933,
+   "endFrame": 939
+  },
+  {
+   "word": "spare.",
+   "startFrame": 941,
+   "endFrame": 953
+  },
+  {
+   "word": "Light",
+   "startFrame": 965,
+   "endFrame": 977
+  },
+  {
+   "word": "gives",
+   "startFrame": 979,
+   "endFrame": 991
+  },
+  {
+   "word": "up",
+   "startFrame": 993,
+   "endFrame": 999
+  },
+  {
+   "word": "on",
+   "startFrame": 1001,
+   "endFrame": 1007
+  },
+  {
+   "word": "the",
+   "startFrame": 1009,
+   "endFrame": 1017
+  },
+  {
+   "word": "way",
+   "startFrame": 1019,
+   "endFrame": 1027
+  },
+  {
+   "word": "down.",
+   "startFrame": 1029,
+   "endFrame": 1039
+  },
+  {
+   "word": "Sunlight",
+   "startFrame": 1051,
+   "endFrame": 1068
+  },
+  {
+   "word": "fades",
+   "startFrame": 1070,
+   "endFrame": 1082
+  },
+  {
+   "word": "first,",
+   "startFrame": 1084,
+   "endFrame": 1096
+  },
+  {
+   "word": "then",
+   "startFrame": 1098,
+   "endFrame": 1108
+  },
+  {
+   "word": "the",
+   "startFrame": 1110,
+   "endFrame": 1118
+  },
+  {
+   "word": "fish",
+   "startFrame": 1120,
+   "endFrame": 1130
+  },
+  {
+   "word": "that",
+   "startFrame": 1132,
+   "endFrame": 1142
+  },
+  {
+   "word": "need",
+   "startFrame": 1144,
+   "endFrame": 1154
+  },
+  {
+   "word": "it,",
+   "startFrame": 1156,
+   "endFrame": 1162
+  },
+  {
+   "word": "then",
+   "startFrame": 1164,
+   "endFrame": 1174
+  },
+  {
+   "word": "only",
+   "startFrame": 1176,
+   "endFrame": 1186
+  },
+  {
+   "word": "the",
+   "startFrame": 1188,
+   "endFrame": 1196
+  },
+  {
+   "word": "lure",
+   "startFrame": 1198,
+   "endFrame": 1208
+  },
+  {
+   "word": "of",
+   "startFrame": 1210,
+   "endFrame": 1216
+  },
+  {
+   "word": "an",
+   "startFrame": 1218,
+   "endFrame": 1224
+  },
+  {
+   "word": "anglerfish",
+   "startFrame": 1226,
+   "endFrame": 1246
+  },
+  {
+   "word": "is",
+   "startFrame": 1248,
+   "endFrame": 1254
+  },
+  {
+   "word": "left.",
+   "startFrame": 1256,
+   "endFrame": 1266
+  },
+  {
+   "word": "Your",
+   "startFrame": 1278,
+   "endFrame": 1288
+  },
+  {
+   "word": "lungs",
+   "startFrame": 1290,
+   "endFrame": 1302
+  },
+  {
+   "word": "would",
+   "startFrame": 1304,
+   "endFrame": 1316
+  },
+  {
+   "word": "fold",
+   "startFrame": 1318,
+   "endFrame": 1328
+  },
+  {
+   "word": "at",
+   "startFrame": 1330,
+   "endFrame": 1336
+  },
+  {
+   "word": "a",
+   "startFrame": 1338,
+   "endFrame": 1343
+  },
+  {
+   "word": "fraction",
+   "startFrame": 1345,
+   "endFrame": 1362
+  },
+  {
+   "word": "of",
+   "startFrame": 1364,
+   "endFrame": 1370
+  },
+  {
+   "word": "that",
+   "startFrame": 1372,
+   "endFrame": 1382
+  },
+  {
+   "word": "depth.",
+   "startFrame": 1384,
+   "endFrame": 1396
+  },
+  {
+   "word": "Zoom",
+   "startFrame": 1408,
+   "endFrame": 1418
+  },
+  {
+   "word": "out",
+   "startFrame": 1420,
+   "endFrame": 1428
+  },
+  {
+   "word": "from",
+   "startFrame": 1430,
+   "endFrame": 1440
+  },
+  {
+   "word": "the",
+   "startFrame": 1442,
+   "endFrame": 1450
+  },
+  {
+   "word": "trench.",
+   "startFrame": 1452,
+   "endFrame": 1465
+  },
+  {
+   "word": "The",
+   "startFrame": 1477,
+   "endFrame": 1485
+  },
+  {
+   "word": "ocean,",
+   "startFrame": 1487,
+   "endFrame": 1499
+  },
+  {
+   "word": "the",
+   "startFrame": 1501,
+   "endFrame": 1509
+  },
+  {
+   "word": "planet,",
+   "startFrame": 1511,
+   "endFrame": 1524
+  },
+  {
+   "word": "and",
+   "startFrame": 1526,
+   "endFrame": 1534
+  },
+  {
+   "word": "the",
+   "startFrame": 1536,
+   "endFrame": 1544
+  },
+  {
+   "word": "whole",
+   "startFrame": 1546,
+   "endFrame": 1558
+  },
+  {
+   "word": "deep",
+   "startFrame": 1560,
+   "endFrame": 1570
+  },
+  {
+   "word": "is",
+   "startFrame": 1572,
+   "endFrame": 1578
+  },
+  {
+   "word": "a",
+   "startFrame": 1580,
+   "endFrame": 1585
+  },
+  {
+   "word": "scratch",
+   "startFrame": 1587,
+   "endFrame": 1602
+  },
+  {
+   "word": "on",
+   "startFrame": 1604,
+   "endFrame": 1610
+  },
+  {
+   "word": "a",
+   "startFrame": 1612,
+   "endFrame": 1617
+  },
+  {
+   "word": "marble.",
+   "startFrame": 1619,
+   "endFrame": 1632
+  }
+ ]
+}

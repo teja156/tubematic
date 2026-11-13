@@ -1,0 +1,532 @@
+{
+ "totalFrames": 1376,
+ "fps": 30,
+ "audioDurationSeconds": 45.87,
+ "words": [
+  {
+   "word": "How",
+   "startFrame": 6,
+   "endFrame": 14
+  },
+  {
+   "word": "does",
+   "startFrame": 16,
+   "endFrame": 26
+  },
+  {
+   "word": "a",
+   "startFrame": 28,
+   "endFrame": 33
+  },
+  {
+   "word": "parcel",
+   "startFrame": 35,
+   "endFrame": 48
+  },
+  {
+   "word": "get",
+   "startFrame": 50,
+   "endFrame": 58
+  },
+  {
+   "word": "from",
+   "startFrame": 60,
+   "endFrame": 70
+  },
+  {
+   "word": "a",
+   "startFrame": 72,
+   "endFrame": 77
+  },
+  {
+   "word": "warehouse",
+   "startFrame": 79,
+   "endFrame": 97
+  },
+  {
+   "word": "to",
+   "startFrame": 99,
+   "endFrame": 105
+  },
+  {
+   "word": "your",
+   "startFrame": 107,
+   "endFrame": 117
+  },
+  {
+   "word": "door?",
+   "startFrame": 119,
+   "endFrame": 129
+  },
+  {
+   "word": "It",
+   "startFrame": 141,
+   "endFrame": 147
+  },
+  {
+   "word": "starts",
+   "startFrame": 149,
+   "endFrame": 162
+  },
+  {
+   "word": "on",
+   "startFrame": 164,
+   "endFrame": 170
+  },
+  {
+   "word": "a",
+   "startFrame": 172,
+   "endFrame": 177
+  },
+  {
+   "word": "shelf",
+   "startFrame": 179,
+   "endFrame": 191
+  },
+  {
+   "word": "in",
+   "startFrame": 193,
+   "endFrame": 199
+  },
+  {
+   "word": "a",
+   "startFrame": 201,
+   "endFrame": 206
+  },
+  {
+   "word": "warehouse",
+   "startFrame": 208,
+   "endFrame": 226
+  },
+  {
+   "word": "outside",
+   "startFrame": 228,
+   "endFrame": 243
+  },
+  {
+   "word": "the",
+   "startFrame": 245,
+   "endFrame": 253
+  },
+  {
+   "word": "city.",
+   "startFrame": 255,
+   "endFrame": 265
+  },
+  {
+   "word": "A",
+   "startFrame": 277,
+   "endFrame": 282
+  },
+  {
+   "word": "truck",
+   "startFrame": 284,
+   "endFrame": 296
+  },
+  {
+   "word": "carries",
+   "startFrame": 298,
+   "endFrame": 313
+  },
+  {
+   "word": "it",
+   "startFrame": 315,
+   "endFrame": 321
+  },
+  {
+   "word": "across",
+   "startFrame": 323,
+   "endFrame": 336
+  },
+  {
+   "word": "the",
+   "startFrame": 338,
+   "endFrame": 346
+  },
+  {
+   "word": "river",
+   "startFrame": 348,
+   "endFrame": 360
+  },
+  {
+   "word": "to",
+   "startFrame": 362,
+   "endFrame": 368
+  },
+  {
+   "word": "the",
+   "startFrame": 370,
+   "endFrame": 378
+  },
+  {
+   "word": "sorting",
+   "startFrame": 380,
+   "endFrame": 395
+  },
+  {
+   "word": "depot.",
+   "startFrame": 397,
+   "endFrame": 409
+  },
+  {
+   "word": "That",
+   "startFrame": 421,
+   "endFrame": 431
+  },
+  {
+   "word": "leg",
+   "startFrame": 433,
+   "endFrame": 441
+  },
+  {
+   "word": "takes",
+   "startFrame": 443,
+   "endFrame": 455
+  },
+  {
+   "word": "about",
+   "startFrame": 457,
+   "endFrame": 469
+  },
+  {
+   "word": "a",
+   "startFrame": 471,
+   "endFrame": 476
+  },
+  {
+   "word": "day.",
+   "startFrame": 478,
+   "endFrame": 486
+  },
+  {
+   "word": "Inside",
+   "startFrame": 498,
+   "endFrame": 511
+  },
+  {
+   "word": "the",
+   "startFrame": 513,
+   "endFrame": 521
+  },
+  {
+   "word": "depot,",
+   "startFrame": 523,
+   "endFrame": 535
+  },
+  {
+   "word": "belts",
+   "startFrame": 537,
+   "endFrame": 549
+  },
+  {
+   "word": "sort",
+   "startFrame": 551,
+   "endFrame": 561
+  },
+  {
+   "word": "thousands",
+   "startFrame": 563,
+   "endFrame": 581
+  },
+  {
+   "word": "of",
+   "startFrame": 583,
+   "endFrame": 589
+  },
+  {
+   "word": "parcels",
+   "startFrame": 591,
+   "endFrame": 606
+  },
+  {
+   "word": "an",
+   "startFrame": 608,
+   "endFrame": 614
+  },
+  {
+   "word": "hour.",
+   "startFrame": 616,
+   "endFrame": 626
+  },
+  {
+   "word": "Your",
+   "startFrame": 638,
+   "endFrame": 648
+  },
+  {
+   "word": "parcel",
+   "startFrame": 650,
+   "endFrame": 663
+  },
+  {
+   "word": "is",
+   "startFrame": 665,
+   "endFrame": 671
+  },
+  {
+   "word": "scanned",
+   "startFrame": 673,
+   "endFrame": 688
+  },
+  {
+   "word": "and",
+   "startFrame": 690,
+   "endFrame": 698
+  },
+  {
+   "word": "dropped",
+   "startFrame": 700,
+   "endFrame": 715
+  },
+  {
+   "word": "on",
+   "startFrame": 717,
+   "endFrame": 723
+  },
+  {
+   "word": "the",
+   "startFrame": 725,
+   "endFrame": 733
+  },
+  {
+   "word": "van",
+   "startFrame": 735,
+   "endFrame": 743
+  },
+  {
+   "word": "for",
+   "startFrame": 745,
+   "endFrame": 753
+  },
+  {
+   "word": "your",
+   "startFrame": 755,
+   "endFrame": 765
+  },
+  {
+   "word": "street.",
+   "startFrame": 767,
+   "endFrame": 780
+  },
+  {
+   "word": "The",
+   "startFrame": 792,
+   "endFrame": 800
+  },
+  {
+   "word": "scanner",
+   "startFrame": 802,
+   "endFrame": 817
+  },
+  {
+   "word": "reads",
+   "startFrame": 819,
+   "endFrame": 831
+  },
+  {
+   "word": "the",
+   "startFrame": 833,
+   "endFrame": 841
+  },
+  {
+   "word": "label",
+   "startFrame": 843,
+   "endFrame": 855
+  },
+  {
+   "word": "and",
+   "startFrame": 857,
+   "endFrame": 865
+  },
+  {
+   "word": "looks",
+   "startFrame": 867,
+   "endFrame": 879
+  },
+  {
+   "word": "up",
+   "startFrame": 881,
+   "endFrame": 887
+  },
+  {
+   "word": "the",
+   "startFrame": 889,
+   "endFrame": 897
+  },
+  {
+   "word": "route",
+   "startFrame": 899,
+   "endFrame": 911
+  },
+  {
+   "word": "in",
+   "startFrame": 913,
+   "endFrame": 919
+  },
+  {
+   "word": "a",
+   "startFrame": 921,
+   "endFrame": 926
+  },
+  {
+   "word": "database.",
+   "startFrame": 928,
+   "endFrame": 945
+  },
+  {
+   "word": "Then",
+   "startFrame": 957,
+   "endFrame": 967
+  },
+  {
+   "word": "the",
+   "startFrame": 969,
+   "endFrame": 977
+  },
+  {
+   "word": "last",
+   "startFrame": 979,
+   "endFrame": 989
+  },
+  {
+   "word": "mile,",
+   "startFrame": 991,
+   "endFrame": 1001
+  },
+  {
+   "word": "the",
+   "startFrame": 1003,
+   "endFrame": 1011
+  },
+  {
+   "word": "slowest",
+   "startFrame": 1013,
+   "endFrame": 1028
+  },
+  {
+   "word": "part",
+   "startFrame": 1030,
+   "endFrame": 1040
+  },
+  {
+   "word": "of",
+   "startFrame": 1042,
+   "endFrame": 1048
+  },
+  {
+   "word": "the",
+   "startFrame": 1050,
+   "endFrame": 1058
+  },
+  {
+   "word": "trip.",
+   "startFrame": 1060,
+   "endFrame": 1070
+  },
+  {
+   "word": "The",
+   "startFrame": 1082,
+   "endFrame": 1090
+  },
+  {
+   "word": "van",
+   "startFrame": 1092,
+   "endFrame": 1100
+  },
+  {
+   "word": "stops",
+   "startFrame": 1102,
+   "endFrame": 1114
+  },
+  {
+   "word": "at",
+   "startFrame": 1116,
+   "endFrame": 1122
+  },
+  {
+   "word": "forty",
+   "startFrame": 1124,
+   "endFrame": 1136
+  },
+  {
+   "word": "doors",
+   "startFrame": 1138,
+   "endFrame": 1150
+  },
+  {
+   "word": "before",
+   "startFrame": 1152,
+   "endFrame": 1165
+  },
+  {
+   "word": "yours.",
+   "startFrame": 1167,
+   "endFrame": 1179
+  },
+  {
+   "word": "Thirty",
+   "startFrame": 1191,
+   "endFrame": 1204
+  },
+  {
+   "word": "six",
+   "startFrame": 1206,
+   "endFrame": 1214
+  },
+  {
+   "word": "hours",
+   "startFrame": 1216,
+   "endFrame": 1228
+  },
+  {
+   "word": "after",
+   "startFrame": 1230,
+   "endFrame": 1242
+  },
+  {
+   "word": "it",
+   "startFrame": 1244,
+   "endFrame": 1250
+  },
+  {
+   "word": "left",
+   "startFrame": 1252,
+   "endFrame": 1262
+  },
+  {
+   "word": "the",
+   "startFrame": 1264,
+   "endFrame": 1272
+  },
+  {
+   "word": "shelf,",
+   "startFrame": 1274,
+   "endFrame": 1286
+  },
+  {
+   "word": "it",
+   "startFrame": 1288,
+   "endFrame": 1294
+  },
+  {
+   "word": "is",
+   "startFrame": 1296,
+   "endFrame": 1302
+  },
+  {
+   "word": "on",
+   "startFrame": 1304,
+   "endFrame": 1310
+  },
+  {
+   "word": "your",
+   "startFrame": 1312,
+   "endFrame": 1322
+  },
+  {
+   "word": "step.",
+   "startFrame": 1324,
+   "endFrame": 1334
+  }
+ ]
+}

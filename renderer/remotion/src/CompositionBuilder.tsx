@@ -283,7 +283,7 @@ const MainLayer: React.FC<{
 }> = ({ children, windows, transition, canvasColor }) => {
   const frame = useCurrentFrame();
   const at = windows.length ? activeInsert(frame, windows, transition) : null;
-  const look = at ? insertLook(transition, at.progress) : null;
+  const look = at ? insertLook(transition, at.progress, 1080, frame) : null;
   return (
     <AbsoluteFill
       style={{
@@ -309,8 +309,9 @@ const InsertFrame: React.FC<{
   transition: ReturnType<typeof transitionOf>;
 }> = ({ children, durationInFrames, startFrame, lead, transition }) => {
   const local = useCurrentFrame();
-  const at = activeInsert(local + startFrame - lead, [{ startFrame, durationInFrames }], transition);
-  const look = insertLook(transition, at ? at.progress : 0);
+  const frame = local + startFrame - lead;
+  const at = activeInsert(frame, [{ startFrame, durationInFrames }], transition);
+  const look = insertLook(transition, at ? at.progress : 0, 1080, frame);
   if (look.insertOpacity <= 0) return null;
   return (
     <AbsoluteFill
@@ -318,7 +319,7 @@ const InsertFrame: React.FC<{
       style={{
         opacity: look.insertOpacity < 1 ? look.insertOpacity : undefined,
         transform: look.insertShiftX !== 0 ? `translateX(${look.insertShiftX}px)` : undefined,
-        clipPath: look.insertClipLeft > 0 ? `inset(0 0 0 ${look.insertClipLeft}px)` : undefined,
+        clipPath: look.insertClipPath ?? (look.insertClipLeft > 0 ? `inset(0 0 0 ${look.insertClipLeft}px)` : undefined),
       }}
     >
       {children}

@@ -1,0 +1,469 @@
+{
+  "_about": "Shared by renderer/remotion/src/scenes/installed/nightSignal/nightSignal.test.ts and mcp/tests/test_night_signal.py: the constants both sides use, and cases worked out by the renderer's own contract.ts and stage.ts. Written by renderer/remotion/nightsignal-tools/sync-contract.mjs; never edit it by hand.",
+  "constants": {
+    "LIMITS": {
+      "minScenes": 3,
+      "maxScenes": 14,
+      "maxItems": 4,
+      "maxCustomParts": 6,
+      "maxShapes": 40,
+      "partBox": 400,
+      "fileTitleChars": 16,
+      "cameraLabelChars": 22,
+      "buttonChars": 6,
+      "phoneTitleChars": 12,
+      "phoneLines": 3,
+      "phoneLineChars": 16,
+      "ruleLines": 2,
+      "ruleLineChars": 12,
+      "caseLabelChars": 10,
+      "caseNameChars": 12,
+      "minBars": 2,
+      "maxBars": 4,
+      "stampChars": 10,
+      "stepsTitleChars": 20,
+      "minSteps": 2,
+      "maxSteps": 4,
+      "stepChars": 24,
+      "minSceneSeconds": 1.5,
+      "maxStillSeconds": 5
+    },
+    "TIMING": {
+      "snap": 2,
+      "tearBefore": 2,
+      "tearAfter": 1,
+      "pop": 10,
+      "step": 18,
+      "connector": 15,
+      "redden": 6,
+      "underline": 10,
+      "ringStart": 4,
+      "ringFrames": 12,
+      "slashDelay": 16,
+      "slashFrames": 6,
+      "mark": 8,
+      "stepIn": 8,
+      "readFrames": 20
+    },
+    "CAMERA": {
+      "push": 1.05
+    },
+    "GEOMETRY": {
+      "bandTop": 360,
+      "bandHeight": 780,
+      "ground": 640,
+      "slotX": {
+        "left": 220,
+        "midleft": 390,
+        "center": 540,
+        "midright": 690,
+        "right": 860
+      },
+      "cameraScale": 0.62,
+      "cameraGround": 470,
+      "hudTop": 204,
+      "safeLeft": 66,
+      "safeRight": 1014,
+      "lineWidth": 900,
+      "capCharWidth": 0.72
+    }
+  },
+  "data": {
+    "file": {
+      "number": 7,
+      "title": "Case"
+    },
+    "scenes": [
+      {
+        "kind": "tableau",
+        "start": 0,
+        "setting": "night",
+        "items": [
+          {
+            "what": "person",
+            "slot": "left"
+          },
+          {
+            "what": "person_phone",
+            "slot": "right",
+            "threat": true,
+            "redAt": 40,
+            "at": 20,
+            "to": {
+              "slot": "center",
+              "at": 60
+            }
+          }
+        ],
+        "connector": {
+          "from": "left",
+          "to": "right",
+          "at": 70
+        },
+        "bubble": {
+          "over": "left",
+          "icon": "qr",
+          "at": 90
+        }
+      },
+      {
+        "kind": "rule",
+        "start": 200,
+        "number": 1,
+        "lines": [
+          "DON'T"
+        ],
+        "icon": "qr"
+      },
+      {
+        "kind": "rule",
+        "start": 300,
+        "cut": "hard",
+        "number": 2,
+        "lines": [
+          "NEVER"
+        ],
+        "icon": "door",
+        "slashAt": 330
+      },
+      {
+        "kind": "steps",
+        "start": 420,
+        "title": "STEPS",
+        "steps": [
+          {
+            "text": "One",
+            "at": 440
+          },
+          {
+            "text": "Two",
+            "at": 480
+          }
+        ]
+      },
+      {
+        "kind": "phone",
+        "start": 600,
+        "screen": "link",
+        "title": "PREVIEW",
+        "lines": [
+          "a"
+        ],
+        "mark": {
+          "kind": "check",
+          "at": 640
+        }
+      },
+      {
+        "kind": "case",
+        "start": 760,
+        "label": "WITNESS",
+        "name": "DOUG",
+        "icon": "dog",
+        "bars": 3,
+        "stamp": {
+          "text": "CLOSED",
+          "at": 800
+        }
+      },
+      {
+        "kind": "camera",
+        "start": 900,
+        "label": "CAM 1",
+        "items": [
+          {
+            "what": "door",
+            "slot": "center"
+          }
+        ],
+        "button": {
+          "text": "OPEN",
+          "crossAt": 950
+        }
+      }
+    ]
+  },
+  "total": 1100,
+  "event_frames": [
+    [
+      0,
+      20,
+      40,
+      60,
+      70,
+      90
+    ],
+    [
+      200,
+      216
+    ],
+    [
+      300,
+      330
+    ],
+    [
+      420,
+      440,
+      480
+    ],
+    [
+      600,
+      640
+    ],
+    [
+      760,
+      800
+    ],
+    [
+      900,
+      950
+    ]
+  ],
+  "quiet_spans": [
+    [
+      0,
+      20
+    ],
+    [
+      20,
+      40
+    ],
+    [
+      40,
+      60
+    ],
+    [
+      60,
+      70
+    ],
+    [
+      70,
+      90
+    ],
+    [
+      90,
+      200
+    ],
+    [
+      200,
+      216
+    ],
+    [
+      216,
+      300
+    ],
+    [
+      300,
+      330
+    ],
+    [
+      330,
+      420
+    ],
+    [
+      420,
+      440
+    ],
+    [
+      440,
+      480
+    ],
+    [
+      480,
+      600
+    ],
+    [
+      600,
+      640
+    ],
+    [
+      640,
+      760
+    ],
+    [
+      760,
+      800
+    ],
+    [
+      800,
+      900
+    ],
+    [
+      900,
+      950
+    ],
+    [
+      950,
+      1100
+    ]
+  ],
+  "tear_at": [
+    {
+      "frame": 197,
+      "tear": null
+    },
+    {
+      "frame": 198,
+      "tear": [
+        1,
+        0.125
+      ]
+    },
+    {
+      "frame": 199,
+      "tear": [
+        1,
+        0.375
+      ]
+    },
+    {
+      "frame": 200,
+      "tear": [
+        1,
+        0.625
+      ]
+    },
+    {
+      "frame": 201,
+      "tear": [
+        1,
+        0.875
+      ]
+    },
+    {
+      "frame": 202,
+      "tear": null
+    },
+    {
+      "frame": 300,
+      "tear": null
+    },
+    {
+      "frame": 418,
+      "tear": [
+        3,
+        0.125
+      ]
+    },
+    {
+      "frame": 419,
+      "tear": [
+        3,
+        0.375
+      ]
+    }
+  ],
+  "item_at": [
+    {
+      "frame": 0,
+      "visible": false,
+      "x": 860,
+      "red": 0
+    },
+    {
+      "frame": 19,
+      "visible": false,
+      "x": 860,
+      "red": 0
+    },
+    {
+      "frame": 20,
+      "visible": true,
+      "x": 860,
+      "red": 0
+    },
+    {
+      "frame": 25,
+      "visible": true,
+      "x": 860,
+      "red": 0
+    },
+    {
+      "frame": 30,
+      "visible": true,
+      "x": 860,
+      "red": 0
+    },
+    {
+      "frame": 40,
+      "visible": true,
+      "x": 860,
+      "red": 0
+    },
+    {
+      "frame": 43,
+      "visible": true,
+      "x": 860,
+      "red": 0.5
+    },
+    {
+      "frame": 46,
+      "visible": true,
+      "x": 860,
+      "red": 1
+    },
+    {
+      "frame": 60,
+      "visible": true,
+      "x": 860,
+      "red": 1
+    },
+    {
+      "frame": 69,
+      "visible": true,
+      "x": 700,
+      "red": 1
+    },
+    {
+      "frame": 78,
+      "visible": true,
+      "x": 540,
+      "red": 1
+    },
+    {
+      "frame": 90,
+      "visible": true,
+      "x": 540,
+      "red": 1
+    }
+  ],
+  "timecode": [
+    {
+      "clock": null,
+      "frame": 0,
+      "text": "03:12:00:00"
+    },
+    {
+      "clock": "03:12",
+      "frame": 61,
+      "text": "03:12:02:01"
+    },
+    {
+      "clock": "23:59",
+      "frame": 1830,
+      "text": "00:00:01:00"
+    },
+    {
+      "clock": "bad",
+      "frame": 5,
+      "text": "03:12:00:05"
+    }
+  ],
+  "fit_font_size": [
+    {
+      "text": "RULE",
+      "size": 128,
+      "fit": 128
+    },
+    {
+      "text": "A LONGER LINE OF TEXT HERE",
+      "size": 96,
+      "fit": 48
+    },
+    {
+      "text": "X",
+      "size": 40,
+      "fit": 40
+    }
+  ]
+}

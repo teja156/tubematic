@@ -26,6 +26,8 @@ from pathlib import Path
 
 _SCRIPT = Path("bean-tools") / "render-props.mjs"
 STORYBOOK_SCRIPT = Path("storybook-tools") / "render-props.mjs"
+# The part sheet of Night Signal, Flat Vector Science and Isometric Infographic (render_style_parts).
+STYLE_PARTS_SCRIPT = Path("style-tools") / "render-parts.mjs"
 PAPER_SCRIPT = Path("paper-tools") / "render-props.mjs"
 # The code-drawn character styles' one preview script (TMDEV-232..235); the spec names the style.
 CHARACTER_SCRIPT = Path("character-tools") / "render-props.mjs"

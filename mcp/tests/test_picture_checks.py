@@ -27,6 +27,8 @@ EXAMPLES = {
     "storybook_atlas": "tubematic-storybook-atlas", "under_the_hood": "tubematic-under-the-hood",
     "case_file_story": "tubematic-case-file-story", "archive_engraving": "tubematic-archive-engraving",
     "editorial_collage": "tubematic-editorial-collage", "storybook_reveal": "tubematic-storybook-reveal",
+    "night_signal": "tubematic-night-signal", "flat_vector_science": "tubematic-flat-vector-science",
+    "isometric_infographic": "tubematic-isometric-infographic",
 }
 
 
@@ -232,6 +234,30 @@ def test_a_data_driven_change_is_read_from_the_style_data():
     warnings = pc.check(config, tl, script, {"Turn": "turn", "Root cause": "payoff"}, 30)
     assert len(warnings) == 1 and warnings[0].startswith("The payoff") and "new board" in warnings[0]
 
+
+
+def _fv_opening_ladder(c):
+    shots = _props(c)["shots"]
+    ladder = next(s for s in shots if s["kind"] == "ladder")
+    first = copy.deepcopy(ladder)
+    first["start"] = 0
+    for k, r in enumerate(first["rungs"]):
+        r["at"] = 40 + 30 * k
+    shots[0] = first
+
+
+def test_a_flat_vector_scale_shot_never_opens_empty():
+    config = _example("flat_vector_science")
+    _fv_opening_ladder(config)
+    assert pc.first_frame_warnings(config) == []
+
+
+def test_the_isometric_readout_and_legend_count_as_changes():
+    config = _example("isometric_infographic")
+    d = _props(config)
+    frames = pc.change_frames("isometric_infographic", config)
+    assert d["legend"]["at"] in frames
+    assert all(s["at"] in frames for s in d["readout"]["steps"])
 
 @pytest.mark.parametrize("style", sorted(EXAMPLES))
 def test_every_style_reports_its_cuts_as_changes(style):

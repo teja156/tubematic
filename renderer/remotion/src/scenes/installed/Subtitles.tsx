@@ -104,8 +104,11 @@ const DEFAULT_WEIGHT = 800;
  *  The Terminal Doc style uses it.
  *  "chip": a small cream paper chip hugging the phrase, with a hairline ink
  *  border; an `emphasis` word turns to `accent` once spoken instead of getting
- *  the red box. The Archive and Engraving style uses it with the "fill" look. */
-export type SubtitleBackground = "pill" | "shadow" | "outline" | "label" | "none" | "log" | "chip";
+ *  the red box. The Archive and Engraving style uses it with the "fill" look.
+ *  "card": a map-label card, warm white with an ink border and a flat offset
+ *  shadow, the words left-aligned beside a small isometric cube chip. The
+ *  Isometric Infographic style uses it. */
+export type SubtitleBackground = "pill" | "shadow" | "outline" | "label" | "none" | "log" | "chip" | "card";
 
 export interface SubtitleConfig {
   enabled?: boolean;
@@ -150,6 +153,9 @@ export interface SubtitleConfig {
    * Absent means the plain look every other style has.
    */
   look?: "plain" | "selection" | "fill" | "tags" | "highlight";
+  /** Extra space between letters, in ems (-0.05 to 0.3), for the plain look;
+   *  absent keeps each background's own. Night Signal sets its spaced capitals with it. */
+  letterSpacing?: number;
 }
 
 /** The "label" plate: ivory paper, ink rule and text, a flat offset shadow. */
@@ -161,6 +167,9 @@ const LABEL_TEXT = "#2A2F33";
 const CHIP_PAPER = "#F1E8D2";
 const CHIP_INK = "#181411";
 const CHIP_ACCENT = "#A83A3A";
+/** The "card" plate: warm white, ink border and text, a red cube chip. */
+const CARD_INK = "#231A2C";
+const CARD_CHIP = "#CF5140";
 
 /** The key-word box: white text on red, scaling in with a little overshoot. */
 const EMPHASIS_BG = "#D0201C";
@@ -366,6 +375,7 @@ export default function Subtitles({
   emphasis = [],
   accent = null,
   look = "plain",
+  letterSpacing,
 }: Props) {
   const frame = useCurrentFrame();
   const webfont = FONTS[fontFamily];
@@ -397,7 +407,8 @@ export default function Subtitles({
 
   const label = background === "label";
   const chip = background === "chip";
-  const ink = color ?? (label ? LABEL_TEXT : chip ? CHIP_INK : canvas === "light" ? "#0f0f0f" : "#ffffff");
+  const card = background === "card";
+  const ink = color ?? (label ? LABEL_TEXT : chip ? CHIP_INK : card ? CARD_INK : canvas === "light" ? "#0f0f0f" : "#ffffff");
   if (background === "log") {
     return <LogStrip chunk={chunk} frame={frame} family={family} fontSize={fontSize} position={position} ink={ink} accent={accent ?? ink} uppercase={uppercase} />;
   }
@@ -468,8 +479,23 @@ export default function Subtitles({
                 letterSpacing: "0.01em",
               }
             : {}),
+          ...(card
+            ? {
+                justifyContent: "flex-start", textAlign: "left" as const, background: "#FFFDF8",
+                border: `3px solid ${CARD_INK}`, boxShadow: "6px 6px 0 rgba(35,26,44,0.14)",
+                padding: `${Math.round(fontSize * 0.36)}px 30px ${Math.round(fontSize * 0.42)}px ${Math.round(fontSize * 1.7)}px`,
+              }
+            : {}),
+          ...(letterSpacing !== undefined ? { letterSpacing: `${letterSpacing}em` } : {}),
         }}
       >
+        {card && (
+          <svg width={60} height={70} style={{ position: "absolute", left: fontSize * 0.45, top: fontSize * 0.4 }}>
+            <path d="M3.5 17 L26 4 L48.5 17 L26 30 Z" fill="#DC8578" />
+            <path d="M3.5 17 L26 30 L26 56 L3.5 43 Z" fill={CARD_CHIP} />
+            <path d="M26 30 L48.5 17 L48.5 43 L26 56 Z" fill="#A54034" />
+          </svg>
+        )}
         {label && diamond}
         <span style={label ? {
           display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "0 0.28em", minWidth: 0,

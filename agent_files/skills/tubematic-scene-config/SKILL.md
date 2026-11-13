@@ -234,8 +234,10 @@ written as data, `case_file_story` is one scene of painted stills with meters an
 written as data, `midcentury_howto` is one scene of numbered steps, a presenter and flat objects,
 written as data, `puppet_history` is one scene of puppets, sets, cards and maps joined by hard cuts,
 written as data, `comic_panels` is one scene of comic pages read panel by panel, written as data,
-and `process_cast` is one scene of drawn parts acting out a process at stations,
-written as data. None of them is this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
+`process_cast` is one scene of drawn parts acting out a process at stations, written as data,
+`night_signal` is one scene of pictogram scenes and cards, written as data,
+`flat_vector_science` is one scene of drifting flat subjects and scale shots, written as data, and
+`isometric_infographic` is one scene of isometric boards with routes and pins, written as data. None of them is this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
 when it is not `tubematic-scene-config`, stop here and invoke that skill.
 
 `system_flow`, `terminal_doc`, `code_scenes` and `format_packs` are **insert styles**, never a
@@ -263,10 +265,13 @@ Read `visual_style` from `get_video`:
 | `puppet_history` | Its own sets | Nothing here: the whole video is the one `PuppetHistory` scene, written as data by the tubematic-puppet-history skill. |
 | `comic_panels` | Its own newsprint | Nothing here: the whole video is the one `ComicPanels` scene, written as data by the tubematic-comic-panels skill. |
 | `process_cast` | Its own paper | Nothing here: the whole video is the one `ProcessCast` scene, written as data by the tubematic-process-cast skill. |
+| `night_signal` | Dark | Nothing here: the whole video is the one `NightSignal` scene, written as data by the tubematic-night-signal skill. |
+| `flat_vector_science` | Dark | Nothing here: the whole video is the one `FlatVectorScience` scene, written as data by the tubematic-flat-vector-science skill. |
+| `isometric_infographic` | Light (cream paper) | Nothing here: the whole video is the one `IsometricInfographic` scene, written as data by the tubematic-isometric-infographic skill. |
 | `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery. This is the **mixed scene system**: the style-routing skill picked it before the script because no single style fit. |
 
 The three named scene styles are restrictions; `cartoon_3d`, `bean_explainer`, `whiteboard`,
-`storybook_atlas`, `under_the_hood`, `case_file_story`, `puppet_history`, `midcentury_howto`, `comic_panels` and `process_cast` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
+`storybook_atlas`, `under_the_hood`, `case_file_story`, `puppet_history`, `midcentury_howto`, `comic_panels`, `process_cast`, `night_signal`, `flat_vector_science` and `isometric_infographic` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
 than the mixed scene system (a style it picked is the video's `visual_style` by now), or when the
 video was scripted before Auto picked styles. It is the absence of a restriction: **you pick the
 register.**
@@ -897,9 +902,10 @@ entirely.
 | `fontFamily` | container default | A CSS family, or one of `Inter`, `Oswald`, `Roboto`, `Montserrat` |
 | `fontSize` | `62` | 28–120 |
 | `color` | `null` | `null` follows the canvas — black on light, white on dark. Set one only for a real reason |
-| `background` | `"pill"` | `"pill"`, `"shadow"`, `"outline"`, `"label"`, `"none"`, `"log"` or `"chip"`. `"pill"` is the safe choice over busy imagery; `"outline"` (bold text, thick dark stroke, no plate) suits illustrated and 3D cartoon scenes; `"label"` (a small printed ivory label) is the Storybook Atlas look; `"log"` (typed into a terminal log strip) is the Terminal Doc look; `"chip"` (a cream paper chip) is the Archive and Engraving look |
+| `background` | `"pill"` | `"pill"`, `"shadow"`, `"outline"`, `"label"`, `"none"`, `"log"`, `"chip"` or `"card"`. `"pill"` is the safe choice over busy imagery; `"outline"` (bold text, thick dark stroke, no plate) suits illustrated and 3D cartoon scenes; `"label"` (a small printed ivory label) is the Storybook Atlas look; `"log"` (typed into a terminal log strip) is the Terminal Doc look; `"chip"` (a cream paper chip) is the Archive and Engraving look; `"card"` (a warm white card with an ink border and a cube chip) is the Isometric Infographic look |
 | `position` | `0.78` | Vertical centre as a fraction of frame height |
 | `uppercase` | `false` | |
+| `letterSpacing` | none | -0.05 to 0.3, in em: spaced capitals (the Night Signal look) |
 
 Match them to the video: a playful topic can take a tighter `maxWords` and `uppercase`; a serious
 one is better at the defaults. On a light canvas check the contrast — `"pill"` handles it.

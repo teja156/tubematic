@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 58 tools
+## The 59 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -150,6 +150,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`render_storybook_props`](#render_storybook_props) | Render a Storybook Atlas video's own props as a picture |
 | [`render_paper_props`](#render_paper_props) | Render a Paper Diorama video's own props as a picture |
 | [`render_style_props`](#render_style_props) | Render a Puppet History, Mid-century How-To, Comic Panels or Process Cast video's own props as a picture |
+| [`render_style_parts`](#render_style_parts) | Render a Night Signal, Flat Vector Science or Isometric Infographic video's own parts as a picture |
 | [`preview_terminal_moves`](#preview_terminal_moves) | Render a Terminal Doc video's own moves as a picture |
 | [`write_scene_config`](#write_scene_config) | Validate and write `scene-config.json` |
 | [`get_scene_config`](#get_scene_config) | Read `scene-config.json` |
@@ -428,7 +429,8 @@ Fields writable only at `TOPIC_PROPOSED`:
   mascot in the same update.
 - A new `mascot_id` must exist, be approved and not archived, and some renderer's GPU test must
   have passed (the not-tested case has its own message). `""` clears it, and echoing the stored
-  mascot is not refused. A mascot is refused on a `cartoon_3d`, `under_the_hood`, `case_file_story`, `paper_diorama`, `archive_engraving`, `editorial_collage`, `storybook_reveal`, `puppet_history`, `midcentury_howto`, `comic_panels` or `process_cast` video
+  mascot is not refused. A mascot is refused on a `cartoon_3d`, `under_the_hood`, `case_file_story`, `paper_diorama`, `archive_engraving`, `editorial_collage`, `storybook_reveal`, `puppet_history`, `midcentury_howto`, `comic_panels`, `process_cast`, `flat_vector_science`,
+  `isometric_infographic` or `night_signal` video
   (`visual_styles.py::NO_MASCOT_STYLES`), and a switch to one of those styles clears the stored one.
 - A `visual_style` different from the stored one clears the record of a style `auto` picked
   (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
@@ -787,7 +789,8 @@ frame in software GL. The tool takes the scene-work claim, as it writes into the
 `grid`, it overlays a labelled grid in normalised `[u, v]` coordinates (0 to 1 across and down the
 image), so the agent can read off an anchor point for an overlay. The grid is drawn on a copy in
 memory. `cartoon_still`, `cartoon_read_still`, `render_mascot_sheets`, `render_bean_props`,
-`preview_doodles`, `render_storybook_props`, `render_paper_props`, `render_style_props` and `preview_terminal_moves` also
+`preview_doodles`, `render_storybook_props`, `render_paper_props`, `render_style_props`, `render_style_parts` and
+`preview_terminal_moves` also
 return pictures.
 
 ### `preview_doodles`
@@ -828,7 +831,7 @@ while it renders.
 `scene_name` is the bare stem, or the composed `"<video_id>/<scene_name>"` that `list_scene_files`
 returns. `source="installed"` reads the installed library. An installed name may also be a path
 inside an installed scene's folder, up to three parts (`beanExplainer/props/lifeProps`,
-`storybookAtlas/props/things`), which is how a Bean Explainer or Storybook Atlas agent reads the
+`storybookAtlas/props/things`), which is how a Bean Explainer, Storybook Atlas or Flat Vector Science agent (`flatVector/props`) reads the
 library props it models its own on, and a Terminal Doc agent reads the kit its moves are built
 from (`terminalDoc/kit`). The path must match
 `_INSTALLED_NESTED` and resolve inside the installed library.
@@ -903,6 +906,21 @@ refused. It runs the same way as [`render_bean_props`](#render_bean_props):
 timeouts, and a killed preview leaves its folder in `character-tools/.tmp/`. The script draws the
 props on the style's own preview component (`PuppetHistoryPropPreview` for Puppet History, `MidcenturyPropPreview` for Mid-century How-To,
 `ComicPanelsPropPreview` for Comic Panels, `ProcessCastPropPreview` for Process Cast).
+
+### `render_style_parts`
+
+`render_style_parts(video_id)` renders the parts a Night Signal, Flat Vector Science or Isometric Infographic video's agent
+drew for it, read from the config (so `write_scene_config` comes first), and returns the picture after
+a JSON block. A Night Signal video's `customParts` are drawn as the scene draws them, in their box, on
+the ground line beside a person and again in red
+([Night Signal](10-scene-authoring.md#night-signal)). A Flat Vector Science video's `customProps` are
+rasterised as the scene does it, on the abyss, their declared box outlined in red and a person beside
+each for scale ([Flat Vector Science](10-scene-authoring.md#flat-vector-science)). An Isometric
+Infographic video's `customProps` are drawn from the kit's solids on a patch of board beside a house
+([Isometric Infographic](10-scene-authoring.md#isometric-infographic)). It runs the same way
+as `render_bean_props`: `bean_preview.py::render_preview` with `script=STYLE_PARTS_SCRIPT` runs
+`renderer/remotion/style-tools/render-parts.mjs` on software GL, under the same lock and timeouts, and
+a killed preview leaves its folder in `style-tools/.tmp/`.
 
 ### `preview_terminal_moves`
 
@@ -1047,6 +1065,28 @@ It checks:
   [Process Cast](10-scene-authoring.md#process-cast).
 - `subtitles.emphasis`, on any style, names word indexes the narration has, at most one word in 5.
   `subtitles.look` is `plain`, `selection`, `fill`, `tags` or `highlight`.
+- A `night_signal` video holds the one installed `NightSignal` scene, and its scenes pass
+  `mcp/night_signal.py` (scenes and items on word starts, one red threat per scene, library or own
+  pictograms, connectors and bubbles between occupied slots, cards that stay long enough to read, no
+  still stretch over 5 seconds). No other style may use `NightSignal`. The style pack's caption
+  settings, including `letterSpacing`, fill every `subtitles` key the config leaves out. The rules are
+  in [Night Signal](10-scene-authoring.md#night-signal).
+- A `flat_vector_science` video holds the one installed `FlatVectorScience` scene, and its shots pass
+  `mcp/flat_vector_science.py` (shots and arrivals on word starts, the prop library, one red thing per
+  shot, pills that fit, the video's own props and their files, no still stretch over 4 seconds). No
+  other style may use `FlatVectorScience`. The rules are in
+  [Flat Vector Science](10-scene-authoring.md#flat-vector-science).
+- An `isometric_infographic` video holds the one installed `IsometricInfographic` scene, and its boards
+  pass `mcp/isometric_infographic.py` (boards and events on word starts, props on the board and apart,
+  routes that lead their movers, pins on props of their board, camera moves, cutaways and explodes of
+  buildings that have them, the video's own props from the kit's solids, no still stretch over 4
+  seconds). No other style may use `IsometricInfographic`. The style pack's caption settings, with the
+  `card` background, fill every `subtitles` key the config leaves out. The rules are in
+  [Isometric Infographic](10-scene-authoring.md#isometric-infographic).
+- `subtitles.emphasis`, on any style, names word indexes the narration has, at most one word in 5.
+  `subtitles.look` is `plain`, `selection` or `fill`. `subtitles.background` is one of `pill`, `shadow`,
+  `outline`, `label`, `none`, `log` and `card` (`SUBTITLE_BACKGROUNDS`), and `subtitles.letterSpacing` is
+  from -0.05 to 0.3 em.
 
 It records two things in the same transaction as the rename of the staged file into place:
 
@@ -1101,10 +1141,11 @@ video has no formula on record. See
 8. Cartoon 3D readiness, for a config with a Cartoon 3D scene: the video's generated source exists
    and the [beat gate](#cartoon_beat_gate) has passed for the source on disk. An open gate is one
    error naming the tool that closes it. A symlink anywhere in the source tree fails the check.
-9. A Bean Explainer, Storybook Atlas or character-style video's own props: each file its
+9. A Bean Explainer, Storybook Atlas, character-style or Flat Vector Science video's own props: each file its
    `customProps` names exists and still passes the source rules `write_scene_config` applied, since
    the agent may have redrawn it since (`server.py::_bean_custom_prop_errors`,
-   `server.py::_storybook_custom_prop_errors`, `server.py::_character_custom_prop_errors`).
+   `server.py::_storybook_custom_prop_errors`, `server.py::_character_custom_prop_errors`,
+   `server.py::_fv_custom_prop_errors`).
 10. A Terminal Doc video's own moves, the same way (`server.py::_td_custom_move_errors`).
 11. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
    `write_scene_config` already checked the cues (see

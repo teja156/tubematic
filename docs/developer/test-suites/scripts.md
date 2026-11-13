@@ -839,6 +839,45 @@ Covers the `tubematic-process-cast` skill ([Process Cast](../10-scene-authoring.
 Trap: skill text that calls the cast mascots, or lets a character talk, leads the agent to the wrong
 video for this style. The test pins the wording that keeps them apart.
 
+### `test_night_signal_skill.py`
+
+Covers the `tubematic-night-signal` skill ([Night Signal](../10-scene-authoring.md#night-signal)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- `reference/contract.md` lists every catalogue value of the pack and the skill every scene kind and
+  slot, and both state the limits `mcp/night_signal.py` enforces.
+- The skill teaches `write_scene_config`, `validate_job` and `render_style_parts`, never calls
+  `generate_image` or `generate_character`, leaves the captions to the style and has one place to look
+  before submitting.
+- The worked example passes the validator, and the uninstaller removes the skill.
+
+### `test_flat_vector_science_skill.py`
+
+Covers the `tubematic-flat-vector-science` skill
+([Flat Vector Science](../10-scene-authoring.md#flat-vector-science)).
+
+- The skill is loadable by an unattended run, its pack names it as the authoring skill, and the
+  operator skill routes to it.
+- The skill and `reference/contract.md` list every library prop and catalogue value, and state the
+  limits `mcp/flat_vector_science.py` enforces.
+- The skill teaches the drawing rules the source checks enforce for a prop of the agent's own (the
+  allowed imports, no hooks, text or filters), leaves the captions to the style and has one place to
+  look before submitting.
+- The reference example and the example prop pass the validator, and the uninstaller removes the skill.
+
+### `test_isometric_infographic_skill.py`
+
+Covers the `tubematic-isometric-infographic` skill
+([Isometric Infographic](../10-scene-authoring.md#isometric-infographic)).
+
+- The skill is loadable by an unattended run, its pack names it as the authoring skill, and the
+  operator skill routes to it.
+- The skill and `reference/contract.md` list every catalogue value, and state the limits
+  `mcp/isometric_infographic.py` enforces.
+- The skill teaches the tools and leaves the captions to the style.
+- The reference example passes the validator, and the uninstaller removes the skill.
+
 ### `test_system_flow_skill.py`
 
 Covers the `tubematic-system-flow` skill ([System Flow](../10-scene-authoring.md#system-flow)).

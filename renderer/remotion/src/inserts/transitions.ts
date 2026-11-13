@@ -16,6 +16,11 @@
  *         the left, and back the other way out.
  * - wipe: the insert is revealed by an edge moving right to left, and
  *         uncovered the same way out.
+ * - glitch: a tear, a few frames long: the insert shows in torn horizontal
+ *         bands over the main picture, more of them each frame, shifted
+ *         sideways by a few pixels. The bands come from a generator seeded by
+ *         the frame, so every render tears the same way. One clip-path on the
+ *         insert layer and a small shift; no filter and no copy of either layer.
  *
  * The transitions run just outside the insert's window: the way in over the n
  * frames before it, the way out over the n frames after it. So the insert's
@@ -31,9 +36,9 @@
  * Keep in sync: tubematic_core/inserts.py (TRANSITIONS, TRANSITION_FRAMES).
  */
 
-export type InsertTransition = "cut" | "dip" | "push" | "wipe";
+export type InsertTransition = "cut" | "dip" | "push" | "wipe" | "glitch";
 
-export const TRANSITION_FRAMES: Record<InsertTransition, number> = { cut: 0, dip: 8, push: 12, wipe: 12 };
+export const TRANSITION_FRAMES: Record<InsertTransition, number> = { cut: 0, dip: 8, push: 12, wipe: 12, glitch: 4 };
 
 export type InsertWindow = { startFrame: number; durationInFrames: number };
 
@@ -42,7 +47,7 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const smooth = (t: number) => t * t * (3 - 2 * t);
 
 export function transitionOf(name: string | undefined): InsertTransition {
-  return name === "dip" || name === "push" || name === "wipe" ? name : "cut";
+  return name === "dip" || name === "push" || name === "wipe" || name === "glitch" ? name : "cut";
 }
 
 /**
@@ -79,6 +84,7 @@ export type InsertLook = {
   insertOpacity: number;
   insertShiftX: number; // pixels, push only
   insertClipLeft: number; // pixels of the insert hidden from the left, wipe only
+  insertClipPath: string | null; // a CSS clip-path showing only some bands of the insert, glitch only
   // The main layer under it.
   mainShiftX: number; // pixels, push only
   // A canvas-coloured veil over the main, dip only.
@@ -87,8 +93,49 @@ export type InsertLook = {
   covers: boolean;
 };
 
-export function insertLook(transition: InsertTransition, progress: number, width = 1080): InsertLook {
-  const none: InsertLook = { insertOpacity: 0, insertShiftX: 0, insertClipLeft: 0, mainShiftX: 0, veilOpacity: 0, covers: false };
+// A small seeded generator (mulberry32): the glitch's bands are a pure
+// function of the frame.
+function seeded(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * The torn bands of a glitch at `progress`, seeded by `frame`: a CSS clip-path
+ * holding the bands of the frame where the insert shows (about `progress` of
+ * them, each torn a few pixels sideways at its edges), and the sideways shift
+ * of the whole insert layer. Null when no band shows.
+ */
+export function glitchBands(progress: number, frame: number, width = 1080, height = 1920): { path: string | null; shiftX: number } {
+  // the bands and the order they show in are fixed, so a later frame shows every band an earlier one did;
+  // only the tears and the shift change with the frame
+  const layout = seeded(17);
+  const r = seeded(Math.floor(frame) * 7919 + 17);
+  const parts: string[] = [];
+  let y = 0;
+  while (y < height) {
+    const h = Math.round(24 + layout() * 150);
+    const show = layout() < progress;
+    const tear = Math.round((r() - 0.5) * 70);
+    if (show) {
+      const y1 = Math.min(height, y + h);
+      parts.push(`M ${Math.max(0, tear)} ${y} L ${width} ${y} L ${width} ${y1} L ${Math.max(0, -tear)} ${y1} Z`);
+    }
+    y += h;
+  }
+  const shiftX = Math.round((r() - 0.5) * 36);
+  return { path: parts.length ? `path("${parts.join(" ")}")` : null, shiftX };
+}
+
+export function insertLook(transition: InsertTransition, progress: number, width = 1080, frame = 0): InsertLook {
+  const none: InsertLook = {
+    insertOpacity: 0, insertShiftX: 0, insertClipLeft: 0, insertClipPath: null, mainShiftX: 0, veilOpacity: 0, covers: false,
+  };
   if (progress <= 0) return none;
   if (progress >= 1) return { ...none, insertOpacity: 1, covers: true };
   const p = smooth(progress);
@@ -104,6 +151,12 @@ export function insertLook(transition: InsertTransition, progress: number, width
       return { ...none, insertOpacity: 1, insertShiftX: (1 - p) * width, mainShiftX: -p * width };
     case "wipe":
       return { ...none, insertOpacity: 1, insertClipLeft: (1 - p) * width };
+    case "glitch": {
+      // The main keeps painting under the bands, jolted the other way.
+      const g = glitchBands(progress, frame, width);
+      if (!g.path) return { ...none, mainShiftX: -g.shiftX };
+      return { ...none, insertOpacity: 1, insertClipPath: g.path, insertShiftX: g.shiftX, mainShiftX: -g.shiftX };
+    }
     default:
       return { ...none, insertOpacity: 1, covers: true };
   }

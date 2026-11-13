@@ -162,7 +162,8 @@ def test_under_the_hood():
     assert p["mascot"] is False and "presenter" in p["messages"]["mascot"]
     assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood", "case_file_story", "paper_diorama",
                                          "archive_engraving", "editorial_collage", "storybook_reveal",
-                                         "midcentury_howto", "comic_panels", "process_cast", "puppet_history"}
+                                         "midcentury_howto", "comic_panels", "process_cast", "puppet_history",
+                                         "night_signal", "flat_vector_science", "isometric_infographic"}
     rows = {r["id"]: r for r in tvs.public_list(openai_key_set=True, gpu_status="working")}
     assert rows["under_the_hood"]["mascot"] is False and rows["cartoon_3d"]["mascot"] is False
     assert rows["auto"]["mascot"] is True and rows["stick"]["mascot"] is True
@@ -266,6 +267,57 @@ def test_storybook_reveal():
         assert name in " ".join(p["routing"]["avoid_for"]), name
     for phrase in ("one protagonist", "moral", "brand"):
         assert phrase in p["script"], phrase
+
+
+def test_isometric_infographic():
+    p = tvs.pack("isometric_infographic")
+    assert p["renderer"] == "dom" and p["canvas"] == "light"
+    assert p["authoring_skill"] == "tubematic-isometric-infographic"
+    assert p["experimental"] is True and p["order"] == 200 and p["dimension"] == "2d"
+    assert tvs.figures_allowed("isometric_infographic") is False
+    assert tvs.needs_openai_key("isometric_infographic") is False and tvs.needs_gpu("isometric_infographic") is False
+    assert p["routing"]["images"] == 0 and p["mascot"] is False
+    assert p["inserts"] == {"host": True, "transition": "push"}
+    assert p["captions"]["background"] == "card"
+    assert len(p["extra"]["props"]) >= 40
+
+
+def test_flat_vector_science():
+    p = tvs.pack("flat_vector_science")
+    assert p["renderer"] == "dom" and p["canvas"] == "dark"
+    assert p["authoring_skill"] == "tubematic-flat-vector-science"
+    assert p["experimental"] is True and p["order"] == 190 and p["dimension"] == "2d"
+    # every subject is a prop the scene draws: no figures from the scene system, no generated characters
+    assert tvs.figures_allowed("flat_vector_science") is False
+    assert tvs.characters_allowed("flat_vector_science") is False
+    # no images, no key, no GPU: the props are drawn in code (the user's choice over generated cut-outs)
+    assert tvs.needs_openai_key("flat_vector_science") is False and tvs.needs_gpu("flat_vector_science") is False
+    assert p["routing"]["images"] == 0
+    assert p["mascot"] is False and p["messages"]["mascot"]
+    assert p["inserts"] == {"host": True, "transition": "dip"}
+    assert len(p["extra"]["boxes"]) >= 40
+
+
+def test_night_signal():
+    p = tvs.pack("night_signal")
+    assert p["renderer"] == "dom" and p["canvas"] == "dark"
+    assert p["authoring_skill"] == "tubematic-night-signal"
+    assert p["experimental"] is True and p["order"] == 210 and p["dimension"] == "2d"
+    # its pictograms are drawn by the scene: no figures from the scene system, no generated characters
+    assert tvs.figures_allowed("night_signal") is False
+    assert tvs.line_art_allowed("night_signal") is False
+    assert tvs.characters_allowed("night_signal") is False
+    # zero images and no GPU: it needs nothing the install could lack
+    assert tvs.needs_openai_key("night_signal") is False and tvs.needs_gpu("night_signal") is False
+    assert p["routing"]["images"] == 0
+    assert tvs.effective_canvas("night_signal", "light") == "dark"
+    # the one red threat is the only coloured figure: no mascot
+    assert p["mascot"] is False and "red threat" in p["messages"]["mascot"]
+    # it goes into an insert through a glitch tear, as it changes its own scenes
+    assert p["inserts"] == {"host": True, "transition": "glitch"}
+    assert p["captions"]["uppercase"] is True and p["captions"]["letterSpacing"] > 0
+    rows = {r["id"]: r for r in tvs.public_list(openai_key_set=False, gpu_status="unknown")}
+    assert rows["night_signal"]["available"] and rows["night_signal"]["mascot"] is False
 
 
 def test_case_file_story():

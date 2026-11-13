@@ -32,6 +32,9 @@ import character_styles
 import editorial_collage
 import storybook_reveal
 import paper_diorama
+import night_signal
+import flat_vector_science
+import isometric_infographic
 import storybook_atlas
 import system_flow
 import terminal_doc
@@ -56,7 +59,8 @@ OPENING = "opening"
 
 MIXED = "scenes"
 _STYLES = (system_flow, whiteboard, bean_explainer, terminal_doc, storybook_atlas, under_the_hood,
-           case_file_story, paper_diorama, archive_engraving, editorial_collage, storybook_reveal)
+           case_file_story, paper_diorama, archive_engraving, editorial_collage, storybook_reveal,
+           night_signal, flat_vector_science, isometric_infographic)
 
 # What each style can do about a beat with nothing changing on screen, in its
 # own words. The pack's picture.turn says the same at length.
@@ -76,6 +80,12 @@ _CHANGE_FIX = {
     editorial_collage.STYLE_ID: "start a new station there, or circle, stamp or point an arrow at the hero on that "
                                 "word, or type the next line",
     storybook_reveal.STYLE_ID: "start a new page there, or wipe its pencil or flood its colour in on that word",
+    night_signal.STYLE_ID: "start a new scene there, or pop an item in, turn the threat red, or land a "
+                           "connector, bubble, mark or step on that word",
+    flat_vector_science.STYLE_ID: "start a new shot there, or bring in a prop, a pill word, a rule, a rung, a "
+                                  "level, a layer or a stage on that word",
+    isometric_infographic.STYLE_ID: "start a new board there, or glide the camera, drop a building in, draw a route, "
+                                    "send a mover, build a pin, lift, cut away or explode on that word",
 }
 
 # Event types that change too little of the frame to count as a visible
@@ -248,6 +258,14 @@ def _first_frame_problem(style: str, config: dict) -> str | None:
         if not (_int(pencil) and pencil <= early):
             return (f"page 1 shows its title over an empty panel until after frame {early}, so the video opens on "
                     "blank paper. Give page 1 pencilAt 0, so its drawing is on screen from the first frame")
+    elif style == flat_vector_science.STYLE_ID:
+        shots = _list(_props(config, flat_vector_science), "shots")
+        first = shots[0] if shots else {}
+        items = _list(first, "items")
+        if first.get("kind") == "subject" and not any(not _int(it.get("at")) or it["at"] <= early for it in items):
+            return (f"shot 1 has no subject on screen until after frame {early}, so the video opens on an empty "
+                    "backdrop. Leave `at` out of the first sentence's subject so it is there from frame 0")
+        # a ladder, zoom, descent or stages shot shows its first picture from its start (stage.ts::pictureAts)
     elif style == under_the_hood.STYLE_ID:
         plates = _list(_props(config, under_the_hood), "plates")
         if not plates or not plates[0].get("image"):
@@ -358,6 +376,36 @@ def _change_frames(style: str, config: dict) -> list[int]:
                 frames += case_file_story.part_frames(beat)
             except (KeyError, IndexError, TypeError):
                 frames.append(beat.get("start"))
+        return _ints(frames)
+    if style == isometric_infographic.STYLE_ID:
+        frames = []
+        for board in _list(_props(config, isometric_infographic), "boards"):
+            try:
+                frames += isometric_infographic.event_frames(board)
+            except (KeyError, TypeError):
+                frames.append(board.get("start"))
+        # the readout rolling to a new value and the legend rising are changes on screen too
+        data = _props(config, isometric_infographic)
+        ro = data.get("readout") if isinstance(data, dict) and isinstance(data.get("readout"), dict) else {}
+        frames += [s.get("at") for s in _list(ro, "steps")]
+        leg = data.get("legend") if isinstance(data, dict) else None
+        frames += [leg.get("at")] if isinstance(leg, dict) else []
+        return _ints(frames)
+    if style == flat_vector_science.STYLE_ID:
+        frames = []
+        for shot in _list(_props(config, flat_vector_science), "shots"):
+            try:
+                frames += flat_vector_science.event_frames(shot)
+            except (KeyError, TypeError):
+                frames.append(shot.get("start"))
+        return _ints(frames)
+    if style == night_signal.STYLE_ID:
+        frames = []
+        for scene in _list(_props(config, night_signal), "scenes"):
+            try:
+                frames += night_signal.event_frames(scene)
+            except (KeyError, TypeError):
+                frames.append(scene.get("start"))
         return _ints(frames)
     return []
 

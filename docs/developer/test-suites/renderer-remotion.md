@@ -59,6 +59,9 @@ Covers `src/inserts/transitions.ts`, how an insert scene goes in and out over it
 - The insert covers the frame only when fully in, so the main style is never hidden while it still
   shows. A dip veils the main in the canvas colour before the insert fades up; a push moves the main
   out as the insert comes in; a wipe uncovers the insert from the right.
+- A glitch tears the insert in over 4 frames: the same frame always gives the same bands, a later frame
+  never shows fewer bands than an earlier one, the main layer jolts the other way from the insert, and the
+  insert covers the frame only at full progress (`glitchBands`).
 - `activeInsert` finds the window a frame falls in.
 - `heldFrame` is the way in plus the insert's `firstFrames`, never before the way in ends and never
   past the window: the frame `CompositionBuilder` freezes the scene on until then, so no insert opens
@@ -339,6 +342,51 @@ Covers `contract.ts`, `stage.ts` and the library
   a join adds the cubes up and removes the other body; the camera glides to the next station while
   the character makes the trip; a focus holds until it is cleared and ends when its actor leaves, so
   the others at the station are not left shrunk.
+
+## Night Signal
+
+### `src/scenes/installed/nightSignal/nightSignal.test.ts`
+
+Covers `contract.ts`, `parts.ts` and `stage.ts`
+([Night Signal](../10-scene-authoring.md#night-signal)).
+
+- The constants, and events, still stretches, tears, an item's position, timecodes and text fits, are
+  computed as in the shared cases `mcp/tests/test_night_signal.py` runs.
+- The catalogues the pack carries are the ones the renderer draws, every library part draws, and
+  every part stands on the ground inside the box a custom part is held to.
+- The stage knows which scene is on screen, tears into a scene around its start and not at a hard
+  cut, pushes in slowly and never past the camera's limit, pops an item in with an overshoot, walks it
+  on its step and reddens the threat on its frame. A camera clock runs on through its minutes and hours.
+
+## Flat Vector Science
+
+### `src/scenes/installed/flatVector/flatVector.test.ts`
+
+Covers `contract.ts`, `props.tsx` and `stage.ts`
+([Flat Vector Science](../10-scene-authoring.md#flat-vector-science)).
+
+- The constants, and events, still stretches, counters, steps and widths, are computed as in the
+  shared cases `mcp/tests/test_flat_vector_science.py` runs.
+- The pack lists what the renderer draws and nothing else; every backdrop has a look and every prop a group, a
+  box and a drawing, and a prop's longest side is drawn at its size.
+- The stage knows which shot is on screen and runs each transition at its own frames, opens a ladder
+  on its first picture before the first rung's word, pops an item in with an overshoot and never stops
+  drifting, and rolls a descent's depth from one layer to the next.
+
+## Isometric Infographic
+
+### `src/scenes/installed/isometric/isometric.test.ts`
+
+Covers `contract.ts`, `kit.ts` and `stage.ts`
+([Isometric Infographic](../10-scene-authoring.md#isometric-infographic)).
+
+- The constants and the shared cases the validator runs
+  (`mcp/tests/test_isometric_infographic.py`) agree (the footprint of a set of solids included), and the
+  pack lists what the kit draws and nothing else.
+- The projection is true isometric and shades three tones from one colour, a solid named with a palette
+  colour shades too; the whole board is in view at zoom 1 and every prop's solids stand on its footprint.
+- A camera move that starts while another still glides starts from the view on screen, so it never jumps.
+- A prop drops in from above with a squash, and one with no `enter` stays where it is.
 
 ## System Flow
 

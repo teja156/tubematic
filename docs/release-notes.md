@@ -88,6 +88,13 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   comes in. The agent decides after it picks the style, and many videos get none.
   [Insert scenes](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#insert-scenes) has
   the details.
+- Three new experimental styles, each with its own preview, that Auto can pick:
+  **Flat Vector Science** (flat glowing creatures, cells and planets in the dark, showing how big,
+  deep or far), **Isometric Infographic** (one thing's journey across a small isometric world, with
+  routes, pins and a running count) and **Night Signal** (a calm warning in glowing pictograms on
+  black, the danger in red). None of them needs a key or a GPU, and none takes a mascot.
+  [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
+  details.
 - An **Inserts** setting (Auto or None) sits beside the style wherever you choose one: a topic waiting
   for approval, New Video, and a domain's defaults, which every new video in the domain starts with.
   The video's window shows the agent's decision and its reason in an **Inserts** row, and the Script

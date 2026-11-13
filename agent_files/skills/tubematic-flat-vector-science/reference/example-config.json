@@ -1,0 +1,221 @@
+{
+ "totalFrames": 1674,
+ "canvas": "dark",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "FlatVectorScience",
+   "startFrame": 0,
+   "durationInFrames": 1674,
+   "props": {
+    "flatVector": {
+     "shots": [
+      {
+       "kind": "subject",
+       "start": 0,
+       "backdrop": "sky",
+       "items": [
+        {
+         "what": "earth",
+         "slot": "center",
+         "size": "l"
+        }
+       ],
+       "pills": [
+        {
+         "on": "center",
+         "parts": [
+          {
+           "text": "OCEAN",
+           "at": 50
+          },
+          {
+           "text": "71% OF EARTH",
+           "at": 79
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "descent",
+       "start": 97,
+       "backdrop": "ocean",
+       "label": "Depth",
+       "unit": "m",
+       "layers": [
+        {
+         "name": "Diver",
+         "value": 40,
+         "at": 97,
+         "what": "diver"
+        },
+        {
+         "name": "Sperm whale",
+         "value": 2000,
+         "at": 200,
+         "what": "whale"
+        },
+        {
+         "name": "Titanic",
+         "value": 3800,
+         "at": 286,
+         "what": "shipwreck"
+        },
+        {
+         "name": "The bottom",
+         "value": 10900,
+         "at": 400,
+         "what": "anglerfish",
+         "red": true
+        }
+       ]
+      },
+      {
+       "kind": "subject",
+       "start": 514,
+       "backdrop": "abyss",
+       "items": [
+        {
+         "what": "bus",
+         "slot": "center",
+         "size": "m",
+         "at": 600
+        },
+        {
+         "what": "person",
+         "slot": "bottom",
+         "size": "s"
+        }
+       ],
+       "pills": [
+        {
+         "on": "center",
+         "parts": [
+          {
+           "text": "1 TONNE",
+           "at": 600
+          },
+          {
+           "text": "PER CM\u00b2",
+           "at": 649,
+           "red": true
+          }
+         ]
+        }
+       ],
+       "rule": {
+        "beside": "center",
+        "label": "12 M",
+        "at": 610
+       },
+       "cut": "flash"
+      },
+      {
+       "kind": "ladder",
+       "start": 673,
+       "backdrop": "sky",
+       "rungs": [
+        {
+         "what": "skyscraper",
+         "label": "Skyscraper",
+         "value": "828 m",
+         "at": 766
+        },
+        {
+         "what": "mountain",
+         "label": "Everest",
+         "value": "8,849 m",
+         "at": 802
+        },
+        {
+         "what": "iceberg",
+         "label": "The deep",
+         "value": "10,900 m",
+         "at": 874,
+         "red": true
+        }
+       ]
+      },
+      {
+       "kind": "stages",
+       "start": 965,
+       "backdrop": "abyss",
+       "steps": [
+        {
+         "what": "sun",
+         "label": "Sunlight",
+         "at": 1051
+        },
+        {
+         "what": "fish_school",
+         "label": "Fish",
+         "at": 1120
+        },
+        {
+         "what": "anglerfish",
+         "label": "Only the lure",
+         "at": 1198,
+         "red": true
+        }
+       ],
+       "cut": "push"
+      },
+      {
+       "kind": "subject",
+       "start": 1278,
+       "backdrop": "inside",
+       "items": [
+        {
+         "what": "lungs",
+         "slot": "center",
+         "size": "l"
+        }
+       ],
+       "pills": [
+        {
+         "on": "center",
+         "parts": [
+          {
+           "text": "LUNGS",
+           "at": 1290
+          },
+          {
+           "text": "FOLD",
+           "at": 1318
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "zoom",
+       "start": 1408,
+       "backdrop": "night",
+       "cut": "lens",
+       "levels": [
+        {
+         "what": "anglerfish",
+         "label": "10 m",
+         "at": 1452
+        },
+        {
+         "what": "earth",
+         "label": "10,000 km",
+         "at": 1511
+        },
+        {
+         "what": "moon",
+         "label": "1 marble",
+         "at": 1619,
+         "red": true
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ]
+}
