@@ -6,8 +6,9 @@ The suite covers the pure TypeScript helpers of the Remotion project's
 [`BeanExplainer`](../09-remotion-project.md#beanexplainer),
 [`Whiteboard`](../09-remotion-project.md#whiteboard),
 [`TerminalDoc`](../09-remotion-project.md#terminaldoc),
-[`UnderTheHood`](../09-remotion-project.md#underthehood) and
-[`CaseFileStory`](../09-remotion-project.md#casefilestory) scenes. Each test file sits beside the code
+[`UnderTheHood`](../09-remotion-project.md#underthehood),
+[`CaseFileStory`](../09-remotion-project.md#casefilestory) and
+[`MidcenturyHowTo`](../09-remotion-project.md#midcenturyhowto) scenes. Each test file sits beside the code
 it covers as `*.test.ts`. The tests run under Node 22 with no browser, canvas or render, because the
 math and geometry classes of `three` work in Node without a DOM.
 
@@ -136,6 +137,27 @@ Covers `contract.ts`, `stage.ts` and the icon tables
   stretch over the stillness limit.
 - Under the `fill` caption look a word is grey until it is spoken, then the text colour, and a
   text colour the blend cannot parse switches on the word's frame without throwing.
+
+## Mid-century How-To
+
+### `src/scenes/installed/midcenturyHowTo/midcenturyHowTo.test.ts`
+
+Covers `contract.ts`, `stage.ts`, the presenter's arm and the object library
+([Mid-century How-To](../10-scene-authoring.md#mid-century-how-to)).
+
+- The constants and the geometry (object, label, inset and presenter boxes, the arm's reach, a
+  screen's lines, the blink) agree with the shared cases `mcp/tests/test_midcentury_howto.py` runs.
+- Running `character-tools/sync-contract.mjs` leaves the fixture and the style pack unchanged, so a
+  catalogue or limit changed without the sync fails here.
+- The library draws every object the contract and the pack list, and each object's acts have
+  distinct names.
+- The `point` and `present` poses aim the glove at the object, and each pose's bitmap box holds its
+  arm and glove.
+- The worked example opens on the title card, walks the steps and ends on the summary, where the
+  presenter stands on the right; a close-up shot has no presenter.
+- A press lands on the row its act lights and uses the presenter's own hand within reach and the
+  hose arm from the edge out of it; the hand pulls back before the press, holds, then returns. Each
+  shot starts empty.
 
 ## System Flow
 

@@ -35,20 +35,22 @@ Every composition runs at 30 fps, so frame 30 is one second in. Two rules follow
 
 ## Compositions
 
-`renderer/remotion/src/Root.tsx` registers four compositions.
+`renderer/remotion/src/Root.tsx` registers these compositions.
 
 | Id | Component | Size and duration |
 |---|---|---|
 | `Composition` | `CompositionBuilder` | 1080×1920, duration read from `timeline.json` |
 | `TextLayoutAudit` | `CompositionBuilder` plus `TextLayoutProbe` | The same |
 | `MascotSheet` | `MascotSheet` | One frame, sized per sheet |
+| `BeanPropSheet`, `StorybookSheet`, `PresenterSheet`, `MidcenturySheet` | A style's model sheet | 1080×1920, one frame per page |
 | `Placeholder` | A static placeholder | 1080×1920, 90 frames |
 
 A renderer turns `Composition` into a video with `npx remotion render Composition`.
 `TextLayoutAudit` is the same video with an invisible measuring probe on top. The
 [text-layout audit](11-rendering-and-review.md#the-text-layout-audit) drives it through Remotion's
 Node API. `MascotSheet` is listed so that Remotion Studio can show it, and its renders use a separate
-entry point ([The mascot layer](#the-mascot-layer)). The GPU test's `GpuProbe` composition is
+entry point ([The mascot layer](#the-mascot-layer)). The model sheets show a style's fixed cast and
+library for a person to check, and no video uses them. The GPU test's `GpuProbe` composition is
 registered only by its own entry point, `src/gpu-probe/index.ts`.
 
 The first two take their duration from `calculateMetadata` (`Root.tsx::durationFromTimeline`), which
@@ -391,6 +393,9 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
 - A Case File Story video has the one `CaseFileStory` scene and its meters and beats pass the Case
   File Story checks; no other video uses `CaseFileStory`
   ([Scene Authoring](10-scene-authoring.md#case-file-story)).
+- A Mid-century How-To video has the one `MidcenturyHowTo` scene and its steps and shots pass the
+  Mid-century How-To checks; no other video uses `MidcenturyHowTo`
+  ([Scene Authoring](10-scene-authoring.md#mid-century-how-to)).
 - `inserts`, if present or if the script marks a segment `insert`, passes `mcp/inserts.py::check`:
   the window rules, the style's own checks (`system_flow.check_insert`, `terminal_doc.check_insert`),
   and no main scene starting inside a window. Each main style's checks treat the windows as quiet
@@ -404,7 +409,7 @@ is queued or rendering (`status_mismatch`).
 `canvas` is the only default the tool writes into most files, besides each insert's `src`, `palette`
 and `shift` and the `insertTransition`, which the agent never writes. A System Flow or Whiteboard config
 with no `subtitles` also gets its style pack's caption settings, because its captions are part of the
-style's look. A Bean Explainer, Storybook Atlas, Under the Hood or Case File Story config gets them under whatever
+style's look. A Bean Explainer, Storybook Atlas, Under the Hood, Case File Story or Mid-century How-To config gets them under whatever
 `subtitles` keys it sets, so a config that sets only `emphasis` keeps the look. A Terminal Doc config
 gets them the same way, with its skin's colours and font over the pack's. An Under the Hood config
 also gets each plate's `aspect`, read from its photograph. The
@@ -457,7 +462,8 @@ rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 
 `renderer/remotion/src/scenes/installed/` is the committed library. A config entry can reference
 `KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`.
-`BeanExplainer`, `Whiteboard`, `UnderTheHood` and `CaseFileStory` are referenced the same way, by
+`BeanExplainer`, `Whiteboard`, `StorybookAtlas`, `UnderTheHood`, `CaseFileStory` and `MidcenturyHowTo`
+are referenced the same way, by
 videos of their own style only. `SystemFlow` and `TerminalDoc` are drawn as
 [insert scenes](#insert-scenes) from the `inserts` list, and as a video's one scene only for a video
 that holds their style from an earlier version. The other
@@ -623,6 +629,32 @@ and IBM Plex Mono (400 and 700) from `public/fonts/` before the first frame; the
 use Instrument Sans, which this scene loads. It decodes every still before the first frame, and a
 still that does not load fails the render. The contract and the checks are in
 [Case File Story](10-scene-authoring.md#case-file-story).
+
+### `MidcenturyHowTo`
+
+`MidcenturyHowTo` draws a whole Mid-century How-To video from `props.midcenturyHowTo`: the title card,
+the step grounds and headers, the presenter, the objects and their acts, the presses, medallions,
+insets and labels, and the summary card. Its helpers and the object library are in
+`midcenturyHowTo/`: `contract.ts` (limits, timings, geometry and the `OBJECTS` catalogue), `stage.ts`
+(what is on stage at a frame), `presenter.tsx`, `cel.tsx` (the palette and the off-register `Cel`
+shape objects are drawn with), `objects/` and `fonts.ts`. It loads Alfa Slab One, Oleo Script and
+Jost (500 and 600) from `public/fonts/` before the first frame; the style's captions use Jost, which
+this scene loads. The `MidcenturySheet` composition renders the presenter's poses and faces, then the
+object library with each object's box outlined in red, one page per frame: `npx remotion still
+src/index.ts MidcenturySheet out.png --frame=<page>`.
+
+A Mid-century How-To video can also use props its agent drew, in `generated/<video_id>/prop-*.tsx`,
+imported through `characterKit/customProps.ts` the same way as Bean Explainer's.
+`character-tools/render-props.mjs` renders them for the `render_style_props` tool on the
+`MidcenturyPropPreview` component, from a bundle entry it writes per call into
+`character-tools/.tmp/` (ignored by git). `character-tools/sync-contract.mjs` rewrites the style
+pack's `extra` and `mcp/tests/fixtures/midcentury_howto_contract.json` from the renderer's code.
+
+`characterKit/` holds what the [character styles](10-scene-authoring.md#character-styles) share:
+`sprite.tsx` (the bitmap cache every character, object and medallion is drawn through), `fonts.ts`
+(the font loader, and `fontFaceCss` for text inside a sprite), `geometry.ts` (seeded randomness, easing
+and shape helpers) and `customProps.ts`. The contract and the checks are in
+[Mid-century How-To](10-scene-authoring.md#mid-century-how-to).
 
 ### Figure and panel components
 
@@ -790,3 +822,7 @@ files in `public/fonts/` (SIL Open Font License 1.1). Its photographs are genera
 Mono files in `public/fonts/` (SIL Open Font License 1.1). Its stills are generated for each video
 from the house lead's sheet, `mcp/case_file_assets/lead.png`, an original character generated for
 this project.
+
+`MidcenturyHowTo`'s presenter and objects are original drawings. Its fonts in `public/fonts/` are
+Alfa Slab One, Oleo Script and Jost, each under the SIL Open Font License 1.1, with the license beside
+them.

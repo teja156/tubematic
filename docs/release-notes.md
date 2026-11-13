@@ -64,6 +64,14 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   for approval, New Video, and a domain's defaults, which every new video in the domain starts with.
   The video's window shows the agent's decision and its reason in an **Inserts** row, and the Script
   tab marks the parts of the script an insert shows.
+- A new experimental style, **Mid-century How-To**: a 1950s classroom-film cartoon in which a gloved
+  presenter walks the viewer through a task in numbered steps, each on its own flat colour, pressing
+  buttons on phones, keypads and other flat objects, with checks, circled numbers and a closing card
+  that lists the steps. It suits a task the viewer can copy, such as turning on two-factor sign-in or
+  backing up a phone, and Auto can pick it. It needs no API key and no GPU, generates no images, and
+  takes no mascot, because its presenter has the stage.
+  [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
+  details.
 
 ### Changed
 

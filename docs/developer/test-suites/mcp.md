@@ -801,6 +801,49 @@ call reserves no picture slot and reaches no paid endpoint.
 
 Trap: a reservation that lapses sooner than the slowest call gives that call's slot to a parallel
 one, and both are billed.
+
+### `test_midcentury_howto.py`
+
+Covers `mcp/midcentury_howto.py`, the shared custom-prop checks in `mcp/character_kit.py`, the
+`character_styles` registry, the checks `write_scene_config` and `validate_job` run on a Mid-century
+How-To config, `render_style_props`, the picture checks and the text audit's per-shot sampling
+([Mid-century How-To](../10-scene-authoring.md#mid-century-how-to)).
+
+- The limits, timings, geometry, catalogues and object boxes equal the renderer's, read from
+  `fixtures/midcentury_howto_contract.json`, and the pack's `extra` lists the same catalogues. Both
+  sides answer the fixture's worked cases (object, label, inset and presenter boxes, the arm's reach,
+  where a press lands, a screen's lines, the blink). After a change to `contract.ts`, `stage.ts` or
+  the library, `node character-tools/sync-contract.mjs` (from `renderer/remotion`) rewrites the
+  fixture and the pack's `extra`; never edit them by hand.
+- The style is registered in `character_styles.BY_ID` and takes no mascot.
+- The skill's worked example passes. Each refusal names its step, shot or event and cause: a title,
+  kicker, header or inset too long, an unknown outfit, ground, object or act, too few steps, a step
+  where no shot starts, a title card under 1.5 seconds, a summary off a shot, anything but poses on
+  the summary card or an arm pose there, the presenter on the left of it, a pose in a shot with no
+  presenter, `at` on a pose that does not aim or naming nothing on stage, an object over the
+  presenter or off the stage, text in an object with no slot, events out of order or before their
+  object lands, an inset over its object, a label that repeats the narration, and a still stretch. A
+  press too close to the last one is refused. A value of the wrong type gets a sentence back and
+  raises nothing.
+- With insert windows passed as `quiet`, a press inside a window is refused, and a window over a
+  stretch that would otherwise be too still is not counted as still.
+- The skill's example prop passes the source rules; a hook, an SVG filter, a dashed stroke,
+  randomness and an import of another style's file are refused.
+- `write_scene_config` writes a sound config with the style's captions, refuses a broken one by the
+  style's name, refuses `MidcenturyHowTo` on another style and a config naming a prop file that does
+  not exist. `validate_job`'s re-check (`_character_custom_prop_errors`) finds a prop redrawn with a
+  hook.
+- `render_style_props` refuses another style, a video with no config and a config with no
+  `customProps`, returns the picture with the character script (the renderer stubbed), and gives up
+  with a retry message when the heavy-check lock stays busy. The preview script's `STYLES` table
+  names this style's preview component.
+- The picture checks find the style, warn when the title card has no object by frame 3, and count a
+  press as a change and a label as none. The text audit samples each shot once, from after its
+  header has come in.
+
+Trap: a drawing is rasterised once per look outside the render's React tree, so a hook in an
+agent's prop would read no frame and no state. The hook rule is the one source rule the character
+styles add to Bean Explainer's.
 ### `test_choose_script_formula.py`
 
 Covers `choose_script_formula`, `get_video`'s `formula_routing`, the domain's default formula in

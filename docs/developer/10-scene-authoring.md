@@ -51,8 +51,8 @@ style looks like.
 
 For the scene styles, a style is a set of permissions: which canvas, and which kinds of figure. It
 does not decide any beat's treatment. `cartoon_3d`, `bean_explainer`, `whiteboard`,
-`storybook_atlas`, `under_the_hood` and `case_file_story` replace the scene system with one
-whole-video scene of their own. `system_flow` and `terminal_doc` are insert styles: they draw short
+`storybook_atlas`, `under_the_hood`, `case_file_story` and `midcentury_howto` replace the scene system
+with one whole-video scene of their own. `system_flow` and `terminal_doc` are insert styles: they draw short
 scenes inside another style's video and are never a video's style
 ([Main styles and inserts](#main-styles-and-inserts)). A video voiced before that keeps its whole
 System Flow or Terminal Doc scene, so both stay in the table below.
@@ -70,6 +70,7 @@ System Flow or Terminal Doc scene, so both stay in the table below.
 | `terminal_doc` | `dark` | No | No | No |
 | `under_the_hood` | `dark` | Its own presenter | No | No |
 | `case_file_story` | `dark` | Its own lead, painted into the stills | No | No |
+| `midcentury_howto` | `light`, painted over by its step grounds | Its own presenter | No | No |
 | `cartoon_3d` | `dark`, never visible | Its own cast | No | No |
 
 The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `characters_allowed`.
@@ -83,8 +84,10 @@ with one diagram scene ([System Flow](#system-flow)),
 with one board scene ([Whiteboard](#whiteboard)), `storybook_atlas` with one picture-book scene
 ([Storybook Atlas](#storybook-atlas)), `terminal_doc` (likewise) with one typographic scene
 ([Terminal Doc](#terminal-doc)), `under_the_hood` with one scene of annotated close-up
-photographs ([Under the Hood](#under-the-hood)), and `case_file_story` with one scene of painted
-stills, meters and number cards ([Case File Story](#case-file-story)).
+photographs ([Under the Hood](#under-the-hood)), `case_file_story` with one scene of painted
+stills, meters and number cards ([Case File Story](#case-file-story)), and `midcentury_howto` with
+one scene of a cartoon presenter walking through numbered steps
+([Mid-century How-To](#mid-century-how-to)).
 
 The API and `update_video` refuse a style whose pack needs something the install lacks, where it is
 chosen. Four styles have a need:
@@ -130,7 +133,7 @@ style.
 | `routing` | What Auto reads to pick a style: `best_for`, `avoid_for`, `cannot_show`, `signals`, and the optional `moods` and `images` (below) |
 | `script` | Optional. How to write the narration and each segment's `visual` brief for this style; `get_video` returns it as `style.script` and the script-writing skill follows it |
 | `picture` | `{opening, turn, payoff, ending}`: how the style shows the first frame, a turn or re-opening, the payoff, and how a video in it ends. `get_video` returns it as `style.picture`; [The opening and the beats](#the-opening-and-the-beats) says how it is used |
-| `extra` | Style-specific data, such as System Flow's icon list, Bean Explainer's and Storybook Atlas's cast and prop catalogues or Whiteboard's doodle library |
+| `extra` | Style-specific data, such as System Flow's icon list, Bean Explainer's and Storybook Atlas's cast and prop catalogues, Mid-century How-To's object library or Whiteboard's doodle library |
 | `role` | `main` for a style that carries a whole video, `insert` for one that draws only insert scenes ([Main styles and inserts](#main-styles-and-inserts)) |
 | `inserts` | A main style only: `{host, transition}`, whether it takes insert scenes and how it goes into one |
 | `insert` | An insert style only: `{max_seconds, palettes, props_key, component, review}` |
@@ -410,6 +413,9 @@ yet voiced, and leaves them alone from voicing on.
   stillness gaps; `write_scene_config` passes `quiet=inserts_mod.windows(config)`.
 - Its authoring skill has an Inserts step that sends the agent to `tubematic-inserts` and names the
   style's own quiet rule.
+- A [character style](#character-styles) is one more module in `character_styles.py::STYLES`, and
+  `write_scene_config`, `validate_job`, the picture checks and the text-layout audit reach it from
+  there.
 
 ### Adding an insert style
 
@@ -565,13 +571,14 @@ record, or segments with no `beat`, has the opening role only. `get_timeline` al
 formula's `first_frame` line, which says what the first frame shows for that structure.
 
 The video ends on the payoff picture, with no closing card after it, unless the style's pack says
-otherwise: every pack's `picture` block states its opening, turn, payoff and ending, and two packs
-end their own way. Case File Story ends on its choice card after the consequence, and Whiteboard on
-its recap pull-back. Mixed scenes take theirs from `visual_styles.py::SCENES_PICTURE`.
+otherwise: every pack's `picture` block states its opening, turn, payoff and ending, and three packs
+end their own way. Case File Story ends on its choice card after the consequence, Whiteboard on its
+recap pull-back, and Mid-century How-To may end on its summary card when the narration recounts the
+steps. Mixed scenes take theirs from `visual_styles.py::SCENES_PICTURE`.
 
 The voice starts a few frames into the video, so a picture on frame 0 cannot sit on a word. The
-styles that time events to words accept an event at frame 0 for that reason: Bean Explainer and
-Storybook Atlas take any event there, and Whiteboard takes region 1's first item. Whiteboard draws
+styles that time events to words accept an event at frame 0 for that reason: Bean Explainer,
+Storybook Atlas and Mid-century How-To take any event there, and Whiteboard takes region 1's first item. Whiteboard draws
 that item from `TIMING.openLead` frames before frame 0 instead of `TIMING.lag` frames after its word,
 so the first frame shows ink being drawn, and System Flow draws a node whose event is within
 `TIMING.openWithin` frames of the start from frame 0, half grown. Both changes touch the opening
@@ -664,6 +671,8 @@ with `FIRST_FRAME_WINDOW` as the early limit):
 - Terminal Doc: beat 1 has nothing on stage by frame 3.
 - Storybook Atlas: nothing moves in chapter 1 by frame 3.
 - Under the Hood: plate 1 has no photograph.
+- Mid-century How-To: the title card has no object on stage by frame 3
+  (`midcentury_howto.py::first_frame_problem`).
 
 Case File Story's validator already requires a shot first, and Cartoon 3D is not checked.
 
@@ -1372,6 +1381,152 @@ push: every frame is a new full-frame painting to capture and encode, which the 
 `mcp/tests/test_case_file_story.py` pins `case_file_story.py` to `contract.ts` and to the pack. The
 pack's `captions` fill every `subtitles` key the config leaves out. The text-layout audit samples
 each beat as if it were a scene, from the frame its last part has appeared.
+
+## Character styles
+
+A character style draws its whole video from data with a cast and objects drawn in code, and lets
+the agent draw an object the library lacks. Mid-century How-To is the first; `mcp/character_styles.py`
+lists them (`STYLES`, by pack order). Each has its own section below, and they share this machinery.
+
+On the renderer's side the shared parts are in `src/scenes/installed/characterKit/`:
+
+- `sprite.tsx` draws every character, object and medallion once per distinct look from its SVG,
+  rasterises it to a PNG and reuses it on every frame that looks the same. A live SVG character cost
+  about 0.3 CPU-seconds a frame on the CPU renderer (measured for Bean Explainer), and a cached bitmap
+  costs nothing measurable. Mid-century How-To's wobble steps through three fixed phases on twos,
+  so a held picture has three looks to cache; motion that changes every frame (a pop, a slide, a press) is a
+  transform on the bitmap. A cache miss holds the frame with `delayRender`, and a drawing that cannot
+  be rasterised fails the render.
+- `fonts.ts` loads a style's bundled faces from `public/fonts/` before the first frame
+  (`useStyleFonts`). An SVG drawn as an image cannot see the page's fonts, so `fontFaceCss` inlines
+  the same files as data URLs into a sprite that holds text.
+- `customProps.ts` imports the video's own `generated/<video_id>/prop-<name>.tsx` files; the frame
+  waits for them, and one that does not load fails the render.
+- `geometry.ts` holds seeded randomness, easing and the shape helpers the drawings share.
+
+On the MCP side:
+
+- `mcp/character_kit.py` holds the custom-prop checks every character style applies
+  (`custom_prop_errors`): the id, `src`, box, text and acts limits the style passes in, and the
+  source rules, which are Bean Explainer's `FORBIDDEN_SOURCE` plus no React or Remotion hook. A
+  drawing is rasterised outside the render's React tree, so a hook has no frame or state there; it
+  draws from the `phase`, `act`, `actT` and `text` it is given. Each style names the imports it
+  allows. The rules read the raw file, comments included.
+- Each style's module exposes the same names (`STYLE_ID`, `SCENE_SRC`, `PROPS_KEY`, `check`,
+  `check_scene_use`, `custom_prop_errors`, `audit_windows`, `change_frames`, `first_frame_problem`,
+  `sample_text`, `CHANGE_FIX`, listed in `character_kit.py`'s header).
+  `write_scene_config` runs `check_scene_use` and `check` for each style in `STYLES`, `validate_job`
+  checks the prop files again as they are on disk (`server.py::_character_custom_prop_errors`), the
+  picture checks read `first_frame_problem` and `change_frames`, and the text-layout audit samples
+  each window `audit_windows` returns.
+- One tool previews the agent's own props for every character style:
+  [`render_style_props`](06-mcp-server.md#render_style_props). It runs
+  `renderer/remotion/character-tools/render-props.mjs`, which draws them on the style's preview
+  component named in its `STYLES` table.
+- `renderer/remotion/character-tools/sync-contract.mjs` writes each style's pack `extra` (the
+  catalogues) and `mcp/tests/fixtures/<style>_contract.json` (the constants and worked cases) from
+  the style's `contract.ts` and `stage.ts`. Run it after changing a catalogue, a limit, a box or
+  `stage.ts`; the tests on both sides fail until it has run. Never edit either file by hand.
+
+A new character style is a pack, an installed scene and its folder, one module added to
+`character_styles.py::STYLES`, an entry in each of the two `character-tools` scripts, and its
+authoring skill.
+
+## Mid-century How-To
+
+A Mid-century How-To video is one installed scene, `MidcenturyHowTo`, that spans the whole video: a
+1950s classroom-film cartoon in which a geometric presenter with white gloves walks the viewer
+through a task in numbered steps. Each step has its own flat ground colour, a numbered medallion, a
+slab-serif header and, when it has a `tag`, a tag card. Flat objects (phones, keypads, locks, paper) pop in, and every
+filled shape is printed a few pixels off its broken ink line, the offset stepping every two frames.
+The captions are the shared caption layer in its `label` look. The agent writes no scene code. Its
+props carry `midcenturyHowTo: {title, kicker, presenter, steps, summary, shots, customProps}`,
+written with the `tubematic-midcentury-howto` skill, whose `reference/contract.md` documents every
+field and the object library, and whose `reference/example-config.json` is the worked example.
+
+- The video opens on a title card (the running title, the `kicker` and a sunburst) that lasts at
+  least 1.5 seconds before step 1, the first sentence or two on why the task matters.
+- `steps` lists 2 to 6 steps, each `{start, header, tag, ground}`, with `ground` one of `mustard`,
+  `blue`, `olive`, `rose` and `sea`. A step lasts at least 3 seconds.
+- `summary`, when given, is the frame a summary card starts: every step listed beside a teal
+  medallion, to the end of the video.
+- `shots` are cuts, each `{start, presenter, events}`; `presenter` is `left`, `right` or `none`
+  for a close-up without him. A step starts where a shot starts.
+- `presenter` picks the presenter's `outfit` and `hair`; the drawing is fixed.
+
+| Event | What the scene draws |
+|---|---|
+| `pose` | The presenter's arm, glove, eye and brow change to a pose and a face on a word. `at` aims a `point` or `present` pose at an object on stage |
+| `object` | An object from the library, or one the agent drew, pops, drops, slides or rises in at `x`, `y`, with its text slot filled |
+| `act` | The object's own animation (a screen row lights, a keypad types, a toggle flips) for 20 frames, then it holds |
+| `press` | A gloved hand pulls back and presses the object on a word, with a ring burst |
+| `check`, `cross` | A teal check or a coral cross medallion on the object |
+| `inset` | A circle holding a short number or word, joined to its object by a dashed line |
+| `label` | A tag card with a turning star |
+
+The presenter never moves his mouth to the words: the narrator is off screen, and the mouth shows
+only his expression. His body holds still while his hand, eye and brow act. A press uses his own hand when
+the point is within `GEOMETRY.armReach` (430 px) of his shoulder, and otherwise a rubber-hose arm
+reaching in from the frame's edge, which is also how a shot with no presenter presses
+(`stage.ts::stageAt`). On a screen the press lands on the row that a `row1` to `row3` act on the
+same frame lights.
+
+The library holds 29 objects (`contract.ts::OBJECTS`, each with its box, text limit and acts),
+checked by a person on the `MidcenturySheet` composition. For an object the viewer must recognise
+and the library lacks, the agent draws its own as `generated/<video_id>/prop-<name>.tsx`, modelled
+on `midcenturyHowTo/objects/` and drawn with `cel.tsx`'s `Cel`, lists it in `customProps` with its
+box, text limit and acts, and looks at it with
+[`render_style_props`](06-mcp-server.md#render_style_props) before it submits.
+
+The renderer's side is `src/scenes/installed/MidcenturyHowTo.tsx` with `midcenturyHowTo/`:
+
+- `contract.ts` holds the limits, timings, geometry and catalogues.
+- `stage.ts` works out what is on stage at a frame: the step, the shot, the presenter's pose and
+  blink, the objects and their acts, the presses and the medallions.
+- `presenter.tsx` draws the presenter and the hose arm, `cel.tsx` the palette and the off-register
+  fill, and `objects/` the library.
+- `MidcenturySheet.tsx` holds the model sheet and `MidcenturyPropPreview`, the picture
+  `render_style_props` returns.
+
+The presenter, the objects, the hose arm and the medallions are [cached bitmaps](#character-styles),
+and the scene uses no SVG filter or CSS gradient; the sunburst is flat wedges that never turn. The
+text the layout audit measures (the title, the step header, tags, labels and insets) is HTML.
+Measured on the CPU renderer over the whole example video, it costs 0.35 CPU-seconds a frame against
+System Flow's example at 0.25 the same day. The scene has no paper grain, because a full-frame
+grain layer, tiled or as one cached bitmap, cost about 0.24 CPU-seconds a frame more; the
+off-register fills carry the printed look. The measurements are in `MidcenturyHowTo.tsx`'s header comment.
+
+`mcp/midcentury_howto.py` checks a config in `write_scene_config` and refuses it when:
+
+- A `midcentury_howto` video has anything but the one `MidcenturyHowTo` scene, from frame 0 for
+  `totalFrames`, or another style uses `MidcenturyHowTo`.
+- The title runs past 30 characters, the kicker past 22, a step header past 18 or a tag past 26, or
+  a ground, outfit, hair, pose, face, entrance, object or act is not in the catalogue or the video's
+  `customProps`.
+- There are fewer than 2 or more than 6 steps or more than 30 shots, the first shot does not start
+  at frame 0, a later shot or a step does not start within 2 frames of a word, a step starts where no
+  shot does, step 1 starts before 1.5 seconds, a shot lasts under 1.5 seconds, a step under 3 or the
+  summary under 2.
+- A pose or a press is not on a word or at frame 0, poses come less than 8 frames apart or presses
+  less than 16, a press starts less than 6 frames into its shot, an `at` names an object not yet on
+  stage or a pose that does not aim, an act, press, medallion or inset starts before its object has
+  landed, or an event starts less than 6 frames before its shot ends.
+- A shot puts more than 4 objects, labels and insets on stage, one of them reaches outside the stage
+  (from the header band to the floor, inside the side margins) or overlaps the presenter, a label or
+  an inset overlaps an object or another label or inset, or the summary card's shot holds anything
+  but the presenter's poses.
+- A label runs past 22 characters or repeats 4 narration words in a row, or an inset's text past 10.
+- A custom prop breaks the [shared rules](#character-styles): at most 8 a video, a box of 60 to 700
+  px a side, a text slot of at most 80 characters, at most 4 acts, and imports of `react`,
+  `remotion` and the style's `cel` or `contract` only.
+- Nothing changes for more than 3 seconds.
+
+`mcp/tests/test_midcentury_howto.py` pins `midcentury_howto.py` to `contract.ts` and `stage.ts`
+through the shared cases in `fixtures/midcentury_howto_contract.json`, and to the pack. The pack's
+`captions` fill every `subtitles` key the config leaves out. The text-layout audit samples each shot
+as if it were a scene, from the frame its header and entrances have settled. A Mid-century How-To
+video takes no mascot (`"mascot": false`), because its presenter holds the stage a mascot would
+take. Its pack hosts inserts with a `wipe` transition.
 
 ---
 

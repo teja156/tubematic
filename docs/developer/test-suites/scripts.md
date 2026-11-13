@@ -715,6 +715,26 @@ Covers the `tubematic-case-file-story` skill ([Case File Story](../10-scene-auth
 Trap: an agent that skips the lead sheet, or leaves `reference` off a still, gets a different
 character in each painting, and nothing after the paid call can repair that.
 
+### `test_midcentury_howto_skill.py`
+
+Covers the `tubematic-midcentury-howto` skill
+([Mid-century How-To](../10-scene-authoring.md#mid-century-how-to)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- `reference/contract.md` lists the pack's objects and no others, each with its text limit and
+  acts, and every catalogue the validator accepts.
+- The limits the skill states are the ones `mcp/midcentury_howto.py` enforces.
+- It names the tools it uses, `render_style_props` among them, never calls `generate_image`, and
+  says the presenter never moves his mouth to talk.
+- The reference files ship, the worked example passes the validator, and the uninstaller removes the
+  skill.
+- The skill teaches objects of the agent's own within the validator's limits, and its worked prop,
+  `example-prop-alarm.tsx`, passes the validator's source checks.
+
+Trap: a skill that teaches a limit the validator does not enforce gets the agent refused on every
+video. Change a limit in `contract.ts`, run the sync script, and change the skill text with it.
+
 ### `test_system_flow_skill.py`
 
 Covers the `tubematic-system-flow` skill ([System Flow](../10-scene-authoring.md#system-flow)).
