@@ -40,7 +40,7 @@ the story.
 
 The full field reference is `reference/contract.md`; the worked example is
 `reference/example-config.json` (narration in `reference/example-timeline.json`), the tale of a
-lighthouse keeper told in three pages. Read all three before you write.
+lighthouse keeper told in five pages (three pictures, two of them shown twice). Read the example before you write.
 
 ## Rules the tools enforce
 
@@ -53,10 +53,13 @@ wrong. Fix every problem it lists, then write again.
 - **Pages:** the first starts at frame 0; the others start on a word (within 2 frames of a word's
   `startFrame`); each lasts at least 2.5 seconds; at most 24 pages.
 - **The title** is 1 to 3 words and at most 24 characters.
-- **The reveal:** `pencilAt` is on a word at least 6 frames after the page starts (the first page may
-  instead give 0 and open on its drawing); `colourAt` is on a word 12 to 30 frames after `pencilAt`
-  (within a second of the pencil), and the colour (18 frames) must finish flooding at least 8 frames
-  before the page ends.
+- **The reveal:** `pencilAt` is on a word 6 to 30 frames after the page starts (a page is an empty card
+  until its pencil wipes in, so it comes within a second; the first page may instead give 0 and open on
+  its drawing); `colourAt` is on a word 12 to 30 frames after `pencilAt` (within a second of the pencil),
+  and the colour (18 frames) must finish flooding at least 8 frames before the page ends. Frames of
+  silence (a `[pause]` the narration is silent through) do not count towards the 30, and `pencilAt` and
+  `colourAt` may sit inside a silent stretch as well as on a word, so a pause never stops a page from
+  being revealed.
 - **Pictures:** `image` is the `public_path` `generate_image` returned,
   `/public/<video_id>/images/<name>.png`, and `pencil` is the `public_path`
   `treat_image(video_id, "<name>", "pencil")` returned for that same name,

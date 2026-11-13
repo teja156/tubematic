@@ -42,7 +42,7 @@ set at 92 px, or smaller down to 56 px so that it fits one line of 880 px.
 | `image` | `/public/<video_id>/images/<name>.png`, the `public_path` from `generate_image`. Never the hero sheet (`hero`) |
 | `pencil` | `/public/<video_id>/images/treated/<name>.pencil.png`, the `public_path` from `treat_image(video_id, "<name>", "pencil")` for the same `<name>` as `image` |
 | `focus` | Optional. `[u, v]`, each from 0 to 1 (default `[0.5, 0.5]`): the point of the picture the slow push keeps in place, read off `read_image`'s grid |
-| `pencilAt` | The word the pencil plate starts wiping in on, at least 6 frames after `start`. The first page may give 0 instead: its drawing is on screen whole from frame 0 |
+| `pencilAt` | The word the pencil plate starts wiping in on, 6 to 30 frames after `start` (the page is an empty card until then). The first page may give 0 instead: its drawing is on screen whole from frame 0. Silent frames do not count towards the 30, and a frame inside a silent pause is allowed as well as a word |
 | `colourAt` | The word the colour starts flooding in on, 12 to 30 frames after `pencilAt` (within a second of the pencil); the flood (18 frames) ends at least 8 frames before the page does |
 | `turn` | Optional. `"cut"` (the default) or `"curl"`: the page before turns over from its bottom-right corner into this one. At most 2 curls a video, never on the first page |
 
@@ -52,8 +52,8 @@ At most 12 different `image` pictures per video. A page may show a picture again
 
 In frames at 30 fps: the title wipes in over 10, the pencil plate over 12, the colour over 18, and a
 curl takes 14. Time the colour to a word within a second of the pencil: from the pencil's first frame to
-the colour landing takes at most 48 frames (1.6 s). Every `start` (but the first), `pencilAt` (but a first page's 0) and `colourAt` is within
-2 frames of a word's `startFrame`.
+the colour landing takes at most 48 frames of narration (1.6 s; a silent pause between them is not counted). Every `start` (but the first), `pencilAt` (but a first page's 0) and `colourAt` is within
+2 frames of a word's `startFrame`, or (`pencilAt` and `colourAt` only) inside a silent pause of the narration (a gap of 24 frames or more between two words).
 
 On each page something new must happen at least every 6 seconds: from the page's start to its pencil
 wipe, and from the colour landing to the page's end. The slow push

@@ -93,6 +93,10 @@ Covers `formatPacks/contract.ts` and `draw.ts` ([Format Packs](../10-scene-autho
 - Every change is listed in order with the insert's first frame first; rows ease on the card's
   curve, and marks are drawn as single paths.
 
+The Code Scenes and Format Packs tests also pin the watermark's position and keep-out line
+(`src/watermarkBox.ts`) to their fixtures, and check that the Code Scenes header and every Format
+Packs top-row text end left of it, so a lifted insert never puts text under the mark.
+
 ### `src/scenes/installed/fitText.test.ts`
 
 Covers `fitText.ts`, the width estimate that sizes a one-line text down to fit its box and counts a
@@ -387,6 +391,10 @@ Covers `contract.ts`, `kit.ts` and `stage.ts`
   colour shades too; the whole board is in view at zoom 1 and every prop's solids stand on its footprint.
 - A camera move that starts while another still glides starts from the view on screen, so it never jumps.
 - A prop drops in from above with a squash, and one with no `enter` stays where it is.
+- The pin layout leaves a lone pin and pins far apart at their default place, moves the second of two
+  close pins to the other side or up a lane (up a lane only when `side` fixes the side or the other side
+  would leave the frame), never puts a label outside the safe margins when a clear place exists, and gives
+  the same answer every time it is asked.
 
 ## System Flow
 

@@ -77,7 +77,8 @@ beat, card or event is wrong. Fix every problem it lists, then write again.
 - **A person card** takes `name`, `dates`, `role` and one of `emblem` or `initials` (never both). A field
   for a picture or a face of a person is refused.
 - **Never still:** something new on the page (a beat, an event, a person or a line arriving) at least
-  every 3.5 seconds. The slow push does not count.
+  every 3.5 seconds. The slow push does not count. A silent pause in the narration is not counted: the
+  page may hold through one.
 
 ## Step 0: read
 

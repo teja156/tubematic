@@ -1,5 +1,6 @@
 import React from "react";
 import { Img, staticFile } from "remotion";
+import { WATERMARK_RIGHT, WATERMARK_TOP, WATERMARK_WIDTH } from "./watermarkBox";
 
 // The "Made with tubematic.ai" mark (TMDEV-141).
 //
@@ -24,13 +25,13 @@ import { Img, staticFile } from "remotion";
 // renderer with no egress would stall on it.
 
 // The asset is 480x630. Drawn at about 27%, on the 1080x1920 canvas.
-const WIDTH = 130;
+const WIDTH = WATERMARK_WIDTH;
 // Top-right, because the bottom of the frame belongs to the captions. Tucked
 // into the corner, deliberately OUTSIDE the Shorts safe zone (top 150, sides
 // 60): the safe zone is where scenes put content, and the mark is meant to
 // stay out of their way, not to be read through the platform's own UI.
-const TOP = 32;
-const RIGHT = 32;
+const TOP = WATERMARK_TOP;
+const RIGHT = WATERMARK_RIGHT;
 // Low enough that the scene shows through it.
 const OPACITY = 0.6;
 // Being last in the DOM is not enough to be on top. Scenes are not isolated

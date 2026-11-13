@@ -297,3 +297,18 @@ def test_steps_that_are_not_a_list_are_refused_with_a_sentence():
 def test_an_output_label_the_fonts_do_not_draw_is_refused():
     errors = _check(_step(_entry(), 2, output={"lines": [], "label": "\u200b"}))
     assert any("not a character the card's fonts draw" in m for m in errors), errors
+
+
+# ── the watermark (Kasm Test 2 finding) ─────────────────────────────────────
+
+def test_the_header_row_ends_left_of_the_watermark():
+    assert cs.KEEP_OUT_X == FIXTURE["keep_out_x"] == FIXTURE["watermark"]["left"] - 18
+
+
+def test_a_step_label_that_would_reach_the_watermark_is_refused():
+    # 24 wide letters each in the tag and the label cannot share the row above the card.
+    e = _entry(tag="W" * 24)
+    e["props"]["codeScenes"]["steps"][0]["label"] = "W" * 20
+    assert any("do not fit one row above the card" in m for m in _check(e))
+    # A usual pair fits in the room left of the mark.
+    assert not any("one row" in m for m in _check(_entry()))

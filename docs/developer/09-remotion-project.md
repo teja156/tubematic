@@ -309,6 +309,13 @@ keep it fixed:
 - The artwork carries its own translucent plate, which keeps the white text readable on any frame.
   The mark needs no colour derived from the canvas.
 
+`src/watermarkBox.ts` holds the mark's position (`WATERMARK_*`) and `KEEP_OUT_X`, the line 18 px left
+of it. An insert moves up by as much as 120 px to clear the captions, which puts its top row beside
+the mark, so Code Scenes keeps its header row (tag, step counter and label) and Format Packs its
+EXAMPLE tag, list title, quiz question and strap headline at or left of that line. The validators
+check the Code Scenes header against it, the Format Packs wrap boxes are narrowed to it, and each
+style's contract test pins the numbers to the shared fixtures.
+
 The image is `public/watermark.png`, baked into the renderer image and loaded with `staticFile()`, so
 no render fetches it over the network. It sits beside the per-video `public/<video_id>/` directories,
 so staging does not touch it. The source artwork is in `logos/` at the repository root.
@@ -506,7 +513,7 @@ from the video's visual style or the canvas the agent recorded, and otherwise wi
 | `fontFamily` | `system-ui, sans-serif` | A non-empty string. See [Fonts](#fonts) |
 | `fontSize` | `62` | 28 to 120 |
 | `color` | `null` | A CSS colour. `null` follows the canvas: white on dark, near-black on light |
-| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"label"` (an ivory printed label), `"none"`, `"log"` (a terminal log strip) `"chip"` (a cream paper chip) or `"card"` (a cube-chip card); see [Grouping words](#grouping-words) |
+| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"label"` (an ivory printed label), `"none"`, `"log"` (a terminal log strip), `"chip"` (a cream paper chip) or `"card"` (a cube-chip card); see [Grouping words](#grouping-words) |
 | `position` | `0.78` | 0.05 to 0.95. The vertical centre as a fraction of frame height |
 | `uppercase` | `false` | `true` or `false` |
 | `accent` | `null` | A CSS colour: the word being spoken in the `log` look, an `emphasis` word on a `chip`, the tags in the `tags` look, the marker in the `highlight` look. `null` uses each one's own colour |

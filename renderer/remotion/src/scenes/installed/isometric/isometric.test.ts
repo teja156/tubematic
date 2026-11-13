@@ -5,6 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { AREA_KINDS, COLOR_NAMES, GEOMETRY, LIMITS, PROP_NAMES, ROOMS, STACKS, TIMING, eventFrames, grouped, type IsometricData } from "./contract";
 import { PROPS, drawSolid, footprint, project, tones } from "./kit";
+import { pinLayout } from "./pins";
 import { dropAt, projAt, quietSpans, readoutAt, viewAt, WHOLE } from "./stage";
 
 const ROOT = path.resolve(__dirname, "../../../../../..");
@@ -81,5 +82,59 @@ describe("the kit and the stage", () => {
     expect(dropAt(p, 50 - TIMING.drop).lift).toBeGreaterThan(2);
     expect(dropAt(p, 50).lift).toBe(0);
     expect(dropAt(p, 51).squash).not.toBe(0);
+  });
+});
+
+describe("the pin layout", () => {
+  const pin = (on: string, label: string, extra: object = {}) => ({ on, label, at: 100, ...extra });
+  const data = (props: [string, string, [number, number]][], pins: object[]) => ({
+    title: "T", boards: [{ start: 0, areas: [], props: props.map(([id, what, at]) => ({ id, what, at })), pins }],
+  }) as unknown as IsometricData;
+
+  it("keeps a lone pin at its default place", () => {
+    const d = data([["a", "house", [3, 3]]], [pin("a", "Home")]);
+    expect(pinLayout(d, d.boards[0])).toEqual([{ right: true, lane: 0 }]);
+  });
+
+  it("never lets two stacked pins' labels overlap: the second takes the other side or rises", () => {
+    // two props one tile apart, so their anchors are about 60 px apart on screen
+    const d = data([["hub", "warehouse", [4, 4]], ["depot", "house", [5, 4.4]]], [pin("hub", "Regional hub", { value: "3", unit: "h" }), pin("depot", "Local depot", { value: "4", unit: "h" })]);
+    const slots = pinLayout(d, d.boards[0]);
+    expect(slots[0]).toEqual({ right: true, lane: 0 });
+    expect(slots[1].right !== slots[0].right || slots[1].lane > 0).toBe(true);
+  });
+
+  it("rises when the other side is fixed by `side`", () => {
+    const d = data([["a", "warehouse", [4, 4]], ["b", "house", [4.4, 4.4]]], [pin("a", "North hub", { side: "right" }), pin("b", "South depot", { side: "right" })]);
+    const [first, second] = pinLayout(d, d.boards[0]);
+    expect(first).toEqual({ right: true, lane: 0 });
+    expect(second).toEqual({ right: true, lane: expect.any(Number) });
+    expect(second.lane).toBeGreaterThan(0);
+  });
+
+  it("is the same whatever frame it is asked at", () => {
+    const d = data([["a", "warehouse", [4, 4]], ["b", "house", [4.5, 4.5]]], [pin("a", "Hub"), pin("b", "Depot")]);
+    expect(pinLayout(d, d.boards[0])).toEqual(pinLayout(d, d.boards[0]));
+  });
+
+  it("never moves a label out of the frame: near the right edge the second pin rises instead of flipping right", () => {
+    const d = data([["a", "warehouse", [9, 1]], ["b", "house", [8.6, 1.4]]], [pin("a", "Far east hub", { value: "3", unit: "h" }), pin("b", "Far east depot", { value: "4", unit: "h" })]);
+    const [first, second] = pinLayout(d, d.boards[0]);
+    expect(first.right).toBe(false); // too far right for a label on its right
+    expect(second.right).toBe(false);
+    expect(second.lane).toBeGreaterThan(0);
+  });
+
+  it("near the left edge a clash rises on the same side: a label never starts left of the safe margin", () => {
+    const d = data([["a", "warehouse", [2, 7]], ["b", "house", [2.4, 7.4]]], [pin("a", "West hub"), pin("b", "West depot")]);
+    const [first, second] = pinLayout(d, d.boards[0]);
+    expect(first).toEqual({ right: true, lane: 0 });
+    expect(second.right).toBe(true);
+    expect(second.lane).toBeGreaterThan(0);
+  });
+
+  it("leaves pins that are far apart where they are", () => {
+    const d = data([["a", "house", [1, 1]], ["b", "house", [8, 8]]], [pin("a", "Start"), pin("b", "End")]);
+    expect(pinLayout(d, d.boards[0]).every((s) => s.lane === 0)).toBe(true);
   });
 });

@@ -82,6 +82,9 @@ export const TIMING = {
   title: 10,
   // the pencil wipe starts at least this many frames after its page (except a first page drawn at frame 0)
   pencilAfter: 6,
+  // ... and at most this many frames of narration after it (silent pauses do not count), so a page never sits
+  // as an empty card for long (a first page drawn at frame 0 aside)
+  pencilWithin: 30,
   pencil: 12,
   // the colour starts flooding at least TIMING.pencil and at most this many frames after the pencil starts
   colourWithin: 30,

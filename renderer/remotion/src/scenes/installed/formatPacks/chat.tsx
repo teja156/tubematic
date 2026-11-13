@@ -7,7 +7,7 @@
  */
 import React from "react";
 import { fitFontSize } from "../fitText";
-import { LAYOUT, ONE_LINE, TIMING, type ChatData } from "./contract";
+import { LAYOUT, ONE_LINE, TIMING, TOP_TEXT_RIGHT, type ChatData } from "./contract";
 import { MONO, SANS } from "./fonts";
 import { arrival, backOut, clamp01, easeOut, type Look } from "./draw";
 import { ExampleTag, MarkedText, type TextMark } from "./parts";
@@ -35,7 +35,7 @@ export const Chat: React.FC<{ data: ChatData; frame: number; origin: number; P: 
           {data.title}
         </div>
       ) : null}
-      <ExampleTag P={P} style={{ right: 1080 - LAYOUT.right, top: LAYOUT.titleY + 12 }} />
+      <ExampleTag P={P} style={{ right: 1080 - TOP_TEXT_RIGHT.exampleTag, top: LAYOUT.titleY + 12 }} />
 
       {/* The phone: a plain slab with a screen. */}
       <div style={{ position: "absolute", left: LAYOUT.left, top: LAYOUT.phoneTop, width: phoneW,

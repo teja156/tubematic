@@ -146,7 +146,11 @@ are hidden while an insert plays, so inside each insert's window no scene starts
 connector, bubble, mark, stamp or slash lands. Start the next scene on the window's end (its last
 frame + 1), so the video comes back on a new picture, or let the scene from before the insert carry on.
 A scene never starts on the frame just before an insert: its tear runs one frame past its start.
-The "never still" rule does not count a window. With no marked segment, write no `inserts`.
+The "never still" rule does not count a window. Plan the gap with the scenes: the segment marked
+`insert` is where no scene starts and nothing lands, so let the scene before it keep its last event
+before the segment's first word, and start the scene after on the window's end (a window of about 140
+frames fits in a scene whose quiet tail is that long, however many events it had before). With no
+marked segment, write no `inserts`.
 
 ## Step 6 — write, validate, submit
 

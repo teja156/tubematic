@@ -91,7 +91,7 @@ station, hero or event is wrong. Fix every problem it lists, then write again.
 - **No face field.** A field for a person's face or portrait is refused, and so is any field that
   would hide a note or place a piece.
 - **Never still:** something new on the desk (a station, an event, a line or a count starting) at
-  least every 3.5 seconds.
+  least every 3.5 seconds. A silent pause in the narration is not counted: the desk may hold through one.
 
 ## Step 0: read
 
