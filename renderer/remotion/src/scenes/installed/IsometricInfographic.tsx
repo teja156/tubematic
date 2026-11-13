@@ -23,13 +23,14 @@ import React, { useLayoutEffect, useMemo, useRef } from "react";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 import { GEOMETRY, H, LIMITS, TIMING, W, grouped, type IsometricData, type Pin } from "./isometric/contract";
 import { colorOf, drawBoard, makeBoardCache, paintPaper, pinAnchor } from "./isometric/draw";
+import { PIN, pinLayout, type PinSlot } from "./isometric/pins";
 import { JOST, useIsometricFonts } from "./isometric/fonts";
 import { INK, PALETTE, miniCube } from "./isometric/kit";
 import { boardIndexAt, easeInOut, easeOutBack, ramp, readoutAt } from "./isometric/stage";
 
 const G = GEOMETRY;
 
-const PinView: React.FC<{ data: IsometricData; boardIndex: number; pin: Pin; frame: number; dim: number }> = ({ data, boardIndex, pin, frame, dim }) => {
+const PinView: React.FC<{ data: IsometricData; boardIndex: number; pin: Pin; slot: PinSlot; frame: number; dim: number }> = ({ data, boardIndex, pin, slot, frame, dim }) => {
   const b = data.boards[boardIndex];
   const prop = b.props.find((p) => p.id === pin.on);
   if (!prop || frame < pin.at) return null;
@@ -37,12 +38,12 @@ const PinView: React.FC<{ data: IsometricData; boardIndex: number; pin: Pin; fra
   const [ax, ay] = pinAnchor(data, b, prop, frame);
   // a pin whose thing the camera has moved out of the band is not shown
   if (ay < G.bandTop || ay > G.bandBottom || ax < G.safeLeft || ax > G.safeRight) return null;
-  const up = 150, rule = 220;
+  const up = PIN.up + slot.lane * PIN.laneStep, rule = PIN.rule;
   const dot = easeOutBack(Math.min(1, p / 0.18));
   const lead = easeInOut((p - 0.12) / 0.33);
   const ru = easeInOut((p - 0.4) / 0.25);
   const tx = easeInOut((p - 0.6) / 0.4);
-  const right = (pin.side ?? (ax > W * 0.62 ? "left" : "right")) === "right";
+  const right = slot.right;
   const topY = ay - up * lead;
   const textLeft = right ? ax + 14 : ax - rule;
   return (
@@ -94,6 +95,7 @@ export default function IsometricInfographic({ isometric }: IsometricInfographic
   const cache = useMemo(makeBoardCache, []);
   const bi = boardIndexAt(data, frame);
   const board = data.boards[bi];
+  const layout = useMemo(() => (board ? pinLayout(data, board) : []), [data, board]);
 
   useLayoutEffect(() => {
     if (paper.current) paintPaper(paper.current);
@@ -122,7 +124,7 @@ export default function IsometricInfographic({ isometric }: IsometricInfographic
       <canvas ref={paper} width={W} height={H} style={{ position: "absolute", left: 0, top: 0 }} />
       <canvas ref={world} width={W} height={H} style={{ position: "absolute", left: 0, top: 0 }} />
       {board ? (board.pins ?? []).map((pin, i) => (
-        <PinView key={i} data={data} boardIndex={bi} pin={pin} frame={frame} dim={dimProp && dimProp !== pin.on ? 0.45 : 1} />
+        <PinView key={i} data={data} boardIndex={bi} pin={pin} slot={layout[i]} frame={frame} dim={dimProp && dimProp !== pin.on ? 0.45 : 1} />
       )) : null}
       <div style={{ position: "absolute", left: G.safeLeft, top: G.titleTop, fontWeight: 600, fontSize: 60, letterSpacing: 5, lineHeight: 1, whiteSpace: "nowrap" }}>
         {data.title.toUpperCase()}
