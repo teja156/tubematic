@@ -34,12 +34,14 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ### Added
 
-- The agent now looks at its own video before it asks for a render. A new `preview_frames` tool draws
+- Every video is now checked by its own agent before it is queued for a render. The agent draws
   chosen frames of the finished scene (the opening, the way in and out of each insert, the turn and
-  the payoff) with the captions, the mascot and the watermark as the render draws them. The
-  agent fixes what looks wrong, such as a label on the wrong side or overlapping text, and
-  looks again, so fewer videos come back from review for a fault that was visible all along. It
-  costs no API credit. Each frame costs some processor time on the machine that runs Tubematic.
+  the payoff) with the captions, the mascot and the watermark as the render draws them, fixes what
+  looks wrong, such as a label on the wrong side or overlapping text, and looks again. This applies to
+  every visual style, and again to every revision, so fewer videos come back from review for a fault
+  that was visible all along. A video whose current scene was never looked at is not queued, and a
+  renderer that cannot draw the frames does not stop it. It costs no API credit. Each frame costs some
+  processor time on the machine that runs Tubematic.
 - Each video now has its own voice speed, from 0.90x to 1.25x. The agent picks it with the script:
   faster for a quick list, slower for a script dense with numbers or a calm story. You see it and
   can change it in the video's window before you approve the script, and the window shows the speed

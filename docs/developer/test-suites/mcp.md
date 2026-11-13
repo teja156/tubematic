@@ -1661,6 +1661,11 @@ command line, so nothing is bundled or rendered.
   symlink is replaced, never written through.
 - A call clears the previous call's pictures. A Cartoon 3D video is sent to `cartoon_still`. A missing
   job file names the step that writes it. A symlinked `preview/` or job file is refused before anything is written.
+- `preview/record.json` holds the hash of the scene-config and timeline looked at, `ok` or `unavailable`.
+  A rewritten config or timeline has not been looked at. A call refused for its arguments records
+  nothing, and a record that is damaged, wrong or a symlink is no look.
+- `submit_render` returns `preview_not_taken` for a video nobody looked at, queues it after a look
+  or an `unavailable` record, and asks nothing of a Cartoon 3D video.
 - A renderer that refuses the folder is named as older than the tool, so an upgrade that is half done
   does not look like a broken scene.
 

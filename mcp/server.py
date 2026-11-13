@@ -6292,6 +6292,33 @@ def _mascot_block(video_id: str) -> dict | None:
     return {"error": "mascot_cues_missing", "detail": MASCOT_CUES_MISSING}
 
 
+PREVIEW_NOT_TAKEN = (
+    "Nobody has looked at this video as the render will draw it. Call preview_frames(video_id, frames) on the "
+    "current scene-config (frame 0, the first words of the turn and the payoff, the way in and out of each insert), "
+    "fix what you see, look again, then submit. A config or timeline written after the look needs a new look. "
+    "If preview_frames itself fails, it records that and this check passes."
+)
+
+
+def _preview_block(video_id: str) -> dict | None:
+    """Why a video may not be queued for want of a look at its frames
+    (TMDEV-241); None for a Cartoon 3D video (its beat gate is its look), a
+    video with no scene-config yet (validate_job's report), or one whose
+    current scene-config and timeline were looked at (or the tool said it could
+    not draw them)."""
+    try:
+        path = tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG)
+        if path.is_symlink() or not path.is_file():
+            return None
+        if cartoon.is_cartoon(json.loads(path.read_text(encoding="utf-8"))):
+            return None
+    except Exception:
+        return None
+    if frame_preview.look_recorded(JOBS_DIR, video_id):
+        return None
+    return {"error": "preview_not_taken", "detail": PREVIEW_NOT_TAKEN}
+
+
 def _cartoon_block(video_id: str) -> dict | None:
     """Why a Cartoon 3D video may not be queued, as a tool error; None for a
     video that is not Cartoon 3D, has no scene-config yet (validate_job's
@@ -6330,6 +6357,10 @@ def submit_render(video_id: str) -> dict:
     automatically (RENDER_QUEUED → RENDERING → VIDEO_READY or
     REVISION_REQUESTED or FAILED). No polling needed on the agent side.
 
+    Refuses with `preview_not_taken` until preview_frames has looked at the
+    current scene-config and timeline (Cartoon 3D excepted: its beat gate is
+    its look). A tool that cannot draw records that, and the check passes.
+
     Returns {status: "queued", video_id} on success, {error} on failure.
     """
     _init_db()
@@ -6362,6 +6393,9 @@ def submit_render(video_id: str) -> dict:
         mascot_err = _mascot_block(video_id)
         if mascot_err:
             return mascot_err
+        preview_err = _preview_block(video_id)
+        if preview_err:
+            return preview_err
 
         # Atomically claim the VOICE_READY → RENDER_QUEUED transition — the guard
         # is expressed in the UPDATE's own WHERE clause (not a separate

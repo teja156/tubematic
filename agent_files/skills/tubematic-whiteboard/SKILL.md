@@ -203,7 +203,11 @@ still" rule does not count a window. With no marked segment, write no `inserts`.
    "light"` (or leave it out), the one scene and any `inserts`. Fix every problem it reports.
 2. `validate_job(video_id)`: fix its errors, then read its `warnings`. The text audit measures each
    region's writing in a browser; an overlap is a measurement, so move or shorten the text.
-3. `submit_render(video_id)`.
+3. **Look before you submit.** Call `preview_frames(video_id, frames)`, as the **tubematic-scene-config** skill's
+   *Look before you submit* step says: frame 0, the first words of the turn and the payoff, and the way in and out of any
+   insert. Fix what you see and look again. `submit_render` refuses with `preview_not_taken` until the current config
+   has been looked at, and a config rewritten after the look needs a new look.
+4. `submit_render(video_id)`.
 
 In the handback, say how many regions you made, the step each shows, and anything you left out to
 stay within the limits.

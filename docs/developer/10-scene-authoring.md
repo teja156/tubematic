@@ -448,6 +448,10 @@ yet voiced, and leaves them alone from voicing on.
   stillness gaps; `write_scene_config` passes `quiet=inserts_mod.windows(config)`.
 - Its authoring skill has an Inserts step that sends the agent to `tubematic-inserts` and names the
   style's own quiet rule.
+- Its authoring skill has a numbered **Look before you submit** step before its `submit_render` step:
+  `preview_frames` at frame 0, the turn and payoff, and each insert, naming `preview_not_taken`.
+  `scripts/tests/test_look_step.py` fails for a main style without it. A style that draws its own world
+  from source (Cartoon 3D) names its own look instead.
 - A [character style](#character-styles) is one more module in `character_styles.py::STYLES`, and
   `write_scene_config`, `validate_job`, the picture checks and the text-layout audit reach it from
   there.
@@ -661,9 +665,10 @@ nothing.
 `preview_frames` renders chosen frames of the composed scene (main style, inserts, captions, mascot
 and watermark, as the render draws them) and returns them as pictures, so the agent sees a label on
 the wrong side or an empty board before a render and an AI review find it. The skills ask for the
-opening, the way in and out of each insert, and the turn and payoff frames. The step is a
-recommendation: `validate_job` and `submit_render` do not check that it happened, so a video never
-waits on a renderer that cannot draw. Cartoon 3D keeps `cartoon_still`
+opening, the way in and out of each insert, and the turn and payoff frames, and every revision looks
+again. `submit_render` refuses a video whose current config nobody looked at (`preview_not_taken`), and
+passes one whose look the tool recorded as unavailable, so a renderer that cannot draw never stops the
+pipeline. Cartoon 3D keeps `cartoon_still`, which its beat gate requires
 ([`preview_frames`](06-mcp-server.md#preview_frames)).
 
 ### Text-layout warnings

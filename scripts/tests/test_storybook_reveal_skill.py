@@ -106,7 +106,7 @@ def test_the_skill_hands_inserts_to_the_insert_skill():
 
 
 def test_the_look_step_points_at_the_frame_preview():
-    assert "`preview_frames`" in (SKILL / "SKILL.md").read_text()
+    assert "`preview_frames(" in (SKILL / "SKILL.md").read_text()
 
 
 def test_the_worked_example_is_valid_json_with_one_scene_and_three_pictures():

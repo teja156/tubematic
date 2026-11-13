@@ -478,7 +478,7 @@ def test_a_symlink_in_the_source_tree_is_refused_before_anything_is_judged(fake_
         cartoon.freeze_source(jobs, VID, scenes)
 
 
-def test_submit_render_does_not_ask_readiness_of_a_video_that_is_not_cartoon(job_db, jobs, monkeypatch):
+def test_submit_render_does_not_ask_readiness_of_a_video_that_is_not_cartoon(job_db, jobs, monkeypatch, looked):
     job_db("vid-plain")
     (jobs / "vid-plain").mkdir()
     (jobs / "vid-plain" / "scene-config.json").write_text(json.dumps(PLAIN_CONFIG))

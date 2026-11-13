@@ -260,6 +260,69 @@ def test_a_renderer_older_than_this_tool_is_named_as_the_cause(fake_node, jobs):
         _preview(jobs, remotion, [10])
 
 
+# ── The record that submit_render asks for ─────────────────────────────────────
+
+def test_a_drawn_preview_records_a_look_at_this_config(fake_node, jobs):
+    _, remotion, _ = fake_node
+    assert not fp.look_recorded(jobs, VID)
+    _preview(jobs, remotion, [10])
+    assert fp.look_recorded(jobs, VID)
+    rec = json.loads((jobs / VID / "preview" / "record.json").read_text())
+    assert rec["status"] == "ok" and rec["frames"] == [10]
+
+
+def test_a_rewritten_config_or_timeline_needs_a_new_look(fake_node, jobs):
+    _, remotion, _ = fake_node
+    _preview(jobs, remotion, [10])
+    (jobs / VID / "scene-config.json").write_text(json.dumps(dict(PLAIN, fps=31)))
+    assert not fp.look_recorded(jobs, VID)
+    _preview(jobs, remotion, [10])
+    assert fp.look_recorded(jobs, VID)
+    (jobs / VID / "timeline.json").write_text(json.dumps({"totalFrames": 121, "fps": 30, "words": []}))
+    assert not fp.look_recorded(jobs, VID)
+
+
+def test_a_tool_that_cannot_draw_records_that_it_could_not_and_lets_the_submit_through(fake_node, jobs):
+    plan, remotion, _ = fake_node
+    plan({"code": 1, "stderr": "chromium could not start"})
+    with pytest.raises(fp.PreviewError):
+        _preview(jobs, remotion, [10])
+    rec = json.loads((jobs / VID / "preview" / "record.json").read_text())
+    assert rec["status"] == "unavailable" and "chromium could not start" in rec["why"]
+    assert fp.look_recorded(jobs, VID)
+
+
+def test_a_refused_call_records_nothing(fake_node, jobs):
+    _, remotion, _ = fake_node
+    with pytest.raises(fp.PreviewError):
+        _preview(jobs, remotion, [999])          # the caller's mistake, not the tool's
+    assert not fp.look_recorded(jobs, VID)
+
+
+def test_a_planted_or_damaged_record_is_no_look(fake_node, jobs, tmp_path):
+    _, remotion, _ = fake_node
+    folder = jobs / VID / "preview"
+    folder.mkdir()
+    (folder / "record.json").write_text("not json")
+    assert not fp.look_recorded(jobs, VID)
+    (folder / "record.json").write_text(json.dumps({"sha": "x", "status": "ok"}))
+    assert not fp.look_recorded(jobs, VID)
+    (folder / "record.json").unlink()
+    elsewhere = tmp_path / "rec.json"
+    _preview(jobs, remotion, [10])
+    elsewhere.write_text((folder / "record.json").read_text())
+    (folder / "record.json").unlink()
+    (folder / "record.json").symlink_to(elsewhere)
+    assert not fp.look_recorded(jobs, VID)       # a record read through a link is refused
+
+
+def test_a_clean_call_keeps_the_record_of_the_look_before(fake_node, jobs):
+    _, remotion, _ = fake_node
+    _preview(jobs, remotion, [10])
+    _preview(jobs, remotion, [20])
+    assert json.loads((jobs / VID / "preview" / "record.json").read_text())["frames"] == [20]
+
+
 # ── The MCP tool ────────────────────────────────────────────────────────────────
 
 def test_the_tool_is_registered_and_refuses_what_it_cannot_draw(through_mcp):
@@ -272,3 +335,44 @@ def test_the_tool_is_registered_and_refuses_what_it_cannot_draw(through_mcp):
     assert "preview_frames" in asyncio.run(go())
     result, _ = through_mcp("preview_frames", video_id="../x", frames=[1])
     assert "error" in result
+
+
+# ── submit_render asks for the look ─────────────────────────────────────────────
+
+@pytest.fixture
+def queued_video(tmp_path, monkeypatch):
+    """A VOICE_READY video with a plain scene-config, in a real (temporary) database and jobs directory."""
+    monkeypatch.setattr(server, "DB_FILE", tmp_path / "test.db")
+    server._init_db()
+    jobs_dir = tmp_path / "jobs"
+    monkeypatch.setattr(server, "JOBS_DIR", jobs_dir)
+    d = jobs_dir / VID
+    d.mkdir(parents=True)
+    (d / "scene-config.json").write_text(json.dumps(PLAIN))
+    (d / "timeline.json").write_text(json.dumps({"totalFrames": 120, "fps": 30, "words": []}))
+    (d / "audio.mp3").write_bytes(b"\x00" * 100)
+    with server._conn() as con:
+        con.execute(
+            "INSERT INTO videos (id, project_id, topic, status, voice_file_path, timeline_path, scene_config_path, "
+            "created_at, updated_at) VALUES (?, NULL, 't', 'VOICE_READY', 'audio.mp3', 'timeline.json', 'scene-config.json', 'x', 'x')",
+            (VID,))
+    return jobs_dir
+
+
+def test_submit_render_refuses_a_video_nobody_looked_at(queued_video):
+    result = server.submit_render(VID)
+    assert result["error"] == "preview_not_taken" and "preview_frames" in result["detail"]
+
+
+def test_submit_render_queues_after_a_look_and_refuses_again_after_a_rewrite(queued_video):
+    d = queued_video / VID
+    fp._write_record(d / "preview", fp._content_hash(d / "scene-config.json", d / "timeline.json"), "ok", [10])
+    (d / "scene-config.json").write_text(json.dumps(dict(PLAIN, fps=31)))
+    assert server.submit_render(VID)["error"] == "preview_not_taken"
+    fp._write_record(d / "preview", fp._content_hash(d / "scene-config.json", d / "timeline.json"), "unavailable", [10], "down")
+    assert server.submit_render(VID) == {"status": "queued", "video_id": VID}
+
+
+def test_a_cartoon_3d_video_is_not_asked_for_a_preview(queued_video):
+    (queued_video / VID / "scene-config.json").write_text(json.dumps(CARTOON))
+    assert server._preview_block(VID) is None

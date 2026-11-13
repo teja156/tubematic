@@ -141,9 +141,13 @@ on. The "never still" rule does not count a window. With no marked segment, writ
 2. `validate_job(video_id)`: fix its errors, then read its `warnings`. The text audit measures the pins,
    the title and the readout in a browser; an overlap is a measurement, so move a pin to its other
    `side`, shorten its text or glide the camera.
-3. Before submit_render: check the opening, the turn and the payoff against the narration once more
+3. **Look before you submit.** Call `preview_frames(video_id, frames)`, as the **tubematic-scene-config** skill's
+   *Look before you submit* step says: frame 0, the first words of the turn and the payoff, and the way in and out of any
+   insert. Fix what you see and look again. `submit_render` refuses with `preview_not_taken` until the current config
+   has been looked at, and a config rewritten after the look needs a new look.
+4. Before submit_render: check the opening, the turn and the payoff against the narration once more
    (every number on a pin or the readout matches what is said).
-4. `submit_render(video_id)`.
+5. `submit_render(video_id)`.
 
 In the handback, say what the followed thing is, its stations, which props you built yourself, and any
 warning you left and why.

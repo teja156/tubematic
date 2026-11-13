@@ -956,6 +956,21 @@ Covers the `tubematic-format-packs` skill ([Format Packs](../10-scene-authoring.
   tick, the EXAMPLE tag, and no invented source for a headline. It has one **Check and submit** step,
   and `uninstall.py` removes it.
 
+### `test_look_step.py`
+
+Covers the look step in the skills ([`preview_frames`](../06-mcp-server.md#preview_frames)).
+
+- Every main style's authoring skill, and the two legacy whole-video paths (System Flow and Terminal
+  Doc), name `preview_frames`, the `preview_not_taken` refusal and a numbered **Look before you
+  submit** step that comes before its `submit_render` step. The list is read from the style packs,
+  so a style added later is held to it with no edit here.
+- Cartoon 3D names `cartoon_still` and never `preview_frames`.
+- The operator looks at a new video, and again after a render revision; a re-voice re-enters the same
+  flow.
+
+Trap: `submit_render` refuses a video that nobody looked at, so a skill that omits the step sends its
+agent into a refusal it was not told about.
+
 ### `test_insert_skills.py`
 
 Covers the skills that make a video with insert scenes

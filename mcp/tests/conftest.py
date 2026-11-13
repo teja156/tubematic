@@ -45,3 +45,11 @@ def through_mcp(caplog, monkeypatch):
         return result.structured_content, [r for r in caplog.records if r.name == "mcp"]
 
     return call
+
+
+@pytest.fixture
+def looked(monkeypatch):
+    """The video was looked at with preview_frames, so submit_render's check for a
+    look (TMDEV-241) passes: for tests that are about something else in the submit."""
+    import frame_preview
+    monkeypatch.setattr(frame_preview, "look_recorded", lambda jobs_dir, video_id: True)

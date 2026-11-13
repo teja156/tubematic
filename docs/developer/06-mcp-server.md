@@ -224,7 +224,8 @@ The calls one video takes when it has no mascot and is not Cartoon 3D:
 14. `write_scene_file(video_id, scene_name, tsx_content)` writes each new scene and returns its `src`.
 15. `write_scene_config(video_id, config)` writes `scene-config.json`.
 16. `validate_job(video_id)` returns `errors` to fix and `warnings` to judge.
-17. `submit_render(video_id)` moves the video to `RENDER_QUEUED`. The renderer takes it from there.
+17. `preview_frames(video_id, frames)` shows the finished scene as the render draws it. The style's skill names the frames, and the agent fixes what it sees.
+18. `submit_render(video_id)` moves the video to `RENDER_QUEUED`. The renderer takes it from there.
 
 ---
 
@@ -802,8 +803,8 @@ and the watermark. It returns a text block naming the frames, then the pictures 
 keeps them under `<video_id>/preview/` until the next call. It reads the scene source as it is on
 disk, takes no scene-work claim and calls no paid API. The skills ask the agent to look at the
 opening, the way in and out of each insert, and the turn and payoff frames after
-`write_scene_config`, fix what looks wrong and look again. Nothing gates on it: `validate_job` and
-`submit_render` never ask whether a preview was taken.
+`write_scene_config`, fix what looks wrong and look again. `submit_render` asks for it
+([below](#submit_render)): `validate_job` does not, so it can run before the look.
 
 `mcp/frame_preview.py` builds the props the render gets (`render_agent.py::render_props`): the three
 job-file paths, the watermark from the `watermark_enabled` setting, and, for a video with a mascot,
@@ -813,7 +814,13 @@ job-file paths, the watermark from the `watermark_enabled` setting, and, for a v
 MCP container's CPU when none answers. A Cartoon 3D video is refused with a pointer to
 `cartoon_still`. The call fails with a message naming an older renderer when the stills server
 refuses the `preview/` folder, which happens only between upgrading the MCP server and the
-renderer. One preview or Cartoon 3D tool runs per video at a time. On the CPU fallback a call costs
+renderer. One preview or Cartoon 3D tool runs per video at a time.
+
+Each call writes `preview/record.json`: the hash of the `scene-config.json` and `timeline.json` it
+looked at, and `ok` when the frames drew or `unavailable` (with the reason) when the tool itself failed
+to draw them. A call refused for its arguments, such as too many frames, records nothing. The file is
+written beside a folder handle opened without following a link, and read the same way, so a link planted
+in its place is no record. On the CPU fallback a call costs
 about 6 CPU seconds to bundle the project and about 1 more per frame; the stills server keeps the
 bundle, so it costs the frames alone.
 
@@ -1209,6 +1216,10 @@ by skipping `validate_job`:
 
 - A Cartoon 3D video with an open gate returns `cartoon_not_ready`.
 - A mascot video whose scene-config has no cue track returns `mascot_cues_missing`.
+- A video whose current `scene-config.json` and `timeline.json` have no `preview/record.json` of that
+  content returns `preview_not_taken`. A config rewritten after the look, such as in a revision,
+  needs a new look. A record of `unavailable` passes, so a renderer that cannot draw never stops the
+  pipeline. A Cartoon 3D video is not asked: its beat gate is its look.
 
 When it queues a Cartoon 3D video it records the source's fingerprint in
 `<jobs>/<video_id>/cartoon/source.json`. The renderer renders that tree or fails the render back to

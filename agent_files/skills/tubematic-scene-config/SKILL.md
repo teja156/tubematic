@@ -92,7 +92,9 @@ correct and re-spends `generate_image` on every image beat.
    side, overlapping text, an empty board, a caption over the subject) with `write_scene_file` or
    `write_scene_config`, and look at the frame again. Each frame costs CPU on a shared host: ask
    for the frames you will act on, not every beat. If the tool returns an error (a renderer that is
-   not ready, say), carry on: nothing waits for a preview. A Cartoon 3D video is looked at with
+   not ready, say), carry on: the tool records that it could not draw, and `submit_render` accepts that. `submit_render`
+   refuses with `preview_not_taken` until the current `scene-config.json` and timeline have been looked at, so a config
+   rewritten after the look (a revision, say) needs a new look. A Cartoon 3D video is looked at with
    `cartoon_still` instead.
 10. Hand back to the operator to call `validate_job`
 
