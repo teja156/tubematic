@@ -26,6 +26,11 @@ topic's main expectation; it is expected as an insert in at least three topics, 
 topics expect no inserts, so the eval can see an insert added for variety
 ([Main styles and inserts](../10-scene-authoring.md#main-styles-and-inserts)).
 
+Night Signal, Flat Vector Science and Isometric Infographic each take at least three topics, with
+pair probes against the styles they could be confused with (Case File Story and Bean Explainer for
+Night Signal, Photo Explainer, Bean Explainer and Stick Explainer for Flat Vector Science, Under the
+Hood for Isometric Infographic).
+
 Most topics probe a pair of styles that could be confused (Bean Explainer and Storybook Atlas, Under
 the Hood and Whiteboard, a story style and Illustrated), or an older style next to a newer neighbour
 that is the wrong answer for it. The `note` names the pair. A probe in each direction is what shows

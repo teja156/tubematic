@@ -1074,12 +1074,82 @@ Trap: `npx` runs `tsc` as a child of its own, so killing `npx` alone leaves `tsc
 call `validate_job` again after a timeout, and those leftover processes once filled a host's memory.
 The timeout test fails if the kill reaches `npx` only.
 
+### `test_night_signal.py`
+
+Covers `mcp/night_signal.py`, the checks `write_scene_config` runs on a Night Signal config, the text
+audit's per-scene sampling and the `letterSpacing` caption key
+([Night Signal](../10-scene-authoring.md#night-signal)).
+
+- The limits, timings and geometry equal the ones in the renderer's `contract.ts`, read from the
+  TypeScript source, and the catalogues equal the library the renderer draws and the pack's `extra`.
+  Both sides answer the shared cases in `fixtures/night_signal_contract.json` (events, still stretches,
+  tears, timecodes and text fits).
+- The skill's worked example (`reference/example-config.json`, timed against
+  `reference/example-timeline.json`) passes.
+- Each refusal names its scene and cause: a bad file, clock, setting, slot, screen or mark; a first scene
+  that is late or a card; a scene off the words, out of order or too short to see; two items in a slot or
+  an item's step onto another; a connector or bubble on an empty slot; a second threat or a `redAt` off
+  the threat; a text over its limit; a card cut before its last part can be read; a second green mark;
+  and a stretch with nothing new for over 5 seconds, where the small running loops do not count.
+- A custom part is refused for a bad shape, a tone, a box overflow or too many shapes, and can stand in
+  a scene while it cannot reuse a library name.
+- With insert windows passed as `quiet`, nothing starts or lands inside a window, and a window over a
+  stretch that would otherwise sit still is not counted as still.
+- The text audit samples every scene once its text has settled.
+- `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
+  one and refuses `NightSignal` on another style. `subtitles.letterSpacing` accepts -0.05 to 0.3 only.
+
+### `test_flat_vector_science.py`
+
+Covers `mcp/flat_vector_science.py`, the checks `write_scene_config` and `validate_job` run on a Flat
+Vector Science config and on the video's own prop files, and `render_style_parts` for the style
+([Flat Vector Science](../10-scene-authoring.md#flat-vector-science)).
+
+- The limits, timings and geometry equal the ones in the renderer's `contract.ts`, the catalogues equal
+  the library the renderer draws and the pack's `extra`, and both sides answer the shared cases in
+  `fixtures/flat_vector_science_contract.json`.
+- The skill's worked example passes and uses every kind of shot.
+- Each refusal names its shot and cause, among them a shot off the words or out of order, a pill that
+  names an empty slot or does not fit, a second red part, a descent whose layers do not go deeper, a
+  last arrival too close to the next shot, a lens or push transition inside an insert, and a stretch
+  with nothing new for over 4 seconds.
+- With insert windows passed as `quiet`, nothing arrives inside a window.
+- The skill's example prop passes the source rules. A custom prop entry with a bad id, `src` or box is
+  refused, and so is a file with a hook, the frame, SVG text, an image or any of Bean Explainer's
+  forbidden patterns, or a file that is missing.
+- The text audit samples every shot.
+- `write_scene_config` writes a sound config with the style's captions, refuses a missing prop file and
+  `FlatVectorScience` on another style. `validate_job` checks a prop file again and refuses one redrawn
+  into breaking the rules.
+- `render_style_parts` refuses what it cannot preview and sends the video's props to the renderer.
+
+### `test_isometric_infographic.py`
+
+Covers `mcp/isometric_infographic.py`, the checks `write_scene_config` runs on an Isometric
+Infographic config, and `render_style_parts` for the style
+([Isometric Infographic](../10-scene-authoring.md#isometric-infographic)).
+
+- The limits, timings, geometry and the shared cases in `fixtures/isometric_infographic_contract.json`
+  agree with the renderer, and the pack carries the catalogues.
+- The skill's worked example passes.
+- Each refusal names its board and cause: a board off the words or too short, a prop off the board or
+  within 0.6 tiles of another, a route off the board, a pin on no prop of its board, a camera move out
+  of range, a cutaway of a building with no inside, a readout that turns red twice or needs too many
+  cubes, a legend that does not fit, and a stretch with nothing new for over 4 seconds. A mover that
+  sets off before its route draws is refused.
+- A bad custom prop is refused, and a custom prop stands on the board like a library one.
+- Nothing happens inside an insert window, the scene-use rule holds and the audit windows are the
+  boards.
+- `write_scene_config` writes a sound config with the `card` captions and refuses the scene on another
+  style. `render_style_parts` sends the video's props to the renderer.
+
 ### `test_picture_checks.py`
 
 Covers `mcp/picture_checks.py` and its place in `validate_job`
 ([Picture warnings](../10-scene-authoring.md#picture-warnings)).
 
-- Each data-driven style's worked example is read as its style and opens on a subject, and the
+- Each data-driven style's worked example (Night Signal, Flat Vector Science and Isometric
+  Infographic included) is read as its style and opens on a subject, and the
   same example with its opening pushed late, its subject removed or its words first is warned once.
 - A segment owes its beat's role once, where the beat starts, and a beat label matches whatever its
   case and spacing. Segments with no beat, or a video with no formula, owe nothing past the opening

@@ -147,7 +147,7 @@ transition runs just outside the insert's window: the way in over the frames bef
 out over the frames after it, so the whole window is on screen and the main style is already on its
 next picture as the insert leaves. The insert's `Sequence` covers those frames too, and the component
 holds its first frame through the way in and its last through the way out (`InsertPlacement.lead`). `inserts/transitions.ts` holds the transitions as pure functions of the frame
-(`insertProgress`, `activeInsert`, `insertLook`), and `TRANSITION_FRAMES` gives their lengths.
+(`insertProgress`, `activeInsert`, `insertLook`, `glitchBands`), and `TRANSITION_FRAMES` gives their lengths.
 
 | Transition | Frames | What it looks like |
 |---|---|---|
@@ -155,9 +155,13 @@ holds its first frame through the way in and its last through the way out (`Inse
 | `dip` | 8 | The main layer fades to the canvas colour, then the insert fades up, and the reverse on the way out |
 | `push` | 12 | The insert slides in from the right while the main layer slides out to the left, and back on the way out |
 | `wipe` | 12 | An edge moving right to left reveals the insert, and moves back left to right on the way out |
+| `glitch` | 4 | The insert shows in torn horizontal bands over the main picture, more each frame, and the main layer jolts the other way. The frame seeds the bands, so every render tears alike |
  An
 unknown or absent `insertTransition` reads as `cut`. `tubematic_core/inserts.py::TRANSITIONS` and
-`TRANSITION_FRAMES` are the Python copy, which the style packs are checked against.
+`TRANSITION_FRAMES` are the Python copy, which the style packs are checked against, and
+`tubematic_core/tests/test_inserts.py` pins its frame counts to the renderer's. `CompositionBuilder` passes
+`insertLook` the current frame, which the glitch seeds its bands with, and the insert layer takes the look's
+`insertClipPath` as its `clip-path`.
 
 While an insert covers the whole frame, `MainLayer` hides the main layer with `visibility: hidden`
 and keeps it mounted. Every main component is a pure function of the frame, so it comes back on the
@@ -216,6 +220,11 @@ The `log` look (`background: "log"`) draws the run as a terminal log instead
 left-aligned behind a `›` prompt, each word typed on as it is spoken, with a block caret after the
 word being spoken. That word is in `accent`; the words already spoken stay, dimmed. Terminal Doc uses
 it.
+
+The `card` background (`Subtitles.tsx`) draws the phrase on a warm-white card with an ink border and a
+flat offset shadow, the words left-aligned beside a small isometric cube chip. Isometric Infographic uses it.
+The `letterSpacing` key adds space between the letters of the plain look, in ems; absent keeps each
+background's own. Night Signal sets its spaced capitals with it.
 
 With `look` set to `"selection"` (`Subtitles.tsx::SelectionLine`), the line builds word by word
 instead, each word appearing 2 frames before its audio (`SELECTION_LEAD`) and blurred for its first
@@ -391,6 +400,14 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
 - A Case File Story video has the one `CaseFileStory` scene and its meters and beats pass the Case
   File Story checks; no other video uses `CaseFileStory`
   ([Scene Authoring](10-scene-authoring.md#case-file-story)).
+- A Night Signal video has the one `NightSignal` scene and its scenes pass the Night Signal checks; no
+  other video uses `NightSignal` ([Scene Authoring](10-scene-authoring.md#night-signal)).
+- A Flat Vector Science video has the one `FlatVectorScience` scene and its shots pass the Flat Vector
+  Science checks; no other video uses `FlatVectorScience`
+  ([Scene Authoring](10-scene-authoring.md#flat-vector-science)).
+- An Isometric Infographic video has the one `IsometricInfographic` scene and its boards pass the
+  Isometric Infographic checks; no other video uses `IsometricInfographic`
+  ([Scene Authoring](10-scene-authoring.md#isometric-infographic)).
 - `inserts`, if present or if the script marks a segment `insert`, passes `mcp/inserts.py::check`:
   the window rules, the style's own checks (`system_flow.check_insert`, `terminal_doc.check_insert`),
   and no main scene starting inside a window. Each main style's checks treat the windows as quiet
@@ -404,7 +421,8 @@ is queued or rendering (`status_mismatch`).
 `canvas` is the only default the tool writes into most files, besides each insert's `src`, `palette`
 and `shift` and the `insertTransition`, which the agent never writes. A System Flow or Whiteboard config
 with no `subtitles` also gets its style pack's caption settings, because its captions are part of the
-style's look. A Bean Explainer, Storybook Atlas, Under the Hood or Case File Story config gets them under whatever
+style's look. A Bean Explainer, Storybook Atlas, Under the Hood, Case File Story, Night Signal, Flat Vector Science or
+Isometric Infographic config gets them under whatever
 `subtitles` keys it sets, so a config that sets only `emphasis` keeps the look. A Terminal Doc config
 gets them the same way, with its skin's colours and font over the pack's. An Under the Hood config
 also gets each plate's `aspect`, read from its photograph. The
@@ -433,11 +451,12 @@ from the video's visual style or the canvas the agent recorded, and otherwise wi
 | `fontFamily` | `system-ui, sans-serif` | A non-empty string. See [Fonts](#fonts) |
 | `fontSize` | `62` | 28 to 120 |
 | `color` | `null` | A CSS colour. `null` follows the canvas: white on dark, near-black on light |
-| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"label"` (an ivory printed label hugging the phrase, a diamond each side, every word at full strength, a 2-frame fade and no rise), `"none"` or `"log"` (typed into a terminal log strip) |
+| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"label"` (an ivory label hugging the phrase, a diamond each side, every word at full strength, no rise), `"none"`, `"log"` (a terminal log strip) or `"card"` (a cube-chip card) |
 | `position` | `0.78` | 0.05 to 0.95. The vertical centre as a fraction of frame height |
 | `uppercase` | `false` | `true` or `false` |
 | `accent` | `null` | A CSS colour for the word being spoken in the `log` look. `null` uses `color` |
 | `emphasis` | `[]` | Distinct word indexes into the timeline's words (0 is the first). Each is drawn on a red box once spoken, or in a selection box under the `selection` look. At most one word in 5 (`SUBTITLE_EMPHASIS_EVERY`) |
+| `letterSpacing` | Each background's own | A number, -0.05 to 0.3. Extra space between letters in ems, for the plain look |
 | `look` | `"plain"` | `"plain"`, `"selection"` (the line builds word by word) or `"fill"` (the whole phrase at once, filling in as it is spoken); see [Grouping words](#grouping-words) |
 
 `server.py::_validate_subtitles` rejects an unknown key, so a typo is reported at write time.
@@ -623,6 +642,43 @@ and IBM Plex Mono (400 and 700) from `public/fonts/` before the first frame; the
 use Instrument Sans, which this scene loads. It decodes every still before the first frame, and a
 still that does not load fails the render. The contract and the checks are in
 [Case File Story](10-scene-authoring.md#case-file-story).
+
+### `NightSignal`
+
+`NightSignal` draws a whole Night Signal video from `props.nightSignal`: the case-file row, the
+scene on a Canvas 2D band (tableaux, the doorbell-camera panel, the phone, the RULE, case and steps
+cards) and the finish over it; its helpers are in `nightSignal/`. It loads Montserrat (600 and 700)
+from `public/fonts/` before the first frame; the style's captions use it. The scene's glitch tear
+between scenes is drawn by the scene itself. The `NightSignalPartsSheet` composition renders the
+library and the video's own parts for [`render_style_parts`](06-mcp-server.md#render_style_parts), and
+`nightsignal-tools/sync-contract.mjs` rewrites the style pack's `extra` and
+`mcp/tests/fixtures/night_signal_contract.json` from the renderer's code. The contract and the reasons
+for its drawing choices are in [Night Signal](10-scene-authoring.md#night-signal).
+
+### `FlatVectorScience`
+
+`FlatVectorScience` draws a whole Flat Vector Science video from `props.flatVector`: the backdrop and
+its specks and the props on a Canvas 2D layer, and the pills, counter, rule and scale bar as DOM text
+over it; its helpers and the prop library are in `flatVector/`. It loads Inter (800) and Fredoka (600)
+from `public/fonts/` before the first frame; the style's captions use Fredoka. Every prop is rendered
+once to static SVG markup and rasterised to a bitmap (`flatVector/sprites.ts`), so a prop costs one
+image draw a frame. A video's own props are `generated/<video_id>/prop-*.tsx`, imported under a
+`delayRender` handle, and one that fails to load fails the render. `FlatVectorPartsSheet` renders them
+for `render_style_parts`, and `flatvector-tools/sync-contract.mjs` rewrites the pack's `extra` and
+`mcp/tests/fixtures/flat_vector_science_contract.json`. The contract and the reasons for its drawing
+choices are in [Flat Vector Science](10-scene-authoring.md#flat-vector-science).
+
+### `IsometricInfographic`
+
+`IsometricInfographic` draws a whole Isometric Infographic video from `props.isometric`: the board,
+its props and routes on a Canvas 2D layer, and the title, readout, pins and legend as DOM text over
+it; its helpers are in `isometric/`. It loads Jost (400, 500 and 600) from `public/fonts/` before the
+first frame; the style's captions use it. The still part of a board (slab, areas and scenery) is
+drawn once into a `BoardCache` and reused while nothing under it changes (`isometric/draw.ts::drawBoard`).
+`IsometricPartsSheet` renders a video's own props for `render_style_parts`, and
+`isometric-tools/sync-contract.mjs` rewrites the pack's `extra` and
+`mcp/tests/fixtures/isometric_infographic_contract.json`. The contract and the reasons for its drawing choices are
+in [Isometric Infographic](10-scene-authoring.md#isometric-infographic).
 
 ### Figure and panel components
 

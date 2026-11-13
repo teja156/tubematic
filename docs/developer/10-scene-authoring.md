@@ -51,8 +51,9 @@ style looks like.
 
 For the scene styles, a style is a set of permissions: which canvas, and which kinds of figure. It
 does not decide any beat's treatment. `cartoon_3d`, `bean_explainer`, `whiteboard`,
-`storybook_atlas`, `under_the_hood` and `case_file_story` replace the scene system with one
-whole-video scene of their own. `system_flow` and `terminal_doc` are insert styles: they draw short
+`storybook_atlas`, `under_the_hood`, `case_file_story`, `flat_vector_science`,
+`isometric_infographic` and `night_signal` replace the scene system with one whole-video scene of their
+own. `system_flow` and `terminal_doc` are insert styles: they draw short
 scenes inside another style's video and are never a video's style
 ([Main styles and inserts](#main-styles-and-inserts)). A video voiced before that keeps its whole
 System Flow or Terminal Doc scene, so both stay in the table below.
@@ -70,6 +71,9 @@ System Flow or Terminal Doc scene, so both stay in the table below.
 | `terminal_doc` | `dark` | No | No | No |
 | `under_the_hood` | `dark` | Its own presenter | No | No |
 | `case_file_story` | `dark` | Its own lead, painted into the stills | No | No |
+| `flat_vector_science` | `dark` | Its own subjects | No | No |
+| `isometric_infographic` | `light` | Its own billboard people | No | No |
+| `night_signal` | `dark` | Its own pictograms | No | No |
 | `cartoon_3d` | `dark`, never visible | Its own cast | No | No |
 
 The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `characters_allowed`.
@@ -84,7 +88,11 @@ with one board scene ([Whiteboard](#whiteboard)), `storybook_atlas` with one pic
 ([Storybook Atlas](#storybook-atlas)), `terminal_doc` (likewise) with one typographic scene
 ([Terminal Doc](#terminal-doc)), `under_the_hood` with one scene of annotated close-up
 photographs ([Under the Hood](#under-the-hood)), and `case_file_story` with one scene of painted
-stills, meters and number cards ([Case File Story](#case-file-story)).
+stills, meters and number cards ([Case File Story](#case-file-story)), `flat_vector_science` with one
+scene of flat props, pills and scale shots ([Flat Vector Science](#flat-vector-science)),
+`isometric_infographic` with one isometric board scene ([Isometric Infographic](#isometric-infographic))
+and `night_signal` with one scene of pictograms and cards ([Night Signal](#night-signal)). These three
+need neither an OpenAI key nor a GPU and take no mascot (`visual_styles.py::NO_MASCOT_STYLES`).
 
 The API and `update_video` refuse a style whose pack needs something the install lacks, where it is
 chosen. Four styles have a need:
@@ -369,6 +377,7 @@ and the main style is already on its next picture as the insert leaves (`src/ins
 | `dip` | 8 | The main fades to the canvas colour, then the insert fades up; the reverse on the way out |
 | `push` | 12 | The insert slides in from the right while the main slides out to the left |
 | `wipe` | 12 | The insert is uncovered by an edge moving right to left |
+| `glitch` | 4 | The insert shows in torn horizontal bands over the main picture, more of them each frame, shifted sideways a few pixels; the bands are seeded by the frame, so every render tears the same way |
 
 While an insert covers the frame, the main layer is hidden with `visibility`: every main component is
 a pure function of the frame, so it comes back on the picture its frame gives it, and hiding it skips
@@ -664,8 +673,11 @@ with `FIRST_FRAME_WINDOW` as the early limit):
 - Terminal Doc: beat 1 has nothing on stage by frame 3.
 - Storybook Atlas: nothing moves in chapter 1 by frame 3.
 - Under the Hood: plate 1 has no photograph.
+- Flat Vector Science: shot 1 is a `subject` with no item on screen by frame 3, or a ladder, zoom, descent
+  or stages shot whose first rung, level, layer or stage arrives after frame 3.
 
-Case File Story's validator already requires a shot first, and Cartoon 3D is not checked.
+Case File Story's validator already requires a shot first, Night Signal's requires a picture scene at
+frame 0, Isometric Infographic's requires board 1 at frame 0, and Cartoon 3D is not checked.
 
 A change is a scene start in a mixed-scenes video, and in a data-driven style a unit start or an
 event that changes the picture (`picture_checks.py::change_frames`). Events that change too little,
@@ -1372,6 +1384,230 @@ push: every frame is a new full-frame painting to capture and encode, which the 
 `mcp/tests/test_case_file_story.py` pins `case_file_story.py` to `contract.ts` and to the pack. The
 pack's `captions` fill every `subtitles` key the config leaves out. The text-layout audit samples
 each beat as if it were a scene, from the frame its last part has appeared.
+
+## Night Signal
+
+A Night Signal video is one installed scene, `NightSignal`, that spans the whole video: a deadpan
+warning in the second person, told in flat warm-white pictograms on near-black, with one red threat
+per scene. A case-file row near the top shows a file number, a short title, a row of small squares (one
+per scene) and a running timecode. The captions are the shared caption layer in spaced white capitals
+at 70% of the height (`letterSpacing`). The agent writes no code for it. Its props carry
+`nightSignal: {file, clock, scenes, customParts}`, written with the `tubematic-night-signal` skill, whose
+`reference/contract.md` documents every field and whose `reference/example-config.json` is the worked
+example. The style needs no OpenAI key and no GPU, takes no mascot and draws no photographs.
+
+| Scene kind | What the scene draws |
+|---|---|
+| `tableau` | Up to 4 pictograms in named slots on a ground line, in a setting (`night`, `street`, `room`, `plain`); a dotted connector between two of them; a thought or speech bubble holding an icon |
+| `camera` | A doorbell-camera panel (REC dot, clock, a label) framing a smaller tableau, with an optional button that a red stroke crosses out |
+| `phone` | A large phone showing a message, a link, a QR code being scanned, a call or an alert, with an optional mark |
+| `rule` | A RULE card: one or two short lines and the forbidden thing inside a red prohibition ring that draws on, then its slash |
+| `case` | A case card: a label and name, a pictogram ID photo, grey redaction bars and an optional red stamp |
+| `steps` | A navy card with a title and 2 to 4 numbered steps, each appearing on its word |
+
+People, animals and objects come from the library in the pack's `extra`, or from the video's own
+`customParts`: up to 6 parts of up to 40 flat shapes (`circle`, `rect`, `line`, `poly`), each in a tone
+(`ink`, `grey`, `dim`, `core`, `red` or `hole`, the black field, to cut a gap) inside a 400 px box. A
+part is JSON, not code, so nothing runs and the checks are on the shapes.
+[`render_style_parts`](06-mcp-server.md#render_style_parts) draws them for a person to check.
+
+The renderer's side is `src/scenes/installed/NightSignal.tsx` with `nightSignal/`:
+
+- `contract.ts` holds the limits, timings and geometry.
+- `parts.ts` holds the pictogram library as shape lists.
+- `stage.ts` works out an item's position, the scene on screen, the redden and the tear at a frame.
+- `draw.ts` paints a scene on a Canvas 2D band of 1080 by 780 px.
+- `NightSignalPartsSheet.tsx` is the `render_style_parts` sheet.
+- `nightsignal-tools/sync-contract.mjs` writes the pack's `extra` and the test fixture from the
+  renderer's own library, so the validator reads the catalogues the renderer draws.
+
+Scenes change through a glitch tear of two to four frames drawn by the scene itself. The pictograms
+are drawn on a canvas because the same shapes as SVG under a blur filter cost several times System
+Flow. The scanlines, the vignette and one grain tile are drawn once into a finish layer and laid over
+the band: a full-frame scanline and grain layer redrawn every frame cost about 0.47 CPU seconds a
+frame, and grain that changed every frame made the encoded video about ten times larger. The threat's
+blurred head is a gradient disc, because a canvas blur on one small head cost about 0.18 CPU seconds
+a frame. Measured on the CPU renderer over the whole example video, the style costs about 1.7 times
+System Flow's example.
+
+`mcp/night_signal.py` checks a config in `write_scene_config` and refuses it when:
+
+- A `night_signal` video has anything but the one `NightSignal` scene, from frame 0 for
+  `totalFrames`, or another style uses `NightSignal`.
+- The video has fewer than 3 or more than 14 scenes, the first is not a picture (`tableau`, `camera`
+  or `phone`) at frame 0, a later scene does not start within 2 frames of a word, or a scene lasts
+  under 1.5 seconds.
+- A frame the config gives (an item's `at`, `redAt`, `to.at`, a slash, a cross, a mark, a stamp, a
+  step) is outside its scene or off a word.
+- A scene holds more than 4 items or two in one slot, an item's step ends on another item, a
+  connector joins or a bubble sits over a slot with no item, or a `what` or `icon` is neither in the
+  library nor in `customParts`.
+- A scene has more than one item marked `threat`, or `redAt` is on another item; the video has more
+  than one green `check`.
+- A text is over its limit (the file title 16 characters, a camera label 22, a button 6, a phone title
+  12 and up to 3 lines of 16, a rule's 2 lines of 12, a case label 10 and name 12, a stamp 10, a steps
+  title 20 and steps of 24).
+- A card's last part appears less than 20 frames before the scene ends.
+- A custom part has more than 40 shapes, leaves its box, or the video has more than 6.
+- Nothing new arrives for more than 5 seconds. The small running loops (stars, a marching dotted line,
+  the REC dot) do not count.
+
+`write_scene_config` fills the pack's `captions` into every `subtitles` key the config leaves out.
+The pack's `inserts.transition` is `glitch`, so the style tears into and out of an insert in torn bands
+over 4 frames. The pictograms are hidden while an insert plays, so no scene starts and nothing lands
+inside an insert's window (`quiet`); the next scene starts on the window's end. The text-layout audit
+samples each scene once its text has arrived. `mcp/tests/test_night_signal.py` pins `night_signal.py`
+to `contract.ts`, `stage.ts` and the pack through the shared cases in
+`fixtures/night_signal_contract.json`.
+
+## Flat Vector Science
+
+A Flat Vector Science video is one installed scene, `FlatVectorScience`, that spans the whole video:
+the look of a calm science channel, about scale. Flat, outline-free subjects shaded in two tones
+(creatures, cells, organs, planets, rockets, mountains, and a bus or a person for scale) drift on a
+dark backdrop with specks floating past, and words the narrator says light up white in dark rounded
+pills on a leader line to the thing they name. The captions are the shared caption layer in small
+white words low in the frame. The agent writes data and, when the library lacks a prop, a still
+drawing. Its props carry `flatVector: {shots, customProps}`, written with the
+`tubematic-flat-vector-science` skill, whose `reference/contract.md` documents every field,
+`reference/example-config.json` is the worked example and `reference/example-prop-octopus.tsx` is a
+finished drawing. The style needs no OpenAI key and no GPU, takes no mascot and draws no photographs.
+
+| Shot kind | What the scene draws |
+|---|---|
+| `subject` | 1 to 3 props in named slots, up to 2 word-lit pills on leader lines and an optional measuring rule beside a prop |
+| `ladder` | 2 to 5 rungs: each larger thing grows in from beyond the frame while the last shrinks to a small mark, its name and size in a title pill |
+| `zoom` | 2 to 6 levels of a power-of-ten zoom: the last thing shrinks away tenfold and the scale bar snaps to the next label |
+| `descent` | 2 to 6 layers going down: the backdrop darkens, a depth counter rolls, a gauge fills and each layer's thing rises in |
+| `stages` | 2 to 5 stages of a process: each stage's thing pops in large while the earlier ones line up small along the bottom, joined by arrows |
+
+Any shot may also carry a rolling `counter`. A shot has a backdrop (`abyss`, `ocean`, `night`, `sky`,
+`strata` or `inside`), props have a size (`s`, `m` or `l`) and a shot arrives by a `cut`, `lens`,
+`flash` or `push`. At most one number or word in a shot may be red.
+
+A prop the library lacks is a still React component in `generated/<video_id>/prop-<name>.tsx`, written
+with `write_scene_file`, modelled on the library, and listed in `customProps` as `{id, src, box,
+light?}` (at most 8). It imports only `react` and `flatVector/toon` (`Toon`, `GlowDot`, `Eye` and the
+path helpers), draws flat two-tone shapes centred on (0, 0) inside its box, and may not use hooks, the
+frame, text, images, filters or gradients of its own: the renderer draws it once and moves it. The
+source checks are Bean Explainer's `FORBIDDEN_SOURCE` plus hooks and the frame and SVG text
+(`flat_vector_science.py::FORBIDDEN_SOURCE`), and `validate_job` runs them again on the files as they
+are now (`server.py::_fv_custom_prop_errors`). [`render_style_parts`](06-mcp-server.md#render_style_parts)
+draws the props as the scene will, with their box outlined.
+
+The renderer's side is `src/scenes/installed/FlatVectorScience.tsx` with `flatVector/`:
+
+- `contract.ts` holds the limits, timings and geometry.
+- `props.tsx` and `toon.tsx` hold the prop library and the flat two-tone shape kit.
+- `sprites.ts` rasterises each prop once to a bitmap at the largest size it is drawn.
+- `stage.ts` works out each shot's arrivals, depth and scale at a frame.
+- `draw.ts` paints the backdrop, specks, props and halos on a Canvas 2D layer; the pills, counter,
+  rule and scale bar are DOM text, so the text audit can measure them.
+- `FlatVectorPartsSheet.tsx` is the `render_style_parts` sheet, and
+  `flatvector-tools/sync-contract.mjs` writes the pack's `extra` and the test fixture.
+
+A live SVG drawing is paid for on every frame on the CPU renderer, a bitmap costs one image draw, so
+every prop is a cached bitmap. Measured on the CPU renderer over the whole example video, the style
+costs about 1.5 times System Flow's example.
+
+`mcp/flat_vector_science.py` checks a config in `write_scene_config` and refuses it when:
+
+- A `flat_vector_science` video has anything but the one `FlatVectorScience` scene, from frame 0 for
+  `totalFrames`, or another style uses `FlatVectorScience`.
+- The video has fewer than 3 or more than 12 shots, the first is not at frame 0 on a `cut`, a later
+  shot does not start within 2 frames of a word or lasts under 1.5 seconds, or a shot carries a field
+  its kind does not take.
+- A frame the config gives (an item, a pill part, a rule, a counter, a rung, a level, a layer, a stage)
+  is outside its shot, off a word or out of order.
+- A `subject` has more than 3 items or two in one slot, a pill names a slot with no item, has no part
+  or more than 2, or does not fit the frame, or a rule is not beside an item.
+- A label, value, rule label or unit is over its limit (1 to 14, 1 to 12 and at most 4 characters), or
+  a descent's layers do not get deeper.
+- A shot has more than one red part.
+- A ladder, zoom, descent or stages shot keeps its last arrival on screen under 20 frames.
+- A custom prop breaks the id, `src`, box or source rules above, or the video has more than 8.
+- A lens or push transition runs inside an insert's window.
+- Nothing new arrives for more than 4 seconds. The drift does not count.
+
+`write_scene_config` fills the pack's `captions` into every `subtitles` key the config leaves out. The
+pack's `inserts.transition` is `dip`. The world is hidden while an insert plays, so no shot starts and
+nothing arrives inside a window. A picture check adds a warning when shot 1 has no subject on screen
+by frame 3. The text-layout audit samples each shot once its text has arrived.
+`mcp/tests/test_flat_vector_science.py` pins `flat_vector_science.py` to `contract.ts`, `stage.ts` and
+the pack through `fixtures/flat_vector_science_contract.json`.
+
+## Isometric Infographic
+
+An Isometric Infographic video is one installed scene, `IsometricInfographic`, that spans the whole
+video: one thing's journey through a system of places on a floating isometric board of 10 by 10 tiles
+on cream paper, drawn in flat three-tone blocks. The followed thing travels a route that draws itself
+ahead of it, buildings drop in with a squash, pins name places with a big number, the camera glides in
+on one place, a building lifts while the rest fades back, a wall cuts away to show what is inside and
+a stack explodes into layers. A title and a readout (a big number with a row of small cubes counting it)
+sit at the top and a legend can rise in at the foot. The engine fills free land with trees and free
+city with blocks, so a handful of props make a full board. The captions are the shared caption layer on a
+warm-white card (the `card` background) under the board. The agent writes data. Its props carry
+`isometric: {title, readout, boards, legend, customProps}`, written with the
+`tubematic-isometric-infographic` skill, whose `reference/contract.md` documents every field and
+whose `reference/example-config.json` is the worked example. The style needs no OpenAI key and no GPU,
+takes no mascot and draws no photographs.
+
+A board holds up to 8 ground areas (`land`, `forest`, `city`, `sand`, `water`, `road`, `plaza`,
+`field`), 1 to 14 props from the library on tiles, up to 3 routes of 2 to 8 points, up to 4 movers,
+up to 4 pins, up to 8 camera moves and up to 3 lifts, cutaways and explodes each. A video has 1 to 3
+boards, and a new board is a hard cut. Colours are named (`red`, `gold`, `slate`, `teal`, `green`,
+`blue`, `cream`, `grey`, `plum`).
+
+A prop the library lacks is JSON, not code: up to 6 `customProps`, each up to 16 solids (`box`, `cyl`,
+`cone`, `pyr`, `gable`) inside the prop's own footprint, coloured `main`, `accent` or a palette name.
+[`render_style_parts`](06-mcp-server.md#render_style_parts) draws them on a patch of board beside a
+house.
+
+The renderer's side is `src/scenes/installed/IsometricInfographic.tsx` with `isometric/`:
+
+- `contract.ts` holds the limits, timings and geometry.
+- `kit.ts` holds the projection, the palette, the prop library and the solid painter.
+- `stage.ts` works out the view, the lifts, the dimming, the drops and the routes at a frame.
+- `draw.ts` paints a board on a Canvas 2D layer, and holds the `BoardCache`; the title, readout, pins
+  and legend are DOM text, so the text audit can measure them.
+- `IsometricPartsSheet.tsx` is the `render_style_parts` sheet, and
+  `isometric-tools/sync-contract.mjs` writes the pack's `extra` and the test fixture.
+
+A board is a few hundred flat faces, which as SVG paths cost about 1.7 times System Flow, so the
+board is a canvas. Redrawing every face each frame still cost about twice System Flow, so the still
+part (slab, areas, scenery) is drawn once into a `BoardCache` and reused until the camera, a prop or a
+dimming changes. Routes are drawn as dashes segment by segment, never with `stroke-dasharray`.
+Measured on the CPU renderer over the whole example video, the style costs about 1.6 times System
+Flow's example.
+
+`mcp/isometric_infographic.py` checks a config in `write_scene_config` and refuses it when:
+
+- An `isometric_infographic` video has anything but the one `IsometricInfographic` scene, from frame 0
+  for `totalFrames`, or another style uses `IsometricInfographic`.
+- The title is not 1 to 22 characters, the video has no board or more than 3, the first board does not
+  start at frame 0, a later board does not start within 2 frames of a word, or a board lasts under 2
+  seconds.
+- A frame the config gives is outside its board or off a word.
+- A board has more areas, props, routes, route points, movers, pins, camera moves, lifts, cutaways or
+  explodes than its limit, a prop stands off the board (0.4 to 9.6) or within 0.6 tiles of another or
+  shares an id, or a route leaves the board.
+- A mover sets off before its route starts to draw, or names no route of the board.
+- A pin names no prop of its board, or its label (1 to 12), value (1 to 8) or unit (4) is over its limit.
+- A camera move's zoom is outside 1 to 2 or its focus is not a prop of the board, a cutaway opens a
+  building with no inside or shows other than 1 to 3 props, or an explode separates something that is
+  not a stack.
+- The readout has more than 8 steps or turns red more than once, its cubes would need more than 12, or
+  the legend has more than 5 entries of 12 characters or does not fit the frame.
+- A custom prop breaks the solid, footprint or count rules.
+- Nothing new arrives for more than 4 seconds. The drift, the clouds and things already moving do not
+  count.
+
+`write_scene_config` fills the pack's `captions` (the `card` background) into every `subtitles` key the
+config leaves out. The pack's `inserts.transition` is `push` and its canvas is `light`. The board is
+hidden while an insert plays, so nothing on the board, the readout or the legend changes inside a
+window. The text-layout audit samples each board once its text has arrived.
+`mcp/tests/test_isometric_infographic.py` pins `isometric_infographic.py` to `contract.ts`, `stage.ts`
+and the pack through `fixtures/isometric_infographic_contract.json`.
 
 ---
 

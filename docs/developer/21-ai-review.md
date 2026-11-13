@@ -97,7 +97,8 @@ The style flags come from `pipeline.py::effective_canvas`, `figures_allowed` and
 A [style pack](10-scene-authoring.md#style-packs) may carry its own `review` text, which
 `render_results.py` passes as `style_block`. When it is present it replaces the canvas and figure
 blocks, which describe the scene system's styles. System Flow, Bean Explainer, Whiteboard,
-Storybook Atlas, Terminal Doc, Under the Hood and Case File Story carry one.
+Storybook Atlas, Terminal Doc, Under the Hood, Case File Story, Flat Vector Science, Isometric
+Infographic and Night Signal carry one.
 
 A video with [insert scenes](10-scene-authoring.md#main-styles-and-inserts) also gets an
 `INSERT SCENES` part right after the style contract. `render_results.py::_insert_review_block` reads
@@ -130,6 +131,9 @@ paid re-voice. Each clause below prevents one. Keep them.
 | Terminal Doc (from its pack, on a whole Terminal Doc video) | Sparse monospace text, typing, glyph noise, a ciphertext wall, an empty dark frame, the amber CRT skin and the typed log captions are the style. It still lists what to report, including stage text that repeats the sentence being spoken | On-screen text reads as duplicated narration and the empty frame as an unfinished video |
 | Under the Hood (from its pack) | Word-by-word captions, a pushing close-up photograph, labels on leader lines, gold arcs, ticking counters and a presenter without lip sync are the style. It still lists what to report, a label on the wrong part first | The labels and the presenter read as clutter or broken animation |
 | Case File Story (from its pack) | Painted stills that push and punch in, a lead with no nose or mouth, the meter row, the cards, the stamp and the choice buttons are the style, and none is redundant text. It lists what to report, a changed lead first | The cards and buttons read as duplicated narration and the lead's blank face as an unfinished drawing |
+| Flat Vector Science (from its pack) | A dark backdrop with drifting specks, flat outline-free subjects, word-lit pills on leader lines, a rolling counter, a measuring rule, ladders, zooms and descents, and one red number per shot are the style. It still lists what to report, an overlapping pill first | The flat drawings read as placeholder art and the drift as a shaking picture |
+| Isometric Infographic (from its pack) | One isometric board on cream paper, flat blocks, a route drawing ahead of its mover, lifts, cutaways, pins, a counting readout and the caption card are the style. It still lists what to report, overlapping pins first | The generated trees and blocks read as clutter and camera glides as unwanted zooms |
+| Night Signal (from its pack) | A near-black field, faceless warm-white pictograms with a glow, one red threat per scene, the case-file row, scanlines, grain and a vignette, torn glitch cuts and spaced capital captions are the style. It still lists what to report, a second red thing first | The blank faces read as unfinished drawings, the glitch as a render fault and the empty black as a missing picture |
 | Insert scenes (each insert pack's `insert.review`) | Between the given times the video cuts to a short scene in another style. The change of look in and out, the captions staying over it and the insert style's own look are intended. It still lists what to report inside it | Every video with an insert is reported for switching style mid-video |
 | Two scripts | Where the written and spoken forms differ, audio matching the spoken form is correct. An IPA transcription between slashes is spoken as the sounds it spells | Every working respelling or IPA term is reported as a mispronunciation |
 | Voices (`_voices_block`) | The narration is spoken by the named voices, and a change of speaker between lines is correct. Added only when two or more voices speak the narration, so a one-voice prompt is unchanged | Every video with a second voice is reported for an inconsistent narrator |

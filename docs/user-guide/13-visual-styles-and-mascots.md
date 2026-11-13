@@ -24,6 +24,9 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Under the Hood (experimental)** | A dark canvas and close-up photographs of one physical object. Short capital labels point at its parts, gold arcs show fields and flows, numbers tick, and a cartoon presenter reacts in the bottom corner | An OpenAI key. Up to 12 generated photographs per video |
 | **Case File Story (experimental)** | A suspense story in painted pictures that puts the viewer inside a scheme or a money dilemma. One blank-faced character stands in for the viewer, meters change with the plot, cards count the numbers out, and it ends on a choice between two buttons | An OpenAI key. Up to 16 generated pictures per video, and one reference picture |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
+| **Flat Vector Science (experimental)** | Flat glowing creatures, cells and planets drift on a dark backdrop, named by pills whose words light up as they are spoken. Shots show scale: a dive through the ocean, a ladder of sizes, a zoom by powers of ten. No images | Nothing |
+| **Isometric Infographic (experimental)** | A small isometric world of flat blocks on cream paper. One thing travels a route that draws ahead of it, buildings drop in, pins name places with a number, and a counter keeps the running total. No images | Nothing |
+| **Night Signal (experimental)** | A calm warning told in glowing white pictograms on black, with the one danger in red: a stranger at the door, a doorbell camera, a phone screen, RULE cards and a card of steps. Scenes change through short glitches. No images | Nothing |
 | **Whiteboard** | One big white board. A floating marker writes and draws each step just after the narrator says it, and the camera glides between parts of the board. It ends on the whole board, each part numbered. No people and no images | Nothing |
 
 Photo Explainer, Stick Explainer and Illustrated set the canvas and how people are drawn. They do not limit what a scene can show. A Stick
@@ -67,6 +70,18 @@ background would flash, and a viewer reads that as a broken render.
   one more for the character's reference picture, so it costs more per video than the styles
   without images. It is experimental.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
+- Choose **Flat Vector Science** for size and scale in nature and space: how deep the ocean goes, how
+  big a star is, what happens to your body somewhere extreme, how a virus copies itself. The script
+  asks one question and answers it with numbers that carry units, each compared with something
+  familiar. Its subjects come from a library of drawn creatures, organs, planets and objects, and the
+  agent can draw one more when the library lacks it. It is experimental.
+- Choose **Isometric Infographic** for one thing's journey through a system of places: a parcel from
+  a warehouse to your door, water from a reservoir to your tap, power from a plant to your socket.
+  The script follows the thing station by station and says the running number aloud. It suits
+  places and routes better than a process acted out by people. It is experimental.
+- Choose **Night Signal** for a warning: what to do, or never do, when a stranger, a call, a link or
+  a knock at night is the danger, and safety steps for a bad moment. The script is a calm list of
+  rules told to the viewer as "you". It suits a dark, serious tone only. It is experimental.
 - Choose **Whiteboard** for an idea worked out step by step: a formula built up, money arithmetic
   such as interest or a percentage, an everyday chain of causes that ends in one picture, two ideas
   side by side. The script is written like a teacher at a board, one step per sentence, ending on one
@@ -208,8 +223,9 @@ surprised, has an idea, hops, glances at something. It does not narrate and does
 
 Mascots are experimental and off by default. A video has one only if you pick it. They are drawn on
 the GPU, so you can pick a mascot only while a renderer's GPU test has passed. Cartoon 3D, Under
-the Hood and Case File Story videos cannot have one: Under the Hood has its own presenter and Case
-File Story its own lead character.
+the Hood, Case File Story, Flat Vector Science, Isometric Infographic and Night Signal videos cannot
+have one: Under the Hood has its own presenter, Case File Story its own lead character, and the other
+three draw a world a mascot would not fit, at a scale or in colours it would break.
 
 ![The Mascots page under Profiles: a form for a new mascot, and the built-in mascot Tubi marked READY](../images/mascots.png)
 

@@ -138,7 +138,7 @@ render is not handed out.
   (`voice_file_path`, `timeline_path`, `scene_config_path`) whose file (`audio.mp3`,
   `timeline.json`, `scene-config.json`) is absent, or whose value is empty because that step did not
   finish. Images are optional and are not checked.
-- A Cartoon 3D, Under the Hood or Case File Story video that also holds a mascot, and a mascot video whose pinned
+- A Cartoon 3D, Under the Hood, Case File Story, Flat Vector Science, Isometric Infographic or Night Signal video that also holds a mascot, and a mascot video whose pinned
   code cannot be read, go to `FAILED`
   ([The mascot's code](20-gpu-and-remote-renderers.md#the-mascots-code)).
 
@@ -419,7 +419,9 @@ as if it were a scene, with the same allowance at each board's start. A Bean Exp
 scene is sampled the same way, shot by shot, a Whiteboard video's region by region and once more
 for the closing pull-back, a Terminal Doc video's beat by beat, an Under the Hood video's plate
 by plate, ending before a zoom-through takes a plate's labels away, and a Case File Story video's
-beat by beat, from the frame a card's last part has appeared. A Storybook Atlas video's one
+beat by beat, from the frame a card's last part has appeared. A Night Signal video's scenes, a Flat Vector
+Science video's shots and an Isometric Infographic video's boards are each sampled once their text has
+arrived, with the same per-window logic. A Storybook Atlas video's one
 scene is sampled once in each stretch between two of its events (twice in a long one), after things
 have arrived, and never during a push or a wipe between chapters.
 

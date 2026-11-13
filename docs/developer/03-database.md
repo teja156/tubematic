@@ -102,7 +102,7 @@ One row per video, from proposed topic to published file.
 | `voiced_speed` | REAL | `NULL` | The speed the audio was last made at, written by `generate_voice`. `NULL` until a voicing records it |
 | `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |
 | `script_profile_id` | TEXT NOT NULL | `''` | The script profile. `''` means the generic style |
-| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a main [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `bean_explainer`, `cartoon_3d`, `whiteboard`, `storybook_atlas`, `under_the_hood` or `case_file_story`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
+| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a main [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `bean_explainer`, `cartoon_3d`, `whiteboard`, `storybook_atlas`, `under_the_hood`, `case_file_story`, `flat_vector_science`, `isometric_infographic` or `night_signal`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
 | `resolved_visual_style` | TEXT NOT NULL | `''` | The canvas `auto` settled on: `dark` or `light`. Written once by the agent |
 | `resolved_renderer` | TEXT NOT NULL | `''` | The renderer an `auto` video uses: `dom` or `cartoon_3d`. Written once by the agent, and not over HTTP |
 | `style_pick` | TEXT NOT NULL | `''` | What Auto picked before the script: a style pack id (then also `visual_style`), `scenes` for the mixed scene system, or `''` when Auto has not decided or a person chose the style |
@@ -165,7 +165,9 @@ written as data, `whiteboard` one board
 scene written as data, `storybook_atlas` one picture-book scene in chapters written as data,
 `under_the_hood` one scene of annotated
 close-up photographs written as data, and `case_file_story` one scene of painted stills with meters
-and number cards written as data (the last two need an OpenAI key). `cartoon_3d` selects a different renderer (one painted 3D world written as code for the
+and number cards written as data (the last two need an OpenAI key). `flat_vector_science`,
+`isometric_infographic` and `night_signal` are each one scene written as data as well (glowing scale
+shots, an isometric board and pictogram warnings), and need no key and no GPU. `cartoon_3d` selects a different renderer (one painted 3D world written as code for the
 video) and needs a working GPU. `auto` leaves the choice to the agent. The values are checked in
 code against the style packs, and the column has no CHECK constraint, so a new style needs no
 migration.
