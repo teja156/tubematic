@@ -19,7 +19,7 @@ export const List: React.FC<{ data: ListData; frame: number; origin: number; P: 
       flexDirection: "column", gap: LAYOUT.rowGap }}>
       <div style={{ alignSelf: "flex-start", background: P.highlight, color: P.cardInk, fontFamily: SANS,
         fontWeight: 700, fontSize: 56, lineHeight: `${LAYOUT.titleLine}px`, textTransform: "uppercase",
-        padding: "8px 22px", borderRadius: 8, marginBottom: 20, maxWidth: WRAP.title[1] + 44 }}>
+        padding: "8px 22px", borderRadius: 8, marginBottom: 20, maxWidth: WRAP.title[1] }}>
         {data.title}
       </div>
       {shown.map((it, i) => {

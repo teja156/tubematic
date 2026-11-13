@@ -91,13 +91,14 @@ export const WRAP = {
 /** Where the top rows' texts end, for the watermark's keep-out line (KEEP_OUT_X):
  *  a lifted insert puts them beside the mark. The list title's label has 22 px
  *  of padding each side and starts at LAYOUT.left; the question starts after
- *  the card's border and 34 px padding; the headline after the strap's bar,
- *  border and padding. */
+ *  the card's border and 34 px padding; the headline after the strap's bar
+ *  (it has no left border) and padding. The title label is content-box: its
+ *  `maxWidth` is the text box, the padding comes on top. */
 export const TOP_TEXT_RIGHT = {
   exampleTag: KEEP_OUT_X,
   listTitle: 120 + 22 + 736 + 22,
   question: 120 + 2 + 34 + 744,
-  headline: 120 + 14 + 2 + 34 + 728,
+  headline: 120 + 14 + 34 + 728,
 } as const;
 export type WrapKind = keyof typeof WRAP;
 
