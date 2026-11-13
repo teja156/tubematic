@@ -364,8 +364,12 @@ child process. A remote renderer has no `/jobs` volume and runs none.
   server again.
 - It starts with the GL options a render gets (`_gl_options`), so a GPU test that passes moves it
   onto the GPU and one that fails moves it back.
-- It serves the `/jobs` volume as its public directory, so a video's files are
-  `/public/<video_id>/…` with nothing copied.
+- It serves the `/jobs` volume merged with the project's own `public/` (fonts, `watermark.png`, the
+  built-in mascots), so a video's files are `/public/<video_id>/…` with nothing copied and a frame
+  draws its text in the fonts a render uses. `cartoon-tools/merged-public.mjs` builds that directory
+  from links to folders and copies of plain files, and refreshes it before every request, since
+  videos are filed while the bundle lives. The local fallback in `src/cartoon3d/gate/stills.ts`
+  serves the same merge.
 - It writes each still to the path the request names, so the renderer mounts `/jobs` read-write.
   Its port takes requests with no credential, so `cartoon-tools/out-path.mjs::planRequest` checks
   every file a request would write before it bundles or opens a browser, and the server answers 400

@@ -470,6 +470,21 @@ Trap: the verdict needs two judges because two judges can disagree about the sam
 values are asserted word for word because `gate/beatGateCli.ts` prints them to tell the author which
 judge to run next.
 
+### `renderer/remotion/cartoon-tools/merged-public.test.ts`
+
+Covers `renderer/remotion/cartoon-tools/merged-public.mjs::syncMergedPublic`, the directory the
+[stills server](../11-rendering-and-review.md#the-stills-server) and its local fallback serve as
+`/public/`.
+
+- A video's files and the project's fonts and watermark come out of one directory. A folder is a link
+  and a plain file is a copy.
+- A video filed after the first sync is served by the next one, and a video that is gone is dropped.
+- The jobs volume wins a name clash, and neither source directory is written to.
+
+Trap: Remotion's static server answers 404 for a symlinked file, so the watermark must be a copy.
+Without the fonts and the watermark a frame of a video fails on the image or draws its text in a
+fallback font, which would make a preview misreport the text layout.
+
 ### `renderer/remotion/cartoon-tools/out-path.test.ts`
 
 Covers `renderer/remotion/cartoon-tools/out-path.mjs::outPathError` and `planRequest`, the checks the

@@ -813,7 +813,9 @@ job-file paths, the watermark from the `watermark_enabled` setting, and, for a v
 MCP container's CPU when none answers. A Cartoon 3D video is refused with a pointer to
 `cartoon_still`. The call fails with a message naming an older renderer when the stills server
 refuses the `preview/` folder, which happens only between upgrading the MCP server and the
-renderer. One preview or Cartoon 3D tool runs per video at a time.
+renderer. One preview or Cartoon 3D tool runs per video at a time. On the CPU fallback a call costs
+about 6 CPU seconds to bundle the project and about 1 more per frame; the stills server keeps the
+bundle, so it costs the frames alone.
 
 ### `preview_doodles`
 
