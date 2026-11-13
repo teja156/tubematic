@@ -186,7 +186,7 @@ label: a clipping carries the video's own words and its date and section only.
 1. `write_scene_config(video_id, config)`. Give `subtitles` only its `emphasis`: the style fills in its
    own captions. Fix every problem it lists.
 2. `validate_job(video_id)`. Read every warning.
-3. **Look before you submit.** <!-- frame-preview: a look-then-fix step goes here once a frame preview exists -->
+3. **Look before you submit.** Call `preview_frames` first, as the **tubematic-scene-config** skill's "Look before you submit" step says, and fix what you see.
    Look at every still again with `read_image`. Then read back the config once against the narration:
    each station's headline and hero fit what is said, each event lands on the word it shows, each date,
    name and number matches the narration, and no card or still shows a real person's face.

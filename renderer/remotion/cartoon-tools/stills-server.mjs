@@ -19,7 +19,7 @@
 // current bundle was made from, and re-bundles when it differs: an edit to a video's code is seen by its next still
 // (~20 s once), an unchanged tree costs a directory walk.
 //           GET  /health                   {ok, bundled, browser, public, gl, chromeMode}
-// An out or outDir must lie under <public>/<video>/cartoon/ (out-path.mjs), or the request is answered 400 with
+// An out or outDir must lie under <public>/<video>/cartoon/ or <video>/preview/ (out-path.mjs), or the request is answered 400 with
 // nothing drawn: the port has no credential, and in production the public directory is the read-write /jobs volume.
 // Responses: JSON {ok, out | outs, ms, logs}. Browser console lines are collected per request and returned as
 // `logs` (what `npx remotion still` never shows).
@@ -169,7 +169,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/rebundle") { touch(); await (busy = busy.then(rebundle)); return json(res, 200, { ok: true }); }
     if (req.method === "POST" && (req.url === "/still" || req.url === "/stills")) {
       const b = await body(req);
-      // every file goes under <public>/<video>/cartoon/: checked before any bundle or browser, and the loop below
+      // every file goes under <public>/<video>/cartoon/ or preview/: checked before any bundle or browser, and the loop below
       // writes exactly the targets checked here
       const plan = planRequest(PUBLIC, req.url, b);
       if (plan.error) return json(res, 400, { ok: false, error: plan.error });

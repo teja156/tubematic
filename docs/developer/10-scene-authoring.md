@@ -641,7 +641,9 @@ flowchart TD
     I --> R["read_image for every image:<br/>check it, and for HYBRID read<br/>anchor points off the grid"]
     R --> W["write_scene_file per scene"]
     W --> C["write_scene_config"]
-    C --> V["validate_job"]
+    C --> P["preview_frames:<br/>look at the opening, inserts,<br/>turn and payoff"]
+    P -->|something wrong| W
+    P --> V["validate_job"]
     V -->|errors| W
     V -->|passes| S["submit_render"]
 ```
@@ -655,6 +657,14 @@ bad image before a render, and to read where the subject sits. It passes those c
 on an in-memory copy, because the file on disk is the render input. `read_image` does not take the
 [scene-work claim](06-mcp-server.md#the-scene-work-claim), because it spends nothing and writes
 nothing.
+
+`preview_frames` renders chosen frames of the composed scene (main style, inserts, captions, mascot
+and watermark, as the render draws them) and returns them as pictures, so the agent sees a label on
+the wrong side or an empty board before a render and an AI review find it. The skills ask for the
+opening, the way in and out of each insert, and the turn and payoff frames. The step is a
+recommendation: `validate_job` and `submit_render` do not check that it happened, so a video never
+waits on a renderer that cannot draw. Cartoon 3D keeps `cartoon_still`
+([`preview_frames`](06-mcp-server.md#preview_frames)).
 
 ### Text-layout warnings
 

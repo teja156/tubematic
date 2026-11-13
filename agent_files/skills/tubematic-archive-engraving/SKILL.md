@@ -185,7 +185,7 @@ or signature. The card always carries the footnote "Recreation".
 1. `write_scene_config(video_id, config)`. Leave `subtitles` out: the style fills in its own chip
    captions. Fix every problem it lists.
 2. `validate_job(video_id)`. Read every warning.
-3. **Look before you submit.** <!-- frame-preview: a look-then-fix step goes here once a frame preview exists -->
+3. **Look before you submit.** Call `preview_frames` first, as the **tubematic-scene-config** skill's "Look before you submit" step says, and fix what you see.
    Look at every engraving again with `read_image` and check its `focus` and points against the grid.
    Then read back the config once against the narration: each beat's title and card fit what is said,
    each event lands on the word it shows, each date and name matches the narration, and no card

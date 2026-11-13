@@ -102,6 +102,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by vqa/stage_script.
 # Sibling modules, imported only after the guard above: cartoon imports
 # tubematic_core itself, so importing it first broke the mcp/-only sys.path
 # that vqa/stage_script.py uses.
+import frame_preview  # the preview_frames tool (TMDEV-241); a sibling module like cartoon
 import cartoon  # the Cartoon 3D tools and checks (TMDEV-185); a sibling module like text_audit
 import system_flow  # the System Flow checks (TMDEV-196); a sibling module like cartoon
 import whiteboard  # the Whiteboard checks (TMDEV-197); a sibling module like system_flow
@@ -10160,6 +10161,48 @@ def cartoon_read_still(video_id: str, kind: str, name: str):
         return {"error": f"no {kind} still named {name!r} for {video_id}"}
     from fastmcp.utilities.types import Image as MCPImage
     return [json.dumps({"video_id": video_id, "kind": kind, "name": name}), MCPImage(data=path.read_bytes(), format="png")]
+
+
+@mcp.tool
+def preview_frames(video_id: str, frames: list[int]):
+    """Look at chosen frames of the video's composed scene, as the render will
+    draw them: the main style, any insert, the captions, the mascot and the
+    watermark. Use it after write_scene_config and before submit_render: ask
+    for the opening frame, the first frames of an insert's way in and way out,
+    and the first words of the turn and the payoff (get_timeline's roles),
+    fix what looks wrong, then look again. One to six frame numbers per call
+    (0 to total_frames - 1); the pictures are returned at half size and kept
+    under the video's preview/ folder until the next call. They show the scene
+    source as it is on disk now. A pure look: it takes no scene-work claim and
+    costs no API credit, but each frame costs CPU on a shared host, so ask for
+    the frames you will act on, not every beat.
+
+    A Cartoon 3D video is looked at with cartoon_still instead.
+
+    Returns a text block naming the frames, then the pictures; or {error}.
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT mascot_id, mascot_version FROM videos WHERE id = ?", (video_id,)).fetchone()
+        if not row:
+            return {"error": f"Video not found: {video_id}"}
+        mascot = _video_mascot(con, dict(row))
+        code = _mascot_code(con, mascot["id"], mascot["version"]) if mascot and mascot["version"] else ""
+    watermark = _get_setting("watermark_enabled", "true").lower() == "true"
+    try:
+        drawn = frame_preview.preview(JOBS_DIR, video_id, _CARTOON_REMOTION, frames,
+                                      watermark=watermark, mascot_code=code or None)
+    except frame_preview.PreviewError as e:
+        return {"error": str(e)}
+    from fastmcp.utilities.types import Image as MCPImage
+    out = [json.dumps({"video_id": video_id, "frames": [int(p.stem[1:]) for p in drawn],
+                       "mascot": bool(mascot and code)})]
+    for p in drawn:
+        out.append(MCPImage(data=p.read_bytes(), format="png"))
+    return out
 
 
 @mcp.tool

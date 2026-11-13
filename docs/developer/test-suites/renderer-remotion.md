@@ -478,6 +478,9 @@ write, before it bundles or opens a browser.
 
 - The paths the Cartoon 3D tools write (`<video_id>/cartoon/stills/…`, `<video_id>/cartoon/beatgate/…`)
   pass, and an output directory under a video's `cartoon/` folder passes.
+- The folder `preview_frames` writes (`<video_id>/preview/…`) passes by the same rules. Look-alikes
+  (`previews/`, `Preview/`, a file named `preview.png`, a `preview` that is not under a video) and a
+  non-PNG in it are refused, as is a `preview/` that is a symlink.
 - A path elsewhere in `/jobs`, outside it, relative, or escaping with `..` is refused, as is a file that
   is not a PNG and a missing path.
 - A path through any symlink is refused, a dangling one and one pointing back inside included,

@@ -149,7 +149,7 @@ right, v top to bottom, 0 to 1): it is the page's `focus`, the point the slow pu
 1. `write_scene_config(video_id, config)`. Leave `subtitles` out: the style fills in its own captions.
    Fix every problem it lists.
 2. `validate_job(video_id)`. Read every warning.
-3. **Look before you submit.** <!-- frame-preview: a look-then-fix step goes here once a frame preview exists -->
+3. **Look before you submit.** Call `preview_frames` first, as the **tubematic-scene-config** skill's "Look before you submit" step says, and fix what you see.
    Look at every picture and pencil plate again with `read_image`. Then read back the config once
    against the narration: each page's title and picture fit what is said, each colour floods on the word
    it pays off, and the hero is the same on every page.

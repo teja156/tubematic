@@ -14,7 +14,7 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 ### Upgrade notes
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode) after you
-   upgrade. The skills that write scripts, handle revisions and pick a video's style changed, and a
+   upgrade. The skills that write scripts, handle revisions, pick a video's style and look at a finished scene changed, and a
    session started before the upgrade keeps the old ones.
 2. To go back to 2.2.x after upgrading, restore the database backup the upgrade took. 2.2.x cannot
    read the new voice speed column, and it reads a voice list with a speed on an `eleven_v3` or
@@ -34,6 +34,12 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ### Added
 
+- The agent now looks at its own video before it asks for a render. A new `preview_frames` tool draws
+  chosen frames of the finished scene (the opening, the way in and out of each insert, the turn and
+  the payoff) with the captions, the mascot and the watermark as the render draws them. The
+  agent fixes what looks wrong, such as a label on the wrong side or overlapping text, and
+  looks again, so fewer videos come back from review for a fault that was visible all along. It
+  costs no API credit. Each frame costs some processor time on the machine that runs Tubematic.
 - Each video now has its own voice speed, from 0.90x to 1.25x. The agent picks it with the script:
   faster for a quick list, slower for a script dense with numbers or a calm story. You see it and
   can change it in the video's window before you approve the script, and the window shows the speed

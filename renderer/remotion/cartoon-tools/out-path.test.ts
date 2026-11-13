@@ -15,7 +15,20 @@ describe("outPathError", () => {
     expect(outPathError("/jobs/", "/jobs/vid_a/cartoon/x.png")).toBeNull();
   });
 
-  it("refuses anything outside <public>/<video>/cartoon/", () => {
+  it("allows the frame previews of the preview_frames tool", () => {
+    expect(outPathError(PUBLIC, "/jobs/vid_a/preview/f0060.png")).toBeNull();
+    expect(outPathError(PUBLIC, "/jobs/vid_a/preview", { dir: true })).toBeNull();
+  });
+
+  it("refuses look-alikes of the preview folder", () => {
+    for (const p of ["/jobs/vid_a/previews/f0001.png", "/jobs/vid_a/preview.png", "/jobs/preview/x.png",
+      "/jobs/vid_a/preview/../timeline.png", "/jobs/vid_a/Preview/x.png"]) {
+      expect(outPathError(PUBLIC, p), p).toMatch(/is not under/);
+    }
+    expect(outPathError(PUBLIC, "/jobs/vid_a/preview/mascot.js")).toMatch(/not a \.png/);
+  });
+
+  it("refuses anything outside <public>/<video>/cartoon/ and <video>/preview/", () => {
     for (const p of [
       "/jobs/vid_a/scene-config.json",
       "/jobs/vid_a/audio.png",
@@ -53,6 +66,7 @@ describe("outPathError with symlinks", () => {
   // a dangling link: its target does not exist yet, so a realpath check would read it as "not created"
   fs.symlinkSync(path.join(outside, "new.png"), path.join(pub, "vid_a", "cartoon", "beatgate", "beat00-f0001.png"));
   fs.symlinkSync(path.join(pub, "vid_a", "cartoon", "beatgate"), path.join(pub, "vid_a", "cartoon", "inside"));
+  fs.symlinkSync(outside, path.join(pub, "vid_a", "preview"));
   afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
 
   it("refuses any path through a symlink, dangling or not, even one pointing back inside", () => {
@@ -60,6 +74,7 @@ describe("outPathError with symlinks", () => {
     expect(outPathError(pub, path.join(pub, "vid_b", "cartoon", "f0001.png"))).toMatch(/goes through the symlink/);
     expect(outPathError(pub, path.join(pub, "vid_a", "cartoon", "beatgate", "beat00-f0001.png"))).toMatch(/goes through the symlink/);
     expect(outPathError(pub, path.join(pub, "vid_a", "cartoon", "inside", "x.png"))).toMatch(/goes through the symlink/);
+    expect(outPathError(pub, path.join(pub, "vid_a", "preview", "f0001.png"))).toMatch(/goes through the symlink/);
     expect(fs.existsSync(path.join(outside, "new.png"))).toBe(false);
   });
 

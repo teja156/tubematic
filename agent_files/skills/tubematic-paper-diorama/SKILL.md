@@ -149,7 +149,7 @@ read as what it stands for at phone size. Fix what does not, write again and loo
 1. `write_scene_config(video_id, config)`. Leave `subtitles` out: the style fills in its own torn-tag
    captions. Fix every problem it lists.
 2. `validate_job(video_id)`. Read every warning.
-3. **Look before you submit.** <!-- frame-preview: a look-then-fix step goes here once a frame preview exists -->
+3. **Look before you submit.** Call `preview_frames` first, as the **tubematic-scene-config** skill's "Look before you submit" step says, and fix what you see.
    Check the props of your own with `render_paper_props`. Then read back the config once against the
    narration: each set's room and banner fit what is said, each event lands on the word it shows, and
    the critter's face matches the moment.

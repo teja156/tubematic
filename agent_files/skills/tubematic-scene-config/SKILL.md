@@ -84,7 +84,17 @@ correct and re-spends `generate_image` on every image beat.
    a beat marked with any other insert style likewise. No mascot cue lands inside a window. With no marked
    segment, write no `inserts`.
    Then call `write_scene_config(video_id, config)`, with the scenes and any `inserts` — **never** write `scene-config.json` with your own file tools. This writes the file and saves `scene_config_path` in one call.
-9. Hand back to the operator to call `validate_job`
+9. **Look before you submit.** Call `preview_frames(video_id, frames)` (one to six frames, 0 to
+   `total_frames - 1`) and look at what the render will draw: frame 0, the first frames of each
+   insert (its way in and the frame after it ends), and the first words of the turn and of the payoff
+   (the segments whose `role` says so in `get_timeline`). The pictures show the main style, the
+   inserts, the captions, the mascot and the watermark. Fix what is wrong (a label on the wrong
+   side, overlapping text, an empty board, a caption over the subject) with `write_scene_file` or
+   `write_scene_config`, and look at the frame again. Each frame costs CPU on a shared host: ask
+   for the frames you will act on, not every beat. If the tool returns an error (a renderer that is
+   not ready, say), carry on: nothing waits for a preview. A Cartoon 3D video is looked at with
+   `cartoon_still` instead.
+10. Hand back to the operator to call `validate_job`
 
 Never generate `scene-config.json` before `timeline.json` exists — `totalFrames` must be copied exactly from `timeline.totalFrames`.
 
@@ -1296,6 +1306,7 @@ Before handing back to the operator:
 - [ ] `scene-config.json` written via `write_scene_config(video_id, config)` — never with your own file tools
 - [ ] `totalFrames` matches `timeline.totalFrames` exactly
 - [ ] No scene exceeds `totalFrames`
+- [ ] Looked at frame 0, each insert and the turn and payoff frames with `preview_frames` after the last config write, and fixed what showed (or the tool returned an error and the handback says so)
 - [ ] Scenes cover frame 0 → `totalFrames` with no gaps
 - [ ] Frame 0 shows what the first sentence names, already moving; no title card, no empty or
       black frame, no abstract gradient (**The Opening and the Beats**)
