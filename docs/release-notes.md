@@ -84,13 +84,22 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   request crossing a network, a **Terminal Doc** string for a password being hashed or a command
   being typed. The video's style keeps the opening, the answer and the ending, the captions stay on
   screen through an insert, and an insert follows the video's canvas, so on a white video it is drawn
-  dark on paper. The agent decides after it picks the style, and many videos get none.
+  dark on paper, and it never opens on an empty board: its first element is already drawn as it
+  comes in. The agent decides after it picks the style, and many videos get none.
   [Insert scenes](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#insert-scenes) has
   the details.
 - An **Inserts** setting (Auto or None) sits beside the style wherever you choose one: a topic waiting
   for approval, New Video, and a domain's defaults, which every new video in the domain starts with.
   The video's window shows the agent's decision and its reason in an **Inserts** row, and the Script
   tab marks the parts of the script an insert shows.
+- Two more insert styles. **Code Scenes** puts a few lines of real code on an editor card: the lines
+  being read light up, a bug gets a red squiggle and a message, the code changes into its fix, and
+  a small pane shows what it prints. **Format Packs** shows a made-up message thread with a scam's
+  tells circled, a short numbered list, a quiz with a locked answer, or a news strap with a changing
+  number. Format Packs draws no real app or brand: a plain phone frame, phone numbers from the ranges
+  set aside for fiction, and an EXAMPLE tag on every made-up thread or headline.
+  [Insert scenes](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#insert-scenes) has
+  the details.
 
 ### Changed
 

@@ -119,6 +119,8 @@ import mascot_sheets  # renders a mascot's model sheets (a Node script on softwa
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
 import terminal_preview  # renders a Terminal Doc video's own moves for the agent to look at
+import code_scenes  # the Code Scenes insert checks (TMDEV-239), the same way
+import format_packs  # the Format Packs insert checks (TMDEV-240), the same way
 import inserts as inserts_mod  # the insert-scene checks (TMDEV-224)
 import picture_checks  # the first-frame and beat-change warnings (TMDEV-215), pure like text_audit
 
@@ -8764,6 +8766,17 @@ _INSERT_CHECKS = {
     system_flow.STYLE_ID: lambda fps, starts, words, e: system_flow.check_insert(
         e, fps, starts, tvs.pack(system_flow.STYLE_ID)["extra"]["icons"]),
     terminal_doc.STYLE_ID: lambda fps, starts, words, e: terminal_doc.check_insert(e, fps, starts, words),
+    code_scenes.STYLE_ID: lambda fps, starts, words, e: code_scenes.check_insert(e, fps, starts, words),
+    format_packs.STYLE_ID: lambda fps, starts, words, e: format_packs.check_insert(e, fps, starts, words),
+}
+
+# How long each insert style's first element takes to settle, for the frame
+# the renderer holds while the insert comes in (no insert opens on an empty
+# board). Code Scenes and Format Packs draw their first element settled on
+# their first frame, so they hold their first frame.
+_INSERT_FIRST_FRAMES = {
+    system_flow.STYLE_ID: system_flow.insert_first_frames,
+    terminal_doc.STYLE_ID: terminal_doc.insert_first_frames,
 }
 
 
@@ -8861,6 +8874,13 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     # main style's data is held quiet inside each one: its validator gets the
     # windows. The inserts themselves are checked once the captions are known.
     quiet = inserts_mod.windows(config)
+
+    # ── Insert-only styles (TMDEV-239) ───────────────────────────────────────
+    # Styles that were never a whole video: their scene is never one of a
+    # video's scenes.
+    only_insert_err = code_scenes.check_scene_use(scenes) or format_packs.check_scene_use(scenes)
+    if only_insert_err:
+        return {"error": only_insert_err}
 
     # ── System Flow (TMDEV-196) ──────────────────────────────────────────────
     # A whole-video style: one installed SystemFlow scene whose props hold the
@@ -9097,7 +9117,8 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     # Each insert's src, palette and shift, and the main style's transition:
     # the renderer reads them, the agent writes none of them.
     config = inserts_mod.fill(config, canvas=canvas,
-                              transition=_insert_host(row)[0].get("transition", "cut"))
+                              transition=_insert_host(row)[0].get("transition", "cut"),
+                              first_frames=_INSERT_FIRST_FRAMES)
 
     # Backstop for "auto must resolve once and record what it resolved": if the
     # agent chose a canvas but never wrote resolved_visual_style, the canvas IS

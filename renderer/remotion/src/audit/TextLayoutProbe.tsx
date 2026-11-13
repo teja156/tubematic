@@ -24,6 +24,9 @@ const MAX_TEXT_CHARS = 80;
 interface MeasuredElement {
   /** Stable-ish identity within one frame: index in document order. */
   index: number;
+  /** The layer it is drawn in (`data-tm-layer` of its nearest marked
+   *  ancestor: "scene", "insert"), or "" outside a marked layer. */
+  layer: string;
   tag: string;
   text: string;
   x: number;
@@ -305,6 +308,7 @@ const measure = (frame: number, visualFrames: number[]): string => {
       opacity,
       rotated,
       ancestorIndices,
+      layer: el.closest("[data-tm-layer]")?.getAttribute("data-tm-layer") ?? "",
     });
   });
 

@@ -885,6 +885,34 @@ def _event_problem(e: dict, t: str, custom: dict) -> str:
     return ""
 
 
+# Moves that bring an element onto the stage, which an insert holds settled
+# while it comes in.
+FIRST_ELEMENT_MOVES = ("word", "rearrange", "encode", "number", "grid", "type", "bracket")
+
+
+def insert_first_frames(entry: dict) -> int:
+    """Frames the moves on the insert's first frame take to play out (a word
+    scrambling or typing in), for the frame the renderer holds while the insert
+    comes in. 0 when nothing starts on its first frame."""
+    try:
+        start = entry["startFrame"]
+        events = entry["props"][PROPS_KEY]["beats"][0]["events"]
+    except (KeyError, IndexError, TypeError):
+        return 0
+    held = 0
+    for e in events:
+        # Only an element arriving counts: a push, a stream of guesses, a glow,
+        # a clear or the wall run on as the insert plays.
+        if isinstance(e, dict) and e.get("at") == start and e.get("type") in FIRST_ELEMENT_MOVES:
+            try:
+                held = max(held, move_frames(e))
+            except (KeyError, TypeError, ValueError):
+                held = max(held, TIMING["reveal"])
+    # Never hold past the next event, which would otherwise show early.
+    later = [e["at"] for e in events if isinstance(e, dict) and _int(e.get("at")) and e["at"] > start]
+    return min([held] + [a - start for a in later])
+
+
 def insert_beat_windows(entry: dict) -> list[tuple[int, int]]:
     """(start, end) of every beat of one Terminal Doc insert, for the text audit."""
     props = entry.get("props")

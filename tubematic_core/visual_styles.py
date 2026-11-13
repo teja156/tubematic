@@ -173,8 +173,8 @@ def _check_pack(path: pathlib.Path, data) -> dict:
             fail('an insert style has no "inserts" block (it cannot host inserts)')
         block = data.get("insert")
         if not isinstance(block, dict) or set(block) != {"max_seconds", "palettes", "props_key", "component",
-                                                         "review"}:
-            fail("an insert style needs insert: {max_seconds, palettes, props_key, component, review}")
+                                                         "block", "review"}:
+            fail("an insert style needs insert: {max_seconds, palettes, props_key, component, block, review}")
         secs = block["max_seconds"]
         if not isinstance(secs, (int, float)) or isinstance(secs, bool) \
                 or not 0 < secs <= tinserts.MAX_SECONDS:
@@ -186,6 +186,13 @@ def _check_pack(path: pathlib.Path, data) -> dict:
             fail("insert.props_key must name the props key its scene reads")
         if not isinstance(block["component"], str) or not block["component"].strip():
             fail("insert.component must name the installed scene that draws it")
+        # Where the insert draws, top and bottom in pixels of the 1920-high
+        # frame before it moves clear of the captions (mcp/inserts.py::shift_for).
+        band = block["block"]
+        if not (isinstance(band, list) and len(band) == 2
+                and all(isinstance(v, int) and not isinstance(v, bool) for v in band)
+                and 0 <= band[0] < band[1] <= 1920):
+            fail("insert.block must be [top, bottom], whole pixels with 0 <= top < bottom <= 1920")
         if not isinstance(block["review"], str) or not block["review"].strip():
             fail("insert.review must tell the AI review what the insert looks like on purpose")
     # What the dashboard's picker shows (TMDEV-226): the group a style sits in,

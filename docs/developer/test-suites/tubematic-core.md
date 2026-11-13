@@ -118,11 +118,13 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   pack passes. Every pack states what it cannot show (`routing.cannot_show`). The optional
   `routing.images`, `routing.moods` and `script` are checked when present, and a pack without them
   still loads.
-- System Flow and Terminal Doc are the insert styles and every other pack is a main style; a stored
-  insert style still reads as a style, and choosing one as a video's style is refused with a reason.
+- System Flow, Terminal Doc, Code Scenes and Format Packs are the insert styles and every other pack
+  is a main style; a stored insert style still reads as a style, and choosing one as a video's style
+  is refused with a reason.
   Every main style hosts inserts except Cartoon 3D, whose pack says why, and every host names a
   transition from `inserts.TRANSITIONS`. `public_list` and `agent_view` carry `role` and `inserts`.
-  A malformed `role`, `inserts` or `insert` block is refused with the field at fault.
+  A malformed `role`, `inserts` or `insert` block is refused with the field at fault, including an
+  `insert.block` that is not two whole pixel values, top above bottom, inside the frame.
 - A `pictures` block (a style built on generated stills) needs an OpenAI key and a picture count,
   and a malformed one is refused with the field at fault: a cap message without its `{count}` and
   `{cap}`, an empty prompt text, a shape outside the three sizes, an unknown or repeated treatment,

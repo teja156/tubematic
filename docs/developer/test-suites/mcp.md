@@ -1093,6 +1093,11 @@ Covers `mcp/inserts.py`, the insert half of `write_scene_config`, `choose_insert
   only. A domain cannot default to an insert style, and its `default_insert_mode` seeds new videos.
 - The text audit samples each insert's boards and beats and names them as inserts.
 
+- No insert opens on an empty board: `fill` writes each insert's `firstFrames` from its style's
+  module (System Flow's first node and label, Terminal Doc's first word, 0 for Code Scenes), capped
+  at `FIRST_FRAMES_MAX` and inside the window; `write_scene_config` writes it and accepts a config
+  sent back with it; the text audit samples the frame before each window and its first frame and
+  warns when the insert has no text of its own there.
 - An insert belongs to the segment that starts at or before it, also when the previous segment's
   last word ends on that frame; non-object `props` are refused with a sentence; captions the
   shift cannot clear are refused; a main scene starting on an insert's first frame is refused; an
@@ -1100,9 +1105,70 @@ Covers `mcp/inserts.py`, the insert half of `write_scene_config`, `choose_insert
   are read before its final frames; an insert longer than its pack's `max_seconds` is refused; a
   mascot cue in an insert's transition frames is refused.
 
-Trap: `BLOCKS` in `inserts.py` is where each insert style draws on the frame; a test reads System
-Flow's band from `camera.ts`, so a layout change there that moves the block fails until the shift is
-recomputed.
+Trap: `BLOCKS` in `inserts.py` is where each insert style draws on the frame, read from each insert
+pack's `insert.block`; a test reads System Flow's band from `camera.ts`, so a layout change there
+that moves the block fails until the pack's block is updated.
+
+### `test_code_scenes.py`
+
+Covers `mcp/code_scenes.py`, the checks `write_scene_config` runs on a Code Scenes insert, and the
+text audit's per-step sampling ([Code Scenes](../10-scene-authoring.md#code-scenes)).
+
+- The languages, limits, timings and band equal the shared fixture
+  `fixtures/code_scenes_contract.json`, which `codeScenes.test.ts` runs against `contract.ts`; the
+  pack's `insert.block`, `props_key` and `component` match. The font-size cases, the typing frames
+  and which output pane each step shows come from the same fixture, and no line count within the
+  limits needs a font under 32 px.
+- A sound four-step insert and a typed first step pass.
+- Each refusal names its step and cause: an unknown language (a shell is Terminal Doc's), no steps,
+  an unknown key, a tag too long, a first step off the insert's first frame or with no code, steps
+  too close, too near the end or off a word, a repeated code version, a tab, too many lines, a line
+  too long, a focus or error line the code lacks, an error match not on its line or a message too
+  long, an output pane too long, with a shell prompt or with no lines and no label, `reveal` on a
+  later step, typing too much or into the next step, a still stretch in the middle or at the end, an
+  emoji, a wide letter, a combining or spacing mark, a control or an invisible character in the code
+  or the output (accented letters pass), a label in another script, an error message too wide for the
+  callout, and a tag and label too wide for the header row.
+- `write_scene_config` writes a Code Scenes insert with its scene, palette and shift filled, names a
+  Code Scenes problem in its refusal, and refuses `CodeScenes` as one of the scenes.
+- The output check stays empty: no code runs, so the AI review checks an output pane, and a sandboxed
+  run would take over in `output_check`.
+
+### `test_text_fit.py`
+
+Covers `mcp/text_fit.py`, the width estimate the Code Scenes and Format Packs validators share with
+the renderer ([Format Packs](../10-scene-authoring.md#format-packs)). The widths, the fitted sizes
+and the line counts equal the shared fixture `fixtures/text_fit_contract.json`, which
+`fitText.test.ts` runs too; wide letters measure wider than narrow ones and emoji wider still; a
+word wider than its box breaks across lines.
+
+### `test_format_packs.py`
+
+Covers `mcp/format_packs.py`, the checks `write_scene_config` runs on a Format Packs insert, and the
+text audit's sampling between changes ([Format Packs](../10-scene-authoring.md#format-packs)).
+
+- The formats, limits, timings, band, tick characters and app names equal the shared fixture
+  `fixtures/format_packs_contract.json`, which `formatPacks.test.ts` runs against `contract.ts`;
+  the pack's `insert.block` matches. Line wrapping and thread height match the fixture's cases.
+- Fiction-range phone numbers pass and real-looking ones do not; amounts and dates are not taken for
+  phone numbers; app names are found as whole words, `X` only on its own.
+- A sound chat, list, quiz and strap each pass, and a strap with a source passes.
+- What passes for a real app is refused: a real-looking number in a contact or a message (written
+  with dots, slashes or dashes too, and a dotted local number such as `867.5309`) or a phone-shaped
+  value on the flap, a tick, an app name in a contact, chat title, list title or strap kicker.
+  Dates, prices, grouped counts and a bare short count pass. Characters the fonts do not draw
+  (another script, an emoji with its variation selector, a spacing mark, a control or zero-width
+  character, an arrow) are refused; accents, curly quotes, currency signs and the minus sign pass.
+- Each other refusal names its part: wrong keys, a first item off the insert's first frame, an
+  arrival off a word, too close to the one before or to the end, text over its limits, a mark on
+  words its message lacks or before its message, overlapping marks on a message or the headline, two
+  labels on one message, a quiz locking too early, a flap still flipping at the end (only its
+  changing tiles take time), a chat title, quiz option, contact name, list lead or mark too wide for
+  its line, a
+  thread too tall for the phone (wide letters wrap to more lines than their count), and a still
+  stretch.
+- `write_scene_config` writes a Format Packs insert with its scene, palette and shift filled, names
+  a Format Packs problem in its refusal, and refuses `FormatPacks` as one of the scenes.
 
 ### `test_system_flow.py`
 

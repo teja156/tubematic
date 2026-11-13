@@ -173,6 +173,16 @@ and the video goes back to its style right after it.
 |---|---|
 | **System Flow** | A diagram of parts: components appear as line icons in boxes, connectors draw between them, and points of light travel along the connectors, for a request crossing a network or the steps of a protocol |
 | **Terminal Doc** | Text as the picture: a password being hashed, letters scrambled into a cipher, a command typed and what it prints, a large number resolving out of noise |
+| **Code Scenes** | A few lines of real code on an editor card: the lines being read light up, a bug gets a red squiggle and a message, the code changes into its fix, and a small pane shows what it prints |
+| **Format Packs** | Phone-style formats: a made-up message thread with the scam's tells circled, a short numbered list, a quiz with a locked answer, or a news strap with a changing number |
+
+Format Packs draws no real app or brand. The phone is a plain frame with no maker's look,
+phone numbers come only from the ranges set aside for fiction, and every made-up message thread or
+headline carries an EXAMPLE tag, so a still from the video cannot pass for a real screenshot. A
+headline shown with its source is a quote from that source.
+
+Code Scenes shows what a snippet prints only when the code makes it certain. Nothing runs the code,
+so the AI review checks that output against the code and sends the video back when it does not match.
 
 An insert follows the video's canvas, so on a white video it is drawn dark on paper. A Cartoon 3D
 video takes no inserts.

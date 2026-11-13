@@ -171,10 +171,10 @@ code against the style packs, and the column has no CHECK constraint, so a new s
 migration.
 [Frozen choices](02-pipeline.md#frozen-choices) covers when each may change.
 
-`system_flow` and `terminal_doc` are insert styles: they draw short insert scenes inside another
-style's video, and no write sets either as a new `visual_style`. A video that holds one from an
-earlier version keeps it and renders as one whole-video diagram or typographic scene written as
-data.
+`system_flow`, `terminal_doc`, `code_scenes` and `format_packs` are insert styles: they draw short
+insert scenes inside another style's video, and no write sets one as a new `visual_style`. A video
+that holds `system_flow` or `terminal_doc` from an earlier version keeps it and renders as one
+whole-video diagram or typographic scene written as data.
 
 Under `auto` the agent first picks a style, at `TOPIC_APPROVED` (`choose_visual_style`). A pack it
 picks becomes `visual_style`, and `style_pick`, `style_runner_up` and `style_reason` record that

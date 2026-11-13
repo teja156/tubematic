@@ -913,7 +913,8 @@ Covers `lib/visualStyles.ts` ([Visual-style picker](../15-dashboard.md#visual-st
 `packStyles.ts` builds the style list from the real pack files in `tubematic_core/style_packs/`, and
 `vitest.setup.ts` makes `useVisualStyles()` return it in every test, so no test holds its own copy
 of the list. It carries each pack's `inserts` block (Auto's as the API serves it) but no `role`: the
-picker tests mark the insert styles themselves.
+picker tests mark the insert styles themselves, from `INSERT_IDS`, the packs whose role is insert, so
+a new insert pack lands in the Inserts group without a test edit.
 
 Trap: settings and GPU status that have not loaded count as available, so the API gives the refusal
 and a page that loads neither does not grey an option out wrongly.

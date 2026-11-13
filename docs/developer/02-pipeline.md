@@ -329,9 +329,10 @@ topic checkpoint:
 - A new main style (Auto's pick, a switch to the runner-up) and a move back to `TOPIC_PROPOSED`
   clear it, because whether an insert helps depends on the main style. It is decided again.
 
-Auto never picks an insert style (`system_flow`, `terminal_doc`), and a write that changes a
-video's `visual_style` to one is refused. A video that holds one from an earlier version keeps it and
-renders as one whole-video scene ([Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts)).
+Auto never picks an insert style (`system_flow`, `terminal_doc`, `code_scenes`, `format_packs`), and
+a write that changes a video's `visual_style` to one is refused. A video that holds System Flow or
+Terminal Doc from an earlier version keeps it and renders as one whole-video scene
+([Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts)).
 
 Two fields that follow from `visual_style` are write-once. The agent writes them through
 `update_video`, HTTP cannot write them, and a second, different value is refused:

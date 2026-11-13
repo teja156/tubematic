@@ -1,6 +1,6 @@
 ---
 name: tubematic-inserts
-description: Place a video's insert scenes (System Flow diagrams, Terminal Doc strings) inside its main style — one insert inside each script segment marked as an insert, the main style's data held quiet under it, written in the config's inserts list — the rules every main-style authoring skill follows
+description: Place a video's insert scenes (System Flow diagrams, Terminal Doc strings, Code Scenes code, Format Packs messages and lists) inside its main style — one insert inside each script segment marked as an insert, the main style's data held quiet under it, written in the config's inserts list — the rules every main-style authoring skill follows
 ---
 
 # Tubematic insert scenes
@@ -39,11 +39,13 @@ Inserts go in a top-level list beside `scenes`. You write four keys per insert:
 
 - `style`: the segment's `insert` value from `get_timeline`.
 - `startFrame`, `durationInFrames`: the window, in the video's frames.
-- `props`: the insert style's data, under its props key (`systemFlow`, `terminalDoc`). Write it with
-  the insert style's own skill, section **As an insert** (`tubematic-system-flow`,
-  `tubematic-terminal-doc`). Its frames are the video's frames, like the main style's.
+- `props`: the insert style's data, under its props key (`systemFlow`, `terminalDoc`, `codeScenes`,
+  `formatPacks`). Write it with the insert style's own skill, section **As an insert**
+  (`tubematic-system-flow`, `tubematic-terminal-doc`, `tubematic-code-scenes`,
+  `tubematic-format-packs`; the pack's `authoring_skill`). Its frames are the video's frames, like the main style's.
 
-Leave out `src`, `palette`, `shift` and `insertTransition`: `write_scene_config` fills them. The
+Leave out `src`, `palette`, `shift`, `firstFrames` and `insertTransition`: `write_scene_config`
+fills them. The
 insert follows the video's canvas (a light video gets the insert's light look) and moves clear of the
 main style's captions by itself.
 
@@ -56,6 +58,9 @@ main style's captions by itself.
 3. Make it last at most 8 seconds (the tool refuses past 9) and at least 2. When the segment is
    longer, cover the part that names what the insert shows and let the main style carry the rest.
 4. End it no later than the next segment's first word.
+5. Start the insert's first element (a node, a word, the code, the first message) on the window's
+   first frame. The renderer holds it, already drawn, while the insert comes in, so an insert never
+   opens on an empty board; `validate_job` warns when one does.
 
 The tool also refuses an insert in the first or last segment, over the payoff's first word, closer
 than 1.5 seconds to the start, the end or another insert, and inserts that add up to more than a

@@ -471,8 +471,10 @@ def test_the_agent_view_carries_the_style_script_guidance():
 
 # ── main styles and insert styles (TMDEV-224) ────────────────────────────────
 
-def test_system_flow_and_terminal_doc_are_insert_styles_and_the_rest_are_main():
-    assert set(tvs.INSERT_STYLES) == {"system_flow", "terminal_doc"}
+def test_the_insert_styles_are_the_insert_only_styles_and_the_rest_are_main():
+    # The user's decision (TMDEV-223): these are only ever scenes inside another
+    # style's video, never a whole video.
+    assert set(tvs.INSERT_STYLES) == {"system_flow", "terminal_doc", "code_scenes", "format_packs"}
     assert tvs.MAIN_STYLES == ("auto",) + tuple(s for s in tvs.PACKS if s not in tvs.INSERT_STYLES)
     # A stored legacy value still reads as a style.
     assert {"system_flow", "terminal_doc"} <= set(tvs.VISUAL_STYLES)
@@ -523,14 +525,22 @@ def _insert_pack(**over):
     (lambda: _valid(insert={"max_seconds": 8}), 'no "insert" block'),
     (lambda: _insert_pack(inserts={"host": True, "transition": "cut"}), 'no "inserts" block'),
     (lambda: _insert_pack(insert={"max_seconds": 8}), "insert: {max_seconds"),
-    (lambda: _insert_pack(insert={"max_seconds": 20, "palettes": ["dark"], "props_key": "x", "component": "X", "review": "r"}),
+    (lambda: _insert_pack(insert={"max_seconds": 20, "palettes": ["dark"], "props_key": "x", "component": "X", "block": [200, 1300], "review": "r"}),
      "insert.max_seconds"),
-    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["blue"], "props_key": "x", "component": "X", "review": "r"}),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["blue"], "props_key": "x", "component": "X", "block": [200, 1300], "review": "r"}),
      "insert.palettes"),
-    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "", "component": "X", "review": "r"}),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "", "component": "X", "block": [200, 1300], "review": "r"}),
      "insert.props_key"),
-    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": " ", "review": "r"}),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": " ", "block": [200, 1300], "review": "r"}),
      "insert.component"),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": "X", "review": "r"}),
+     "insert: {max_seconds"),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": "X",
+                                  "block": [1300, 200], "review": "r"}), "insert.block"),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": "X",
+                                  "block": [0.1, 0.6], "review": "r"}), "insert.block"),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": "X",
+                                  "block": [200, 2000], "review": "r"}), "insert.block"),
 ])
 def test_a_malformed_role_block_is_refused(make, fragment):
     data = make()
