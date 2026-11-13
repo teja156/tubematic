@@ -376,3 +376,30 @@ def test_submit_render_queues_after_a_look_and_refuses_again_after_a_rewrite(que
 def test_a_cartoon_3d_video_is_not_asked_for_a_preview(queued_video):
     (queued_video / VID / "scene-config.json").write_text(json.dumps(CARTOON))
     assert server._preview_block(VID) is None
+
+
+def test_an_unreadable_config_is_not_a_way_past_the_gate(queued_video):
+    d = queued_video / VID
+    (d / "scene-config.json").write_text("{not json")
+    assert server.submit_render(VID)["error"] == "preview_not_taken"
+    real = d / "real.json"
+    real.write_text(json.dumps(PLAIN))
+    (d / "scene-config.json").unlink()
+    (d / "scene-config.json").symlink_to(real)
+    assert server.submit_render(VID)["error"] == "preview_not_taken"
+
+
+def test_a_missing_node_is_recorded_as_a_tool_that_could_not_draw(fake_node, jobs, monkeypatch):
+    _, remotion, _ = fake_node
+    monkeypatch.setenv("PATH", "/nonexistent")
+    with pytest.raises(fp.PreviewError):
+        _preview(jobs, remotion, [10])
+    assert json.loads((jobs / VID / "preview" / "record.json").read_text())["status"] == "unavailable"
+
+
+def test_a_cli_that_answers_with_the_wrong_shape_is_recorded_as_unavailable(fake_node, jobs, monkeypatch):
+    _, remotion, _ = fake_node
+    monkeypatch.setattr(cartoon, "_last_json", lambda out: {"stills": "f0010.png"})
+    with pytest.raises(fp.PreviewError):
+        _preview(jobs, remotion, [10])
+    assert json.loads((jobs / VID / "preview" / "record.json").read_text())["status"] == "unavailable"

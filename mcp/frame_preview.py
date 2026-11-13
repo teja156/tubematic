@@ -23,6 +23,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -180,8 +181,8 @@ def preview(jobs_dir, video_id: str, remotion_dir: Path, frames, *, watermark: b
             try:
                 proc = cartoon.run_cli(remotion_dir, "still", [str(tjobs.job_dir(jobs_dir, video_id)), str(folder), *map(str, clean)],
                                        timeout=TIMEOUT_SECS, props=props, public_dir=Path(jobs_dir))
-            except cartoon.CartoonError as e:
-                why = str(e)
+            except (cartoon.CartoonError, OSError, subprocess.SubprocessError) as e:
+                why = str(e) or e.__class__.__name__
                 raise PreviewError(why)
             if proc.returncode != 0:
                 text = cartoon._fail_text(proc)
@@ -192,9 +193,12 @@ def preview(jobs_dir, video_id: str, remotion_dir: Path, frames, *, watermark: b
                     why = f"the frames could not be rendered: {text}"
                 raise PreviewError(why)
             try:
-                drawn = [Path(p) for p in cartoon._last_json(proc.stdout).get("stills", [])]
-            except cartoon.CartoonError as e:
-                why = str(e)
+                stills = cartoon._last_json(proc.stdout).get("stills", [])
+                if not isinstance(stills, list) or not all(isinstance(p, str) for p in stills):
+                    raise cartoon.CartoonError("the renderer's answer did not list the pictures it drew")
+                drawn = [Path(p) for p in stills]
+            except (cartoon.CartoonError, AttributeError) as e:
+                why = str(e) or "the renderer's answer was not understood"
                 raise PreviewError(why)
         except PreviewError:
             _write_record(folder, sha, "unavailable", clean, why)

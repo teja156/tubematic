@@ -6308,12 +6308,12 @@ def _preview_block(video_id: str) -> dict | None:
     not draw them)."""
     try:
         path = tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG)
-        if path.is_symlink() or not path.is_file():
+        if not path.is_symlink() and not path.exists():
             return None
-        if cartoon.is_cartoon(json.loads(path.read_text(encoding="utf-8"))):
+        if not path.is_symlink() and cartoon.is_cartoon(json.loads(path.read_text(encoding="utf-8"))):
             return None
     except Exception:
-        return None
+        pass   # an unreadable config is not a way past the check: look_recorded refuses what it cannot read
     if frame_preview.look_recorded(JOBS_DIR, video_id):
         return None
     return {"error": "preview_not_taken", "detail": PREVIEW_NOT_TAKEN}
