@@ -51,7 +51,8 @@ which field:
 - Every frame you give (`at`, `redAt`, `to.at`, `slashAt`, `crossAt`, a mark's or a stamp's `at`, each
   step's `at`) is inside its scene and within 2 frames of a word's start.
 - A `tableau` or `camera` holds 1 to 4 items, each in its own slot (`left`, `midleft`, `center`,
-  `midright`, `right`). An item's step (`to`) may not end where another item stands.
+  `midright`, `right`). An item's step (`to`) may not end where another item stands, and starts no
+  earlier than the item appears.
 - At most one item per scene has `"threat": true`; `redAt` is only for the threat.
 - A connector joins two slots that hold items; a bubble sits over a slot that holds an item.
 - Every `what`, `icon` and bubble `icon` is a library part (`style` → `extra.people`, `extra.animals`,
@@ -60,8 +61,9 @@ which field:
   phone lines of 16, a rule's 1 or 2 lines of 12, a case label 10 and name 12, a stamp 10, a steps title
   20 and 2 to 4 steps of 24. Write them in capitals where the card shows capitals; the card draws
   them in capitals anyway.
-- A card (`phone`, `rule`, `case`, `steps`) keeps its last part on screen at least 20 frames before
-  the next scene.
+- A card (`phone`, `rule`, `case`, `steps`) keeps its last part on screen at least 20 frames after it
+  has finished arriving (a slash draws for 6 frames, a mark, a stamp or a step for 8; a phone's lines
+  and a case's bars slide in over the card's first frames) before the next scene.
 - Green is used once: at most one `check` mark in a video.
 - Nothing may sit still for more than 5 seconds: some item, connector, bubble, mark, stamp or step must
   arrive on a word within every 5-second stretch (the small running loops do not count).

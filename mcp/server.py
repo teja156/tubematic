@@ -8101,12 +8101,14 @@ def write_scene_config(video_id: str, config: dict) -> dict:
             {"enabled": false} only when you can say why this video is better
             without them. Optional keys: maxWords (1-7, how many words are on
             screen at once), fontFamily, fontSize, color (null follows the
-            canvas), background ("pill"/"shadow"/"outline"/"label"/"none"/"log";
+            canvas), background ("pill"/"shadow"/"outline"/"label"/"none"/"log"/"card";
             "outline" is bold text with a thick dark stroke and no plate, the
             look of narrated cartoon Shorts; "label" is a printed ivory label
             with a diamond each side, the Storybook Atlas look; "log" is typed
-            into a terminal log strip, the Terminal Doc look), position (fraction of
-            frame height), uppercase, emphasis (a list of word indexes into
+            into a terminal log strip, the Terminal Doc look; "card" is a warm
+            white card with an ink border and a cube chip, the Isometric
+            Infographic look), position (fraction of frame height), uppercase,
+            letterSpacing (-0.05 to 0.3, in em: spaced capitals), emphasis (a list of word indexes into
             the narration, 0 first, drawn on a red box as the line's key word;
             at most one word in 5). Because the narration is captioned, a
             scene should not also spell it out: put text in a scene only when

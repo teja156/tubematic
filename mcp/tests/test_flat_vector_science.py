@@ -318,7 +318,8 @@ def test_render_style_parts_rechecks_a_prop_redrawn_after_the_config(make_video,
     assert "SVG filter" in server.render_style_parts(vid)["error"]
 
 
-@pytest.mark.parametrize("tail", ["\nexport default null;\n", "\n// export default function Decoy() {}\nexport default null;\n"])
+@pytest.mark.parametrize("tail", ["\nexport default null;\n", "\n// export default function Decoy() {}\nexport default null;\n",
+                                  "\n/* export default function Decoy() {} */\n", "\n// export default function Decoy() {}\n"])
 def test_a_prop_file_must_export_a_function(tail):
     body = OCTOPUS.replace("export default function Octopus() {", "function Octopus() {") + tail
     problems = _check(_with_octopus(), sources={"vid_example/prop-octopus": body})
@@ -340,3 +341,22 @@ def test_a_subject_pill_still_lighting_at_the_cut_is_refused():
     shot["pills"][0]["parts"][-1]["at"] = end - 3
     problems = fv.check(cfg, 30, WORD_STARTS + [end - 3], EXTRA, "vid_example")
     assert any("after it settles" in p for p in problems), problems
+
+
+def test_a_later_pill_word_needs_only_to_light_before_the_cut():
+    cfg = copy.deepcopy(EXAMPLE)
+    d = _data(cfg)
+    shot = next(s for s in d["shots"] if s["kind"] == "subject" and s.get("pills")
+                and len(s["pills"][0]["parts"]) > 1)
+    end = d["shots"][d["shots"].index(shot) + 1]["start"]
+    at = end - fv.TIMING["light"] - 1
+    shot["pills"][0]["parts"][-1]["at"] = at
+    assert not any("after it settles" in p for p in fv.check(cfg, 30, WORD_STARTS + [at], EXTRA, "vid_example"))
+
+
+
+def test_a_wrong_typed_value_is_reported_not_raised():
+    problems = _check(_with(lambda d: d["shots"][0].update(items=True)))
+    assert problems
+    problems = _check(_with(lambda d: d["shots"][0]["items"][0].update(slot=["center"])))
+    assert any("slot must be one of" in p for p in problems), problems

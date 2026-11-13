@@ -116,6 +116,11 @@ _KEYS = {
 }
 
 
+def _seq(v) -> list:
+    """v when it is a list, else []: a wrong-typed collection is refused by its own check, never iterated."""
+    return v if isinstance(v, list) else []
+
+
 def is_flat_vector_scene(scene) -> bool:
     return isinstance(scene, dict) and scene.get("src") == SCENE_SRC
 
@@ -153,13 +158,13 @@ def event_frames(shot: dict) -> list[int]:
     kind = shot.get("kind")
 
     def ats(key):
-        return [x["at"] for x in shot.get(key) or [] if isinstance(x, dict) and _int(x.get("at"))]
+        return [x["at"] for x in _seq(shot.get(key)) if isinstance(x, dict) and _int(x.get("at"))]
 
     if kind == "subject":
         out += ats("items")
-        for p in shot.get("pills") or []:
+        for p in _seq(shot.get("pills")):
             if isinstance(p, dict):
-                out += [x["at"] for x in p.get("parts") or [] if isinstance(x, dict) and _int(x.get("at"))]
+                out += [x["at"] for x in _seq(p.get("parts")) if isinstance(x, dict) and _int(x.get("at"))]
         r = shot.get("rule")
         if isinstance(r, dict) and _int(r.get("at")):
             out.append(r["at"])
@@ -270,8 +275,10 @@ def custom_prop_errors(custom, video_id: str, library_names, sources: dict | Non
             if bad:
                 errs.append(f"{where} ({cid}): it imports {', '.join(sorted(set(bad)))}; a prop imports only react "
                             "and ../../installed/flatVector/toon.")
-            # every default export must be the function (a decoy in a comment cannot cover an "export default null")
-            exports = re.findall(r"\bexport\s+default\s+(\w*)", body)
+            # every default export outside comments must be the function: a commented-out one exports nothing,
+            # and a decoy cannot cover an "export default null" (the forbidden patterns above read the raw file)
+            code = re.sub(r"/\*.*?\*/|//[^\n]*", "", body, flags=re.S)
+            exports = re.findall(r"\bexport\s+default\s+(\w*)", code)
             if not exports or any(e != "function" for e in exports):
                 errs.append(f"{where} ({cid}): the file must default-export the drawing as a function "
                             "(\"export default function Name() { ... }\").")
@@ -279,13 +286,26 @@ def custom_prop_errors(custom, video_id: str, library_names, sources: dict | Non
     return errs, boxes
 
 
-def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "",
-          sources: dict | None = None, quiet=()) -> list[str]:
+
+def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "", sources: dict | None = None, quiet=()) -> list[str]:
+    """Every problem with the config, one sentence each (at most MAX_ERRORS), or [] when it may be
+    written. A value of the wrong type (a list or an object where a name, a number or true/false
+    belongs) is reported with the problems found before it, never raised."""
+    out: list[str] = []
+    try:
+        return _check_unguarded(config, fps, word_starts, extra, video_id=video_id, sources=sources, quiet=quiet, _out=out)
+    except (TypeError, KeyError, AttributeError, IndexError, ValueError):
+        return out[:MAX_ERRORS - 1] + ["A field holds a value of the wrong type (a list or an object where a name, a "
+                                       "number or true/false belongs); compare the config with the skill's contract."]
+
+
+def _check_unguarded(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "",
+          sources: dict | None = None, quiet=(), _out=None) -> list[str]:
     """Every problem with a Flat Vector Science config, one sentence each (at
     most MAX_ERRORS), or [] when it may be written. `extra` is the style pack's
     catalogue block; `sources` maps customProps' src to the file's text (None
     skips the source checks). `quiet` holds the config's insert windows."""
-    errors: list[str] = []
+    errors: list[str] = _out if _out is not None else []
     found = [0]
 
     def err(msg: str) -> None:
@@ -294,7 +314,7 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
             errors.append(msg)
 
     total = config.get("totalFrames")
-    scenes_cfg = config.get("scenes") or []
+    scenes_cfg = _seq(config.get("scenes"))
     use = check_scene_use(STYLE_ID, scenes_cfg)
     if use:
         return [use]
@@ -478,8 +498,9 @@ def _check_shot(s, where, start, end, index, boxes, on_word, err) -> None:
             for k, x in enumerate(parts):
                 if _timed(x, "at", f"{w} part {k + 1}", start, end, on_word, err, "the frame its word lights", low=prev + 1):
                     prev = x["at"]
-                    # the pill grows from 3 frames after its word and its text lights from 7 (FlatVectorScience.tsx)
-                    last = max(last, x["at"] + 7 + T["pillReveal"])
+                    # the pill grows from 3 frames after its first word and its text is revealed from 7; each later
+                    # word lights over T["light"] frames on its own word (FlatVectorScience.tsx)
+                    last = max(last, x["at"] + (7 + T["pillReveal"] if k == 0 else T["light"]))
                 if "red" in x and not isinstance(x["red"], bool):
                     err(f"{w} part {k + 1}: red must be true or false.")
                 reds += x.get("red") is True
@@ -570,11 +591,11 @@ def _check_quiet(shots, starts, quiet, err) -> None:
 def shot_windows(config: dict) -> list[tuple[int, int]]:
     """(settled, end) of every shot, for the text-layout audit: a shot is
     sampled once its first pill, title or readout has grown in."""
-    scenes_cfg = config.get("scenes") or []
+    scenes_cfg = _seq(config.get("scenes"))
     if len(scenes_cfg) != 1 or not is_flat_vector_scene(scenes_cfg[0]):
         return []
     data = (scenes_cfg[0].get("props") or {}).get(PROPS_KEY) or {}
-    shots = [s for s in data.get("shots") or [] if isinstance(s, dict) and _int(s.get("start"))]
+    shots = [s for s in _seq(data.get("shots")) if isinstance(s, dict) and _int(s.get("start"))]
     total = config.get("totalFrames") if _int(config.get("totalFrames")) else 0
     out = []
     for s, end in zip(shots, [n["start"] for n in shots[1:]] + [total]):

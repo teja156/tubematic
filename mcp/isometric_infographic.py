@@ -92,6 +92,11 @@ _ID = re.compile(r"^[a-z][a-z0-9_]{0,23}$")
 _BOARD_KEYS = {"start", "areas", "props", "routes", "movers", "pins", "camera", "lifts", "cutaways", "explodes"}
 
 
+def _seq(v) -> list:
+    """v when it is a list, else []: a wrong-typed collection is refused by its own check, never iterated."""
+    return v if isinstance(v, list) else []
+
+
 def is_iso_scene(scene) -> bool:
     return isinstance(scene, dict) and scene.get("src") == SCENE_SRC
 
@@ -120,11 +125,11 @@ def grouped(n) -> str:
 
 def event_frames(b: dict) -> list[int]:
     out = [b["start"]]
-    for p in b.get("props") or []:
+    for p in _seq(b.get("props")):
         if isinstance(p, dict) and _int(p.get("enter")):
             out.append(p["enter"])
     for key in ("routes", "movers", "pins", "camera", "lifts", "cutaways", "explodes"):
-        out += [x["at"] for x in b.get(key) or [] if isinstance(x, dict) and _int(x.get("at"))]
+        out += [x["at"] for x in _seq(b.get(key)) if isinstance(x, dict) and _int(x.get("at"))]
     return sorted(set(out))
 
 
@@ -136,9 +141,9 @@ def settle_frames(b: dict) -> list[int]:
     """The frame each of a board's changes has finished: a landing, a route drawn, a mover arrived, a pin
     built, a glide, a lift, a cutaway or an explode done."""
     out = [b["start"]]
-    out += [p["enter"] for p in b.get("props") or [] if isinstance(p, dict) and _int(p.get("enter"))]
+    out += [p["enter"] for p in _seq(b.get("props")) if isinstance(p, dict) and _int(p.get("enter"))]
     for key, t in _LASTS.items():
-        out += [x["at"] + TIMING[t] for x in b.get(key) or [] if isinstance(x, dict) and _int(x.get("at"))]
+        out += [x["at"] + TIMING[t] for x in _seq(b.get(key)) if isinstance(x, dict) and _int(x.get("at"))]
     return out
 
 
@@ -247,10 +252,23 @@ def custom_prop_errors(custom, library, colors) -> tuple[list[str], dict]:
     return errs, parts
 
 
+
 def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "", quiet=()) -> list[str]:
+    """Every problem with the config, one sentence each (at most MAX_ERRORS), or [] when it may be
+    written. A value of the wrong type (a list or an object where a name, a number or true/false
+    belongs) is reported with the problems found before it, never raised."""
+    out: list[str] = []
+    try:
+        return _check_unguarded(config, fps, word_starts, extra, video_id=video_id, quiet=quiet, _out=out)
+    except (TypeError, KeyError, AttributeError, IndexError, ValueError):
+        return out[:MAX_ERRORS - 1] + ["A field holds a value of the wrong type (a list or an object where a name, a "
+                                       "number or true/false belongs); compare the config with the skill's contract."]
+
+
+def _check_unguarded(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "", quiet=(), _out=None) -> list[str]:
     """Every problem with an Isometric Infographic config, one sentence each
     (at most MAX_ERRORS), or [] when it may be written."""
-    errors: list[str] = []
+    errors: list[str] = _out if _out is not None else []
     found = [0]
 
     def err(msg: str) -> None:
@@ -259,7 +277,7 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
             errors.append(msg)
 
     total = config.get("totalFrames")
-    scenes_cfg = config.get("scenes") or []
+    scenes_cfg = _seq(config.get("scenes"))
     use = check_scene_use(STYLE_ID, scenes_cfg)
     if use:
         return [use]
@@ -278,15 +296,15 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
     if not _text(data.get("title"), LIMITS["titleChars"]):
         err(f"title must be 1 to {LIMITS['titleChars']} characters.")
 
-    colors = set(extra.get("colors") or [])
-    library = set(extra.get("props") or [])
+    colors = set(_seq(extra.get("colors")))
+    library = set(_seq(extra.get("props")))
     cerrs, custom = custom_prop_errors(data.get("customProps"), library, colors)
     for e in cerrs:
         err(e)
     names = library | set(custom)
     halves = {**(extra.get("footprints") or {}), **custom}
-    rooms = set(extra.get("rooms") or [])
-    stacks = set(extra.get("stacks") or [])
+    rooms = set(_seq(extra.get("rooms")))
+    stacks = set(_seq(extra.get("stacks")))
 
     snaps = sorted(set(word_starts))
 
@@ -326,7 +344,7 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
         extra_keys = sorted(set(b) - _BOARD_KEYS)
         if extra_keys:
             err(f"{where}: unknown field(s) {extra_keys}; a board takes {sorted(_BOARD_KEYS)}.")
-        _check_board(b, where, starts[i], ends[i], names, rooms, stacks, colors, timed, err, set(extra.get("areas") or []), halves)
+        _check_board(b, where, starts[i], ends[i], names, rooms, stacks, colors, timed, err, set(_seq(extra.get("areas"))), halves)
         sound.append(found[0] == before)
 
     ro = data.get("readout")
@@ -394,13 +412,13 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
         if ends[i] - last < TIMING["readFrames"]:
             err(f"Board {i + 1}: its last change settles at frame {last}, {ends[i] - last} frames before the board "
                 f"ends; leave at least {TIMING['readFrames']} frames to see it.")
-    late = [s["at"] for s in ((ro or {}).get("steps") if isinstance((ro or {}).get("steps"), list) else [])
-            if isinstance(s, dict) and _int(s.get("at"))]
-    late += [leg["at"]] if isinstance(leg, dict) and _int(leg.get("at")) else []
-    if late and total - max(late) < TIMING["readFrames"] + TIMING["roll"]:
-        err(f"The readout or the legend changes at frame {max(late)}, {total - max(late)} frames before the video "
-            f"ends; leave at least {TIMING['readFrames'] + TIMING['roll']} frames (its roll and the time to read it).")
-    for f in [s.get("at") for s in (ro or {}).get("steps") or [] if isinstance(s, dict)] + ([leg.get("at")] if isinstance(leg, dict) else []):
+    # each change has finished once it has rolled (a readout step) or risen (the legend)
+    late = [s["at"] + TIMING["roll"] for s in _seq((ro or {}).get("steps")) if isinstance(s, dict) and _int(s.get("at"))]
+    late += [leg["at"] + TIMING["legend"]] if isinstance(leg, dict) and _int(leg.get("at")) else []
+    if late and total - max(late) < TIMING["readFrames"]:
+        err(f"The readout or the legend finishes changing at frame {max(late)}, {total - max(late)} frames before "
+            f"the video ends; leave at least {TIMING['readFrames']} frames to read it.")
+    for f in [s.get("at") for s in _seq((ro or {}).get("steps")) if isinstance(s, dict)] + ([leg.get("at")] if isinstance(leg, dict) else []):
         w = window_at(f, quiet) if _int(f) else None
         if w:
             err(f"The readout or the legend changes at frame {f}, inside an insert ({window_text(w)}); move it out of the window.")
@@ -568,15 +586,15 @@ def _check_board(b, where, start, end, names, rooms, stacks, colors, timed, err,
 def board_windows(config: dict) -> list[tuple[int, int]]:
     """(settled, end) of every board, for the text-layout audit: sampled once
     its first pin has built, or a second after it starts."""
-    scenes_cfg = config.get("scenes") or []
+    scenes_cfg = _seq(config.get("scenes"))
     if len(scenes_cfg) != 1 or not is_iso_scene(scenes_cfg[0]):
         return []
     data = (scenes_cfg[0].get("props") or {}).get(PROPS_KEY) or {}
-    boards = [b for b in data.get("boards") or [] if isinstance(b, dict) and _int(b.get("start"))]
+    boards = [b for b in _seq(data.get("boards")) if isinstance(b, dict) and _int(b.get("start"))]
     total = config.get("totalFrames") if _int(config.get("totalFrames")) else 0
     out = []
     for b, end in zip(boards, [n["start"] for n in boards[1:]] + [total]):
-        pins = [p["at"] for p in b.get("pins") or [] if isinstance(p, dict) and _int(p.get("at"))]
+        pins = [p["at"] for p in _seq(b.get("pins")) if isinstance(p, dict) and _int(p.get("at"))]
         settled = (min(pins) if pins else b["start"]) + TIMING["pin"] + 2
         if end > b["start"]:
             out.append((min(settled, end - 1), end))

@@ -1439,7 +1439,8 @@ System Flow's example.
   under 1.5 seconds.
 - A frame the config gives (an item's `at`, `redAt`, `to.at`, a slash, a cross, a mark, a stamp, a
   step) is outside its scene or off a word.
-- A scene holds more than 4 items or two in one slot, an item's step ends on another item, a
+- A scene holds more than 4 items or two in one slot, an item's step ends on another item or starts
+  before the item appears, a
   connector joins or a bubble sits over a slot with no item, or a `what` or `icon` is neither in the
   library nor in `customParts`.
 - A scene has more than one item marked `threat`, or `redAt` is on another item; the video has more
@@ -1447,7 +1448,8 @@ System Flow's example.
 - A text is over its limit (the file title 16 characters, a camera label 22, a button 6, a phone title
   12 and up to 3 lines of 16, a rule's 2 lines of 12, a case label 10 and name 12, a stamp 10, a steps
   title 20 and steps of 24).
-- A card's last part appears less than 20 frames before the scene ends.
+- A card's last part has finished arriving (its slash, mark, stamp, step, phone line or case bar drawn)
+  less than 20 frames before the scene ends.
 - A custom part has more than 40 shapes, leaves its box (a circle's radius and a line's width count), or
   the video has more than 6.
 - Nothing new arrives for more than 5 seconds. The small running loops (stars, a marching dotted line,
@@ -1606,8 +1608,8 @@ Flow's example.
   or would need more than 12, or the legend has more than 5 entries of 12 characters or does not fit the
   frame.
 - A board's last change finishes (a route drawn, a mover arrived, a pin built, a glide, a lift, a cutaway
-  or an explode done) less than 20 frames before the board ends, or the readout or the legend changes in
-  the video's last 38 frames (its roll plus 20).
+  or an explode done) less than 20 frames before the board ends, or the readout finishes rolling or the
+  legend finishes rising less than 20 frames before the video ends.
 - A custom prop breaks the solid, footprint (a solid's size counts, not only its centre) or count rules.
 - Nothing new arrives for more than 4 seconds. The drift, the clouds and things already moving do not
   count.

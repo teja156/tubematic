@@ -64,7 +64,7 @@ def test_the_skill_states_the_validators_limits():
                    f"1 or {L['ruleLines']} lines of {L['ruleLineChars']}", f"a case label {L['caseLabelChars']}",
                    f"name {L['caseNameChars']}", f"a stamp {L['stampChars']}", f"a steps title {L['stepsTitleChars']}",
                    f"{L['minSteps']} to {L['maxSteps']} steps of {L['stepChars']}",
-                   f"at least {T['readFrames']} frames before", "at most one `check` mark",
+                   f"at least {T['readFrames']} frames after it", "at most one `check` mark",
                    f"more than {L['maxStillSeconds']} seconds", f"at most {L['maxCustomParts']} in `customParts`",
                    f"at most {L['maxShapes']} shapes", f"at least {T['slashDelay']} frames into the card",
                    f"x from -{L['partBox'] // 2} to {L['partBox'] // 2}", f"y from -{L['partBox']}"):

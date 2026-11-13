@@ -59,7 +59,7 @@ and which field:
 - A descent's layers go deeper each time.
 - At most one red thing in a shot (a pill part, a rung, a level, a layer, a stage or the counter).
 - A ladder, zoom, descent or stages shot keeps its last arrival on screen at least 20 frames before the
-  next shot; in a subject shot, the last pill word (16 frames) or the rule (12 frames) has finished lighting before
+  next shot; in a subject shot, the pill (16 frames from its first word, 5 for each later word) and the rule (12 frames) have finished lighting before
   the next shot.
 - Nothing may sit still for more than 4 seconds: a prop, a pill word, a rule, a counter, a rung, a
   level, a layer or a stage must arrive on a word within every 4-second stretch (the drift does not count).

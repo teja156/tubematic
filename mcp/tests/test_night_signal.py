@@ -285,3 +285,30 @@ def test_letter_spacing_is_a_caption_key_in_its_range(make_video):
     assert "error" not in server.write_scene_config(vid, cfg)
     cfg["subtitles"] = {"letterSpacing": 0.9}
     assert "letterSpacing" in server.write_scene_config(vid, cfg)["error"]
+
+
+def test_an_item_cannot_step_before_it_appears():
+    cfg = copy.deepcopy(EXAMPLE)
+    sc = next(s for s in _data(cfg)["scenes"] if s["kind"] == "tableau")
+    it = sc["items"][0]
+    free = next(sl for sl in ns.SLOTS if sl not in {x["slot"] for x in sc["items"]})
+    it.pop("to", None)
+    it["at"], it["to"] = sc["start"] + 30, {"slot": free, "at": sc["start"] + 10}
+    problems = ns.check(cfg, 30, WORD_STARTS + [sc["start"] + 10, sc["start"] + 30], EXTRA, "vid_example")
+    assert any("before it appears" in p for p in problems), problems
+
+
+def test_a_card_is_read_from_when_its_last_part_has_arrived():
+    cfg = copy.deepcopy(EXAMPLE)
+    d = _data(cfg)
+    rule = next(s for s in d["scenes"] if s["kind"] == "rule")
+    end = d["scenes"][d["scenes"].index(rule) + 1]["start"] if rule is not d["scenes"][-1] else cfg["totalFrames"]
+    rule["slashAt"] = end - 21
+    problems = ns.check(cfg, 30, WORD_STARTS + [end - 21], EXTRA, "vid_example")
+    assert any("finished arriving" in p for p in problems), problems
+
+
+def test_a_wrong_typed_value_is_reported_not_raised():
+    problems = _check(_with(lambda d: d["scenes"][0]["items"][0].update(what=["door"])))
+    assert any("wrong type" in p for p in problems), problems
+

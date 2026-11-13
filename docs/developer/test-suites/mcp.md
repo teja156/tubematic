@@ -1089,7 +1089,9 @@ audit's per-scene sampling and the `letterSpacing` caption key
 - Each refusal names its scene and cause: a bad file, clock, setting, slot, screen or mark; a first scene
   that is late or a card; a scene off the words, out of order or too short to see; two items in a slot or
   an item's step onto another; a connector or bubble on an empty slot; a second threat or a `redAt` off
-  the threat; a text over its limit; a card cut before its last part can be read; a second green mark;
+  the threat; an item that steps before it appears; a text over its limit; a card cut before its last
+  part has finished arriving and been read; a second green mark; a value of the wrong type (reported,
+  never raised);
   and a stretch with nothing new for over 5 seconds, where the small running loops do not count.
 - A custom part is refused for a bad shape, a tone, a box overflow (a circle's radius and a line's width
   count) or too many shapes, and can stand in a scene while it cannot reuse a library name.
@@ -1118,8 +1120,9 @@ Vector Science config and on the video's own prop files, and `render_style_parts
 - With insert windows passed as `quiet`, nothing arrives inside a window.
 - The skill's example prop passes the source rules. A custom prop entry with a bad id, `src` or box is
   refused, and so is a file with a hook, the frame, SVG text, an image or any of Bean Explainer's
-  forbidden patterns, a file whose default export is not a function (a decoy in a comment included), or
-  a file that is missing.
+  forbidden patterns, a file whose default export is not a function (one only inside a comment, or a
+  decoy in a comment beside an `export default null`), or a file that is missing. A later pill word only
+  has to finish lighting before the cut. A value of the wrong type is reported, never raised.
 - The text audit samples every shot.
 - `write_scene_config` writes a sound config with the style's captions, refuses a missing prop file and
   `FlatVectorScience` on another style. `validate_job` checks a prop file again and refuses one redrawn
@@ -1144,7 +1147,8 @@ Infographic config, and `render_style_parts` for the style
   nothing new for over 4 seconds. A mover that sets off before its route draws is refused, going `back`
   or not.
 - A board's last change must have finished 20 frames before the board ends (a mover's whole trip
-  counts), and the readout and the legend must change early enough to roll and be read.
+  counts), and the readout and the legend must have finished rolling or rising 20 frames before the
+  end, each by its own length. A value of the wrong type is reported, never raised.
 - A bad custom prop is refused (a solid outside its footprint included), a custom prop stands on the
   board like a library one, and the footprint agrees with the renderer's.
 - Nothing happens inside an insert window, a prop may fall behind one and land after it, the scene-use

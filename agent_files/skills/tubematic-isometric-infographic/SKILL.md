@@ -56,7 +56,8 @@ board and which field:
   1 or more), at most 12.
 - A board's last change has finished at least 20 frames before the board ends (a route draws for 20
   frames, a mover travels 40, a pin builds 18, a glide 24, a lift 14, a cutaway or an explode 16), and
-  the readout and the legend change no later than 38 frames before the video ends.
+  the readout (which rolls for 18 frames) and the legend (which rises for 12) have finished 20 frames
+  before the video ends.
 - The legend has 1 to 5 entries of 1 to 12 characters and must fit the frame.
 - Nothing may sit still for more than 4 seconds: a prop, a route, a mover, a pin, a camera move, a lift,
   a cutaway, an explode, a readout step or the legend must arrive on a word within every 4-second

@@ -120,13 +120,18 @@ _KEYS = {
 _ITEM_KEYS = {"what", "slot", "at", "threat", "redAt", "face", "to"}
 
 
+def _seq(v) -> list:
+    """v when it is a list, else []: a wrong-typed collection is refused by its own check, never iterated."""
+    return v if isinstance(v, list) else []
+
+
 def is_night_signal_scene(scene) -> bool:
     return isinstance(scene, dict) and scene.get("src") == SCENE_SRC
 
 
 def library(extra: dict) -> set:
     """Every part name the pack's library holds: people, animals, objects."""
-    return set(extra.get("people") or []) | set(extra.get("animals") or []) | set(extra.get("objects") or [])
+    return set(_seq(extra.get("people"))) | set(_seq(extra.get("animals"))) | set(_seq(extra.get("objects")))
 
 
 def fit_font_size(text: str, size: int, width: int = GEOMETRY["lineWidth"]) -> int:
@@ -140,7 +145,7 @@ def event_frames(scene: dict) -> list[int]:
     out = [scene["start"]]
     kind = scene.get("kind")
     if kind in ("tableau", "camera"):
-        for it in scene.get("items") or []:
+        for it in _seq(scene.get("items")):
             if not isinstance(it, dict):
                 continue
             if _int(it.get("at")):
@@ -163,7 +168,7 @@ def event_frames(scene: dict) -> list[int]:
     if kind == "case" and isinstance(scene.get("stamp"), dict) and _int(scene["stamp"].get("at")):
         out.append(scene["stamp"]["at"])
     if kind == "steps":
-        out.extend(s["at"] for s in scene.get("steps") or [] if isinstance(s, dict) and _int(s.get("at")))
+        out.extend(s["at"] for s in _seq(scene.get("steps")) if isinstance(s, dict) and _int(s.get("at")))
     return sorted(set(out))
 
 
@@ -227,13 +232,26 @@ def check_scene_use(visual_style: str, scenes: list) -> str:
     return ""
 
 
-def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "",
-          quiet=()) -> list[str]:
+
+def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "", quiet=()) -> list[str]:
+    """Every problem with the config, one sentence each (at most MAX_ERRORS), or [] when it may be
+    written. A value of the wrong type (a list or an object where a name, a number or true/false
+    belongs) is reported with the problems found before it, never raised."""
+    out: list[str] = []
+    try:
+        return _check_unguarded(config, fps, word_starts, extra, video_id=video_id, quiet=quiet, _out=out)
+    except (TypeError, KeyError, AttributeError, IndexError, ValueError):
+        return out[:MAX_ERRORS - 1] + ["A field holds a value of the wrong type (a list or an object where a name, a "
+                                       "number or true/false belongs); compare the config with the skill's contract."]
+
+
+def _check_unguarded(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "",
+          quiet=(), _out=None) -> list[str]:
     """Every problem with a Night Signal config, one sentence each (at most
     MAX_ERRORS), or [] when it may be written. `extra` is the style pack's
     catalogue block. `quiet` holds the config's insert windows
     (mcp/quiet_windows.py)."""
-    errors: list[str] = []
+    errors: list[str] = _out if _out is not None else []
     found = [0]
 
     def err(msg: str) -> None:
@@ -242,7 +260,7 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
             errors.append(msg)
 
     total = config.get("totalFrames")
-    scenes_cfg = config.get("scenes") or []
+    scenes_cfg = _seq(config.get("scenes"))
     use = check_scene_use(STYLE_ID, scenes_cfg)
     if use:
         return [use]
@@ -455,8 +473,9 @@ def _check_items(s, where, start, end, parts, on_word, err) -> set:
                 err(f"{w}: to must be {{\"slot\": one of {list(SLOTS)}, \"at\": a frame}}.")
             elif to["slot"] == it["slot"]:
                 err(f"{w}: to names the slot it already stands in.")
-            else:
-                _timed(to, "at", f"{w} to", start, end, on_word, err, "the frame its step starts on")
+            elif _timed(to, "at", f"{w} to", start, end, on_word, err, "the frame its step starts on"):
+                if _int(it.get("at")) and to["at"] < it["at"]:
+                    err(f"{w}: its step starts at frame {to['at']}, before it appears at {it['at']}.")
     # a step may not end on a slot another item holds
     for n, it in enumerate(items):
         if isinstance(it, dict) and isinstance(it.get("to"), dict) and it["to"].get("slot") in slots - {it.get("slot")}:
@@ -484,9 +503,10 @@ def _check_scene(s, where, start, end, parts, on_word, checks, err) -> None:
     kind = s["kind"]
     last = [start]
 
-    def timed(obj, key, w, what, low=None):
+    def timed(obj, key, w, what, low=None, lasts=0):
+        # `lasts`: the frames its animation runs after `key` (draw.ts), so the read window starts once it is done
         if _timed(obj, key, w, start, end, on_word, err, what, low):
-            last[0] = max(last[0], obj[key])
+            last[0] = max(last[0], obj[key] + lasts)
 
     if kind in ("tableau", "camera"):
         if kind == "tableau" and s.get("setting") not in SETTINGS:
@@ -530,8 +550,10 @@ def _check_scene(s, where, start, end, parts, on_word, checks, err) -> None:
             else:
                 if m["kind"] == "check":
                     checks[0] += 1
-                timed(m, "at", f"{where} mark", "the frame the mark lands")
-        last[0] = max(last[0], start + 4 + 8 * (len(lines) if isinstance(lines, list) else 0))
+                timed(m, "at", f"{where} mark", "the frame the mark lands", lasts=T["mark"])
+        # line i slides in from 4 + 8i frames after the start, over 10 frames (draw.ts::phone)
+        if isinstance(lines, list) and lines:
+            last[0] = max(last[0], start + 4 + 8 * (len(lines) - 1) + 10)
     elif kind == "rule":
         if not _int(s.get("number")) or not 1 <= s["number"] <= 99:
             err(f"{where}: number must be a whole number from 1 to 99.")
@@ -542,9 +564,10 @@ def _check_scene(s, where, start, end, parts, on_word, checks, err) -> None:
         if s.get("icon") not in parts:
             err(f"{where}: icon {s.get('icon')!r} is not a library part or a customParts id.")
         if "slashAt" in s:
-            timed(s, "slashAt", where, "the frame the red slash crosses the icon", low=start + T["ringStart"] + T["ringFrames"])
+            timed(s, "slashAt", where, "the frame the red slash crosses the icon", low=start + T["ringStart"] + T["ringFrames"],
+                  lasts=T["slashFrames"])
         else:
-            last[0] = start + T["slashDelay"]
+            last[0] = start + T["slashDelay"] + T["slashFrames"]
     elif kind == "case":
         if not _text(s.get("label"), L["caseLabelChars"]):
             err(f"{where}: label must be 1 to {L['caseLabelChars']} characters (\"WITNESS\").")
@@ -559,7 +582,10 @@ def _check_scene(s, where, start, end, parts, on_word, checks, err) -> None:
             if not isinstance(st, dict) or set(st) != {"text", "at"} or not _text(st.get("text"), L["stampChars"]):
                 err(f"{where}: stamp must be {{\"text\": 1 to {L['stampChars']} characters, \"at\": a frame}}.")
             else:
-                timed(st, "at", f"{where} stamp", "the frame the stamp lands")
+                timed(st, "at", f"{where} stamp", "the frame the stamp lands", lasts=T["mark"])
+        # bar i draws from 4 + 5i frames after the start, over 8 frames (draw.ts::caseCard)
+        if _int(s.get("bars")) and L["minBars"] <= s["bars"] <= L["maxBars"]:
+            last[0] = max(last[0], start + 4 + 5 * (s["bars"] - 1) + 8)
     elif kind == "steps":
         if not _text(s.get("title"), L["stepsTitleChars"]):
             err(f"{where}: title must be 1 to {L['stepsTitleChars']} characters.")
@@ -572,10 +598,10 @@ def _check_scene(s, where, start, end, parts, on_word, checks, err) -> None:
         else:
             prev = start - 1
             for n, x in enumerate(steps):
-                timed(x, "at", f"{where} step {n + 1}", "the frame it appears", low=prev + 1)
+                timed(x, "at", f"{where} step {n + 1}", "the frame it appears", low=prev + 1, lasts=T["stepIn"])
                 prev = x["at"] if _int(x["at"]) else prev
     if kind in ("phone", "rule", "case", "steps") and end - last[0] < T["readFrames"]:
-        err(f"{where}: its last part appears at frame {last[0]}, {end - last[0]} frames before the scene ends; "
+        err(f"{where}: its last part has finished arriving at frame {last[0]}, {end - last[0]} frames before the scene ends; "
             f"leave at least {T['readFrames']} frames to read it.")
 
 
@@ -604,11 +630,11 @@ def scene_windows(config: dict) -> list[tuple[int, int]]:
     """(settled, end) of every scene of a Night Signal config, for the
     text-layout audit to sample each: a picture from just after its tear, a
     card from its last part. [] when the config is not one."""
-    scenes_cfg = config.get("scenes") or []
+    scenes_cfg = _seq(config.get("scenes"))
     if len(scenes_cfg) != 1 or not is_night_signal_scene(scenes_cfg[0]):
         return []
     data = (scenes_cfg[0].get("props") or {}).get(PROPS_KEY) or {}
-    scenes = [s for s in data.get("scenes") or [] if isinstance(s, dict) and _int(s.get("start"))]
+    scenes = [s for s in _seq(data.get("scenes")) if isinstance(s, dict) and _int(s.get("start"))]
     total = config.get("totalFrames") if _int(config.get("totalFrames")) else 0
     out = []
     for s, end in zip(scenes, [n["start"] for n in scenes[1:]] + [total]):

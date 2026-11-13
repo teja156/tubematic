@@ -173,7 +173,7 @@ def test_the_last_change_on_a_board_and_the_last_readout_step_are_left_on_screen
     cfg = copy.deepcopy(EXAMPLE)
     _data(cfg)["legend"]["at"] = total - 3
     problems = iso.check(cfg, 30, WORD_STARTS + [total - 3], EXTRA, "vid_example")
-    assert any("the time to read it" in p for p in problems), problems
+    assert any("finishes changing" in p for p in problems), problems
 
 
 def test_the_scene_use_rule_and_the_audit_windows():
@@ -278,3 +278,18 @@ def test_a_move_still_running_at_the_board_end_is_refused():
     _b(d)["movers"][0]["at"] = end - 25
     problems = iso.check(cfg, 30, WORD_STARTS + [end - 25], EXTRA, "vid_example")
     assert any("settles at frame" in p for p in problems), problems
+
+
+def test_a_legend_is_held_from_when_it_has_risen():
+    cfg = copy.deepcopy(EXAMPLE)
+    total = cfg["totalFrames"]
+    at = total - iso.TIMING["legend"] - iso.TIMING["readFrames"]
+    _data(cfg)["legend"]["at"] = at
+    assert not any("finishes changing" in p for p in iso.check(cfg, 30, WORD_STARTS + [at], EXTRA, "vid_example"))
+
+
+def test_a_wrong_typed_value_is_reported_not_raised():
+    problems = _check(_with(lambda d: _b(d)["props"][0].update(what={"a": 1})))
+    assert any("wrong type" in p for p in problems), problems
+    assert _check(_with(lambda d: _b(d).update(props=True)))
+
