@@ -69,6 +69,12 @@ describe("the stage", () => {
     expect(merged.actors.map((a) => a.id)).toEqual(["bit"]);
   });
 
+  it("takes the clones off with their original when it exits", () => {
+    const split = at("clone");
+    const data: ProcessCastData = { ...DATA, events: DATA.events.filter((e) => e.frame <= split).concat([{ type: "exit" as const, frame: split + 20, who: "bit" }]) };
+    expect(castAt(data, split + 20 + TIMING.enter).actors).toHaveLength(0);
+  });
+
   it("adds the cubes up once two units bodies have joined", () => {
     const f = at("join");
     expect(castAt(DATA, f).actors.find((a) => a.id === "bit")!.units).toBe(4);

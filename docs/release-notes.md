@@ -72,6 +72,15 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   takes no mascot, because its presenter has the stage.
   [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
   details.
+- A new experimental style, **Process Cast**: little drawn characters with faces act out an invisible
+  process at stations along one ground line. They carry and hand over task cards, split into copies
+  and merge back, join their cubes into a bigger body and react, while the camera glides from
+  station to station. It suits a process whose actors are things, such as bits adding up to a byte,
+  cells and organs, the layers of a system or the stages of a build, and Auto can pick it. It needs
+  no API key and no GPU, generates no images, and takes no mascot, because its whole cast is drawn
+  characters and a mascot would be confused with them.
+  [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
+  details.
 
 ### Changed
 

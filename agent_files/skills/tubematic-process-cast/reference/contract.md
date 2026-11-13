@@ -16,7 +16,7 @@ checks every rule here and names what is wrong. The worked example is `example-c
 A character's `id` is lowercase letters, digits and `_`, starts with a letter and does not end in a
 digit (clones are named `<id>2`, `<id>3`). `name` is its tag, at most 14 characters.
 Bodies: `bean`, `blob`, `block`, `gem`, `units`; a `units` body has `units`, 1 to 16 cubes, drawn
-52 px each in a near-square grid. Tints: `teal`, `olive`, `coral`, `sky`, `mustard`, `plum`, `cream`. Accessories:
+80 px each in a near-square grid. Tints: `teal`, `olive`, `coral`, `sky`, `mustard`, `plum`, `cream`. Accessories:
 `none`, `glasses`, `tuft`, `sprout`, `cap`.
 
 A station's `id` is unique and not also a cast id; its `sign` is at most 14 characters.

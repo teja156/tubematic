@@ -286,3 +286,16 @@ def test_bodies_that_would_overlap_are_refused():
     assert pc.crowding({"a": {"station": "s", "slot": 0, "body": "bean", "units": 1},
                         "b": {"station": "s", "slot": 2, "body": "bean", "units": 1}}, {"s": "desk"}) == ""
     assert "overlaps the desk" in pc.crowding({"a": {"station": "s", "slot": 2, "body": "units", "units": 16}}, {"s": "desk"})
+
+
+def test_an_actor_leaves_with_its_clones():
+    """The renderer takes the clones off with their original, so their slots
+    are free again for the validator too."""
+    def leave(d):
+        clone = next(e for e in d["events"] if e["type"] == "clone")
+        merge = next(e for e in d["events"] if e["type"] == "merge")
+        d["events"].remove(merge)
+        d["events"].insert(d["events"].index(clone) + 1, {"type": "exit", "frame": merge["frame"], "who": "bit"})
+        d["events"] = [e for e in d["events"] if e.get("who") != "bit" or e["frame"] <= merge["frame"]]
+    problems = _check(_with(leave))
+    assert not any("bit2" in p and "taken" in p for p in problems), problems

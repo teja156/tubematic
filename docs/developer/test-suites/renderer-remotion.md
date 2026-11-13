@@ -7,8 +7,9 @@ The suite covers the pure TypeScript helpers of the Remotion project's
 [`Whiteboard`](../09-remotion-project.md#whiteboard),
 [`TerminalDoc`](../09-remotion-project.md#terminaldoc),
 [`UnderTheHood`](../09-remotion-project.md#underthehood),
-[`CaseFileStory`](../09-remotion-project.md#casefilestory) and
-[`MidcenturyHowTo`](../09-remotion-project.md#midcenturyhowto) scenes. Each test file sits beside the code
+[`CaseFileStory`](../09-remotion-project.md#casefilestory),
+[`MidcenturyHowTo`](../09-remotion-project.md#midcenturyhowto) and
+[`ProcessCast`](../09-remotion-project.md#processcast) scenes. Each test file sits beside the code
 it covers as `*.test.ts`. The tests run under Node 22 with no browser, canvas or render, because the
 math and geometry classes of `three` work in Node without a DOM.
 
@@ -158,6 +159,23 @@ Covers `contract.ts`, `stage.ts`, the presenter's arm and the object library
 - A press lands on the row its act lights and uses the presenter's own hand within reach and the
   hose arm from the edge out of it; the hand pulls back before the press, holds, then returns. Each
   shot starts empty.
+
+## Process Cast
+
+### `src/scenes/installed/processCast/processCast.test.ts`
+
+Covers `contract.ts`, `stage.ts` and the library
+([Process Cast](../10-scene-authoring.md#process-cast)).
+
+- The constants and the geometry (body sizes, slot positions and counts, where a prop sits, clone
+  ids, the blink) agree with the shared cases `mcp/tests/test_process_cast.py` runs.
+- Running `character-tools/sync-contract.mjs` leaves the fixture and the style pack unchanged, so a
+  catalogue or limit changed without the sync fails here.
+- The library draws every prop the contract and the pack list, and every kind of furniture.
+- The worked example brings its first character in at frame 0 at the first station with the camera
+  there; a split shows its clones as silhouettes for the first frames and a merge takes them back;
+  a join adds the cubes up and removes the other body; the camera glides to the next station while
+  the character makes the trip; a focus holds until it is cleared.
 
 ## System Flow
 

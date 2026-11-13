@@ -109,8 +109,14 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   its presenter as a figure but neither line art nor generated characters, uses the `label` caption
   background, and takes no mascot, with a refusal that names its presenter. `public_list` shows it
   available with no key and no GPU. Its `script` text asks for steps opened by their number and for
-  no invented menus. The styles that take no mascot are Cartoon 3D, Under the Hood, Case File
-  Story and Mid-century How-To, and no other.
+  no invented menus.
+- Process Cast is an experimental 2D main style on the light canvas that hosts inserts with a
+  `cut`, names its own skill, needs neither an OpenAI key nor a GPU, generates no images, counts its
+  cast as figures but neither line art nor generated characters, uses no caption background, and
+  takes no mascot, with a refusal that names its cast. Its label, tagline and routing never say
+  "mascot", and its routing's `avoid_for` sends a process acted out by people or roles to Stick
+  Explainer. The styles that take no mascot are Cartoon 3D, Under the Hood, Case File Story,
+  Mid-century How-To and Process Cast, and no other.
 - Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its
   routing's `avoid_for` names System Flow, Stick and Photo Explainer, the styles Auto must tell it
   apart from.
@@ -251,7 +257,7 @@ the fixed topic set in `tests/fixtures/style_routing_cases.json`
   count, and the list shares no state with the packs.
 - A candidate is unavailable for the same reasons that refuse the choice: no OpenAI key, a GPU that
   is not working or not tested, a mascot on a style that takes none (a 3D world, Under the Hood, Case File Story, Mid-century
-  How-To).
+  How-To, Process Cast).
   `scenes` is always available.
 - Every topic names only real outcomes, and every outcome is the first expectation of at least
   three topics. No topic expects an insert style as its main style; every insert style is expected

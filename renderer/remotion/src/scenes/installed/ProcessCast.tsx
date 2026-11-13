@@ -15,7 +15,9 @@
  * sign, card, mark and prop is a cached bitmap (./characterKit/sprite.tsx), the
  * wobble is seeded once and never boils, the camera moves bitmaps by their
  * position, and the paper is one flat colour (a full-frame image layer of any
- * kind cost about 0.2 CPU-seconds per frame when measured).
+ * kind cost about 0.2 CPU-seconds per frame when measured). Measured over the
+ * whole example video: 0.21 CPU-seconds per frame, against 0.25 for System
+ * Flow's example rendered the same day.
  */
 import React from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";

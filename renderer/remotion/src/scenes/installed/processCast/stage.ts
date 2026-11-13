@@ -114,8 +114,10 @@ function tracksAt(data: ProcessCastData, frame: number): { tracks: Map<string, T
         break;
       }
       case "exit": {
-        const t = tracks.get(e.who);
-        if (t) t.exitAt = f;
+        // An actor leaves with its clones.
+        for (const c of tracks.values()) {
+          if (c.id === e.who || (c.id.startsWith(e.who) && /^\d+$/.test(c.id.slice(e.who.length)) && c.vanishAt < 0)) c.exitAt = f;
+        }
         break;
       }
       case "clone": {

@@ -42,7 +42,7 @@ Every composition runs at 30 fps, so frame 30 is one second in. Two rules follow
 | `Composition` | `CompositionBuilder` | 1080×1920, duration read from `timeline.json` |
 | `TextLayoutAudit` | `CompositionBuilder` plus `TextLayoutProbe` | The same |
 | `MascotSheet` | `MascotSheet` | One frame, sized per sheet |
-| `BeanPropSheet`, `StorybookSheet`, `PresenterSheet`, `MidcenturySheet` | A style's model sheet | 1080×1920, one frame per page |
+| `BeanPropSheet`, `StorybookSheet`, `PresenterSheet`, `MidcenturySheet`, `ProcessCastSheet` | A style's model sheet | 1080×1920, one frame per page |
 | `Placeholder` | A static placeholder | 1080×1920, 90 frames |
 
 A renderer turns `Composition` into a video with `npx remotion render Composition`.
@@ -396,6 +396,9 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
 - A Mid-century How-To video has the one `MidcenturyHowTo` scene and its steps and shots pass the
   Mid-century How-To checks; no other video uses `MidcenturyHowTo`
   ([Scene Authoring](10-scene-authoring.md#mid-century-how-to)).
+- A Process Cast video has the one `ProcessCast` scene and its cast, stations and events pass the
+  Process Cast checks; no other video uses `ProcessCast`
+  ([Scene Authoring](10-scene-authoring.md#process-cast)).
 - `inserts`, if present or if the script marks a segment `insert`, passes `mcp/inserts.py::check`:
   the window rules, the style's own checks (`system_flow.check_insert`, `terminal_doc.check_insert`),
   and no main scene starting inside a window. Each main style's checks treat the windows as quiet
@@ -409,7 +412,7 @@ is queued or rendering (`status_mismatch`).
 `canvas` is the only default the tool writes into most files, besides each insert's `src`, `palette`
 and `shift` and the `insertTransition`, which the agent never writes. A System Flow or Whiteboard config
 with no `subtitles` also gets its style pack's caption settings, because its captions are part of the
-style's look. A Bean Explainer, Storybook Atlas, Under the Hood, Case File Story or Mid-century How-To config gets them under whatever
+style's look. A Bean Explainer, Storybook Atlas, Under the Hood, Case File Story, Mid-century How-To or Process Cast config gets them under whatever
 `subtitles` keys it sets, so a config that sets only `emphasis` keeps the look. A Terminal Doc config
 gets them the same way, with its skin's colours and font over the pack's. An Under the Hood config
 also gets each plate's `aspect`, read from its photograph. The
@@ -462,8 +465,8 @@ rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 
 `renderer/remotion/src/scenes/installed/` is the committed library. A config entry can reference
 `KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`.
-`BeanExplainer`, `Whiteboard`, `StorybookAtlas`, `UnderTheHood`, `CaseFileStory` and `MidcenturyHowTo`
-are referenced the same way, by
+`BeanExplainer`, `Whiteboard`, `StorybookAtlas`, `UnderTheHood`, `CaseFileStory`, `MidcenturyHowTo`
+and `ProcessCast` are referenced the same way, by
 videos of their own style only. `SystemFlow` and `TerminalDoc` are drawn as
 [insert scenes](#insert-scenes) from the `inserts` list, and as a video's one scene only for a video
 that holds their style from an earlier version. The other
@@ -656,6 +659,27 @@ pack's `extra` and `mcp/tests/fixtures/midcentury_howto_contract.json` from the 
 and shape helpers) and `customProps.ts`. The contract and the checks are in
 [Mid-century How-To](10-scene-authoring.md#mid-century-how-to).
 
+### `ProcessCast`
+
+`ProcessCast` draws a whole Process Cast video from `props.processCast`: the paper, the ground line,
+each station's furniture and hanging sign, the cast with their name tags, task cards and marks, the
+props, the cards handed between characters, and the camera travelling along the line. Its helpers
+and libraries are in `processCast/`: `contract.ts` (limits, timings, geometry and the `STATIONS` and
+`PROPS` catalogues), `stage.ts` (what is on stage at a frame), `actor.tsx` (the bodies and faces),
+`ink.tsx` (the palette, the seeded wobbly ink and the pencil hatching), `stations.tsx` (the
+furniture, the signs and the ground), `props/` and `fonts.ts`. It loads JetBrains Mono (700) and
+Nunito (800) from `public/fonts/` before the first frame; the style's captions use Nunito, which this
+scene loads. The `ProcessCastSheet` composition renders the bodies, tints, faces and marks, then the
+stations, then the prop library with each prop's box outlined in red, one page per frame:
+`npx remotion still src/index.ts ProcessCastSheet out.png --frame=<page>`.
+
+A Process Cast video can also use props its agent drew, in `generated/<video_id>/prop-*.tsx`,
+imported through `characterKit/customProps.ts`. `character-tools/render-props.mjs` renders them for
+the `render_style_props` tool on the `ProcessCastPropPreview` component, and
+`character-tools/sync-contract.mjs` rewrites the style pack's `extra` and
+`mcp/tests/fixtures/process_cast_contract.json` from the renderer's code. The contract and the checks
+are in [Process Cast](10-scene-authoring.md#process-cast).
+
 ### Figure and panel components
 
 Four files serve videos that use line-art figures or a light canvas. None paints a background by
@@ -825,4 +849,8 @@ this project.
 
 `MidcenturyHowTo`'s presenter and objects are original drawings. Its fonts in `public/fonts/` are
 Alfa Slab One, Oleo Script and Jost, each under the SIL Open Font License 1.1, with the license beside
+them.
+
+`ProcessCast`'s cast, furniture and props are original drawings. Its fonts are the JetBrains Mono and
+Nunito files in `public/fonts/`, each under the SIL Open Font License 1.1, with the license beside
 them.

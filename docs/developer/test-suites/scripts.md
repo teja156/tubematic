@@ -735,6 +735,23 @@ Covers the `tubematic-midcentury-howto` skill
 Trap: a skill that teaches a limit the validator does not enforce gets the agent refused on every
 video. Change a limit in `contract.ts`, run the sync script, and change the skill text with it.
 
+### `test_process_cast_skill.py`
+
+Covers the `tubematic-process-cast` skill ([Process Cast](../10-scene-authoring.md#process-cast)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- `reference/contract.md` lists the pack's props and stations and no others, and every catalogue
+  the validator accepts.
+- The limits and timings the skill states are the ones `mcp/process_cast.py` enforces.
+- It says the cast has nothing to do with an install's mascot and the style takes no mascot, that a
+  face never moves its mouth with the words, never calls `generate_image`, and runs no code or shell.
+- The worked example passes the validator, its worked prop, `example-prop-ticket.tsx`, passes the
+  source checks, and the uninstaller removes the skill.
+
+Trap: skill text that calls the cast mascots, or lets a character talk, leads the agent to the wrong
+video for this style. The test pins the wording that keeps them apart.
+
 ### `test_system_flow_skill.py`
 
 Covers the `tubematic-system-flow` skill ([System Flow](../10-scene-authoring.md#system-flow)).

@@ -844,6 +844,42 @@ How-To config, `render_style_props`, the picture checks and the text audit's per
 Trap: a drawing is rasterised once per look outside the render's React tree, so a hook in an
 agent's prop would read no frame and no state. The hook rule is the one source rule the character
 styles add to Bean Explainer's.
+
+### `test_process_cast.py`
+
+Covers `mcp/process_cast.py`, the checks `write_scene_config` runs on a Process Cast config,
+`render_style_props` for this style, the picture checks and the text audit's per-station sampling
+([Process Cast](../10-scene-authoring.md#process-cast)).
+
+- The limits, timings, geometry and catalogues equal the renderer's, read from
+  `fixtures/process_cast_contract.json`, and the pack's `extra` lists the same catalogues. Both sides
+  answer the fixture's worked cases (body sizes, slot positions and counts, where a prop sits, clone
+  ids, the blink). After a change to `contract.ts`, `stage.ts` or the library,
+  `node character-tools/sync-contract.mjs` (from `renderer/remotion`) rewrites the fixture and the
+  pack's `extra`; never edit them by hand.
+- The style is registered in `character_styles.BY_ID` and takes no mascot.
+- The skill's worked example passes. Each refusal names its event or entry and cause: too many characters,
+  an id ending in a digit, an unknown body, kind or face, too many cubes or cubes on a body that is
+  not `units`, a name or sign too long, a station the camera never shows, events out of order, a slot
+  out of range or taken, a clone count out of range, a join with an actor not on stage, a card or
+  prop text too long, a prop off the library or off screen, nothing entering at frame 0, an event at a
+  station the camera has left, an event off its word, and a still stretch. A card handed by a
+  character that holds none and a clone that splits are refused. A value of the wrong type gets a
+  sentence back and raises nothing.
+- An event inside an insert window is refused.
+- The skill's example prop passes the source rules; a hook, an SVG pattern and an import of another
+  style's file are refused.
+- `write_scene_config` writes a sound config with the style's captions and refuses a broken one by
+  the style's name. `render_style_props` returns the picture for this style (the renderer stubbed),
+  and the preview script's `STYLES` table names this style's preview component.
+- The picture checks find the style and warn when no character enters by frame 3, a camera move
+  counts as a change and a look does not, and the text audit samples each station after the
+  camera's glide.
+- Bodies that would overlap each other or the furniture are refused
+  (`process_cast.py::crowding`).
+
+Trap: the slots are spaced for ordinary bodies, so a `units` body that grows past them by a join
+draws over its neighbour or the furniture unless the crowding check catches it.
 ### `test_choose_script_formula.py`
 
 Covers `choose_script_formula`, `get_video`'s `formula_routing`, the domain's default formula in

@@ -51,8 +51,8 @@ style looks like.
 
 For the scene styles, a style is a set of permissions: which canvas, and which kinds of figure. It
 does not decide any beat's treatment. `cartoon_3d`, `bean_explainer`, `whiteboard`,
-`storybook_atlas`, `under_the_hood`, `case_file_story` and `midcentury_howto` replace the scene system
-with one whole-video scene of their own. `system_flow` and `terminal_doc` are insert styles: they draw short
+`storybook_atlas`, `under_the_hood`, `case_file_story`, `midcentury_howto` and `process_cast` replace
+the scene system with one whole-video scene of their own. `system_flow` and `terminal_doc` are insert styles: they draw short
 scenes inside another style's video and are never a video's style
 ([Main styles and inserts](#main-styles-and-inserts)). A video voiced before that keeps its whole
 System Flow or Terminal Doc scene, so both stay in the table below.
@@ -71,6 +71,7 @@ System Flow or Terminal Doc scene, so both stay in the table below.
 | `under_the_hood` | `dark` | Its own presenter | No | No |
 | `case_file_story` | `dark` | Its own lead, painted into the stills | No | No |
 | `midcentury_howto` | `light`, painted over by its step grounds | Its own presenter | No | No |
+| `process_cast` | `light`, painted over by its own paper | Its own cast | No | No |
 | `cartoon_3d` | `dark`, never visible | Its own cast | No | No |
 
 The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `characters_allowed`.
@@ -85,9 +86,10 @@ with one board scene ([Whiteboard](#whiteboard)), `storybook_atlas` with one pic
 ([Storybook Atlas](#storybook-atlas)), `terminal_doc` (likewise) with one typographic scene
 ([Terminal Doc](#terminal-doc)), `under_the_hood` with one scene of annotated close-up
 photographs ([Under the Hood](#under-the-hood)), `case_file_story` with one scene of painted
-stills, meters and number cards ([Case File Story](#case-file-story)), and `midcentury_howto` with
+stills, meters and number cards ([Case File Story](#case-file-story)), `midcentury_howto` with
 one scene of a cartoon presenter walking through numbered steps
-([Mid-century How-To](#mid-century-how-to)).
+([Mid-century How-To](#mid-century-how-to)), and `process_cast` with one scene of a drawn cast
+acting out a process at stations ([Process Cast](#process-cast)).
 
 The API and `update_video` refuse a style whose pack needs something the install lacks, where it is
 chosen. Four styles have a need:
@@ -133,7 +135,7 @@ style.
 | `routing` | What Auto reads to pick a style: `best_for`, `avoid_for`, `cannot_show`, `signals`, and the optional `moods` and `images` (below) |
 | `script` | Optional. How to write the narration and each segment's `visual` brief for this style; `get_video` returns it as `style.script` and the script-writing skill follows it |
 | `picture` | `{opening, turn, payoff, ending}`: how the style shows the first frame, a turn or re-opening, the payoff, and how a video in it ends. `get_video` returns it as `style.picture`; [The opening and the beats](#the-opening-and-the-beats) says how it is used |
-| `extra` | Style-specific data, such as System Flow's icon list, Bean Explainer's and Storybook Atlas's cast and prop catalogues, Mid-century How-To's object library or Whiteboard's doodle library |
+| `extra` | Style-specific data, such as System Flow's icon list, Bean Explainer's and Storybook Atlas's cast and prop catalogues, Mid-century How-To's object library, Process Cast's body, station and prop catalogues or Whiteboard's doodle library |
 | `role` | `main` for a style that carries a whole video, `insert` for one that draws only insert scenes ([Main styles and inserts](#main-styles-and-inserts)) |
 | `inserts` | A main style only: `{host, transition}`, whether it takes insert scenes and how it goes into one |
 | `insert` | An insert style only: `{max_seconds, palettes, props_key, component, review}` |
@@ -578,7 +580,7 @@ steps. Mixed scenes take theirs from `visual_styles.py::SCENES_PICTURE`.
 
 The voice starts a few frames into the video, so a picture on frame 0 cannot sit on a word. The
 styles that time events to words accept an event at frame 0 for that reason: Bean Explainer,
-Storybook Atlas and Mid-century How-To take any event there, and Whiteboard takes region 1's first item. Whiteboard draws
+Storybook Atlas, Mid-century How-To and Process Cast take any event there, and Whiteboard takes region 1's first item. Whiteboard draws
 that item from `TIMING.openLead` frames before frame 0 instead of `TIMING.lag` frames after its word,
 so the first frame shows ink being drawn, and System Flow draws a node whose event is within
 `TIMING.openWithin` frames of the start from frame 0, half grown. Both changes touch the opening
@@ -673,12 +675,14 @@ with `FIRST_FRAME_WINDOW` as the early limit):
 - Under the Hood: plate 1 has no photograph.
 - Mid-century How-To: the title card has no object on stage by frame 3
   (`midcentury_howto.py::first_frame_problem`).
+- Process Cast: no character enters by frame 3 (`process_cast.py::first_frame_problem`). Its
+  validator already refuses a config where nothing enters at frame 0.
 
 Case File Story's validator already requires a shot first, and Cartoon 3D is not checked.
 
 A change is a scene start in a mixed-scenes video, and in a data-driven style a unit start or an
 event that changes the picture (`picture_checks.py::change_frames`). Events that change too little,
-such as a System Flow chip or a Bean label, do not count. A Cartoon 3D video is not checked: its
+such as a System Flow chip, a Bean label or a Process Cast look, do not count. A Cartoon 3D video is not checked: its
 cuts live in its own TypeScript. Both checks are advisory for the same reason as the audit: a
 picture is a judgement, and a warning that blocked a render would stop it on a false positive.
 
@@ -1385,16 +1389,18 @@ each beat as if it were a scene, from the frame its last part has appeared.
 ## Character styles
 
 A character style draws its whole video from data with a cast and objects drawn in code, and lets
-the agent draw an object the library lacks. Mid-century How-To is the first; `mcp/character_styles.py`
-lists them (`STYLES`, by pack order). Each has its own section below, and they share this machinery.
+the agent draw an object the library lacks. They are Mid-century How-To and Process Cast;
+`mcp/character_styles.py` lists them (`STYLES`, by pack order). Each has its own section below, and
+they share this machinery.
 
 On the renderer's side the shared parts are in `src/scenes/installed/characterKit/`:
 
-- `sprite.tsx` draws every character, object and medallion once per distinct look from its SVG,
+- `sprite.tsx` draws every character, object, prop and medallion once per distinct look from its SVG,
   rasterises it to a PNG and reuses it on every frame that looks the same. A live SVG character cost
   about 0.3 CPU-seconds a frame on the CPU renderer (measured for Bean Explainer), and a cached bitmap
   costs nothing measurable. Mid-century How-To's wobble steps through three fixed phases on twos,
-  so a held picture has three looks to cache; motion that changes every frame (a pop, a slide, a press) is a
+  so a held picture has three looks to cache, and Process Cast's wobble is seeded once per drawing,
+  so a held picture has one; motion that changes every frame (a pop, a slide, a press) is a
   transform on the bitmap. A cache miss holds the frame with `delayRender`, and a drawing that cannot
   be rasterised fails the render.
 - `fonts.ts` loads a style's bundled faces from `public/fonts/` before the first frame
@@ -1410,7 +1416,8 @@ On the MCP side:
   (`custom_prop_errors`): the id, `src`, box, text and acts limits the style passes in, and the
   source rules, which are Bean Explainer's `FORBIDDEN_SOURCE` plus no React or Remotion hook. A
   drawing is rasterised outside the render's React tree, so a hook has no frame or state there; it
-  draws from the `phase`, `act`, `actT` and `text` it is given. Each style names the imports it
+  draws from the props it is given (`phase`, `act`, `actT` and `text` in Mid-century How-To, `text`
+  alone in Process Cast). Each style names the imports it
   allows. The rules read the raw file, comments included.
 - Each style's module exposes the same names (`STYLE_ID`, `SCENE_SRC`, `PROPS_KEY`, `check`,
   `check_scene_use`, `custom_prop_errors`, `audit_windows`, `change_frames`, `first_frame_problem`,
@@ -1527,6 +1534,116 @@ through the shared cases in `fixtures/midcentury_howto_contract.json`, and to th
 as if it were a scene, from the frame its header and entrances have settled. A Mid-century How-To
 video takes no mascot (`"mascot": false`), because its presenter holds the stage a mascot would
 take. Its pack hosts inserts with a `wipe` transition.
+
+## Process Cast
+
+A Process Cast video is one installed scene, `ProcessCast`, that spans the whole video: an invisible
+process acted out by a cast of little drawn parts with faces on warm grey paper. The parts stand at
+stations along one ground line, each station with a hanging sign and a piece of furniture or an open
+stage, and the camera shows one station at a time, gliding or cutting between them. Outlines are a
+thick wobbly ink and fills are coloured-pencil hatching. The captions are the shared caption layer
+with no background. The agent writes no scene code. Its props carry
+`processCast: {cast, stations, events, customProps}`, written with the `tubematic-process-cast`
+skill, whose `reference/contract.md` documents every field and catalogue, and whose
+`reference/example-config.json` is the worked example.
+
+The characters are the style's own cast, made for each video, and have nothing to do with the
+install's [mascots](#mascots). The style is named Process Cast so that it is never confused with the
+mascot feature.
+
+- `cast` lists 1 to 6 characters, each `{id, name, body, tint, units, accessory}`. `body` is `bean`,
+  `blob`, `block`, `gem` or `units`; a `units` body has `units`, 1 to 16 cubes in a near-square grid,
+  and is sized by its count. `name` is the tag over its head, at most 14 characters. An `id` does
+  not end in a digit, because a character's clones are named `<id>2` and `<id>3`.
+- `stations` lists 1 to 6 stations in order along the line, each `{id, kind, sign}`. `kind` is
+  `desk`, `board`, `door`, `shelf`, `machine`, `server`, `cell` or `stage`, and `sign` is at most 14
+  characters. A station has 3 slots to the left of its furniture; a `stage` has no furniture and 5
+  slots, where the characters are drawn at 0.9 size.
+- `events` lists at most 120 events in frame order, each with `type` and `frame`.
+
+| Event | What the scene draws |
+|---|---|
+| `enter` | A character pops, drops or slides into a slot at a station |
+| `move` | A hop to another slot at the same station (10 frames), or a trip to another station (20 frames) |
+| `exit` | The character leaves the stage |
+| `clone` | The character splits into 2 or 3 look-alikes in free slots at its station. They show as flat silhouettes for 2 frames before their outline and face pop on |
+| `merge` | The clones hop back into the original over 12 frames |
+| `join` | Two `units` bodies at one station become one, and the cubes add up |
+| `react` | A face, and optionally a mark beside the head for 45 frames |
+| `look` | The eyes turn to another character, a station or the viewer (`front`) |
+| `carry` | A task card of up to 18 characters over the character's head. `""` puts it down |
+| `hand` | The card flies to another character at the same station over 12 frames |
+| `prop` | A prop from the library or the video's own appears at a station, replacing the one there |
+| `focus` | One character grows and the others at its station shrink. `""` ends it |
+| `camera` | The camera glides (20 frames) or cuts to another station |
+
+A face shows a feeling and never moves to the words: the narrator is off screen. The camera starts
+at the first station, and everything happens at the station it shows. Slots are never shared, and no two bodies at a station, nor a body and the furniture,
+overlap (`process_cast.py::crowding`), so a wide `units` body needs the slot beside it free.
+
+Its `routing` gives Auto processes whose actors are things: units that add up, cells and organs, the
+parts of a system met one by one, a pipeline of named stages. A process acted out by people or
+roles, and a request walked through a system's parts as roles, stay with Stick Explainer. The
+`follow-the-flow` and `escalating-ladder` formulas list the style.
+
+The library holds 22 props (`contract.ts::PROPS`, each with its box and text limit) and 7 kinds of
+furniture (`contract.ts::STATIONS`), checked by a person on the `ProcessCastSheet` composition. For a
+prop the viewer must recognise and the library lacks, the agent draws its own as
+`generated/<video_id>/prop-<name>.tsx`, modelled on `processCast/props/` and drawn with `ink.tsx`'s
+`Inked` and `Hatches`, lists it in `customProps` with its box and text limit, and looks at it with
+[`render_style_props`](06-mcp-server.md#render_style_props) before it submits. A Process Cast prop
+has no acts and draws from its `text` alone.
+
+The renderer's side is `src/scenes/installed/ProcessCast.tsx` with `processCast/`:
+
+- `contract.ts` holds the limits, timings, geometry and catalogues.
+- `stage.ts` works out what is on stage at a frame: where the camera is, each character's station,
+  slot, hop, face, blink, mark, card and focus, the clones and joins, the props and the cards in
+  flight.
+- `actor.tsx` draws the bodies, faces and accessories, `ink.tsx` the palette, the seeded wobbly ink
+  and the hatching, `stations.tsx` the furniture, the signs and the ground, and `props/` the library.
+- `ProcessCastSheet.tsx` holds the model sheet and `ProcessCastPropPreview`, the picture
+  `render_style_props` returns.
+
+Every character, piece of furniture, sign, card, mark and prop is a
+[cached bitmap](#character-styles), and the camera moves the bitmaps by their position. Measured on
+the CPU renderer over the whole example video, it costs 0.21 CPU-seconds a frame against System
+Flow's example at 0.25 the same day. The paper is one flat colour, because a full-frame image layer
+of any kind cost about 0.2 CPU-seconds a frame more. The name tags, cards, signs and prop labels are
+drawn inside the bitmaps, so the text-layout audit measures only the captions in this style. A tag,
+card or sign is sized to its text, and a prop's label is fitted to its prop.
+
+`mcp/process_cast.py` checks a config in `write_scene_config` and refuses it when:
+
+- A `process_cast` video has anything but the one `ProcessCast` scene, from frame 0 for
+  `totalFrames`, or another style uses `ProcessCast`.
+- A count or a text runs past its limit above, a body, tint, accessory, station kind, face, mark,
+  entrance, camera move or prop is not in the catalogue or the video's `customProps`, `units` is set
+  on a body that is not `units`, or a station's id is also a cast id.
+- Nothing enters at frame 0, the events are out of frame order, an event is not within 2 frames of a
+  word or at frame 0, or an event starts less than 8 frames before the end.
+- The camera moves less than 1.5 seconds after its last move, or never shows one of the stations.
+- Anything happens at a station the camera does not show: an entrance, a prop, a hand-over, a focus
+  or anything a character does there. A trip is refused only when the camera shows neither end.
+- A slot is taken, or bodies overlap each other or the furniture by more than 12 px.
+- A character acts again while it is still entering, hopping, travelling, handing over, merging or
+  joining, or less than 6 frames after its last change. A reaction or a look may come sooner.
+- A card is handed by a character that holds none or between two stations, a clone splits, a split
+  has too few free slots, a merge has no clones, or a join is not two `units` bodies at one station
+  of at most 16 cubes together.
+- An event starts inside an insert window.
+- A custom prop breaks the [shared rules](#character-styles): at most 8 a video, a box of 60 to 400
+  px a side, a text slot of at most 18 characters, no acts, and imports of `react`, `remotion` and
+  the style's `ink` or `contract` only.
+- Nothing changes for more than 3 seconds. A `look` is not a change, and an insert window is not
+  counted as still.
+
+`mcp/tests/test_process_cast.py` pins `process_cast.py` to `contract.ts` and `stage.ts` through the
+shared cases in `fixtures/process_cast_contract.json`, and to the pack. The pack's `captions` fill
+every `subtitles` key the config leaves out. The text-layout audit samples each stretch the camera
+holds a station, from the frame the glide and the entrances have settled. A Process Cast video takes
+no mascot (`"mascot": false`), because its whole cast is drawn characters and one more would be
+confused with them. Its pack hosts inserts with a `cut` transition.
 
 ---
 
