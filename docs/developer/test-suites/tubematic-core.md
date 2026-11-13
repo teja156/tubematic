@@ -119,6 +119,12 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   Every main style hosts inserts except Cartoon 3D, whose pack says why, and every host names a
   transition from `inserts.TRANSITIONS`. `public_list` and `agent_view` carry `role` and `inserts`.
   A malformed `role`, `inserts` or `insert` block is refused with the field at fault.
+- A `pictures` block (a style built on generated stills) needs an OpenAI key and a picture count,
+  and a malformed one is refused with the field at fault: a cap message without its `{count}` and
+  `{cap}`, an empty prompt text, a shape outside the three sizes, an unknown or repeated treatment,
+  a reference sheet that is not in `apart`, a house sheet without its file, a sheet missing a key,
+  and an unknown key. Case File Story's block holds its lead sheet, its two prompt texts and its
+  fixed 9:16 shape.
 - `motion_graphics` is labelled Photo Explainer, is the one main pack whose `routing.yields_ties`
   is `true`, and none of its picture duties asks for a diagram. A `yields_ties` that is not true or
   false is refused.

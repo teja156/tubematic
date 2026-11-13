@@ -188,8 +188,10 @@ def test_case_file_story():
     assert rows["case_file_story"]["mascot"] is False
     assert rows["case_file_story"]["unavailable_reason"] == "needs an OpenAI key"
     # what generate_image adds to this style's prompts
-    for key in ("sheet_lead", "sheet_style", "still_lead", "still_style"):
-        assert p["extra"][key].strip()
+    pics = p["pictures"]
+    assert pics["still_lead"].strip() and pics["still_style"].strip() and pics["still_aspect"] == "9:16"
+    assert pics["sheet"]["name"] == "lead" and pics["sheet"]["house"] == "house" and pics["apart"] == ["lead"]
+    assert pics["sheet"]["lead"].strip() and pics["sheet"]["style"].strip()
     # the script text carries the ending and the subject line the user set
     script = p["script"]
     for phrase in ("second person", "the last sentence is only the two options", "invented",
@@ -273,6 +275,40 @@ def _valid(**over):
 def test_a_malformed_pack_is_refused(over, fragment):
     with pytest.raises(tvs.PackError, match=fragment.replace(".", r"\.")):
         tvs._check_pack(pathlib.Path("stick.json"), _valid(**over))
+
+
+def _pictured(**pics):
+    """Case File Story's pack with its pictures block changed."""
+    data = json.loads((tvs.PACKS_DIR / "case_file_story.json").read_text())
+    data["pictures"] = {**data["pictures"], **pics}
+    return data
+
+
+@pytest.mark.parametrize("pics, fragment", [
+    ({"cap_message": "too many"}, "cap_message"),
+    ({"still_style": ""}, "still_style"),
+    ({"still_aspect": "4:3"}, "still_aspect"),
+    ({"treatments": ["sepia"]}, "treatments"),
+    ({"treatments": ["print", "print"]}, "treatments"),
+    ({"apart": []}, "sheet.name must be in pictures.apart"),
+    ({"sheet": {"name": "lead", "lead": "a", "style": "b", "house": "house"}}, "house and house_file"),
+    ({"sheet": {"name": "lead", "lead": "a"}}, "pictures.sheet must have"),
+    ({"colour": "red"}, "has only the keys"),
+])
+def test_a_malformed_pictures_block_is_refused(pics, fragment):
+    with pytest.raises(tvs.PackError, match=fragment.replace(".", r"\.")):
+        tvs._check_pack(pathlib.Path("case_file_story.json"), _pictured(**pics))
+
+
+def test_a_pictures_block_needs_an_openai_key_and_a_cap():
+    data = _pictured()
+    data["needs"] = {"openai_key": False, "gpu": False}
+    with pytest.raises(tvs.PackError, match="needs.openai_key"):
+        tvs._check_pack(pathlib.Path("case_file_story.json"), data)
+    data = _pictured()
+    data["routing"] = {**data["routing"], "images": 0}
+    with pytest.raises(tvs.PackError, match="routing.images"):
+        tvs._check_pack(pathlib.Path("case_file_story.json"), data)
 
 
 def test_auto_cannot_be_a_pack():

@@ -108,6 +108,8 @@ def test_the_log_caption_look_is_one_the_server_accepts():
     src = SUBTITLES_TSX.read_text()
     backgrounds = re.search(r"export type SubtitleBackground = (.*?);", src).group(1)
     assert tuple(re.findall(r'"(\w+)"', backgrounds)) == server.SUBTITLE_BACKGROUNDS
+    looks = re.search(r"look\?: (.*?);", src).group(1)
+    assert tuple(re.findall(r'"(\w+)"', looks)) == server.SUBTITLE_LOOKS
     config = re.search(r"export interface SubtitleConfig \{(.*?)\n\}", src, re.S).group(1)
     assert set(re.findall(r"^\s*(\w+)\?:", config, re.M)) == set(server.SUBTITLE_KEYS)
     assert server._validate_subtitles(PACK["captions"]) == ""

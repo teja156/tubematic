@@ -1316,9 +1316,8 @@ the same character from one still to the next:
    scene. A still with no lead in it takes no reference.
 
 A call with a reference goes to OpenAI's image edits endpoint with the reference as a file part,
-using the `image_model` setting. For this style `server.py::_case_file_image_plan` adds the pack's
-`extra` text to every prompt: the lead's description before the scene and the painting style after
-it. The house look is then the same whatever the agent writes, and the agent's prompt is only the
+using the `image_model` setting. `server.py::_image_plan` adds the pack's `pictures` text to every
+prompt: the lead's description before the scene and the painting style after it. The house look is then the same whatever the agent writes, and the agent's prompt is only the
 scene. The lead sheet is always 16:9 and a still always 9:16, because a still covers the frame and
 its `focus` is a fraction of that frame. The same function refuses, before any paid call, a
 `reference` on a video of another style, a lead sheet asked for without `reference="house"`, the

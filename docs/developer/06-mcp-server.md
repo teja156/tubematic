@@ -87,11 +87,11 @@ restart.
 
 ---
 
-## The 55 tools
+## The 56 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
-(Gemini). Five tools take [the scene-work claim](#the-scene-work-claim).
+(Gemini). Six tools take [the scene-work claim](#the-scene-work-claim).
 
 ### Video tools
 
@@ -134,6 +134,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 |---|---|
 | [`generate_image`](#generate_image) | Generate a scene image |
 | [`generate_character`](#generate_character) | Generate a transparent character cut-out |
+| [`treat_image`](#treat_image) | Bake a style's look into a generated still, as a new PNG |
 | [`read_image`](#read_image) | Return a stored image as a picture |
 | [`preview_doodles`](#preview_doodles) | Draw a Whiteboard video's own doodles as a picture |
 
@@ -712,30 +713,34 @@ side. The scene skill tells the agent to leave the default alone, because any ot
 cropped hard to fit the frame. The Under the Hood skill asks for `1:1`, because its plates are drawn
 at their own shape in a band narrower than the frame.
 
-On an `under_the_hood` video the tool refuses a new `image_name` once the video's images folder and
-its calls in flight hold 12 pictures, the pack's `routing.images`, before any request; regenerating an
-existing name is allowed (`server.py::_image_cap_error`). A call reserves its name under a lock before
-the request and releases it when it ends, so parallel calls cannot each take the last slot and a
-failed call does not keep one. A `case_file_story` video is capped the same way at 16 stills. Its lead
-sheet has a slot of its own, so the pack's `routing.images` is 17.
+A style built on generated stills has a `pictures` block in its pack, and that block drives three
+things here (`visual_styles.py::_check_pictures` checks its shape):
 
-`reference` is for a `case_file_story` video; any other video refuses it. With one, the picture is
-made from a reference picture through `POST https://api.openai.com/v1/images/edits`, with the same
-model and sizes, which keeps the story's lead the same character in every still:
+- The cap. A new `image_name` is refused once the video's images folder and its calls in flight hold
+  the pack's `routing.images`, before any request; regenerating an existing name is allowed
+  (`server.py::_image_cap_error`). Names in `pictures.apart` (a reference sheet) have a slot of their
+  own. A call reserves its name under a lock before the request and releases it when it ends, so
+  parallel calls cannot each take the last slot and a failed call does not keep one. The refusal is
+  the pack's `pictures.cap_message`. Under the Hood is capped at 12 photographs; Case File Story at 16
+  stills plus its lead sheet, so its `routing.images` is 17.
+- The prompt. The pack's `pictures.still_style` is added after the agent's words, and
+  `pictures.still_aspect`, when set, fixes the shape of every still.
+- The reference. Only a style with `pictures.sheet` takes `reference`; any other video refuses it.
+  With one, the picture is made from a reference picture through
+  `POST https://api.openai.com/v1/images/edits`, with the same model and sizes, which keeps a
+  story's character the same in every still:
 
 | Call | Reference picture | Result |
 |---|---|---|
-| `image_name="lead"`, `reference="house"` | The house lead's sheet shipped in `mcp/case_file_assets/` | The video's lead sheet, always 16:9. The prompt is the outfit |
-| `reference="lead"`, or another image of the video | That image | A still with the lead painted into the scene the prompt describes, always 9:16 |
-| No `reference` | None | A still with no lead in it, always 9:16 |
+| `image_name=<sheet name>`, `reference=<house>` | The house sheet shipped in `mcp/` (Case File Story's lead) | The video's sheet, always 16:9 |
+| `image_name=<sheet name>`, no `reference`, on a style with no house sheet | None | The video's sheet made from the prompt alone, always 16:9 |
+| `reference=<sheet name>`, or another image of the video | That image | A still painted from it, with `pictures.still_lead` before the prompt |
+| No `reference` | None | A still with no sheet character in it |
 
-On such a video the tool adds the pack's fixed text to the prompt: the lead's description before
-the scene and the painting style after it. It refuses, before any request, a lead sheet asked for
-without `reference="house"`, the house sheet used for another picture, and a reference that is not
-yet a picture of the video, and a picture named `house`, the name kept for the house sheet
-(`server.py::_case_file_image_plan`). The result carries `reference`. A call with a reference
-waits up to 600 seconds for OpenAI's response, as `generate_character` does, and a reserved slot
-lasts 900 seconds, longer than that wait.
+The tool refuses, before any request, a sheet asked for the wrong way, the house name used for
+another picture, and a reference that is not yet a picture of the video (`server.py::_image_plan`).
+The result carries `reference`. A call with a reference waits up to 600 seconds for OpenAI's
+response, as `generate_character` does, and a reserved slot lasts 900 seconds, longer than that wait.
 The reasons are in [Case File Story](10-scene-authoring.md#the-lead-and-the-stills).
 
 ### `generate_character`
@@ -750,6 +755,24 @@ with a `reference` goes to `/v1/images/edits`, which edits the existing asset an
 character. Both send `background: "transparent"`. A stored `character_model` outside the OpenAI
 catalog is refused by name before any request. `input_fidelity` is not sent, because every model in
 the catalog rejects it.
+
+### `treat_image`
+
+`treat_image(video_id, image_name, treatment)` bakes a look into one of the video's generated stills
+and writes it as a new PNG, `images/treated/<image_name>.<treatment>.png`. It is free: Pillow on the server
+(`mcp/treatments.py`), no paid call. The still itself is left as it is, and a
+treated copy never counts against the style's cap. The treatments a video may use are its pack's
+`pictures.treatments`; any other is refused.
+
+| Treatment | What it makes |
+|---|---|
+| `print` | A grey 45-degree halftone with a white paper border, the frame's size |
+| `sticker` | The subject keyed out of a plain background (or a still's own transparency), a white die-cut edge and a hard shadow, cropped to the subject |
+| `engraving` | Ink on laid paper: a contrast curve, then dark ink to warm paper |
+| `pencil` | A graphite line plate from the still's edges over a light tone, which lines up with the colour still pixel for pixel |
+
+The looks are baked once because the same work as a CSS or SVG filter costs 10 to 100 times more per
+frame in software GL. The tool takes the scene-work claim, as it writes into the video's folder.
 
 ### `read_image`
 
@@ -1313,8 +1336,8 @@ stateDiagram-v2
 - The claim window is `{VOICE_READY, REVISION_REQUESTED}`. The revision loop writes scenes while the
   video is at `REVISION_REQUESTED` and then moves it back before submitting. A move within the
   window keeps the claim, and a move out of it releases the claim.
-- Five tools take the claim: `generate_image`, `generate_character`, `write_scene_file`,
-  `write_scene_config` and `submit_render`.
+- Six tools take the claim: `generate_image`, `generate_character`, `treat_image`,
+  `write_scene_file`, `write_scene_config` and `submit_render`.
 - Reads are exempt: `read_image`, `get_scene_config`, `read_scene_file`, `get_timeline`,
   `validate_job`, `list_scene_files`, `get_video`. A session that looked at a video would otherwise
   hold it for the full TTL and block a second session from diagnosing it, and reads are what the

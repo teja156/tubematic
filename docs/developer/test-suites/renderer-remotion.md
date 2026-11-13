@@ -24,6 +24,20 @@ does not run `npm test`, so run the suite yourself after you change either modul
 The soundtrack tools under `cartoon-tools/audio/` have a pytest suite of their own, described on
 [`cartoon-audio.md`](cartoon-audio.md).
 
+## Caption looks
+
+### `src/scenes/installed/subtitleLooks.test.ts`
+
+Covers the `tags` and `highlight` looks of `Subtitles.tsx`
+([Grouping words](../09-remotion-project.md#grouping-words)).
+
+- A word's tag has the same tilt and torn edge on every frame and every render, and two words get
+  different edges. The torn outline stays inside the tag's box.
+- A tag pops from 0.6 past 1 and is back at 1 from its fourth frame, so a still tag costs nothing to
+  repaint.
+- The marker under an emphasis word starts at the word's first frame, wipes in over 8 frames and
+  holds.
+
 ## Insert scenes
 
 ### `src/inserts/transitions.test.ts`

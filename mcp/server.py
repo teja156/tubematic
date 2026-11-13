@@ -110,6 +110,7 @@ import bean_explainer  # the Bean Explainer checks (TMDEV-198), the same way
 import storybook_atlas  # the Storybook Atlas checks (TMDEV-200), the same way
 import under_the_hood  # the Under the Hood checks (TMDEV-201), the same way
 import case_file_story  # the Case File Story checks (TMDEV-202), the same way
+import treatments  # the looks treat_image bakes into a still (TMDEV-229/230/231)
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
@@ -344,7 +345,7 @@ ANGLE_WRITE_STATUSES = ("TOPIC_PROPOSED", "TOPIC_APPROVED", "REVISION_REQUESTED"
 # one word at a time is a deliberate style, not a mistake.
 # Keep in sync: renderer/remotion/src/scenes/installed/Subtitles.tsx (which
 # holds the defaults — they are NOT repeated here, so there is nothing to drift).
-SUBTITLE_BACKGROUNDS = ("pill", "shadow", "outline", "label", "none", "log")
+SUBTITLE_BACKGROUNDS = ("pill", "shadow", "outline", "label", "none", "log", "chip")
 SUBTITLE_NUMERIC_RANGES = {
     "maxWords": (1, 7),
     "fontSize": (28, 120),
@@ -355,8 +356,10 @@ SUBTITLE_KEYS = ("enabled", "maxWords", "fontFamily", "fontSize", "color",
 # look: "selection" builds the line word by word with the key words in a blue
 # text-selection box (the Under the Hood style); "fill" shows the whole phrase
 # at once with the words still to come in grey (the Case File Story style);
-# "plain", or absent, is the look every other style has.
-SUBTITLE_LOOKS = ("plain", "selection", "fill")
+# "tags" pops one torn paper tag per word (Paper Diorama); "highlight" puts the
+# phrase on a cream strip with a marker under each emphasis word (Editorial
+# Collage); "plain", or absent, is the look every other style has.
+SUBTITLE_LOOKS = ("plain", "selection", "fill", "tags", "highlight")
 # emphasis: indexes into the narration's words drawn on a red box (the key word
 # of a line). One in SUBTITLE_EMPHASIS_EVERY words at most: emphasis on every
 # other word is no emphasis. write_scene_config checks the indexes against the
@@ -7154,48 +7157,67 @@ def _redact_keys(text: str) -> str:
     return text
 
 
-# The house lead's reference sheet (TMDEV-202): every Case File Story video's
-# own lead sheet is made from it. Shipped beside this module, so it is in the
-# image wherever mcp/ is.
-CASE_FILE_HOUSE_SHEET = Path(__file__).resolve().parent / "case_file_assets" / "lead.png"
+# A style built on generated stills says so in its pack's `pictures` block
+# (Under the Hood, Case File Story, and the TMDEV-229..231 paper styles): the
+# per-video cap, the painting instructions added to every prompt, and the
+# reference sheet the stills are painted from. A house sheet (Case File
+# Story's lead) ships beside this module, so it is in the image wherever mcp/ is.
+_MCP_DIR = Path(__file__).resolve().parent
+CASE_FILE_HOUSE_SHEET = _MCP_DIR / "case_file_assets" / "lead.png"
 
 
-def _case_file_image_plan(style: str, video_id: str, image_name: str, prompt: str,
-                          aspect_ratio: str, reference: str) -> dict:
+def _sheet_styles() -> list[str]:
+    return [sid for sid, p in tvs.PACKS.items() if p.get("pictures", {}).get("sheet")]
+
+
+def _image_plan(style: str, video_id: str, image_name: str, prompt: str,
+                aspect_ratio: str, reference: str) -> dict:
     """What generate_image sends for this call: {prompt, aspect_ratio,
-    ref_path}, or {error}. Only a Case File Story video takes a reference or
-    has its prompt extended; every other video gets its arguments back
-    unchanged with ref_path None. Nothing here spends money."""
-    cfs = case_file_story
-    if style != cfs.STYLE_ID:
-        if reference:
-            return {"error": "reference is for a case_file_story video only: this video's visual_style is "
-                             f"{style or 'auto'!r}. Leave it out."}
+    ref_path}, or {error}. Only a style whose pack has a `pictures` block has
+    its prompt extended, and only one with a `pictures.sheet` takes a
+    reference; every other video gets its arguments back unchanged with
+    ref_path None. Nothing here spends money."""
+    pics = tvs.PACKS[style].get("pictures") if style in tvs.PACKS else None
+    sheet = (pics or {}).get("sheet")
+    if not sheet and reference:
+        return {"error": "reference is only for a style painted from a reference sheet "
+                         f"({', '.join(_sheet_styles())}): this video's visual_style is "
+                         f"{style or 'auto'!r}. Leave it out."}
+    if not pics:
         return {"prompt": prompt, "aspect_ratio": aspect_ratio, "ref_path": None}
-    extra = tvs.pack(cfs.STYLE_ID)["extra"]
-    if image_name == cfs.HOUSE_REFERENCE:
-        return {"error": f"The name {cfs.HOUSE_REFERENCE!r} is kept for the house lead's sheet "
-                         f"(reference=\"{cfs.HOUSE_REFERENCE}\"). Give this picture another name."}
     # The agent's words end as a sentence, so the pack's text starts a new one.
     said = prompt.strip()
     if said[-1:] not in ".!?":
         said += "."
-    if image_name == cfs.LEAD_NAME:
-        if reference != cfs.HOUSE_REFERENCE:
-            return {"error": f"The image named {cfs.LEAD_NAME!r} is this video's lead sheet and is made from "
-                             f"the house lead: call generate_image(video_id, \"{cfs.LEAD_NAME}\", <the outfit>, "
-                             f"reference=\"{cfs.HOUSE_REFERENCE}\")."}
-        if not CASE_FILE_HOUSE_SHEET.is_file():
-            return {"error": "The house lead sheet is missing from this install (mcp/case_file_assets/lead.png)."}
-        return {"prompt": f"{extra['sheet_lead']} The character wears: {said} {extra['sheet_style']}",
-                "aspect_ratio": "16:9", "ref_path": CASE_FILE_HOUSE_SHEET}
-    if reference == cfs.HOUSE_REFERENCE:
-        return {"error": f"reference=\"{cfs.HOUSE_REFERENCE}\" only makes the lead sheet (image_name "
-                         f"\"{cfs.LEAD_NAME}\"). For a still with the lead in it, pass reference=\"{cfs.LEAD_NAME}\"."}
-    # A still covers the frame, and its focus and punch points are read as
-    # fractions of that frame: any other shape would be cropped to a strip.
+    # A still covers the frame, and its focus points are read as fractions of
+    # that frame: a style may fix the shape so no still is cropped to a strip.
+    aspect = pics.get("still_aspect", aspect_ratio)
+    style_text = pics.get("still_style", "")
+    if not sheet:
+        return {"prompt": f"{said} {style_text}".strip(), "aspect_ratio": aspect, "ref_path": None}
+    name, house = sheet["name"], sheet.get("house", "")
+    if house and image_name == house:
+        return {"error": f"The name {house!r} is kept for the house sheet "
+                         f"(reference=\"{house}\"). Give this picture another name."}
+    how = f"<the outfit>, reference=\"{house}\"" if house else "<who they are and what they wear>"
+    if image_name == name:
+        if reference != house:
+            source = "the house sheet" if house else "your description alone, with no reference"
+            return {"error": f"The image named {name!r} is this video's reference sheet and is made from "
+                             f"{source}: call generate_image(video_id, \"{name}\", {how})."}
+        join = f" {sheet['join']}" if sheet.get("join") else ""
+        sheet_prompt = f"{sheet['lead']}{join} {said} {sheet['style']}"
+        if not house:
+            return {"prompt": sheet_prompt, "aspect_ratio": "16:9", "ref_path": None}
+        house_file = _MCP_DIR / sheet["house_file"]
+        if not house_file.is_file():
+            return {"error": f"The house sheet is missing from this install (mcp/{sheet['house_file']})."}
+        return {"prompt": sheet_prompt, "aspect_ratio": "16:9", "ref_path": house_file}
+    if house and reference == house:
+        return {"error": f"reference=\"{house}\" only makes the reference sheet (image_name "
+                         f"\"{name}\"). For a still painted from it, pass reference=\"{name}\"."}
     if not reference:
-        return {"prompt": f"{said} {extra['still_style']}", "aspect_ratio": "9:16", "ref_path": None}
+        return {"prompt": f"{said} {style_text}".strip(), "aspect_ratio": aspect, "ref_path": None}
     err = _check_image_name(reference, ".png")
     if err:
         return {"error": err.replace("image_name", "reference")}
@@ -7204,11 +7226,11 @@ def _case_file_image_plan(style: str, video_id: str, image_name: str, prompt: st
     except tjobs.UnsafePath as e:
         return {"error": str(e)}
     if not ref_path.is_file():
-        hint = (f" Make the lead sheet first: generate_image(video_id, \"{cfs.LEAD_NAME}\", <the outfit>, "
-                f"reference=\"{cfs.HOUSE_REFERENCE}\")." if reference == cfs.LEAD_NAME else "")
+        hint = (f" Make the reference sheet first: generate_image(video_id, \"{name}\", {how})."
+                if reference == name else "")
         return {"error": f"reference {reference!r} is not an image of this video yet.{hint}"}
-    return {"prompt": f"{extra['still_lead']} {said} {extra['still_style']}",
-            "aspect_ratio": "9:16", "ref_path": ref_path}
+    return {"prompt": f"{pics['still_lead']} {said} {style_text}".strip(),
+            "aspect_ratio": aspect, "ref_path": ref_path}
 
 
 # How long generate_image waits for OpenAI: a picture from text, and an edit
@@ -7229,25 +7251,25 @@ _image_reservations_lock = threading.Lock()
 
 
 def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
-    """The refusal for one generated photograph too many, or "" (and then the
+    """The refusal for one generated picture too many, or "" (and then the
     name is reserved for this call).
 
-    A style whose pack caps its pictures (Under the Hood and Case File Story:
-    routing.images) is refused a NEW image name once the video's images folder
+    A style whose pack has a `pictures` block caps its pictures at
+    routing.images: a NEW image name is refused once the video's images folder
     and the calls in flight hold that many; regenerating an existing name
     stays allowed, because a bad still must be replaceable. Checked before the
     paid call, since the cap is about spend."""
     with _conn() as con:
         vrow = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
     style = ((vrow["visual_style"] if vrow else "") or "").strip()
-    if style not in (under_the_hood.STYLE_ID, case_file_story.STYLE_ID):
+    pics = tvs.PACKS[style].get("pictures") if style in tvs.PACKS else None
+    if not pics:
         return ""
-    cap = tvs.pack(style)["routing"].get("images", 0)
-    # A Case File Story video's lead sheet has a slot of its own: it is not a
-    # still, and a video that spent every slot on stills must still be able to
-    # make the sheet they are painted from.
-    apart = {case_file_story.LEAD_NAME} if style == case_file_story.STYLE_ID else set()
-    cap -= len(apart)
+    # A reference sheet has a slot of its own: it is not a still, and a video
+    # that spent every slot on stills must still be able to make the sheet
+    # they are painted from.
+    apart = set(pics.get("apart", ()))
+    cap = tvs.pack(style)["routing"]["images"] - len(apart)
     with _image_reservations_lock:
         now = time.time()
         held = {n: t for n, t in _image_reservations.get(video_id, {}).items() if now - t < _IMAGE_RESERVE_SECS}
@@ -7260,13 +7282,7 @@ def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
             held[image_name] = now
             _image_reservations[video_id] = held
             return ""
-    if style == case_file_story.STYLE_ID:
-        return (f"This Case File Story video already has {len(names)} stills, counting any being made now, "
-                f"the most a video may use ({cap}). Reuse a still in another shot with a different focus or "
-                "a punch-in, or regenerate one under its own name to replace it.")
-    return (f"This Under the Hood video already has {len(names)} photographs, counting any being made "
-            f"now, the most a video may use ({cap}). Reuse one of them on another plate with a "
-            "different focus or zoom, or regenerate one under its own name to replace it.")
+    return pics["cap_message"].format(count=len(names), cap=cap)
 
 
 def _release_image_reservation(video_id: str, image_name: str) -> None:
@@ -7319,26 +7335,28 @@ def generate_image(video_id: str, image_name: str, prompt: str,
     that was asked for — a provider answers with its own nearest bucket. Use
     them to size any frame the picture sits in, so it is not cropped to fit.
 
-    An under_the_hood video may have at most 12 photographs: a 13th new
-    image_name is refused before the paid call; regenerating an existing name
-    is allowed.
+    A style built on generated stills caps them per video (under_the_hood
+    12 photographs; case_file_story 16 stills besides its lead sheet;
+    archive_engraving and editorial_collage 10; storybook_reveal 12 pages
+    besides its hero sheet): a new image_name past the cap is refused before
+    the paid call; regenerating an existing name is allowed. Such a style also
+    adds its fixed painting instructions to every prompt, so describe only the
+    subject; its authoring skill says what to write.
 
-    reference: for a case_file_story video only (any other video refuses it).
-    The picture is then made FROM a reference picture, which is what keeps the
-    lead the same character in every still:
-      - reference="house" with image_name="lead" makes this video's lead
-        sheet: the house lead in the outfit your prompt describes. Make it
-        first, once. It is always 16:9 and it is not a picture for the video.
-      - reference="lead" (or the name of another image of this video) paints
-        that character into the scene your prompt describes. No picture of
-        such a video may itself be named "house".
-      - no reference: a still with no lead in it (an object, an exterior).
-    A still of such a video is always 9:16, because it fills the frame, and
-    the lead sheet always 16:9, whatever aspect_ratio says.
-    For a case_file_story video the style's fixed painting instructions are
-    added to every prompt, so describe only the scene: the place, what the
-    lead is doing, the light. Such a video may have at most 16 stills, besides
-    its lead sheet; a 17th new still is refused before the paid call.
+    reference: only for a style painted from a reference sheet (any other
+    video refuses it). The picture is then made FROM a reference picture,
+    which keeps one character the same in every still:
+      - case_file_story: reference="house" with image_name="lead" makes this
+        video's lead sheet, the house lead in the outfit your prompt
+        describes. No picture of such a video may itself be named "house".
+      - storybook_reveal: image_name="hero" with no reference makes this
+        video's hero sheet from your description alone.
+      - reference=<the sheet's name> (or another image of this video) paints
+        that character into the scene your prompt describes.
+      - no reference: a still with no sheet character in it.
+    Make the sheet first, once. A sheet is always 16:9 and is not a picture
+    for the video; a style may fix the shape of its stills whatever
+    aspect_ratio says (case_file_story: 9:16).
     """
     err = _video_id_error(video_id)
     if err:
@@ -7376,8 +7394,8 @@ def generate_image(video_id: str, image_name: str, prompt: str,
     # instructions and the sheet's shape, all settled before any paid call.
     with _conn() as con:
         srow = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
-    plan = _case_file_image_plan((srow["visual_style"] or "").strip(), video_id, image_name, prompt,
-                                 aspect_ratio, reference)
+    plan = _image_plan((srow["visual_style"] or "").strip(), video_id, image_name, prompt,
+                       aspect_ratio, reference)
     if "error" in plan:
         return plan
     prompt, aspect_ratio, ref_path = plan["prompt"], plan["aspect_ratio"], plan["ref_path"]
@@ -7480,6 +7498,79 @@ def generate_image(video_id: str, image_name: str, prompt: str,
         # Once the file exists the folder counts it; a failed call must not
         # keep the slot (a different name would be refused for nothing).
         _release_image_reservation(video_id, image_name)
+
+
+@mcp.tool
+def treat_image(video_id: str, image_name: str, treatment: str) -> dict:
+    """Bake a look into one of this video's generated stills, as a new PNG.
+
+    Free: it runs on the server and calls no paid service. The still
+    images/<image_name>.png is left as it is, and the treated copy is written
+    to images/treated/<image_name>.<treatment>.png, which the scene config
+    names by its public_path. A treated copy never counts against the style's
+    picture cap. Calling it again overwrites the copy (after a regenerated
+    still, treat it again).
+
+    treatment: one the video's visual style lists (its authoring skill says
+    which, and a refusal names them):
+      - "print": a grey 45-degree halftone with a white paper border
+      - "sticker": the subject cut out of a plain background, with a white
+        die-cut edge and a hard shadow, on a transparent ground. Generate the
+        still as one isolated object on a plain flat background.
+      - "engraving": ink on laid paper
+      - "pencil": a graphite line plate that lines up with the colour still
+
+    Returns {video_id, image_name, treatment, filename, public_path, width,
+    height} or {error}.
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    style = (row["visual_style"] or "").strip()
+    allowed = (tvs.PACKS[style].get("pictures", {}).get("treatments", []) if style in tvs.PACKS else [])
+    if treatment not in allowed:
+        if not allowed:
+            return {"error": f"This video's visual_style ({style or 'auto'!r}) takes no treatments."}
+        return {"error": f"treatment {treatment!r} is not one this style uses: expected one of {allowed}."}
+    err = _check_image_name(image_name, f".{max(allowed, key=len)}.png")
+    if err:
+        return {"error": err}
+    guard_err = _guard_scene_work(video_id)
+    if guard_err:
+        return guard_err
+    try:
+        source = tjobs.image_file(JOBS_DIR, video_id, f"{image_name}.png")
+        target = tjobs.treated_file(JOBS_DIR, video_id, image_name, treatment)
+    except tjobs.UnsafePath as e:
+        return {"error": str(e)}
+    if not source.is_file():
+        return {"error": f"{image_name!r} is not a still of this video yet: make it with generate_image first."}
+    from PIL import Image as _PILImage  # imported per call, as read_image does
+
+    try:
+        with _PILImage.open(source) as im:
+            im.load()
+            out = treatments.apply(im, treatment)
+    except (OSError, ValueError) as e:
+        return {"error": f"Could not treat {image_name!r}: {e}"}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(f".{target.name}.tmp")
+    out.save(tmp, format="PNG", optimize=True)
+    os.replace(tmp, target)
+    return {
+        "video_id": video_id,
+        "image_name": image_name,
+        "treatment": treatment,
+        "filename": target.name,
+        "public_path": f"/public/{video_id}/images/{tjobs.TREATED}/{target.name}",
+        "width": out.width,
+        "height": out.height,
+    }
 
 
 # Above this, an image content block is resized down anyway, so paying to ship

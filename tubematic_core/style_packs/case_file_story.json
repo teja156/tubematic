@@ -78,6 +78,23 @@
     "images_per_video": "up to 16 painted stills and one lead sheet",
     "images": 17
   },
+  "pictures": {
+    "cap_message": "This Case File Story video already has {count} stills, counting any being made now, the most a video may use ({cap}). Reuse a still in another shot with a different focus or a punch-in, or regenerate one under its own name to replace it.",
+    "apart": [
+      "lead"
+    ],
+    "still_aspect": "9:16",
+    "still_style": "Painted digital illustration in a cinematic gouache style: soft visible brushwork, one strong coloured light source, deep warm shadows, rich saturated colour, slightly simplified shapes, a film-still composition for a vertical phone screen with the subject in the middle of the frame and calmer, darker areas at the very top and bottom. No text, no letters, no numbers, no logos, no brand names, no watermark, no speech bubbles, no frame.",
+    "still_lead": "The character in the reference picture, painted into a scene: the same smooth ivory rounded-cube head, round black glasses, short dark eyebrows, build and clothes, exactly, with no nose and no mouth. Any other person in the scene is a plain figure with a smooth round grey head, no glasses and no face.",
+    "sheet": {
+      "name": "lead",
+      "house": "house",
+      "house_file": "case_file_assets/lead.png",
+      "lead": "The same character as in the reference picture: the same smooth ivory rounded-cube head, thin round black glasses with plain white lenses, two short dark eyebrows and the same build, exactly. No nose and no mouth. Change only the clothes.",
+      "join": "The character wears:",
+      "style": "Show the character full body three times side by side on a plain pale grey background: front view, three-quarter view, back view, in the same clothes in all three. Neutral standing pose. Painted gouache style with soft visible brushwork and a thin dark outline. No text, no labels, no logos, no watermark, no ground shadow."
+    }
+  },
   "extra": {
     "accents": [
       "pink",
@@ -108,10 +125,6 @@
       "document",
       "key",
       "goldbar"
-    ],
-    "sheet_lead": "The same character as in the reference picture: the same smooth ivory rounded-cube head, thin round black glasses with plain white lenses, two short dark eyebrows and the same build, exactly. No nose and no mouth. Change only the clothes.",
-    "sheet_style": "Show the character full body three times side by side on a plain pale grey background: front view, three-quarter view, back view, in the same clothes in all three. Neutral standing pose. Painted gouache style with soft visible brushwork and a thin dark outline. No text, no labels, no logos, no watermark, no ground shadow.",
-    "still_lead": "The character in the reference picture, painted into a scene: the same smooth ivory rounded-cube head, round black glasses, short dark eyebrows, build and clothes, exactly, with no nose and no mouth. Any other person in the scene is a plain figure with a smooth round grey head, no glasses and no face.",
-    "still_style": "Painted digital illustration in a cinematic gouache style: soft visible brushwork, one strong coloured light source, deep warm shadows, rich saturated colour, slightly simplified shapes, a film-still composition for a vertical phone screen with the subject in the middle of the frame and calmer, darker areas at the very top and bottom. No text, no letters, no numbers, no logos, no brand names, no watermark, no speech bubbles, no frame."
+    ]
   }
 }

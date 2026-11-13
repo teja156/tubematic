@@ -209,7 +209,9 @@ captions do not blink out between phrases. The hold ends 12 frames after the run
 
 The word being spoken is drawn at full opacity and the rest of its run is dimmed. After a 4-frame
 entry, nothing in the line moves or resizes. A word listed in `emphasis` is drawn in white on a red box
-from the moment it is spoken, with the box scaling in over 8 frames.
+from the moment it is spoken, with the box scaling in over 8 frames. The `label` background is an
+ivory printed label hugging the phrase, a diamond each side, every word at full strength, with a
+2-frame fade and no rise.
 
 The `log` look (`background: "log"`) draws the run as a terminal log instead
 (`Subtitles.tsx::LogStrip`): a `LOG` label and a running clock over a hairline, then the run
@@ -226,7 +228,20 @@ box's top and bottom edges grow from its centre over 3 frames. The Under the Hoo
 
 With `look` set to `"fill"`, the whole phrase is on screen from its first frame, with no rise or
 fade. The words still to come are grey, and each turns to the text colour over 2 frames as it is
-spoken and stays there. The Case File Story style uses this look.
+spoken and stays there. The Case File Story style uses this look. On a `chip` background
+(`background: "chip"`) the phrase sits on a cream paper chip, and an `emphasis` word turns to
+`accent` (red by default) once spoken; the Archive and Engraving style uses the two together.
+
+With `look` set to `"tags"` (`Subtitles.tsx::TagLine`), each word is a torn paper tag that pops in as
+it is spoken: scale 0.6 up to 1.08 and back to 1 over 4 frames (`tagScale`), then still. Each tag's
+tilt (up to 5 degrees), lift and torn top and bottom edges come from a seed of its own word
+(`tagSeed`, `tornPolygon`), so a tag looks the same on every frame and every render. A run holds up to
+`maxWords` tags. The tag is `accent` and its text `color`. The Paper Diorama style uses this look.
+
+With `look` set to `"highlight"` (`Subtitles.tsx::HighlightStrip`), the whole phrase sits on a cream
+strip from its first frame, the words still to come in grey as in `fill`, and a yellow marker bar
+wipes in under each `emphasis` word over 8 frames as it is spoken (`markerReach`). The Editorial
+Collage style uses this look.
 
 ### Fonts
 
@@ -433,12 +448,12 @@ from the video's visual style or the canvas the agent recorded, and otherwise wi
 | `fontFamily` | `system-ui, sans-serif` | A non-empty string. See [Fonts](#fonts) |
 | `fontSize` | `62` | 28 to 120 |
 | `color` | `null` | A CSS colour. `null` follows the canvas: white on dark, near-black on light |
-| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"label"` (an ivory printed label hugging the phrase, a diamond each side, every word at full strength, a 2-frame fade and no rise), `"none"` or `"log"` (typed into a terminal log strip) |
+| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"label"` (an ivory printed label), `"none"`, `"log"` (a terminal log strip) or `"chip"` (a cream paper chip); see [Grouping words](#grouping-words) |
 | `position` | `0.78` | 0.05 to 0.95. The vertical centre as a fraction of frame height |
 | `uppercase` | `false` | `true` or `false` |
-| `accent` | `null` | A CSS colour for the word being spoken in the `log` look. `null` uses `color` |
+| `accent` | `null` | A CSS colour: the word being spoken in the `log` look, an `emphasis` word on a `chip`, the tags in the `tags` look, the marker in the `highlight` look. `null` uses each one's own colour |
 | `emphasis` | `[]` | Distinct word indexes into the timeline's words (0 is the first). Each is drawn on a red box once spoken, or in a selection box under the `selection` look. At most one word in 5 (`SUBTITLE_EMPHASIS_EVERY`) |
-| `look` | `"plain"` | `"plain"`, `"selection"` (the line builds word by word) or `"fill"` (the whole phrase at once, filling in as it is spoken); see [Grouping words](#grouping-words) |
+| `look` | `"plain"` | `"plain"`, `"selection"`, `"fill"`, `"tags"` or `"highlight"`; see [Grouping words](#grouping-words) |
 
 `server.py::_validate_subtitles` rejects an unknown key, so a typo is reported at write time.
 `server.py::_emphasis_error` checks `emphasis` against the narration's word count. The

@@ -453,6 +453,26 @@ Covers `read_image` ([`read_image`](../06-mcp-server.md#read_image)).
 Trap: the coordinate grid is drawn on a copy in memory. The file under the job directory is the
 render input, so a grid written back to it would appear in the finished video.
 
+### `test_treatments.py`
+
+Covers `mcp/treatments.py` and `treat_image`, the looks baked into a style's generated stills
+([`treat_image`](../06-mcp-server.md#treat_image)).
+
+- The pack schema's list of treatments and the module's are the same.
+- `print`, `engraving` and `pencil` keep the frame's size, so a focus point read off the still stays
+  true on the treated copy. A print is grey dots on paper inside a white border; an engraving runs
+  from ink to laid paper.
+- A sticker is cut to the subject on a transparent ground, keeps a still that is already
+  transparent, and is refused for a picture with nothing on its ground.
+- The tool writes `images/treated/<name>.<treatment>.png` and leaves the still as it was. Sixteen
+  treated copies on a Case File Story video take no picture slot: the sheet still has its own slot,
+  a 17th new still is refused and a regeneration is allowed.
+- A treatment the style does not list, an unknown one, a still the video does not have, a name
+  with a path in it, and any treatment on a style with none are refused.
+
+Trap: nothing in `mcp/` may import numpy (`test_removed_tools.py`), so the cut-out is a Pillow flood
+fill on a quarter-size copy, sharpened against the full-size mask.
+
 ## Scene files and scene config
 
 ### `test_scene_resolution.py`
@@ -687,7 +707,8 @@ per-beat sampling ([Terminal Doc](../10-scene-authoring.md#terminal-doc)).
   move's length).
 - The `log` caption look and its `accent` are values `_validate_subtitles` accepts, read from
   `Subtitles.tsx`'s type: without that, the server would refuse the style's own captions in either
-  skin.
+  skin. The server's lists of backgrounds, keys and looks equal the ones `Subtitles.tsx` declares, so
+  a look added on one side only is caught here.
 - The skill's worked example passes. Each refusal names its beat, event and cause: an unknown skin,
   move, slot, size or tone, a cut off the words, a string too wide for its size, an encode not from
   `a` to `c` or with `b` taken, a move on an element that is still playing or not on stage, two
@@ -737,7 +758,7 @@ Covers `mcp/under_the_hood.py`, the checks `write_scene_config` runs on an Under
 - `write_scene_config` writes a sound config with the style's captions, fills each plate's `aspect`
   from its file, keeps an `emphasis` it was given, refuses a photograph too wide to cover the band
   before writing anything, refuses `UnderTheHood` on another style and other scenes on an Under the
-  Hood video. `subtitles.look` accepts `plain` and `selection` only.
+  Hood video. `subtitles.look` accepts the looks `Subtitles.tsx` draws, and no other.
 - `generate_image` refuses a 13th new photograph on an Under the Hood video before any request goes
   out, and allows regenerating an existing one; other styles are not capped. A name being generated
   holds its slot, so a second new name cannot take the last one meanwhile, and a call that fails gives
@@ -779,17 +800,18 @@ the style: the reference picture, the text added to the prompt and the cap on pi
   card, is refused: a card is read on screen, and the consequence and the choice end the story there.
 - `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
   one, refuses `CaseFileStory` on another style and other scenes on a Case File Story video.
-  `subtitles.look` accepts `plain`, `selection` and `fill` only.
+  `subtitles.look` accepts the looks `Subtitles.tsx` draws, and no other.
 - The house lead's sheet ships beside the server. The lead sheet is made from it through the edits
-  endpoint, at 16:9, with the outfit between the pack's lead description and sheet style. A still
+  endpoint, at 16:9, with the outfit between the pack's `pictures.sheet` lead description and sheet
+  style. A still
   with `reference="lead"` sends the video's own sheet and the pack's lead description and painting
   style around the scene. A still with no reference goes to the generations endpoint with the
   painting style added. A still is sent at 9:16 whatever `aspect_ratio` asks for. A prompt with no
   final full stop gets one before the pack's text.
 - `generate_image` refuses, before any request goes out, a lead sheet without `reference="house"`,
   the house sheet used for another picture, a picture named `house`, a reference that is not yet an image of the video, a
-  reference with a path in it, and a reference on a video of another style, whose prompt is sent
-  unchanged. A 17th new still is refused and a regeneration is allowed. The lead sheet has a slot
+  reference with a path in it, and a reference on a video of a style with no reference sheet, whose
+  prompt is sent unchanged. A 17th new still is refused and a regeneration is allowed. The lead sheet has a slot
   of its own: a video that already holds 16 stills can still make it, and it never takes a still's
   place. Under the Hood keeps its own cap and wording.
 
