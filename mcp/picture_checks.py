@@ -27,6 +27,9 @@ import re
 import bean_explainer
 import cartoon
 import case_file_story
+import night_signal
+import flat_vector_science
+import isometric_infographic
 import storybook_atlas
 import system_flow
 import terminal_doc
@@ -51,7 +54,7 @@ OPENING = "opening"
 
 MIXED = "scenes"
 _STYLES = (system_flow, whiteboard, bean_explainer, terminal_doc, storybook_atlas, under_the_hood,
-           case_file_story)
+           case_file_story, night_signal, flat_vector_science, isometric_infographic)
 
 # What each style can do about a beat with nothing changing on screen, in its
 # own words. The pack's picture.turn says the same at length.
@@ -65,6 +68,12 @@ _CHANGE_FIX = {
                               "in, or open a plate on that word",
     under_the_hood.STYLE_ID: "start a new plate there, or an outline, arcs, stat or chart on that word",
     case_file_story.STYLE_ID: "cut to a new shot there, a punch in, or the next card part on that word",
+    night_signal.STYLE_ID: "start a new scene there, or pop an item in, turn the threat red, or land a "
+                           "connector, bubble, mark or step on that word",
+    flat_vector_science.STYLE_ID: "start a new shot there, or bring in a prop, a pill word, a rule, a rung, a "
+                                  "level, a layer or a stage on that word",
+    isometric_infographic.STYLE_ID: "start a new board there, or glide the camera, drop a building in, draw a route, "
+                                    "send a mover, build a pin, lift, cut away or explode on that word",
 }
 
 # Event types that change too little of the frame to count as a visible
@@ -198,6 +207,17 @@ def _first_frame_problem(style: str, config: dict) -> str | None:
             return (f"nothing moves in chapter 1 until after frame {early}, so the video opens on the "
                     "plaque over a still stage. Walk the guide, bring a person in or the subject's "
                     "prop at frame 0")
+    elif style == flat_vector_science.STYLE_ID:
+        shots = _list(_props(config, flat_vector_science), "shots")
+        first = shots[0] if shots else {}
+        frames = flat_vector_science.event_frames(first) if first.get("kind") != "subject" else []
+        items = _list(first, "items")
+        if first.get("kind") == "subject" and not any(not _int(it.get("at")) or it["at"] <= early for it in items):
+            return (f"shot 1 has no subject on screen until after frame {early}, so the video opens on an empty "
+                    "backdrop. Leave `at` out of the first sentence's subject so it is there from frame 0")
+        if first.get("kind") in ("ladder", "zoom", "descent", "stages") and not (len(frames) > 1 and frames[1] <= early):
+            return (f"shot 1's first rung, level, layer or stage arrives after frame {early}, so the video opens on "
+                    "an empty backdrop. Time it to the first word")
     elif style == under_the_hood.STYLE_ID:
         plates = _list(_props(config, under_the_hood), "plates")
         if not plates or not plates[0].get("image"):
@@ -284,6 +304,30 @@ def _change_frames(style: str, config: dict) -> list[int]:
                 frames += case_file_story.part_frames(beat)
             except (KeyError, IndexError, TypeError):
                 frames.append(beat.get("start"))
+        return _ints(frames)
+    if style == isometric_infographic.STYLE_ID:
+        frames = []
+        for board in _list(_props(config, isometric_infographic), "boards"):
+            try:
+                frames += isometric_infographic.event_frames(board)
+            except (KeyError, TypeError):
+                frames.append(board.get("start"))
+        return _ints(frames)
+    if style == flat_vector_science.STYLE_ID:
+        frames = []
+        for shot in _list(_props(config, flat_vector_science), "shots"):
+            try:
+                frames += flat_vector_science.event_frames(shot)
+            except (KeyError, TypeError):
+                frames.append(shot.get("start"))
+        return _ints(frames)
+    if style == night_signal.STYLE_ID:
+        frames = []
+        for scene in _list(_props(config, night_signal), "scenes"):
+            try:
+                frames += night_signal.event_frames(scene)
+            except (KeyError, TypeError):
+                frames.append(scene.get("start"))
         return _ints(frames)
     return []
 

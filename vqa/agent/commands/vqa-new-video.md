@@ -35,7 +35,10 @@ your own judgment.
     numbers and ciphertext on a dark terminal, written as data), `under_the_hood` (close-up photographs
     of one object with labels pinned to its parts, written as data; it needs an OpenAI key),
     `case_file_story` (a second-person suspense story in painted stills with meters and number
-    cards, written as data; it needs an OpenAI key) or
+    cards, written as data; it needs an OpenAI key), `night_signal` (a deadpan warning in glowing
+    pictograms on black, one red threat per scene, written as data), `flat_vector_science`
+    (flat glowing creatures, cells and planets drifting in the dark, showing scale, written as data),
+    `isometric_infographic` (one thing's journey across an isometric board of blocks, written as data) or
     `cartoon_3d` (a 3D world; it needs a working GPU). There is no dashboard here, so this chat is the
     only place that choice can be made, and it is frozen the moment the topic is approved.
     `get_pipeline_status()` returns every style as `visual_styles`,

@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 55 tools
+## The 56 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -147,6 +147,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`list_scene_files`](#list_scene_files) | List generated and installed scenes |
 | [`render_bean_props`](#render_bean_props) | Render a Bean Explainer video's own props as a picture |
 | [`render_storybook_props`](#render_storybook_props) | Render a Storybook Atlas video's own props as a picture |
+| [`render_style_parts`](#render_style_parts) | Render a Night Signal or Flat Vector Science video's own parts as a picture |
 | [`preview_terminal_moves`](#preview_terminal_moves) | Render a Terminal Doc video's own moves as a picture |
 | [`write_scene_config`](#write_scene_config) | Validate and write `scene-config.json` |
 | [`get_scene_config`](#get_scene_config) | Read `scene-config.json` |
@@ -757,7 +758,7 @@ the catalog rejects it.
 `grid`, it overlays a labelled grid in normalised `[u, v]` coordinates (0 to 1 across and down the
 image), so the agent can read off an anchor point for an overlay. The grid is drawn on a copy in
 memory. `cartoon_still`, `cartoon_read_still`, `render_mascot_sheets`, `render_bean_props`,
-`preview_doodles`, `render_storybook_props` and `preview_terminal_moves` also return pictures.
+`preview_doodles`, `render_storybook_props`, `render_style_parts` and `preview_terminal_moves` also return pictures.
 
 ### `preview_doodles`
 
@@ -847,6 +848,19 @@ beside it at the same scale, and its first state again on a night-navy swatch fo
 `render_bean_props`: `bean_preview.py::render_preview` with `script=STORYBOOK_SCRIPT` runs
 `renderer/remotion/storybook-tools/render-props.mjs` on software GL, under the same lock and
 timeouts, and a killed preview leaves its folder in `storybook-tools/.tmp/`.
+
+### `render_style_parts`
+
+`render_style_parts(video_id)` renders the parts a Night Signal or Flat Vector Science video's agent
+drew for it, read from the config (so `write_scene_config` comes first), and returns the picture after
+a JSON block. A Night Signal video's `customParts` are drawn as the scene draws them, in their box, on
+the ground line beside a person and again in red
+([Night Signal](10-scene-authoring.md#night-signal)). A Flat Vector Science video's `customProps` are
+rasterised as the scene does it, on the abyss, their declared box outlined in red and a person beside
+each for scale ([Flat Vector Science](10-scene-authoring.md#flat-vector-science)). It runs the same way
+as `render_bean_props`: `bean_preview.py::render_preview` with `script=STYLE_PARTS_SCRIPT` runs
+`renderer/remotion/style-tools/render-parts.mjs` on software GL, under the same lock and timeouts, and
+a killed preview leaves its folder in `style-tools/.tmp/`.
 
 ### `preview_terminal_moves`
 

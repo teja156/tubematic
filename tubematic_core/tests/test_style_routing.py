@@ -79,7 +79,8 @@ def test_each_candidate_carries_its_routing_block_and_cost():
     (True, "unknown", False, {"cartoon_3d": "GPU not tested yet"}),
     (True, "not_usable", False, {"cartoon_3d": "needs a working GPU"}),
     (True, "working", True, {"cartoon_3d": tvs.MASCOT_EXCLUDES_3D, "under_the_hood": tvs.MASCOT_EXCLUDED,
-                             "case_file_story": tvs.MASCOT_EXCLUDED}),
+                             "case_file_story": tvs.MASCOT_EXCLUDED, "night_signal": tvs.MASCOT_EXCLUDED,
+                             "flat_vector_science": tvs.MASCOT_EXCLUDED, "isometric_infographic": tvs.MASCOT_EXCLUDED}),
 ])
 def test_the_gates_match_what_refuses_the_choice(key, gpu, mascot, unavailable):
     rows = _by_id(openai_key_set=key, gpu_status=gpu, has_mascot=mascot)

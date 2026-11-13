@@ -110,6 +110,9 @@ import bean_explainer  # the Bean Explainer checks (TMDEV-198), the same way
 import storybook_atlas  # the Storybook Atlas checks (TMDEV-200), the same way
 import under_the_hood  # the Under the Hood checks (TMDEV-201), the same way
 import case_file_story  # the Case File Story checks (TMDEV-202), the same way
+import night_signal  # the Night Signal checks (TMDEV-238), the same way
+import flat_vector_science  # the Flat Vector Science checks (TMDEV-236), the same way
+import isometric_infographic  # the Isometric Infographic checks (TMDEV-237), the same way
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
@@ -344,14 +347,17 @@ ANGLE_WRITE_STATUSES = ("TOPIC_PROPOSED", "TOPIC_APPROVED", "REVISION_REQUESTED"
 # one word at a time is a deliberate style, not a mistake.
 # Keep in sync: renderer/remotion/src/scenes/installed/Subtitles.tsx (which
 # holds the defaults — they are NOT repeated here, so there is nothing to drift).
-SUBTITLE_BACKGROUNDS = ("pill", "shadow", "outline", "label", "none", "log")
+SUBTITLE_BACKGROUNDS = ("pill", "shadow", "outline", "label", "none", "log", "card")
 SUBTITLE_NUMERIC_RANGES = {
     "maxWords": (1, 7),
     "fontSize": (28, 120),
     "position": (0.05, 0.95),
+    # Extra space between letters, in ems (the Night Signal style spaces its capitals).
+    "letterSpacing": (-0.05, 0.3),
 }
 SUBTITLE_KEYS = ("enabled", "maxWords", "fontFamily", "fontSize", "color",
-                 "background", "position", "uppercase", "emphasis", "accent", "look")
+                 "background", "position", "uppercase", "emphasis", "accent", "look",
+                 "letterSpacing")
 # look: "selection" builds the line word by word with the key words in a blue
 # text-selection box (the Under the Hood style); "fill" shows the whole phrase
 # at once with the words still to come in grey (the Case File Story style);
@@ -6117,6 +6123,7 @@ def validate_job(video_id: str) -> dict:
         if "scene_config" in dir() and isinstance(scene_config, dict):
             errors.extend(_bean_custom_prop_errors(video_id, scene_config))
             errors.extend(_storybook_custom_prop_errors(video_id, scene_config))
+            errors.extend(_fv_custom_prop_errors(video_id, scene_config))
     except Exception as e:
         errors.append(f"Custom prop check failed: {e}")
     # A Terminal Doc video's own moves (TMDEV-199), for the same reason.
@@ -8295,6 +8302,21 @@ def _bean_custom_sources(video_id: str, config, props_key: str = bean_explainer.
     return out
 
 
+def _fv_custom_prop_errors(video_id: str, config) -> list[str]:
+    """validate_job's re-check of a Flat Vector Science config's own props
+    against their files as they are now; [] for any other config."""
+    try:
+        custom = config["scenes"][0]["props"][flat_vector_science.PROPS_KEY].get("customProps")
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return []
+    if not custom:
+        return []
+    errs, _ = flat_vector_science.custom_prop_errors(
+        custom, video_id, set(flat_vector_science.library(tvs.pack(flat_vector_science.STYLE_ID)["extra"])),
+        _bean_custom_sources(video_id, config, flat_vector_science.PROPS_KEY))
+    return [f"Custom prop: {e}" for e in errs]
+
+
 def _storybook_custom_prop_errors(video_id: str, config) -> list[str]:
     """validate_job's re-check of a Storybook Atlas config's own props against
     their files as they are now; [] when the config has none."""
@@ -8485,6 +8507,84 @@ def _td_custom_move_errors(video_id: str, config) -> list[str]:
     errs, _ = terminal_doc.custom_move_errors(custom, video_id, _td_custom_sources(video_id, config))
     return [f"Custom move: {e}" for e in errs]
 
+
+
+@mcp.tool
+def render_style_parts(video_id: str):
+    """Look at the parts you drew for a Night Signal, Flat Vector Science or
+    Isometric Infographic video before you use them.
+
+    A Night Signal video's `customParts` (pictograms built from flat shapes)
+    are drawn exactly as the scene draws them: in their box (outlined), on the
+    ground line beside a person for size, and again in red, as the threat. A
+    Flat Vector Science video's `customProps` (its prop-<name>.tsx drawings)
+    are drawn on the abyss as the scene rasterises them, their declared box
+    outlined in red, a person beside each at the same size for scale: a
+    drawing that runs past its box is cut off in the video. An Isometric
+    Infographic video's `customProps` (compositions of the kit's solids) stand
+    on a patch of board, in their colours, beside a house for scale.
+
+    Reads the parts from the video's scene-config (so write_scene_config
+    first) and the prop files as they are now. Rewrite a part and call this
+    again. It renders on the CPU and waits its turn behind other heavy checks,
+    so it can take a minute or two.
+
+    Returns {video_id, parts} followed by the picture, or {"error": ...} (a
+    render failure carries the renderer's error output, often a type error in
+    a prop file: fix it and call again).
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    style = row["visual_style"] or ""
+    keys = {night_signal.STYLE_ID: (night_signal.PROPS_KEY, "customParts"),
+            flat_vector_science.STYLE_ID: (flat_vector_science.PROPS_KEY, "customProps"),
+            isometric_infographic.STYLE_ID: (isometric_infographic.PROPS_KEY, "customProps")}
+    if style not in keys:
+        return {"error": "render_style_parts is for Night Signal, Flat Vector Science and Isometric Infographic "
+                         f"videos; this video's visual_style is {style or 'auto'!r}."}
+    props_key, list_key = keys[style]
+    try:
+        config = json.loads(tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG).read_text(encoding="utf-8"))
+        data = config["scenes"][0]["props"][props_key]
+    except (tjobs.UnsafePath, OSError, ValueError, KeyError, IndexError, TypeError):
+        return {"error": f"This video has no {tvs.pack(style)['label']} scene-config yet: write it with "
+                         f"write_scene_config ({list_key} listing your parts) first."}
+    custom = data.get(list_key) or [] if isinstance(data, dict) else []
+    if not isinstance(custom, list) or not custom:
+        return {"error": f"The scene-config lists no {list_key}, so there is nothing of yours to look at."}
+    # the JSON styles send their parts as they are; Flat Vector Science names its prop files
+    spec = {"style": style, "props": custom} if style == flat_vector_science.STYLE_ID else {"style": style, "parts": custom}
+    if not _heavy_checks_lock.acquire(timeout=HEAVY_CHECK_WAIT_SECS):
+        return {"error": f"Other checks kept the renderer busy for {HEAVY_CHECK_WAIT_SECS}s. Nothing is wrong "
+                         "with this video; call render_style_parts again."}
+    try:
+        with tempfile.TemporaryDirectory(prefix="tubematic-style-parts-") as tmp:
+            out_png = Path(tmp) / "parts.png"
+            try:
+                bean_preview.render_preview(_MASCOT_REMOTION, spec, out_png, script=bean_preview.STYLE_PARTS_SCRIPT)
+            except bean_preview.BeanPreviewError as e:
+                return {"error": str(e)}
+            from PIL import Image as PILImage
+            from fastmcp.utilities.types import Image as MCPImage
+            with PILImage.open(out_png) as src:
+                src.load()
+                img = src.convert("RGB")
+    finally:
+        _heavy_checks_lock.release()
+    longest = max(img.size)
+    if longest > _READ_IMAGE_MAX_EDGE:
+        ratio = _READ_IMAGE_MAX_EDGE / longest
+        img = img.resize((max(1, round(img.size[0] * ratio)), max(1, round(img.size[1] * ratio))), PILImage.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    meta = {"video_id": video_id, "parts": [c.get("id") for c in custom if isinstance(c, dict)]}
+    return [json.dumps(meta, indent=2), MCPImage(data=buf.getvalue(), format="png")]
 
 @mcp.tool
 def preview_terminal_moves(video_id: str):
@@ -8795,6 +8895,52 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         given = config.get("subtitles")
         if given is None or isinstance(given, dict):
             config["subtitles"] = {**tvs.pack(case_file_story.STYLE_ID)["captions"], **(given or {})}
+    # ── Flat Vector Science (TMDEV-236) ──────────────────────────────────────
+    # The same shape again: one installed FlatVectorScience scene whose props
+    # hold the shots as data; the video's own props are prop-<name>.tsx files.
+    fv_err = flat_vector_science.check_scene_use(row["visual_style"], scenes)
+    if fv_err:
+        return {"error": fv_err}
+    if (row["visual_style"] or "") == flat_vector_science.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = flat_vector_science.check(
+            config, fps, word_starts, tvs.pack(flat_vector_science.STYLE_ID)["extra"], video_id,
+            _bean_custom_sources(video_id, config, flat_vector_science.PROPS_KEY), quiet=quiet)
+        if problems:
+            return {"error": "The Flat Vector Science video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(flat_vector_science.STYLE_ID)["captions"], **(given or {})}
+    # ── Isometric Infographic (TMDEV-237) ────────────────────────────────────
+    # The same shape again: one installed IsometricInfographic scene whose props
+    # hold the boards as data; the video's own props are JSON compositions.
+    iso_err = isometric_infographic.check_scene_use(row["visual_style"], scenes)
+    if iso_err:
+        return {"error": iso_err}
+    if (row["visual_style"] or "") == isometric_infographic.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = isometric_infographic.check(config, fps, word_starts,
+                                               tvs.pack(isometric_infographic.STYLE_ID)["extra"], video_id, quiet=quiet)
+        if problems:
+            return {"error": "The Isometric Infographic video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(isometric_infographic.STYLE_ID)["captions"], **(given or {})}
+    # ── Night Signal (TMDEV-238) ─────────────────────────────────────────────
+    # The same shape again: one installed NightSignal scene whose props hold
+    # the case file and the pictogram scenes as data.
+    ns_err = night_signal.check_scene_use(row["visual_style"], scenes)
+    if ns_err:
+        return {"error": ns_err}
+    if (row["visual_style"] or "") == night_signal.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = night_signal.check(config, fps, word_starts,
+                                      tvs.pack(night_signal.STYLE_ID)["extra"], video_id, quiet=quiet)
+        if problems:
+            return {"error": "The Night Signal video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(night_signal.STYLE_ID)["captions"], **(given or {})}
 
     # ── subtitles (TMDEV-101) ────────────────────────────────────────────────
     # Absent means on with defaults, so nothing is filled in here: writing the

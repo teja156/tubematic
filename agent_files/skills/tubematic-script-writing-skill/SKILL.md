@@ -616,6 +616,14 @@ blank-faced lead, and every brief is a place with what you are doing in it, or a
 is a situation the viewer steps into, not an incident reported as real, so rule 14 bears on its
 laws, limits and terms, which must all be real. The amounts in the story and its meters' values
 are part of the invented situation.
+`night_signal` has no photographs and no named people: "you", "a stranger", "a caller" are faceless
+pictograms, and every brief is a small scene (who stands where, the one threat in red) or a card (a
+RULE, a phone screen, a list of steps).
+`flat_vector_science` has no photographs either: a named creature, organ or planet is a flat drawn
+prop from its library or one drawn for the video, and every brief names the one subject on screen and
+the number it shows with its unit.
+`isometric_infographic` has no photographs or named people either: a place is a building on its board
+and a role is a billboard person, and every brief names where on the journey the beat is and what moves.
 A segment marked as an insert has no photographs either, and neither has a legacy whole
 `system_flow` or `terminal_doc` video (one voiced before they became insert styles). In System Flow
 a named person or place is a labelled component (`"Alice's laptop"` as a `user` or `phone` node),

@@ -56,6 +56,9 @@ import storybook_atlas  # chapter windows for the whole-video Storybook Atlas sc
 import terminal_doc  # beat windows for the whole-video Terminal Doc scene (TMDEV-199)
 import under_the_hood  # plate windows for the whole-video Under the Hood scene (TMDEV-201)
 import case_file_story  # beat windows for the whole-video Case File Story scene (TMDEV-202)
+import night_signal  # scene windows for the whole-video Night Signal scene (TMDEV-238)
+import flat_vector_science  # shot windows for the whole-video Flat Vector Science scene (TMDEV-236)
+import isometric_infographic  # board windows for the whole-video Isometric Infographic scene (TMDEV-237)
 import picture_checks  # which style drew a config, for the mixed-scenes first-frame pass (TMDEV-215)
 
 # ── Tunables ────────────────────────────────────────────────────────────────
@@ -306,6 +309,23 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
         if cfs_beats:
             for first, b_end in cfs_beats:
                 last = b_end - 1
+                span = last - first
+                count = min(SAMPLES_PER_SCENE, span + 1)
+                step = max(1, span // max(1, count - 1))
+                passes.append({"scene": index, "first": first, "step": step,
+                               "count": min(count, span // step + 1)})
+            continue
+        # A Night Signal or Flat Vector Science scene spans the whole video too;
+        # each of its scenes or shots is a cut, sampled once its text is in.
+        ns_scenes = (night_signal.scene_windows(scene_config)
+                     if night_signal.is_night_signal_scene(scene) else
+                     flat_vector_science.shot_windows(scene_config)
+                     if flat_vector_science.is_flat_vector_scene(scene) else
+                     isometric_infographic.board_windows(scene_config)
+                     if isometric_infographic.is_iso_scene(scene) else [])
+        if ns_scenes:
+            for first, s_end in ns_scenes:
+                last = s_end - 1
                 span = last - first
                 count = min(SAMPLES_PER_SCENE, span + 1)
                 step = max(1, span // max(1, count - 1))

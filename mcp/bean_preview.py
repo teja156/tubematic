@@ -23,6 +23,8 @@ from pathlib import Path
 
 _SCRIPT = Path("bean-tools") / "render-props.mjs"
 STORYBOOK_SCRIPT = Path("storybook-tools") / "render-props.mjs"
+# The part sheet of Night Signal, Flat Vector Science and Isometric Infographic (render_style_parts).
+STYLE_PARTS_SCRIPT = Path("style-tools") / "render-parts.mjs"
 STDERR_TAIL_LINES = 8
 # Under server.py's HEAVY_CHECK_WAIT_SECS (300): the preview holds the heavy-check
 # lock, and a validate_job queued behind it must not give up first.
