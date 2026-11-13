@@ -65,7 +65,7 @@ def test_the_skill_states_the_validators_limits():
     L, T = sr.LIMITS, sr.TIMING
     for phrase in (f"within {T['snap']} frames", f"at least {L['minPageSeconds']} seconds",
                    f"at most {L['maxPages']} pages", f"1 to {L['titleWords']} words and at most {L['titleChars']} characters",
-                   f"at least {T['pencilAfter']} frames after the page starts",
+                   f"{T['pencilAfter']} to {T['pencilWithin']} frames after the page starts",
                    f"{T['pencil']} to {T['colourWithin']} frames after `pencilAt`", "within a second of the pencil",
                    f"colour ({T['colour']} frames)", f"at least {T['read']} frames before the page ends",
                    f"**{L['maxImages']} different pictures per video**", f"at most {L['maxCurls']} per video",
