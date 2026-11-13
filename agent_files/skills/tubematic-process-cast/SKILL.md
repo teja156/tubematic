@@ -167,8 +167,8 @@ window. With no marked segment, write no `inserts`.
    "light"` (or leave it out), the one scene and any `inserts`. Fix every problem it reports. If the
    video has props of your own, look at them now with `render_style_props` (Step 3b).
 2. `validate_job(video_id)`: fix its errors, then read its `warnings`. The text audit measures the
-   signs, tags and cards in a browser; an overlap is a measurement, so move a character or shorten
-   the text.
+   captions in a browser. The signs, tags and cards are drawn into pictures, which
+   `write_scene_config` already sized from their text and kept apart.
 3. **Look before you submit.** (Reserved: a later tool lets you look at chosen frames of the composed
    video here. Until it exists, go straight on.)
 4. `submit_render(video_id)`.

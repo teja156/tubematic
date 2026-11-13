@@ -80,6 +80,25 @@ globalThis.__out = { extra, fixture: {
 } };
 `,
   },
+  comic_panels: {
+    dir: "comicPanels",
+    entry: (D, about) => `
+import { ACTOR, BALLOONS, CAST_KINDS, CUSTOM, FACES, HAIRS, ITEM_TYPES, LAYOUTS, LIMITS, LINES, OUTFITS, PAGE, POSES, PROPS, SCALE, SKINS, TIMING, TONES,
+  balloonSize, itemBox, sfxSize } from "${D}/contract";
+const extra = {
+  layouts: Object.keys(LAYOUTS), tones: Object.keys(TONES), cast_kinds: [...CAST_KINDS], hairs: [...HAIRS], outfits: [...OUTFITS], skins: [...SKINS],
+  poses: [...POSES], faces: [...FACES], balloons: [...BALLOONS], lines: [...LINES],
+  props: Object.fromEntries(Object.entries(PROPS).map(([k, v]) => [k, { text: v.text, acts: [] }])),
+};
+globalThis.__out = { extra, fixture: {
+  _about: ${JSON.stringify(about)},
+  constants: { LIMITS, TIMING, PAGE, LAYOUTS, TONES: Object.keys(TONES), CAST_KINDS, HAIRS, OUTFITS, SKINS, POSES, FACES, BALLOONS, LINES, ITEM_TYPES, PROPS, SCALE, CUSTOM, ACTOR },
+  item_box: [["2+2", 0, 0.5, 0.6, 260, 300, 1], ["stack3", 2, 0.2, 0.3, 150, 260, 0.8], ["1+2", 1, 0.9, 0.1, 420, 220, 1.4]].map(([l, i, x, y, w, h, s]) => ({ layout: l, panel: i, x, y, w, h, scale: s, box: itemBox(LAYOUTS[l][i], x, y, w, h, s) })),
+  balloon_size: ["Hi", "This is your bank!", "A bank never asks for that", "Read me the code we just sent you now!!"].map((t) => ({ text: t, size: balloonSize(t) })),
+  sfx_size: ["POW", "RING!", "KA-BOOOOOM"].map((t) => ({ text: t, size: sfxSize(t) })),
+} };
+`,
+  },
 };
 
 async function sync(style) {

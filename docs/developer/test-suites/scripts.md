@@ -735,6 +735,22 @@ Covers the `tubematic-midcentury-howto` skill
 Trap: a skill that teaches a limit the validator does not enforce gets the agent refused on every
 video. Change a limit in `contract.ts`, run the sync script, and change the skill text with it.
 
+### `test_comic_panels_skill.py`
+
+Covers the `tubematic-comic-panels` skill ([Comic Panels](../10-scene-authoring.md#comic-panels)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- `reference/contract.md` lists the pack's props and layouts and every catalogue the validator accepts.
+- The limits the skill states are the ones `mcp/comic_panels.py` enforces.
+- It says the narrator is off screen and a balloon is never the narration read aloud, that the cast
+  is invented and never a real person, and that the style takes no mascot.
+- The worked example passes the validator, its worked prop, `example-prop-trophy.tsx`, passes the
+  source checks, and the uninstaller removes the skill.
+
+Trap: skill text that lets a balloon repeat the narration, or a character look like a real person,
+leads the agent to a video the validator or the AI review refuses. The test pins the wording.
+
 ### `test_process_cast_skill.py`
 
 Covers the `tubematic-process-cast` skill ([Process Cast](../10-scene-authoring.md#process-cast)).

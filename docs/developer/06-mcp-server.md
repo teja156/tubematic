@@ -147,7 +147,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`list_scene_files`](#list_scene_files) | List generated and installed scenes |
 | [`render_bean_props`](#render_bean_props) | Render a Bean Explainer video's own props as a picture |
 | [`render_storybook_props`](#render_storybook_props) | Render a Storybook Atlas video's own props as a picture |
-| [`render_style_props`](#render_style_props) | Render a Mid-century How-To or Process Cast video's own props as a picture |
+| [`render_style_props`](#render_style_props) | Render a Mid-century How-To, Comic Panels or Process Cast video's own props as a picture |
 | [`preview_terminal_moves`](#preview_terminal_moves) | Render a Terminal Doc video's own moves as a picture |
 | [`write_scene_config`](#write_scene_config) | Validate and write `scene-config.json` |
 | [`get_scene_config`](#get_scene_config) | Read `scene-config.json` |
@@ -427,7 +427,7 @@ Fields writable only at `TOPIC_PROPOSED`:
 - A new `mascot_id` must exist, be approved and not archived, and some renderer's GPU test must
   have passed (the not-tested case has its own message). `""` clears it, and echoing the stored
   mascot is not refused. A mascot is refused on a `cartoon_3d`, `under_the_hood`, `case_file_story`,
-  `midcentury_howto` or `process_cast` video (`visual_styles.py::NO_MASCOT_STYLES`), and a switch to one of those styles clears the stored one.
+  `midcentury_howto`, `comic_panels` or `process_cast` video (`visual_styles.py::NO_MASCOT_STYLES`), and a switch to one of those styles clears the stored one.
 - A `visual_style` different from the stored one clears the record of a style `auto` picked
   (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
   scenes (`resolved_renderer`, `resolved_visual_style`). The same value again keeps them, because the
@@ -857,13 +857,13 @@ timeouts, and a killed preview leaves its folder in `storybook-tools/.tmp/`.
 `write_scene_config` comes first) and returns the picture after a JSON block naming them. Each prop
 is drawn with its declared box outlined in red and the first text the config gives it, beside a
 library prop for line weight and size: for Mid-century How-To at rest and at the end of its first
-act beside a library phone, for Process Cast beside a library card. A video in any other style is
+act beside a library phone, for Comic Panels beside a library sign, for Process Cast beside a library card. A video in any other style is
 refused. It runs the same way as [`render_bean_props`](#render_bean_props):
 `bean_preview.py::render_preview` with `script=CHARACTER_SCRIPT` runs
 `renderer/remotion/character-tools/render-props.mjs` on software GL, under the same lock and
 timeouts, and a killed preview leaves its folder in `character-tools/.tmp/`. The script draws the
 props on the style's own preview component (`MidcenturyPropPreview` for Mid-century How-To,
-`ProcessCastPropPreview` for Process Cast).
+`ComicPanelsPropPreview` for Comic Panels, `ProcessCastPropPreview` for Process Cast).
 
 ### `preview_terminal_moves`
 
@@ -957,6 +957,14 @@ It checks:
   narration, no still stretch over 3 seconds). No other style may use `MidcenturyHowTo`. The style
   pack's caption settings fill every `subtitles` key the config leaves out. The rules are in
   [Mid-century How-To](10-scene-authoring.md#mid-century-how-to).
+- A `comic_panels` video holds the one installed `ComicPanels` scene, and its cast, pages and panels
+  pass `mcp/comic_panels.py` (panels and items starting on words, panels read for at least 1.5
+  seconds, the prop library and the video's own props and their files, characters, props, balloons
+  and sound effects inside their panel, balloons and sound effects clear of each other, balloons
+  pointing at someone in the panel, balloons and caption boxes that do not repeat the narration, no
+  still stretch over 3 seconds). No other style may use `ComicPanels`. The style pack's caption
+  settings fill every `subtitles` key the config leaves out. The rules are in
+  [Comic Panels](10-scene-authoring.md#comic-panels).
 - A `process_cast` video holds the one installed `ProcessCast` scene, and its cast, stations and
   events pass `mcp/process_cast.py` (events on words, the camera starting at the first station and
   showing every station, everything happening at the station the camera shows, slots never shared,

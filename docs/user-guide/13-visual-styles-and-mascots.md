@@ -24,6 +24,7 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Under the Hood (experimental)** | A dark canvas and close-up photographs of one physical object. Short capital labels point at its parts, gold arcs show fields and flows, numbers tick, and a cartoon presenter reacts in the bottom corner | An OpenAI key. Up to 12 generated photographs per video |
 | **Case File Story (experimental)** | A suspense story in painted pictures that puts the viewer inside a scheme or a money dilemma. One blank-faced character stands in for the viewer, meters change with the plot, cards count the numbers out, and it ends on a choice between two buttons | An OpenAI key. Up to 16 generated pictures per video, and one reference picture |
 | **Mid-century How-To (experimental)** | A 1950s classroom-film cartoon. A gloved presenter walks you through a task in numbered steps, each on its own flat colour, pressing buttons on phones, keypads and other flat objects, with checks, circled numbers and a closing card that lists the steps. No images | Nothing |
+| **Comic Panels (experimental)** | A comic page builds up panel by panel on cream newsprint, with a hero, a villain, speech balloons and sound effects like POW. The camera moves from panel to panel and pulls back to the whole page. No images | Nothing |
 | **Process Cast (experimental)** | Little drawn characters with faces, such as a packet, a cell or a byte made of cubes, act out an invisible process at stations along one ground line. They carry task cards, split and join up, and the camera glides between stations. No images | Nothing |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
 | **Whiteboard** | One big white board. A floating marker writes and draws each step just after the narrator says it, and the camera glides between parts of the board. It ends on the whole board, each part numbered. No people and no images | Nothing |
@@ -73,6 +74,14 @@ background would flash, and a viewer reads that as a broken render.
   opens on why the task matters, then numbers each step aloud and names what to tap, type or turn
   on. It suits a procedure better than a list of separate tips, how something works inside, or a
   story. It is experimental.
+- Choose **Comic Panels** for a fight or a showdown told round by round: a defender against an
+  invader, such as your password against a guessing attack or an antibiotic against a superbug, an
+  arms race where each side answers the other's move, or a short punchy story with an invented hero
+  and villain. The script sets the scene in a line, gives each round one move and one answer, and
+  writes a few short lines for the characters to say, which the video shows as balloons and the
+  narrator never reads out. A process with no fight in it suits Process Cast better, and a process
+  acted out by people in roles suits Stick Explainer. The characters are invented and never look
+  like a real person. It is experimental.
 - Choose **Process Cast** for an invisible process whose actors are things: bits adding up to a
   byte, cells and organs at work, the layers of a system met one by one, a build passing through
   named stages. The script names each part once and keeps calling it by that name, because each part
@@ -93,7 +102,7 @@ the script is written for the style: a Whiteboard script works an idea out one s
 for example. It reads what each style is made for and avoids, compares that with the topic, and
 picks the style that clearly fits. It considers every style this install can make: Illustrated only
 while an OpenAI key is stored, Under the Hood and Case File Story only while an OpenAI key is stored
-and the video has no mascot, Mid-century How-To and Process Cast only while the video has no mascot,
+and the video has no mascot, Mid-century How-To, Comic Panels and Process Cast only while the video has no mascot,
 Cartoon 3D only while a GPU is working and the video has no mascot.
 It may pick a style that generates images, which costs more per video. It does not pick a style for
 variety: the same kind of topic gets the same style every time.
@@ -151,6 +160,12 @@ presenter's outfit and the objects, and times every gesture, press and check to 
 presenter is the same character in every video, and he never moves his mouth to the words, because
 the narrator is off screen. When the library has no object the video needs, such as a smoke alarm,
 the agent draws one in the same style and checks the drawing before the video renders.
+
+A Comic Panels video works the same way: the agent casts a hero, a villain and any invented people,
+lays the story out as one to three comic pages of three or four panels, and times every panel, character,
+balloon, sound effect and camera punch to the narration. The narrator stays off screen, so a balloon
+is always a line a character says and never the narration read twice. When the library has no prop the
+video needs, the agent draws one in the same style and checks the drawing before the video renders.
 
 A Process Cast video works the same way: the agent casts each part of the process as a character,
 picks its body, colour and name, sets up the stations, and times every entrance, hop, card, copy and
@@ -235,9 +250,9 @@ surprised, has an idea, hops, glances at something. It does not narrate and does
 
 Mascots are experimental and off by default. A video has one only if you pick it. They are drawn on
 the GPU, so you can pick a mascot only while a renderer's GPU test has passed. Cartoon 3D, Under
-the Hood, Case File Story, Mid-century How-To and Process Cast videos cannot have one: Under the Hood
-and Mid-century How-To have their own presenter, Case File Story its own lead character, and Process
-Cast a whole cast of drawn characters that a mascot would be confused with.
+the Hood, Case File Story, Mid-century How-To, Comic Panels and Process Cast videos cannot have one: Under the Hood
+and Mid-century How-To have their own presenter, Case File Story its own lead character, and Comic
+Panels and Process Cast a whole cast of drawn characters that a mascot would be confused with.
 
 ![The Mascots page under Profiles: a form for a new mascot, and the built-in mascot Tubi marked READY](../images/mascots.png)
 

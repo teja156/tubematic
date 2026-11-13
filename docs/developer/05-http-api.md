@@ -467,7 +467,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 | `409` | `agent_id`, `agent_model` or `agent_effort` sent while the video is not at a human checkpoint |
 | `409` | `angle` and `angle_kind` sent while the video is past `TOPIC_PROPOSED` |
 | `409` | `voice_speed` sent while the video is not at `SCRIPT_READY` |
-| `409` | An approving `PATCH` while the video's mascot is archived, or while a Cartoon 3D, Under the Hood, Case File Story, Mid-century How-To or Process Cast video keeps a mascot |
+| `409` | An approving `PATCH` while the video's mascot is archived, or while a Cartoon 3D, Under the Hood, Case File Story, Mid-century How-To, Comic Panels or Process Cast video keeps a mascot |
 | `409` | `{"error": "Status precondition failed", "current", "expected"}` |
 | `409` | `{"error", "voice_conflict": true}`: the voice's model cannot speak the stored script, or, on approval to `VOICING`, a segment's own voice cannot speak that segment |
 | `409` | A model was written alone and the video's agent changed while the request was in flight |
@@ -511,7 +511,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 - `insert_mode` must be `auto` or `none` (the video's Inserts setting). `null` is refused.
 - `mascot_id` must be a string. A changed value must be a pickable mascot, needs a GPU `status` of
   `working`, and is refused on a video whose style takes no mascot (`cartoon_3d`, `under_the_hood`,
-  `case_file_story`, `midcentury_howto`, `process_cast`). `""` clears the mascot.
+  `case_file_story`, `midcentury_howto`, `comic_panels`, `process_cast`). `""` clears the mascot.
 - `angle` and `angle_kind` are sent together, both strings. `angle` is at most 300 characters and
   `angle_kind` is a kind from [`GET /angle-kinds`](#get-angle-kinds). `""` for both removes the
   angle. A changed sentence or kind sets `angle_score` to 0 in the same `UPDATE`, because the score
@@ -542,7 +542,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 - A `status` of `VOICING` from `SCRIPT_READY` checks every segment against the voice that speaks it,
   with or without `voice_id` in the body, and answers `409` with `voice_conflict` when one cannot.
 - A `mascot_id` is checked only when it changes, so a client that echoes the stored value is not
-  refused for a GPU that has gone since. A switch to `cartoon_3d`, `under_the_hood`, `case_file_story`, `midcentury_howto` or `process_cast` clears the mascot in the same
+  refused for a GPU that has gone since. A switch to `cartoon_3d`, `under_the_hood`, `case_file_story`, `midcentury_howto`, `comic_panels` or `process_cast` clears the mascot in the same
   `UPDATE`, and a changed mascot resets `mascot_version` to 0.
 - The approving `PATCH` (`TOPIC_PROPOSED` to `TOPIC_APPROVED`) is `409` when the video's mascot has
   been archived, or when the video is Cartoon 3D (by its style or by `resolved_renderer`) and keeps

@@ -619,6 +619,9 @@ are part of the invented situation.
 `midcentury_howto` has no photographs either: a named product, app or setting there is a flat
 object with its name on its screen or label, exactly as the real menu names it, and the presenter is
 the only person in it.
+`comic_panels` has none either: its people are invented comic characters (a hero, a villain and
+anyone else as a person), never a real, named one, and a line a character says is a short balloon in
+the `visual` brief, never the narration itself.
 `process_cast` has none either, and no people: the parts of the process are its characters, each
 named once in the narration the way its tag reads, and a place is a station named as its sign reads.
 A segment marked as an insert has no photographs either, and neither has a legacy whole

@@ -1,0 +1,450 @@
+{
+  "_about": "Shared by renderer/remotion/src/scenes/installed/comicPanels/comicPanels.test.ts and mcp/tests/test_comic_panels.py: the constants both sides use, and cases worked out by the renderer's own contract.ts and stage.ts. Written by renderer/remotion/character-tools/sync-contract.mjs; never edit it by hand.",
+  "constants": {
+    "LIMITS": {
+      "maxPages": 3,
+      "maxCast": 4,
+      "maxItemsPerPanel": 8,
+      "titleChars": 28,
+      "balloonChars": 40,
+      "captionChars": 40,
+      "sfxChars": 10,
+      "maxStillSeconds": 3,
+      "minPanelSeconds": 1.5,
+      "echoWords": 5
+    },
+    "TIMING": {
+      "inkIn": 18,
+      "read": 18,
+      "pop": 10,
+      "minItemGap": 4,
+      "hit": 8,
+      "pullBack": 20,
+      "endMargin": 6
+    },
+    "PAGE": {
+      "w": 1000,
+      "h": 1700,
+      "titleH": 120,
+      "gutter": 20,
+      "margin": 24,
+      "x": 40,
+      "y": 120,
+      "scale": 1
+    },
+    "LAYOUTS": {
+      "stack3": [
+        [
+          24,
+          140,
+          952,
+          500
+        ],
+        [
+          24,
+          660,
+          952,
+          500
+        ],
+        [
+          24,
+          1180,
+          952,
+          496
+        ]
+      ],
+      "stack4": [
+        [
+          24,
+          140,
+          952,
+          370
+        ],
+        [
+          24,
+          530,
+          952,
+          370
+        ],
+        [
+          24,
+          920,
+          952,
+          370
+        ],
+        [
+          24,
+          1310,
+          952,
+          366
+        ]
+      ],
+      "2+1": [
+        [
+          24,
+          140,
+          466,
+          760
+        ],
+        [
+          510,
+          140,
+          466,
+          760
+        ],
+        [
+          24,
+          920,
+          952,
+          756
+        ]
+      ],
+      "1+2": [
+        [
+          24,
+          140,
+          952,
+          760
+        ],
+        [
+          24,
+          920,
+          466,
+          756
+        ],
+        [
+          510,
+          920,
+          466,
+          756
+        ]
+      ],
+      "2+2": [
+        [
+          24,
+          140,
+          466,
+          760
+        ],
+        [
+          510,
+          140,
+          466,
+          760
+        ],
+        [
+          24,
+          920,
+          466,
+          756
+        ],
+        [
+          510,
+          920,
+          466,
+          756
+        ]
+      ]
+    },
+    "TONES": [
+      "cream",
+      "pink",
+      "blue",
+      "yellow",
+      "green",
+      "dark"
+    ],
+    "CAST_KINDS": [
+      "hero",
+      "person",
+      "villain"
+    ],
+    "HAIRS": [
+      "spiky",
+      "bob",
+      "bun",
+      "short",
+      "bald",
+      "curly"
+    ],
+    "OUTFITS": [
+      "blue",
+      "red",
+      "green",
+      "yellow",
+      "purple",
+      "grey"
+    ],
+    "SKINS": [
+      "light",
+      "tan",
+      "brown",
+      "dark"
+    ],
+    "POSES": [
+      "stand",
+      "point",
+      "panic",
+      "cheer",
+      "think",
+      "type",
+      "shrug",
+      "facepalm"
+    ],
+    "FACES": [
+      "neutral",
+      "happy",
+      "shocked",
+      "worried",
+      "angry",
+      "smug",
+      "sad",
+      "grin"
+    ],
+    "BALLOONS": [
+      "speech",
+      "thought",
+      "shout"
+    ],
+    "LINES": [
+      "speed",
+      "focus"
+    ],
+    "ITEM_TYPES": [
+      "actor",
+      "prop",
+      "balloon",
+      "caption",
+      "sfx",
+      "lines",
+      "hit"
+    ],
+    "PROPS": {
+      "phone": {
+        "w": 150,
+        "h": 260,
+        "text": 24
+      },
+      "laptop": {
+        "w": 300,
+        "h": 220,
+        "text": 24
+      },
+      "inbox": {
+        "w": 420,
+        "h": 220,
+        "text": 30
+      },
+      "login": {
+        "w": 340,
+        "h": 260,
+        "text": 20
+      },
+      "browser": {
+        "w": 420,
+        "h": 120,
+        "text": 24
+      },
+      "monitor": {
+        "w": 320,
+        "h": 260,
+        "text": 24
+      },
+      "server": {
+        "w": 160,
+        "h": 260,
+        "text": 0
+      },
+      "lock": {
+        "w": 120,
+        "h": 160,
+        "text": 0
+      },
+      "key": {
+        "w": 170,
+        "h": 90,
+        "text": 0
+      },
+      "shield": {
+        "w": 150,
+        "h": 180,
+        "text": 0
+      },
+      "bug": {
+        "w": 160,
+        "h": 150,
+        "text": 0
+      },
+      "virus": {
+        "w": 160,
+        "h": 160,
+        "text": 0
+      },
+      "cell": {
+        "w": 180,
+        "h": 180,
+        "text": 0
+      },
+      "bomb": {
+        "w": 160,
+        "h": 170,
+        "text": 0
+      },
+      "money": {
+        "w": 200,
+        "h": 120,
+        "text": 8
+      },
+      "document": {
+        "w": 160,
+        "h": 210,
+        "text": 20
+      },
+      "envelope": {
+        "w": 200,
+        "h": 140,
+        "text": 16
+      },
+      "rocket": {
+        "w": 140,
+        "h": 260,
+        "text": 0
+      },
+      "planet": {
+        "w": 220,
+        "h": 220,
+        "text": 0
+      },
+      "clock": {
+        "w": 150,
+        "h": 160,
+        "text": 0
+      },
+      "sign": {
+        "w": 260,
+        "h": 160,
+        "text": 16
+      },
+      "door": {
+        "w": 180,
+        "h": 300,
+        "text": 0
+      }
+    },
+    "SCALE": {
+      "min": 0.5,
+      "max": 1.6
+    },
+    "CUSTOM": {
+      "maxProps": 8,
+      "minSide": 60,
+      "maxSide": 500,
+      "maxText": 24,
+      "maxActs": 0
+    },
+    "ACTOR": {
+      "w": 260,
+      "h": 300
+    }
+  },
+  "item_box": [
+    {
+      "layout": "2+2",
+      "panel": 0,
+      "x": 0.5,
+      "y": 0.6,
+      "w": 260,
+      "h": 300,
+      "scale": 1,
+      "box": [
+        127,
+        446,
+        387,
+        746
+      ]
+    },
+    {
+      "layout": "stack3",
+      "panel": 2,
+      "x": 0.2,
+      "y": 0.3,
+      "w": 150,
+      "h": 260,
+      "scale": 0.8,
+      "box": [
+        154.4,
+        1224.8,
+        274.4,
+        1432.8
+      ]
+    },
+    {
+      "layout": "1+2",
+      "panel": 1,
+      "x": 0.9,
+      "y": 0.1,
+      "w": 420,
+      "h": 220,
+      "scale": 1.4,
+      "box": [
+        149.40000000000003,
+        841.6,
+        737.4000000000001,
+        1149.6
+      ]
+    }
+  ],
+  "balloon_size": [
+    {
+      "text": "Hi",
+      "size": {
+        "w": 140,
+        "h": 106
+      }
+    },
+    {
+      "text": "This is your bank!",
+      "size": {
+        "w": 390,
+        "h": 152
+      }
+    },
+    {
+      "text": "A bank never asks for that",
+      "size": {
+        "w": 390,
+        "h": 152
+      }
+    },
+    {
+      "text": "Read me the code we just sent you now!!",
+      "size": {
+        "w": 390,
+        "h": 198
+      }
+    }
+  ],
+  "sfx_size": [
+    {
+      "text": "POW",
+      "size": {
+        "w": 196,
+        "h": 110
+      }
+    },
+    {
+      "text": "RING!",
+      "size": {
+        "w": 300,
+        "h": 110
+      }
+    },
+    {
+      "text": "KA-BOOOOOM",
+      "size": {
+        "w": 560,
+        "h": 110
+      }
+    }
+  ]
+}

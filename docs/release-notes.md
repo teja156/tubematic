@@ -81,6 +81,16 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   characters and a mascot would be confused with them.
   [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
   details.
+- A new experimental style, **Comic Panels**: the topic is told as a comic. A page of cream newsprint
+  holds three or four panels that ink in one by one, with a hero, a villain and invented people, speech,
+  thought and shout balloons, sound effects such as POW and CLANG, and speed lines, while the camera
+  moves from panel to panel, punches in on a hit and pulls back to show the whole page at the end. It
+  suits a fight told round by round, such as a password against a guessing attack or an antibiotic
+  against a superbug, an arms race, or a short punchy story of an invented hero and villain, and Auto
+  can pick it. It needs no API key and no GPU, generates no images, and takes no mascot, because its
+  whole cast is drawn characters and a mascot would be confused with them.
+  [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
+  details.
 
 ### Changed
 

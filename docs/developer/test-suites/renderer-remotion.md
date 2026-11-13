@@ -8,7 +8,8 @@ The suite covers the pure TypeScript helpers of the Remotion project's
 [`TerminalDoc`](../09-remotion-project.md#terminaldoc),
 [`UnderTheHood`](../09-remotion-project.md#underthehood),
 [`CaseFileStory`](../09-remotion-project.md#casefilestory),
-[`MidcenturyHowTo`](../09-remotion-project.md#midcenturyhowto) and
+[`MidcenturyHowTo`](../09-remotion-project.md#midcenturyhowto),
+[`ComicPanels`](../09-remotion-project.md#comicpanels) and
 [`ProcessCast`](../09-remotion-project.md#processcast) scenes. Each test file sits beside the code
 it covers as `*.test.ts`. The tests run under Node 22 with no browser, canvas or render, because the
 math and geometry classes of `three` work in Node without a DOM.
@@ -159,6 +160,25 @@ Covers `contract.ts`, `stage.ts`, the presenter's arm and the object library
 - A press lands on the row its act lights and uses the presenter's own hand within reach and the
   hose arm from the edge out of it; the hand pulls back before the press, holds, then returns. Each
   shot starts empty.
+
+## Comic Panels
+
+### `src/scenes/installed/comicPanels/comicPanels.test.ts`
+
+Covers `contract.ts`, `stage.ts` and the library
+([Comic Panels](../10-scene-authoring.md#comic-panels)).
+
+- The constants and the box helpers (balloon and sound-effect sizes, a character's box) agree with
+  the shared cases `mcp/tests/test_comic_panels.py` runs.
+- Running `character-tools/sync-contract.mjs` leaves the fixture and the style pack unchanged, so a
+  catalogue or limit changed without the sync fails here.
+- Every layout's panels lie on the page under the title bar, and the library draws every prop the
+  contract lists.
+- The stage opens on page 1, panel 1, framed and inked at frame 0. The camera glides to the next
+  panel over `TIMING.read` frames and then holds still (the two top panels of a page share one
+  framing with the title bar), pulls back to the whole page at the splash,
+  and punches in and shakes on a hit before it settles. An item pops in and lands on 1, so a
+  held picture never repaints, and a panel or item that starts at frame 0 is drawn finished.
 
 ## Process Cast
 

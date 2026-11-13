@@ -1635,6 +1635,81 @@
       "future": "",
       "note": "Pair probe with Process Cast: the actors are people and roles (an attacker and a user), which is Stick Explainer's.",
       "inserts_expect": "any"
+    },
+    {
+      "title": "Antibiotics vs superbugs: the arms race",
+      "brief": "Round one, a new antibiotic knocks the bacteria out. A few survivors carry a gene that resists it; they multiply, and the next drug has to hit harder. Who is winning now, and what keeps the drugs working.",
+      "expect": [
+        "comic_panels"
+      ],
+      "ok": [
+        "stick",
+        "process_cast",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Two sides fighting round by round, a move and an answer: Comic Panels.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "Your password vs a guessing attack",
+      "brief": "Round one, the attacker tries the hundred most common passwords. Round two, a whole dictionary. Round three, every combination. How each extra character holds the attack off for years longer.",
+      "expect": [
+        "comic_panels"
+      ],
+      "ok": [
+        "whiteboard",
+        "stick",
+        "bean_explainer",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A defender against an invader, told as a showdown. Whiteboard is acceptable for the arithmetic of the guesses.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "Spam filter vs spammer: the endless fight",
+      "brief": "Spammers misspell words, hide text in pictures and rent fresh addresses; each time, the filter learns the trick and blocks it, and the spammer comes back with a new one.",
+      "expect": [
+        "comic_panels"
+      ],
+      "ok": [
+        "stick",
+        "bean_explainer",
+        "scenes"
+      ],
+      "future": "",
+      "note": "An arms race told move by move between a hero and a villain.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "Captain Patch and the zero-day villain",
+      "brief": "A short comic about Captain Patch, an invented hero who guards a city's computers, and the villain who slips in through a hole nobody knew about, until Patch closes it.",
+      "expect": [
+        "comic_panels"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Comic Panels vs Illustrated: an invented hero, but a villain and a fight, told in balloons and sound effects.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How a firewall decides what gets in",
+      "brief": "Every packet that reaches your network is checked against a list of rules: where it comes from, which port it wants, and whether it belongs to a connection you started.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "process_cast",
+        "comic_panels",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe with Comic Panels: a defender, but no fight told round by round; a mechanism walked through by roles, which is Stick Explainer's.",
+      "inserts_expect": "any"
     }
   ]
 }

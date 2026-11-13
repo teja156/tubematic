@@ -36,7 +36,8 @@ your own judgment.
     of one object with labels pinned to its parts, written as data; it needs an OpenAI key),
     `case_file_story` (a second-person suspense story in painted stills with meters and number
     cards, written as data; it needs an OpenAI key), `midcentury_howto` (a 1950s classroom-film
-    presenter walking through numbered steps, written as data), `process_cast` (a cast of drawn parts
+    presenter walking through numbered steps, written as data), `comic_panels` (comic pages read panel
+    by panel, with a hero, a villain, balloons and sound effects, written as data), `process_cast` (a cast of drawn parts
     with faces acting out a process station by station, written as data) or
     `cartoon_3d` (a 3D world; it needs a working GPU). There is no dashboard here, so this chat is the
     only place that choice can be made, and it is frozen the moment the topic is approved.

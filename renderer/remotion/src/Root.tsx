@@ -8,6 +8,7 @@ import { BeanPropSheet, SHEET_PAGES } from "./scenes/installed/beanExplainer/Bea
 import { StorybookSheet, SHEET_PAGES as STORYBOOK_SHEET_PAGES } from "./scenes/installed/storybookAtlas/StorybookSheet";
 import { MidcenturySheet, SHEET_PAGES as MIDCENTURY_SHEET_PAGES } from "./scenes/installed/midcenturyHowTo/MidcenturySheet";
 import { ProcessCastSheet, SHEET_PAGES as PROCESS_CAST_SHEET_PAGES } from "./scenes/installed/processCast/ProcessCastSheet";
+import { ComicPanelsSheet, SHEET_PAGES as COMIC_PANELS_SHEET_PAGES } from "./scenes/installed/comicPanels/ComicPanelsSheet";
 import { PresenterSheet } from "./scenes/installed/underTheHood/PresenterSheet";
 
 // Text-layout audit composition (VQA-9). Renders exactly what "Composition"
@@ -153,6 +154,19 @@ export const RemotionRoot: React.FC = () => {
         id="ProcessCastSheet"
         component={ProcessCastSheet}
         durationInFrames={PROCESS_CAST_SHEET_PAGES}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{}}
+      />
+
+      {/* The Comic Panels model sheet: one page per frame (the cast, poses and
+          faces, then the props), for a person to approve the style's cast and
+          kit. No video uses it. */}
+      <Composition
+        id="ComicPanelsSheet"
+        component={ComicPanelsSheet}
+        durationInFrames={COMIC_PANELS_SHEET_PAGES}
         fps={30}
         width={1080}
         height={1920}

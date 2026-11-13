@@ -1,10 +1,11 @@
 """The code-drawn character styles, in pack order. The MCP server, the picture
 checks and the text-layout audit loop over this list, so a new style of this
 kind is one module here (character_kit says what each module exposes)."""
+import comic_panels
 import midcentury_howto
 import process_cast
 
-STYLES = (midcentury_howto, process_cast)
+STYLES = (midcentury_howto, comic_panels, process_cast)
 BY_ID = {m.STYLE_ID: m for m in STYLES}
 
 

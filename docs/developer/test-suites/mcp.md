@@ -845,6 +845,38 @@ Trap: a drawing is rasterised once per look outside the render's React tree, so 
 agent's prop would read no frame and no state. The hook rule is the one source rule the character
 styles add to Bean Explainer's.
 
+### `test_comic_panels.py`
+
+Covers `mcp/comic_panels.py`, the checks `write_scene_config` runs on a Comic Panels config,
+`render_style_props` for this style, the picture checks and the text audit's per-panel sampling
+([Comic Panels](../10-scene-authoring.md#comic-panels)).
+
+- The limits, timings, layouts and catalogues equal the renderer's, read from
+  `fixtures/comic_panels_contract.json`, and the pack's `extra` lists the same catalogues. Both sides
+  answer the fixture's worked cases (balloon and sound-effect boxes). After a change to
+  `contract.ts`, `stage.ts` or the library, `node character-tools/sync-contract.mjs` (from
+  `renderer/remotion`) rewrites the fixture and the pack's `extra`; never edit them by hand.
+- The style is registered in `character_styles.BY_ID` and takes no mascot.
+- The skill's worked example passes. Each refusal names its page, panel or item and the cause: a
+  page or panel out of order or off a word, a layout with the wrong number of panels, a panel read
+  for too short a time, too many items, items out of frame order or too close together, an unknown
+  pose, face, tone, hair, outfit or balloon kind, a character, prop, balloon or sound effect past its
+  panel's edge, text over its limit, a balloon pointing at nothing in its panel, a balloon or caption
+  box repeating the narration, two hits within 8 frames anywhere on a page, a panel with no character or prop, and a
+  still stretch. A value of the wrong type gets a sentence back and raises nothing.
+- Balloons and sound effects in one panel may not cover each other, because they are the panel's
+  words and one hidden behind another cannot be read.
+- A character may be cut off at the bottom of its panel and no other edge, because panels frame
+  people from the waist up.
+- An item, a panel or a page starting inside an insert window is refused.
+- The skill's example prop passes the source rules; a hook, an SVG pattern and an import of another
+  style's file are refused.
+- `write_scene_config` writes a sound config with the style's captions and refuses a broken one by
+  the style's name. `render_style_props` returns the picture for this style (the renderer stubbed),
+  and the preview script's `STYLES` table names this style's preview component.
+- The picture checks find the style and warn when page 1, panel 1 has no character or prop by frame
+  3, and the text audit samples each panel after the camera has arrived and the panel has inked in.
+
 ### `test_process_cast.py`
 
 Covers `mcp/process_cast.py`, the checks `write_scene_config` runs on a Process Cast config,

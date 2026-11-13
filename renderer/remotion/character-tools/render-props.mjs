@@ -41,6 +41,7 @@ const ID = /^[a-z0-9_]{1,24}$/;
 const STYLES = {
   midcentury_howto: { module: "midcenturyHowTo/MidcenturySheet", component: "MidcenturyPropPreview" },
   process_cast: { module: "processCast/ProcessCastSheet", component: "ProcessCastPropPreview" },
+  comic_panels: { module: "comicPanels/ComicPanelsSheet", component: "ComicPanelsPropPreview" },
 };
 
 const die = (message, code = 1) => {

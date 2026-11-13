@@ -160,7 +160,7 @@ def test_under_the_hood():
     assert tvs.effective_canvas("under_the_hood", "light") == "dark"
     # its own presenter stands where a mascot would: no mascot, like Cartoon 3D
     assert p["mascot"] is False and "presenter" in p["messages"]["mascot"]
-    assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood", "case_file_story", "midcentury_howto", "process_cast"}
+    assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood", "case_file_story", "midcentury_howto", "comic_panels", "process_cast"}
     rows = {r["id"]: r for r in tvs.public_list(openai_key_set=True, gpu_status="working")}
     assert rows["under_the_hood"]["mascot"] is False and rows["cartoon_3d"]["mascot"] is False
     assert rows["auto"]["mascot"] is True and rows["stick"]["mascot"] is True
@@ -502,3 +502,23 @@ def test_process_cast():
     # Stick Explainer keeps processes acted out by people and requests walked through a system (user, 2026-11-12)
     assert any("Stick Explainer fits it" in a and "people or roles" in a for a in p["routing"]["avoid_for"])
 
+
+
+def test_comic_panels():
+    p = tvs.pack("comic_panels")
+    assert p["renderer"] == "dom" and p["canvas"] == "light" and p["dimension"] == "2d"
+    assert p["authoring_skill"] == "tubematic-comic-panels"
+    assert p["experimental"] is True and p["order"] == 170 and p["role"] == "main"
+    assert p["inserts"] == {"host": True, "transition": "push"}
+    assert tvs.figures_allowed("comic_panels") is True
+    assert tvs.line_art_allowed("comic_panels") is False and tvs.characters_allowed("comic_panels") is False
+    assert tvs.needs_openai_key("comic_panels") is False and tvs.needs_gpu("comic_panels") is False
+    assert p["routing"]["images"] == 0 and p["captions"]["background"] == "label"
+    # its own comic cast; a mascot would be one character too many (user, 2026-11-12)
+    assert p["mascot"] is False and "cast" in p["messages"]["mascot"]
+    # the routing hands non-fights to Process Cast, roles to Stick, scams to Case File, calm stories to Illustrated
+    avoid = " ".join(p["routing"]["avoid_for"])
+    for neighbour in ("Process Cast", "Stick Explainer", "Case File Story", "Illustrated", "Bean Explainer"):
+        assert f"({neighbour} fits it)" in avoid, neighbour
+    # a balloon is a character's line, never the narration read twice
+    assert "never reads a balloon aloud" in p["script"]

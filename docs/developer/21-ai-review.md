@@ -97,7 +97,7 @@ The style flags come from `pipeline.py::effective_canvas`, `figures_allowed` and
 A [style pack](10-scene-authoring.md#style-packs) may carry its own `review` text, which
 `render_results.py` passes as `style_block`. When it is present it replaces the canvas and figure
 blocks, which describe the scene system's styles. System Flow, Bean Explainer, Whiteboard,
-Storybook Atlas, Terminal Doc, Under the Hood, Case File Story, Mid-century How-To and Process Cast carry
+Storybook Atlas, Terminal Doc, Under the Hood, Case File Story, Mid-century How-To, Comic Panels and Process Cast carry
 one.
 
 A video with [insert scenes](10-scene-authoring.md#main-styles-and-inserts) also gets an
@@ -132,6 +132,7 @@ paid re-voice. Each clause below prevents one. Keep them.
 | Under the Hood (from its pack) | Word-by-word captions, a pushing close-up photograph, labels on leader lines, gold arcs, ticking counters and a presenter without lip sync are the style. It still lists what to report, a label on the wrong part first | The labels and the presenter read as clutter or broken animation |
 | Case File Story (from its pack) | Painted stills that push and punch in, a lead with no nose or mouth, the meter row, the cards, the stamp and the choice buttons are the style, and none is redundant text. It lists what to report, a changed lead first | The cards and buttons read as duplicated narration and the lead's blank face as an unfinished drawing |
 | Mid-century How-To (from its pack) | Flat step colours, fills printed off the ink line with a jitter, a presenter who never moves his mouth, gloved presses, rubber-hose arms and the summary card are the style. It still lists what to report, a wrong object first | The jitter reads as a rendering fault and the still mouth as missing lip sync |
+| Comic Panels (from its pack) | Newsprint pages, thick panel borders, halftone dots, waist-up characters, balloons, sound effects, a camera moving between panels and a blank panel not yet read are the style. It still lists what to report, a balloon pointing at the wrong character first | The blank unread panels read as missing content and the halftone and heavy ink as a rendering fault |
 | Process Cast (from its pack) | Wobbly ink, pencil hatching, faces that never talk, stub arms, monospace tags and cards, clones that flash as silhouettes and a camera gliding between stations are the style. It still lists what to report, a mismatched character, card or prop first | The still mouths read as missing lip sync, and the flat silhouettes of new clones as a rendering fault |
 | Insert scenes (each insert pack's `insert.review`) | Between the given times the video cuts to a short scene in another style. The change of look in and out, the captions staying over it and the insert style's own look are intended. It still lists what to report inside it | Every video with an insert is reported for switching style mid-video |
 | Two scripts | Where the written and spoken forms differ, audio matching the spoken form is correct. An IPA transcription between slashes is spoken as the sounds it spells | Every working respelling or IPA term is reported as a mispronunciation |
