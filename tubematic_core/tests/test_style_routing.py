@@ -85,7 +85,9 @@ def test_each_candidate_carries_its_routing_block_and_cost():
                              "case_file_story": tvs.MASCOT_EXCLUDED, "paper_diorama": tvs.MASCOT_EXCLUDED,
                              "archive_engraving": tvs.MASCOT_EXCLUDED,
                              "editorial_collage": tvs.MASCOT_EXCLUDED,
-                             "storybook_reveal": tvs.MASCOT_EXCLUDED}),
+                             "storybook_reveal": tvs.MASCOT_EXCLUDED, "midcentury_howto": tvs.MASCOT_EXCLUDED,
+                             "comic_panels": tvs.MASCOT_EXCLUDED, "process_cast": tvs.MASCOT_EXCLUDED,
+                             "puppet_history": tvs.MASCOT_EXCLUDED}),
 ])
 def test_the_gates_match_what_refuses_the_choice(key, gpu, mascot, unavailable):
     rows = _by_id(openai_key_set=key, gpu_status=gpu, has_mascot=mascot)

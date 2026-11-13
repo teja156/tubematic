@@ -10,8 +10,12 @@ The suite covers the pure TypeScript helpers of the Remotion project's
 [`CaseFileStory`](../09-remotion-project.md#casefilestory),
 [`PaperDiorama`](../09-remotion-project.md#paperdiorama),
 [`ArchiveEngraving`](../09-remotion-project.md#archiveengraving),
-[`EditorialCollage`](../09-remotion-project.md#editorialcollage) and
-[`StorybookReveal`](../09-remotion-project.md#storybookreveal) scenes. Each test file sits beside the code
+[`EditorialCollage`](../09-remotion-project.md#editorialcollage),
+[`StorybookReveal`](../09-remotion-project.md#storybookreveal),
+[`PuppetHistory`](../09-remotion-project.md#puppethistory),
+[`MidcenturyHowTo`](../09-remotion-project.md#midcenturyhowto),
+[`ComicPanels`](../09-remotion-project.md#comicpanels) and
+[`ProcessCast`](../09-remotion-project.md#processcast) scenes. Each test file sits beside the code
 it covers as `*.test.ts`. The tests run under Node 22 with no browser, canvas or render, because the
 math and geometry classes of `three` work in Node without a DOM.
 
@@ -256,6 +260,85 @@ Covers `contract.ts` and `stage.ts` ([Storybook Reveal](../10-scene-authoring.md
   top to bottom with a ragged edge, and the page curl turns the old page away over `TIMING.curl`
   frames from the bottom-right corner.
 - The scene's source holds no SVG filter, gradient or blur, which keeps its render cost low.
+
+## Puppet History
+
+### `src/scenes/installed/puppetHistory/puppetHistory.test.ts`
+
+Covers `contract.ts`, `stage.ts`, the library and the map
+([Puppet History](../10-scene-authoring.md#puppet-history)).
+
+- The constants agree with the shared cases `mcp/tests/test_puppet_history.py` runs, and running
+  `character-tools/sync-contract.mjs` leaves the fixture and the style pack unchanged, so a
+  catalogue or limit changed without the sync fails here.
+- The library draws every costume, set and prop the contract lists, and every set keeps its decor
+  on stage and off the caption band.
+- The stage opens with the first puppet in place at frame 0. A puppet slides in from the nearest
+  edge and stops dead in its slot, a puppet in the right slot faces left, a swapped costume lasts
+  into later beats, and a card line is struck out before the new value is scrawled. Beats change
+  with a hard cut.
+- A sign's centre is pulled in from the frame's edges for a wide sign in a side slot (`signX`, the
+  cases `mcp/tests/test_puppet_history.py` runs).
+- The map knows today's countries by `world-atlas`'s names and fits the focus countries by their
+  largest landmass, so a far territory does not pull the map across an ocean.
+
+## Mid-century How-To
+
+### `src/scenes/installed/midcenturyHowTo/midcenturyHowTo.test.ts`
+
+Covers `contract.ts`, `stage.ts`, the presenter's arm and the object library
+([Mid-century How-To](../10-scene-authoring.md#mid-century-how-to)).
+
+- The constants and the geometry (object, label, inset and presenter boxes, the arm's reach, a
+  screen's lines, the blink) agree with the shared cases `mcp/tests/test_midcentury_howto.py` runs.
+- Running `character-tools/sync-contract.mjs` leaves the fixture and the style pack unchanged, so a
+  catalogue or limit changed without the sync fails here.
+- The library draws every object the contract and the pack list, and each object's acts have
+  distinct names.
+- The `point` and `present` poses aim the glove at the object, and each pose's bitmap box holds its
+  arm and glove.
+- The worked example opens on the title card, walks the steps and ends on the summary, where the
+  presenter stands on the right; a close-up shot has no presenter.
+- A press lands on the row its act lights and uses the presenter's own hand within reach and the
+  hose arm from the edge out of it; the hand pulls back before the press, holds, then returns. Each
+  shot starts empty.
+
+## Comic Panels
+
+### `src/scenes/installed/comicPanels/comicPanels.test.ts`
+
+Covers `contract.ts`, `stage.ts` and the library
+([Comic Panels](../10-scene-authoring.md#comic-panels)).
+
+- The constants and the box helpers (balloon and sound-effect sizes, a character's box) agree with
+  the shared cases `mcp/tests/test_comic_panels.py` runs.
+- Running `character-tools/sync-contract.mjs` leaves the fixture and the style pack unchanged, so a
+  catalogue or limit changed without the sync fails here.
+- Every layout's panels lie on the page under the title bar, and the library draws every prop the
+  contract lists.
+- The stage opens on page 1, panel 1, framed and inked at frame 0. The camera glides to the next
+  panel over `TIMING.read` frames and then holds still (the two top panels of a page share one
+  framing with the title bar), pulls back to the whole page at the splash,
+  and punches in and shakes on a hit before it settles. An item pops in and lands on 1, so a
+  held picture never repaints, and a panel or item that starts at frame 0 is drawn finished.
+
+## Process Cast
+
+### `src/scenes/installed/processCast/processCast.test.ts`
+
+Covers `contract.ts`, `stage.ts` and the library
+([Process Cast](../10-scene-authoring.md#process-cast)).
+
+- The constants and the geometry (body sizes, slot positions and counts, where a prop sits, clone
+  ids, the blink) agree with the shared cases `mcp/tests/test_process_cast.py` runs.
+- Running `character-tools/sync-contract.mjs` leaves the fixture and the style pack unchanged, so a
+  catalogue or limit changed without the sync fails here.
+- The library draws every prop the contract and the pack list, and every kind of furniture.
+- The worked example brings its first character in at frame 0 at the first station with the camera
+  there; a split shows its clones as silhouettes for the first frames and a merge takes them back;
+  a join adds the cubes up and removes the other body; the camera glides to the next station while
+  the character makes the trip; a focus holds until it is cleared and ends when its actor leaves, so
+  the others at the station are not left shrunk.
 
 ## System Flow
 

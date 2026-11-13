@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 57 tools
+## The 58 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -149,6 +149,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`render_bean_props`](#render_bean_props) | Render a Bean Explainer video's own props as a picture |
 | [`render_storybook_props`](#render_storybook_props) | Render a Storybook Atlas video's own props as a picture |
 | [`render_paper_props`](#render_paper_props) | Render a Paper Diorama video's own props as a picture |
+| [`render_style_props`](#render_style_props) | Render a Puppet History, Mid-century How-To, Comic Panels or Process Cast video's own props as a picture |
 | [`preview_terminal_moves`](#preview_terminal_moves) | Render a Terminal Doc video's own moves as a picture |
 | [`write_scene_config`](#write_scene_config) | Validate and write `scene-config.json` |
 | [`get_scene_config`](#get_scene_config) | Read `scene-config.json` |
@@ -427,7 +428,7 @@ Fields writable only at `TOPIC_PROPOSED`:
   mascot in the same update.
 - A new `mascot_id` must exist, be approved and not archived, and some renderer's GPU test must
   have passed (the not-tested case has its own message). `""` clears it, and echoing the stored
-  mascot is not refused. A mascot is refused on a `cartoon_3d`, `under_the_hood`, `case_file_story`, `paper_diorama`, `archive_engraving`, `editorial_collage` or `storybook_reveal` video
+  mascot is not refused. A mascot is refused on a `cartoon_3d`, `under_the_hood`, `case_file_story`, `paper_diorama`, `archive_engraving`, `editorial_collage`, `storybook_reveal`, `puppet_history`, `midcentury_howto`, `comic_panels` or `process_cast` video
   (`visual_styles.py::NO_MASCOT_STYLES`), and a switch to one of those styles clears the stored one.
 - A `visual_style` different from the stored one clears the record of a style `auto` picked
   (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
@@ -786,7 +787,8 @@ frame in software GL. The tool takes the scene-work claim, as it writes into the
 `grid`, it overlays a labelled grid in normalised `[u, v]` coordinates (0 to 1 across and down the
 image), so the agent can read off an anchor point for an overlay. The grid is drawn on a copy in
 memory. `cartoon_still`, `cartoon_read_still`, `render_mascot_sheets`, `render_bean_props`,
-`preview_doodles`, `render_storybook_props`, `render_paper_props` and `preview_terminal_moves` also return pictures.
+`preview_doodles`, `render_storybook_props`, `render_paper_props`, `render_style_props` and `preview_terminal_moves` also
+return pictures.
 
 ### `preview_doodles`
 
@@ -886,6 +888,21 @@ paints it, with the same rough edge, grain and shadow ([Paper Diorama](10-scene-
 It runs the same way as `render_bean_props`: `bean_preview.py::render_preview` with `script=PAPER_SCRIPT`
 runs `renderer/remotion/paper-tools/render-props.mjs` on the `PaperPropSheet` composition, on
 software GL, under the same `_heavy_checks_lock` and timeouts.
+
+### `render_style_props`
+
+`render_style_props(video_id)` renders the props the agent drew for a video in a
+[character style](10-scene-authoring.md#character-styles) (the config's `customProps`, so
+`write_scene_config` comes first) and returns the picture after a JSON block naming them. Each prop
+is drawn with its declared box outlined in red and the first text the config gives it, beside a
+library prop for line weight and size: for Puppet History beside a library scroll, for Mid-century How-To at rest and at the end of its first
+act beside a library phone, for Comic Panels beside a library sign, for Process Cast beside a library card. A video in any other style is
+refused. It runs the same way as [`render_bean_props`](#render_bean_props):
+`bean_preview.py::render_preview` with `script=CHARACTER_SCRIPT` runs
+`renderer/remotion/character-tools/render-props.mjs` on software GL, under the same lock and
+timeouts, and a killed preview leaves its folder in `character-tools/.tmp/`. The script draws the
+props on the style's own preview component (`PuppetHistoryPropPreview` for Puppet History, `MidcenturyPropPreview` for Mid-century How-To,
+`ComicPanelsPropPreview` for Comic Panels, `ProcessCastPropPreview` for Process Cast).
 
 ### `preview_terminal_moves`
 
@@ -1000,6 +1017,34 @@ It checks:
   baked with `treat_image`, short titles, a picture that stays on screen long enough to read). No other
   style may use `StorybookReveal`. The style pack's caption settings fill every `subtitles` key the
   config leaves out. The rules are in [Storybook Reveal](10-scene-authoring.md#storybook-reveal).
+- A `puppet_history` video holds the one installed `PuppetHistory` scene, and its cast and beats
+  pass `mcp/puppet_history.py` (beats and events on words, each beat's puppets entering in it, one
+  puppet a slot, the countries a map names, text within its limits, a card that does not repeat the
+  narration, the video's own props and their files, no still stretch over 3 seconds). No other style
+  may use `PuppetHistory`. The style pack's caption settings fill every `subtitles` key the config
+  leaves out. The rules are in [Puppet History](10-scene-authoring.md#puppet-history).
+- A `midcentury_howto` video holds the one installed `MidcenturyHowTo` scene, and its title, steps
+  and shots pass `mcp/midcentury_howto.py` (steps and shots on word starts, poses and presses on
+  words, the object library and the video's own props and their files, objects, labels and insets
+  inside the stage and clear of the presenter and of each other, labels that do not repeat the
+  narration, no still stretch over 3 seconds). No other style may use `MidcenturyHowTo`. The style
+  pack's caption settings fill every `subtitles` key the config leaves out. The rules are in
+  [Mid-century How-To](10-scene-authoring.md#mid-century-how-to).
+- A `comic_panels` video holds the one installed `ComicPanels` scene, and its cast, pages and panels
+  pass `mcp/comic_panels.py` (panels and items starting on words, panels read for at least 1.5
+  seconds, the prop library and the video's own props and their files, characters, props, balloons
+  and sound effects inside their panel, balloons and sound effects clear of each other, balloons
+  pointing at someone in the panel, balloons and caption boxes that do not repeat the narration, no
+  still stretch over 3 seconds). No other style may use `ComicPanels`. The style pack's caption
+  settings fill every `subtitles` key the config leaves out. The rules are in
+  [Comic Panels](10-scene-authoring.md#comic-panels).
+- A `process_cast` video holds the one installed `ProcessCast` scene, and its cast, stations and
+  events pass `mcp/process_cast.py` (events on words, the camera starting at the first station and
+  showing every station, everything happening at the station the camera shows, slots never shared,
+  bodies clear of each other and of the furniture, the prop library and the video's own props and
+  their files, no still stretch over 3 seconds). No other style may use `ProcessCast`. The style
+  pack's caption settings fill every `subtitles` key the config leaves out. The rules are in
+  [Process Cast](10-scene-authoring.md#process-cast).
 - `subtitles.emphasis`, on any style, names word indexes the narration has, at most one word in 5.
   `subtitles.look` is `plain`, `selection`, `fill`, `tags` or `highlight`.
 
@@ -1056,9 +1101,10 @@ video has no formula on record. See
 8. Cartoon 3D readiness, for a config with a Cartoon 3D scene: the video's generated source exists
    and the [beat gate](#cartoon_beat_gate) has passed for the source on disk. An open gate is one
    error naming the tool that closes it. A symlink anywhere in the source tree fails the check.
-9. A Bean Explainer or Storybook Atlas video's own props: each file its `customProps` names exists
-   and still passes the source rules `write_scene_config` applied, since the agent may have redrawn
-   it since (`server.py::_bean_custom_prop_errors`, `server.py::_storybook_custom_prop_errors`).
+9. A Bean Explainer, Storybook Atlas or character-style video's own props: each file its
+   `customProps` names exists and still passes the source rules `write_scene_config` applied, since
+   the agent may have redrawn it since (`server.py::_bean_custom_prop_errors`,
+   `server.py::_storybook_custom_prop_errors`, `server.py::_character_custom_prop_errors`).
 10. A Terminal Doc video's own moves, the same way (`server.py::_td_custom_move_errors`).
 11. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
    `write_scene_config` already checked the cues (see

@@ -15,3 +15,5 @@ storybook-tools/.tmp/
 paper-tools/.tmp/
 # terminal-tools/render-moves.mjs writes a private entry per call here; it removes it when done
 terminal-tools/.tmp/
+# character-tools/render-props.mjs writes a private entry per call here; it removes it when done
+character-tools/.tmp/

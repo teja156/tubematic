@@ -230,7 +230,11 @@ Some styles are different in kind: they do not restrict the scene system, they *
 data; `whiteboard` is one board scene whose regions of writing and doodles are written as data;
 `storybook_atlas` is one picture-book scene whose chapters, people and props are written as
 data, `under_the_hood` is one scene of close-up photographs with labels, arcs and counters pinned to them,
-written as data, and `case_file_story` is one scene of painted stills with meters and number cards,
+written as data, `case_file_story` is one scene of painted stills with meters and number cards,
+written as data, `midcentury_howto` is one scene of numbered steps, a presenter and flat objects,
+written as data, `puppet_history` is one scene of puppets, sets, cards and maps joined by hard cuts,
+written as data, `comic_panels` is one scene of comic pages read panel by panel, written as data,
+and `process_cast` is one scene of drawn parts acting out a process at stations,
 written as data. None of them is this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
 when it is not `tubematic-scene-config`, stop here and invoke that skill.
 
@@ -255,10 +259,14 @@ Read `visual_style` from `get_video`:
 | `terminal_doc` | Dark | Nothing here: a legacy whole video is the one `TerminalDoc` scene, written as data by the tubematic-terminal-doc skill. |
 | `under_the_hood` | Dark | Nothing here: the whole video is the one `UnderTheHood` scene, written as data by the tubematic-under-the-hood skill. |
 | `case_file_story` | Dark | Nothing here: the whole video is the one `CaseFileStory` scene, written as data by the tubematic-case-file-story skill. |
+| `midcentury_howto` | Its own ground colours | Nothing here: the whole video is the one `MidcenturyHowTo` scene, written as data by the tubematic-midcentury-howto skill. |
+| `puppet_history` | Its own sets | Nothing here: the whole video is the one `PuppetHistory` scene, written as data by the tubematic-puppet-history skill. |
+| `comic_panels` | Its own newsprint | Nothing here: the whole video is the one `ComicPanels` scene, written as data by the tubematic-comic-panels skill. |
+| `process_cast` | Its own paper | Nothing here: the whole video is the one `ProcessCast` scene, written as data by the tubematic-process-cast skill. |
 | `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery. This is the **mixed scene system**: the style-routing skill picked it before the script because no single style fit. |
 
 The three named scene styles are restrictions; `cartoon_3d`, `bean_explainer`, `whiteboard`,
-`storybook_atlas`, `under_the_hood` and `case_file_story` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
+`storybook_atlas`, `under_the_hood`, `case_file_story`, `puppet_history`, `midcentury_howto`, `comic_panels` and `process_cast` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
 than the mixed scene system (a style it picked is the video's `visual_style` by now), or when the
 video was scripted before Auto picked styles. It is the absence of a restriction: **you pick the
 register.**

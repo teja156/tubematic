@@ -1,0 +1,266 @@
+{
+ "totalFrames": 794,
+ "fps": 30,
+ "canvas": "light",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "ComicPanels",
+   "startFrame": 0,
+   "durationInFrames": 794,
+   "props": {
+    "comicPanels": {
+     "cast": [
+      {
+       "id": "you",
+       "kind": "hero"
+      },
+      {
+       "id": "caller",
+       "kind": "villain"
+      }
+     ],
+     "pages": [
+      {
+       "start": 0,
+       "layout": "2+2",
+       "title": "The bank call",
+       "panels": [
+        {
+         "start": 0,
+         "tone": "yellow",
+         "items": [
+          {
+           "type": "actor",
+           "frame": 0,
+           "who": "you",
+           "pose": "stand",
+           "face": "happy",
+           "x": 0.42,
+           "y": 0.62
+          },
+          {
+           "type": "prop",
+           "frame": 0,
+           "id": "phone",
+           "prop": "phone",
+           "x": 0.78,
+           "y": 0.6,
+           "scale": 0.8,
+           "text": "UNKNOWN"
+          },
+          {
+           "type": "sfx",
+           "frame": 32,
+           "text": "RING!",
+           "x": 0.6,
+           "y": 0.22
+          },
+          {
+           "type": "caption",
+           "frame": 54,
+           "text": "Dinner time"
+          }
+         ]
+        },
+        {
+         "start": 79,
+         "tone": "dark",
+         "items": [
+          {
+           "type": "actor",
+           "frame": 79,
+           "who": "caller",
+           "pose": "point",
+           "face": "grin",
+           "x": 0.4,
+           "y": 0.66
+          },
+          {
+           "type": "balloon",
+           "frame": 111,
+           "kind": "speech",
+           "text": "This is your bank!",
+           "x": 0.55,
+           "y": 0.2,
+           "to": "caller"
+          },
+          {
+           "type": "lines",
+           "frame": 145,
+           "kind": "focus"
+          }
+         ]
+        },
+        {
+         "start": 206,
+         "tone": "pink",
+         "items": [
+          {
+           "type": "prop",
+           "frame": 206,
+           "prop": "lock",
+           "x": 0.38,
+           "y": 0.45,
+           "scale": 1.4
+          },
+          {
+           "type": "balloon",
+           "frame": 221,
+           "kind": "shout",
+           "text": "Read me the code!",
+           "x": 0.5,
+           "y": 0.8,
+           "to": "lock"
+          },
+          {
+           "type": "prop",
+           "frame": 283,
+           "prop": "phone",
+           "x": 0.8,
+           "y": 0.3,
+           "scale": 0.8,
+           "text": "CODE 4821"
+          }
+         ]
+        },
+        {
+         "start": 305,
+         "tone": "blue",
+         "items": [
+          {
+           "type": "actor",
+           "frame": 305,
+           "who": "you",
+           "pose": "panic",
+           "face": "shocked",
+           "x": 0.5,
+           "y": 0.66
+          },
+          {
+           "type": "lines",
+           "frame": 331,
+           "kind": "speed"
+          },
+          {
+           "type": "hit",
+           "frame": 331
+          },
+          {
+           "type": "sfx",
+           "frame": 331,
+           "text": "THUMP!",
+           "x": 0.5,
+           "y": 0.18
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "start": 355,
+       "layout": "stack3",
+       "title": "Hang up",
+       "panels": [
+        {
+         "start": 355,
+         "tone": "cream",
+         "items": [
+          {
+           "type": "actor",
+           "frame": 355,
+           "who": "you",
+           "pose": "think",
+           "face": "worried",
+           "x": 0.28,
+           "y": 0.62
+          },
+          {
+           "type": "balloon",
+           "frame": 384,
+           "kind": "thought",
+           "text": "A bank never asks for that",
+           "x": 0.68,
+           "y": 0.35,
+           "to": "you"
+          }
+         ]
+        },
+        {
+         "start": 472,
+         "tone": "green",
+         "items": [
+          {
+           "type": "actor",
+           "frame": 472,
+           "who": "you",
+           "pose": "point",
+           "face": "angry",
+           "x": 0.3,
+           "y": 0.62
+          },
+          {
+           "type": "sfx",
+           "frame": 484,
+           "text": "CLICK!",
+           "x": 0.78,
+           "y": 0.2
+          },
+          {
+           "type": "prop",
+           "frame": 512,
+           "prop": "phone",
+           "x": 0.75,
+           "y": 0.62,
+           "scale": 0.7,
+           "text": "MY BANK"
+          },
+          {
+           "type": "balloon",
+           "frame": 534,
+           "kind": "speech",
+           "text": "Is my account OK?",
+           "x": 0.32,
+           "y": 0.18,
+           "to": "you"
+          }
+         ]
+        },
+        {
+         "start": 591,
+         "tone": "yellow",
+         "items": [
+          {
+           "type": "actor",
+           "frame": 591,
+           "who": "you",
+           "pose": "cheer",
+           "face": "happy",
+           "x": 0.35,
+           "y": 0.62
+          },
+          {
+           "type": "prop",
+           "frame": 630,
+           "prop": "shield",
+           "x": 0.72,
+           "y": 0.55,
+           "scale": 1.2
+          },
+          {
+           "type": "caption",
+           "frame": 686,
+           "text": "One call later"
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "splash": 718
+    }
+   }
+  }
+ ]
+}

@@ -1,0 +1,292 @@
+{
+ "totalFrames": 806,
+ "fps": 30,
+ "audioDurationSeconds": 26.87,
+ "words": [
+  {
+   "word": "A",
+   "startFrame": 6,
+   "endFrame": 11
+  },
+  {
+   "word": "computer",
+   "startFrame": 13,
+   "endFrame": 30
+  },
+  {
+   "word": "only",
+   "startFrame": 32,
+   "endFrame": 42
+  },
+  {
+   "word": "knows",
+   "startFrame": 44,
+   "endFrame": 56
+  },
+  {
+   "word": "off",
+   "startFrame": 58,
+   "endFrame": 66
+  },
+  {
+   "word": "and",
+   "startFrame": 68,
+   "endFrame": 76
+  },
+  {
+   "word": "on.",
+   "startFrame": 78,
+   "endFrame": 84
+  },
+  {
+   "word": "One",
+   "startFrame": 96,
+   "endFrame": 104
+  },
+  {
+   "word": "switch",
+   "startFrame": 106,
+   "endFrame": 119
+  },
+  {
+   "word": "like",
+   "startFrame": 121,
+   "endFrame": 131
+  },
+  {
+   "word": "that",
+   "startFrame": 133,
+   "endFrame": 143
+  },
+  {
+   "word": "is",
+   "startFrame": 145,
+   "endFrame": 151
+  },
+  {
+   "word": "a",
+   "startFrame": 153,
+   "endFrame": 158
+  },
+  {
+   "word": "bit.",
+   "startFrame": 160,
+   "endFrame": 168
+  },
+  {
+   "word": "Alone,",
+   "startFrame": 180,
+   "endFrame": 192
+  },
+  {
+   "word": "a",
+   "startFrame": 194,
+   "endFrame": 199
+  },
+  {
+   "word": "bit",
+   "startFrame": 201,
+   "endFrame": 209
+  },
+  {
+   "word": "can't",
+   "startFrame": 211,
+   "endFrame": 223
+  },
+  {
+   "word": "say",
+   "startFrame": 225,
+   "endFrame": 233
+  },
+  {
+   "word": "much.",
+   "startFrame": 235,
+   "endFrame": 245
+  },
+  {
+   "word": "So",
+   "startFrame": 257,
+   "endFrame": 263
+  },
+  {
+   "word": "it",
+   "startFrame": 265,
+   "endFrame": 271
+  },
+  {
+   "word": "splits",
+   "startFrame": 273,
+   "endFrame": 286
+  },
+  {
+   "word": "into",
+   "startFrame": 288,
+   "endFrame": 298
+  },
+  {
+   "word": "helpers.",
+   "startFrame": 300,
+   "endFrame": 315
+  },
+  {
+   "word": "No,",
+   "startFrame": 327,
+   "endFrame": 333
+  },
+  {
+   "word": "wait.",
+   "startFrame": 335,
+   "endFrame": 345
+  },
+  {
+   "word": "Bits",
+   "startFrame": 347,
+   "endFrame": 357
+  },
+  {
+   "word": "add",
+   "startFrame": 359,
+   "endFrame": 367
+  },
+  {
+   "word": "up",
+   "startFrame": 369,
+   "endFrame": 375
+  },
+  {
+   "word": "instead.",
+   "startFrame": 377,
+   "endFrame": 392
+  },
+  {
+   "word": "Four",
+   "startFrame": 404,
+   "endFrame": 414
+  },
+  {
+   "word": "more",
+   "startFrame": 416,
+   "endFrame": 426
+  },
+  {
+   "word": "bits",
+   "startFrame": 428,
+   "endFrame": 438
+  },
+  {
+   "word": "drop",
+   "startFrame": 440,
+   "endFrame": 450
+  },
+  {
+   "word": "in.",
+   "startFrame": 452,
+   "endFrame": 458
+  },
+  {
+   "word": "Eight",
+   "startFrame": 470,
+   "endFrame": 482
+  },
+  {
+   "word": "bits",
+   "startFrame": 484,
+   "endFrame": 494
+  },
+  {
+   "word": "make",
+   "startFrame": 496,
+   "endFrame": 506
+  },
+  {
+   "word": "a",
+   "startFrame": 508,
+   "endFrame": 513
+  },
+  {
+   "word": "byte.",
+   "startFrame": 515,
+   "endFrame": 525
+  },
+  {
+   "word": "That's",
+   "startFrame": 537,
+   "endFrame": 550
+  },
+  {
+   "word": "256",
+   "startFrame": 552,
+   "endFrame": 560
+  },
+  {
+   "word": "patterns.",
+   "startFrame": 562,
+   "endFrame": 579
+  },
+  {
+   "word": "Enough",
+   "startFrame": 591,
+   "endFrame": 604
+  },
+  {
+   "word": "for",
+   "startFrame": 606,
+   "endFrame": 614
+  },
+  {
+   "word": "every",
+   "startFrame": 616,
+   "endFrame": 628
+  },
+  {
+   "word": "letter",
+   "startFrame": 630,
+   "endFrame": 643
+  },
+  {
+   "word": "on",
+   "startFrame": 645,
+   "endFrame": 651
+  },
+  {
+   "word": "your",
+   "startFrame": 653,
+   "endFrame": 663
+  },
+  {
+   "word": "keyboard.",
+   "startFrame": 665,
+   "endFrame": 682
+  },
+  {
+   "word": "The",
+   "startFrame": 694,
+   "endFrame": 702
+  },
+  {
+   "word": "letter",
+   "startFrame": 704,
+   "endFrame": 717
+  },
+  {
+   "word": "A",
+   "startFrame": 719,
+   "endFrame": 724
+  },
+  {
+   "word": "is",
+   "startFrame": 726,
+   "endFrame": 732
+  },
+  {
+   "word": "one",
+   "startFrame": 734,
+   "endFrame": 742
+  },
+  {
+   "word": "byte.",
+   "startFrame": 744,
+   "endFrame": 754
+  }
+ ]
+}

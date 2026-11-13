@@ -1,0 +1,264 @@
+{
+ "totalFrames": 920,
+ "fps": 30,
+ "canvas": "light",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "MidcenturyHowTo",
+   "startFrame": 0,
+   "durationInFrames": 920,
+   "props": {
+    "midcenturyHowTo": {
+     "title": "Turn on 2FA",
+     "kicker": "Meet your second lock.",
+     "presenter": {
+      "outfit": "coral",
+      "hair": "dark"
+     },
+     "steps": [
+      {
+       "start": 207,
+       "header": "Open Settings",
+       "tag": "Settings > Security",
+       "ground": "mustard"
+      },
+      {
+       "start": 338,
+       "header": "Scan the Code",
+       "tag": "Any authenticator app",
+       "ground": "blue"
+      },
+      {
+       "start": 550,
+       "header": "Type the Code",
+       "tag": "Six digits",
+       "ground": "olive"
+      }
+     ],
+     "summary": 827,
+     "shots": [
+      {
+       "start": 0,
+       "presenter": "left",
+       "events": [
+        {
+         "type": "object",
+         "frame": 0,
+         "id": "shield",
+         "object": "shield",
+         "x": 0.7,
+         "y": 0.6,
+         "scale": 1.1
+        },
+        {
+         "type": "pose",
+         "frame": 0,
+         "pose": "wave",
+         "face": "smile"
+        },
+        {
+         "type": "pose",
+         "frame": 37,
+         "pose": "shrug",
+         "face": "worried"
+        },
+        {
+         "type": "pose",
+         "frame": 105,
+         "pose": "present",
+         "face": "grin",
+         "at": "shield"
+        },
+        {
+         "type": "act",
+         "frame": 169,
+         "target": "shield",
+         "act": "glow"
+        }
+       ]
+      },
+      {
+       "start": 207,
+       "presenter": "left",
+       "events": [
+        {
+         "type": "object",
+         "frame": 207,
+         "id": "phone",
+         "object": "phone",
+         "x": 0.56,
+         "y": 0.52,
+         "text": "Settings|Profile|Security|Privacy"
+        },
+        {
+         "type": "pose",
+         "frame": 207,
+         "pose": "present",
+         "face": "smile",
+         "at": "phone"
+        },
+        {
+         "type": "pose",
+         "frame": 253,
+         "pose": "think",
+         "face": "neutral"
+        },
+        {
+         "type": "pose",
+         "frame": 299,
+         "pose": "point",
+         "face": "neutral",
+         "at": "phone"
+        },
+        {
+         "type": "press",
+         "frame": 309,
+         "target": "phone"
+        },
+        {
+         "type": "act",
+         "frame": 309,
+         "target": "phone",
+         "act": "row2"
+        }
+       ]
+      },
+      {
+       "start": 338,
+       "presenter": "left",
+       "events": [
+        {
+         "type": "pose",
+         "frame": 338,
+         "pose": "think",
+         "face": "neutral"
+        },
+        {
+         "type": "object",
+         "frame": 338,
+         "id": "table",
+         "object": "table",
+         "x": 0.7,
+         "y": 0.643
+        },
+        {
+         "type": "object",
+         "frame": 340,
+         "id": "qr",
+         "object": "qr",
+         "x": 0.7,
+         "y": 0.52,
+         "enter": "drop"
+        },
+        {
+         "type": "pose",
+         "frame": 382,
+         "pose": "present",
+         "face": "smile",
+         "at": "qr"
+        },
+        {
+         "type": "label",
+         "frame": 414,
+         "text": "Any authenticator",
+         "x": 0.62,
+         "y": 0.36
+        },
+        {
+         "type": "pose",
+         "frame": 461,
+         "pose": "point",
+         "face": "smile",
+         "at": "qr"
+        },
+        {
+         "type": "act",
+         "frame": 485,
+         "target": "qr",
+         "act": "scan"
+        },
+        {
+         "type": "check",
+         "frame": 525,
+         "target": "qr"
+        }
+       ]
+      },
+      {
+       "start": 550,
+       "presenter": "none",
+       "events": [
+        {
+         "type": "object",
+         "frame": 550,
+         "id": "keypad",
+         "object": "keypad",
+         "x": 0.45,
+         "y": 0.55,
+         "scale": 1.2,
+         "text": "481297"
+        },
+        {
+         "type": "press",
+         "frame": 576,
+         "target": "keypad"
+        },
+        {
+         "type": "act",
+         "frame": 576,
+         "target": "keypad",
+         "act": "type"
+        },
+        {
+         "type": "inset",
+         "frame": 640,
+         "target": "keypad",
+         "text": "30 s",
+         "x": 0.83,
+         "y": 0.4
+        },
+        {
+         "type": "act",
+         "frame": 721,
+         "target": "keypad",
+         "act": "done"
+        },
+        {
+         "type": "check",
+         "frame": 721,
+         "target": "keypad"
+        },
+        {
+         "type": "label",
+         "frame": 750,
+         "text": "Password alone: no",
+         "x": 0.4,
+         "y": 0.335
+        }
+       ]
+      },
+      {
+       "start": 827,
+       "events": [
+        {
+         "type": "pose",
+         "frame": 827,
+         "pose": "thumbsup",
+         "face": "grin"
+        },
+        {
+         "type": "pose",
+         "frame": 865,
+         "pose": "wave",
+         "face": "proud"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

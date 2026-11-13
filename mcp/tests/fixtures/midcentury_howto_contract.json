@@ -1,0 +1,608 @@
+{
+  "_about": "Shared by renderer/remotion/src/scenes/installed/midcenturyHowTo/midcenturyHowTo.test.ts and mcp/tests/test_midcentury_howto.py: the constants both sides use, and cases worked out by the renderer's own contract.ts and stage.ts. Written by renderer/remotion/character-tools/sync-contract.mjs; never edit it by hand.",
+  "constants": {
+    "LIMITS": {
+      "minSteps": 2,
+      "maxSteps": 6,
+      "maxShots": 30,
+      "maxEventsPerShot": 20,
+      "maxElementsPerShot": 4,
+      "titleChars": 30,
+      "kickerChars": 22,
+      "headerChars": 18,
+      "tagChars": 26,
+      "labelChars": 22,
+      "insetChars": 10,
+      "maxStillSeconds": 3,
+      "minShotSeconds": 1.5,
+      "minStepSeconds": 3,
+      "minIntroSeconds": 1.5,
+      "minSummarySeconds": 2,
+      "labelEchoWords": 4
+    },
+    "TIMING": {
+      "objectIn": 8,
+      "minPoseGap": 8,
+      "poseBlend": 4,
+      "pressLead": 6,
+      "pressHold": 12,
+      "pressReturn": 8,
+      "minPressGap": 16,
+      "actFrames": 20,
+      "pop": 8,
+      "endMargin": 6,
+      "headerIn": 12
+    },
+    "GEOMETRY": {
+      "safeLeft": 60,
+      "safeRight": 1020,
+      "stageTop": 600,
+      "introStageTop": 860,
+      "floorY": 1385,
+      "presenterX": 205,
+      "presenterHalfWidth": 150,
+      "presenterHeight": 820,
+      "shoulderDx": 52,
+      "shoulderDy": -588,
+      "armReach": 430,
+      "labelFontPx": 40,
+      "labelCharPx": 22,
+      "labelHeightPx": 64,
+      "insetRadius": 120,
+      "overlapTolerance": 6
+    },
+    "GROUNDS": {
+      "mustard": "#E8B43A",
+      "blue": "#7F9CC0",
+      "olive": "#A7AE5B",
+      "rose": "#D9937E",
+      "sea": "#7DB8A8"
+    },
+    "EVENT_TYPES": [
+      "pose",
+      "object",
+      "act",
+      "press",
+      "check",
+      "cross",
+      "inset",
+      "label"
+    ],
+    "POSES": [
+      "stand",
+      "present",
+      "point",
+      "thumbsup",
+      "wave",
+      "think",
+      "shrug",
+      "hips"
+    ],
+    "SUMMARY_POSES": [
+      "stand",
+      "thumbsup",
+      "wave",
+      "hips"
+    ],
+    "AIM_POSES": [
+      "present",
+      "point"
+    ],
+    "FACES": [
+      "neutral",
+      "smile",
+      "grin",
+      "worried",
+      "surprised",
+      "proud"
+    ],
+    "OUTFITS": [
+      "coral",
+      "teal",
+      "mustard",
+      "blue"
+    ],
+    "HAIRS": [
+      "dark",
+      "red",
+      "blond",
+      "grey"
+    ],
+    "SIDES": [
+      "left",
+      "right",
+      "none"
+    ],
+    "ENTRANCES": [
+      "pop",
+      "drop",
+      "slide",
+      "rise"
+    ],
+    "OBJECTS": {
+      "phone": {
+        "w": 320,
+        "h": 560,
+        "text": 80,
+        "acts": [
+          "row1",
+          "row2",
+          "row3",
+          "done"
+        ]
+      },
+      "laptop": {
+        "w": 540,
+        "h": 420,
+        "text": 70,
+        "acts": [
+          "row1",
+          "row2",
+          "row3",
+          "done"
+        ]
+      },
+      "window": {
+        "w": 600,
+        "h": 440,
+        "text": 80,
+        "acts": [
+          "row1",
+          "row2",
+          "row3",
+          "done"
+        ]
+      },
+      "qr": {
+        "w": 270,
+        "h": 270,
+        "text": 0,
+        "acts": [
+          "scan",
+          "done"
+        ]
+      },
+      "keypad": {
+        "w": 380,
+        "h": 470,
+        "text": 8,
+        "acts": [
+          "type",
+          "done"
+        ]
+      },
+      "password": {
+        "w": 560,
+        "h": 160,
+        "text": 18,
+        "acts": [
+          "type",
+          "done"
+        ]
+      },
+      "toggle": {
+        "w": 280,
+        "h": 150,
+        "text": 0,
+        "acts": [
+          "flip"
+        ]
+      },
+      "button": {
+        "w": 360,
+        "h": 160,
+        "text": 14,
+        "acts": [
+          "light"
+        ]
+      },
+      "app": {
+        "w": 240,
+        "h": 270,
+        "text": 10,
+        "acts": [
+          "bounce"
+        ]
+      },
+      "router": {
+        "w": 440,
+        "h": 290,
+        "text": 0,
+        "acts": [
+          "blink"
+        ]
+      },
+      "lock": {
+        "w": 230,
+        "h": 310,
+        "text": 0,
+        "acts": [
+          "unlock"
+        ]
+      },
+      "key": {
+        "w": 320,
+        "h": 170,
+        "text": 0,
+        "acts": [
+          "turn"
+        ]
+      },
+      "shield": {
+        "w": 250,
+        "h": 300,
+        "text": 0,
+        "acts": [
+          "glow"
+        ]
+      },
+      "usb": {
+        "w": 320,
+        "h": 150,
+        "text": 0,
+        "acts": [
+          "plug"
+        ]
+      },
+      "battery": {
+        "w": 320,
+        "h": 170,
+        "text": 0,
+        "acts": [
+          "fill"
+        ]
+      },
+      "envelope": {
+        "w": 360,
+        "h": 250,
+        "text": 20,
+        "acts": [
+          "open"
+        ]
+      },
+      "document": {
+        "w": 310,
+        "h": 390,
+        "text": 40,
+        "acts": [
+          "stamp"
+        ]
+      },
+      "checklist": {
+        "w": 360,
+        "h": 420,
+        "text": 72,
+        "acts": [
+          "tick1",
+          "tick2",
+          "tick3",
+          "tick4"
+        ]
+      },
+      "card": {
+        "w": 390,
+        "h": 250,
+        "text": 16,
+        "acts": []
+      },
+      "sign": {
+        "w": 380,
+        "h": 270,
+        "text": 24,
+        "acts": [
+          "wobble"
+        ]
+      },
+      "calendar": {
+        "w": 300,
+        "h": 330,
+        "text": 6,
+        "acts": [
+          "flip"
+        ]
+      },
+      "clock": {
+        "w": 300,
+        "h": 300,
+        "text": 0,
+        "acts": [
+          "spin"
+        ]
+      },
+      "bulb": {
+        "w": 230,
+        "h": 330,
+        "text": 0,
+        "acts": [
+          "light"
+        ]
+      },
+      "gear": {
+        "w": 290,
+        "h": 290,
+        "text": 0,
+        "acts": [
+          "turn"
+        ]
+      },
+      "magnifier": {
+        "w": 300,
+        "h": 310,
+        "text": 0,
+        "acts": [
+          "scan"
+        ]
+      },
+      "bell": {
+        "w": 270,
+        "h": 290,
+        "text": 0,
+        "acts": [
+          "ring"
+        ]
+      },
+      "cloud": {
+        "w": 380,
+        "h": 250,
+        "text": 0,
+        "acts": [
+          "upload"
+        ]
+      },
+      "trash": {
+        "w": 250,
+        "h": 310,
+        "text": 0,
+        "acts": [
+          "drop"
+        ]
+      },
+      "table": {
+        "w": 480,
+        "h": 300,
+        "text": 0,
+        "acts": []
+      }
+    },
+    "OBJECT_SCALE": {
+      "min": 0.5,
+      "max": 1.5
+    },
+    "CUSTOM": {
+      "maxProps": 8,
+      "minSide": 60,
+      "maxSide": 700,
+      "maxText": 80,
+      "maxActs": 4
+    }
+  },
+  "object_box": [
+    {
+      "object": "phone",
+      "x": 0.66,
+      "y": 0.52,
+      "scale": 1,
+      "box": [
+        552.8000000000001,
+        718.4000000000001,
+        872.8000000000001,
+        1278.4
+      ]
+    },
+    {
+      "object": "keypad",
+      "x": 0.5,
+      "y": 0.55,
+      "scale": 1.2,
+      "box": [
+        312,
+        774,
+        768,
+        1338
+      ]
+    },
+    {
+      "object": "table",
+      "x": 0.72,
+      "y": 0.66,
+      "scale": 0.8,
+      "box": [
+        585.6,
+        1147.2,
+        969.6,
+        1387.2
+      ]
+    }
+  ],
+  "label_box": [
+    {
+      "text": "Settings",
+      "x": 0.5,
+      "y": 0.4,
+      "box": [
+        407,
+        736,
+        673,
+        800
+      ]
+    },
+    {
+      "text": "Six digits, 30 seconds",
+      "x": 0.3,
+      "y": 0.7,
+      "box": [
+        37,
+        1312,
+        611,
+        1376
+      ]
+    }
+  ],
+  "inset_box": [
+    {
+      "x": 0.8,
+      "y": 0.4,
+      "box": [
+        744,
+        648,
+        984,
+        888
+      ]
+    }
+  ],
+  "presenter_box": [
+    {
+      "side": "left",
+      "box": [
+        55,
+        565,
+        355,
+        1385
+      ]
+    },
+    {
+      "side": "right",
+      "box": [
+        725,
+        565,
+        1025,
+        1385
+      ]
+    }
+  ],
+  "in_reach": [
+    {
+      "side": "left",
+      "x": 500,
+      "y": 900,
+      "reach": true
+    },
+    {
+      "side": "left",
+      "x": 900,
+      "y": 700,
+      "reach": false
+    },
+    {
+      "side": "right",
+      "x": 600,
+      "y": 900,
+      "reach": true
+    },
+    {
+      "side": "right",
+      "x": 100,
+      "y": 1000,
+      "reach": false
+    },
+    {
+      "side": "none",
+      "x": 540,
+      "y": 900,
+      "reach": false
+    }
+  ],
+  "press_point": [
+    {
+      "object": "phone",
+      "act": "row2",
+      "point": [
+        540,
+        993.6
+      ]
+    },
+    {
+      "object": "laptop",
+      "act": "row1",
+      "point": [
+        540,
+        891.6
+      ]
+    },
+    {
+      "object": "window",
+      "act": "row3",
+      "point": [
+        540,
+        1154.88
+      ]
+    },
+    {
+      "object": "keypad",
+      "act": "",
+      "point": [
+        540,
+        1008
+      ]
+    },
+    {
+      "object": "lock",
+      "act": "",
+      "point": [
+        540,
+        960
+      ]
+    }
+  ],
+  "screen_lines": [
+    {
+      "text": "Settings|Profile|Security|Privacy",
+      "lines": [
+        "Settings",
+        "Profile",
+        "Security",
+        "Privacy"
+      ]
+    },
+    {
+      "text": "A | B ||C|D|E",
+      "lines": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    {
+      "text": "",
+      "lines": []
+    }
+  ],
+  "blink": [
+    {
+      "frame": 0,
+      "seed": 17,
+      "blink": false
+    },
+    {
+      "frame": 1,
+      "seed": 17,
+      "blink": false
+    },
+    {
+      "frame": 50,
+      "seed": 17,
+      "blink": false
+    },
+    {
+      "frame": 99,
+      "seed": 17,
+      "blink": true
+    },
+    {
+      "frame": 100,
+      "seed": 17,
+      "blink": false
+    },
+    {
+      "frame": 101,
+      "seed": 17,
+      "blink": false
+    },
+    {
+      "frame": 300,
+      "seed": 17,
+      "blink": false
+    }
+  ]
+}

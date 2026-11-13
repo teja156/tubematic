@@ -6,6 +6,10 @@ import { TextLayoutProbe } from "./audit/TextLayoutProbe";
 import { MascotSheetComposition } from "./mascot/MascotSheet";
 import { BeanPropSheet, SHEET_PAGES } from "./scenes/installed/beanExplainer/BeanPropSheet";
 import { StorybookSheet, SHEET_PAGES as STORYBOOK_SHEET_PAGES } from "./scenes/installed/storybookAtlas/StorybookSheet";
+import { MidcenturySheet, SHEET_PAGES as MIDCENTURY_SHEET_PAGES } from "./scenes/installed/midcenturyHowTo/MidcenturySheet";
+import { ProcessCastSheet, SHEET_PAGES as PROCESS_CAST_SHEET_PAGES } from "./scenes/installed/processCast/ProcessCastSheet";
+import { ComicPanelsSheet, SHEET_PAGES as COMIC_PANELS_SHEET_PAGES } from "./scenes/installed/comicPanels/ComicPanelsSheet";
+import { PuppetHistorySheet, SHEET_PAGES as PUPPET_HISTORY_SHEET_PAGES } from "./scenes/installed/puppetHistory/PuppetHistorySheet";
 import { PresenterSheet } from "./scenes/installed/underTheHood/PresenterSheet";
 import { PaperPropSheet, sheetPages as paperSheetPages } from "./scenes/installed/paperDiorama/PaperPropSheet";
 
@@ -126,6 +130,58 @@ export const RemotionRoot: React.FC = () => {
         id="PresenterSheet"
         component={PresenterSheet}
         durationInFrames={1}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{}}
+      />
+
+      {/* The Mid-century How-To model sheet: one page per frame (the presenter's
+          poses and faces, then the object library), for a person to approve
+          the style's presenter and objects. No video uses it. */}
+      <Composition
+        id="MidcenturySheet"
+        component={MidcenturySheet}
+        durationInFrames={MIDCENTURY_SHEET_PAGES}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{}}
+      />
+
+      {/* The Process Cast model sheet: one page per frame (the cast's bodies,
+          tints and faces, then the stations, then the props), for a person to
+          approve the style's cast and kit. No video uses it. */}
+      <Composition
+        id="ProcessCastSheet"
+        component={ProcessCastSheet}
+        durationInFrames={PROCESS_CAST_SHEET_PAGES}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{}}
+      />
+
+      {/* The Comic Panels model sheet: one page per frame (the cast, poses and
+          faces, then the props), for a person to approve the style's cast and
+          kit. No video uses it. */}
+      <Composition
+        id="ComicPanelsSheet"
+        component={ComicPanelsSheet}
+        durationInFrames={COMIC_PANELS_SHEET_PAGES}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{}}
+      />
+
+      {/* The Puppet History model sheet: one page per frame (the costumes, the
+          poses and faces, the sets, then the hand props), for a person to
+          approve the style's cast and kit. No video uses it. */}
+      <Composition
+        id="PuppetHistorySheet"
+        component={PuppetHistorySheet}
+        durationInFrames={PUPPET_HISTORY_SHEET_PAGES}
         fps={30}
         width={1080}
         height={1920}

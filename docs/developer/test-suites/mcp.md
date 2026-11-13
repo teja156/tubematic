@@ -954,6 +954,164 @@ the text audit's per-page sampling, the picture checks, the hero sheet and page 
 Trap: the tests read the TypeScript source for the contract, so a limit changed on one side only
 fails here before it reaches a render.
 
+
+### `test_puppet_history.py`
+
+Covers `mcp/puppet_history.py`, the checks `write_scene_config` runs on a Puppet History config,
+`render_style_props` for this style, the picture checks and the text audit's per-beat sampling
+([Puppet History](../10-scene-authoring.md#puppet-history)).
+
+- The limits, timings, geometry and catalogues equal the renderer's, read from
+  `fixtures/puppet_history_contract.json`, and the pack's `extra` lists the same costumes, poses,
+  faces, sets, props and countries. After a change to `contract.ts`, `stage.ts` or the library,
+  `node character-tools/sync-contract.mjs` (from `renderer/remotion`) rewrites the fixture and the
+  pack's `extra`; never edit them by hand.
+- The style is registered in `character_styles.BY_ID` and takes no mascot.
+- The skill's worked example passes. Each refusal names its beat or event and the cause: too many
+  puppets, an unknown costume, set, pose, face or prop, a name, sign, stamp, date, label or card text
+  over its limit, a first beat off frame 0, a map country the atlas lacks (a historical name such as
+  Gaul), a fill, label or arrow outside the beat's focus, a card repeating the narration, a slot
+  out of range or taken, a puppet acting before it enters, an event of a kind the beat does not take,
+  an event off its word, nothing on the first set at frame 0, and a still stretch. A value of the
+  wrong type gets a sentence back and raises nothing.
+- A puppet is busy while it slides in, and its slot is free again once it has slid out.
+- A wide sign held from a side slot is pulled in from the frame's edges (`sign_x`, equal to the
+  renderer's `signX`), and two puppets whose signs would overlap are refused.
+- An event inside an insert window is refused, and the scene may be used only by this style.
+- The skill's example prop passes the source rules; a hook, an SVG pattern and an import of another
+  style's file are refused.
+- `write_scene_config` writes a sound config with the style's captions and refuses a broken one by
+  the style's name. `render_style_props` returns the picture for this style (the renderer stubbed),
+  and the preview script's `STYLES` table names this style's preview component.
+- The picture checks find the style and warn when no puppet is on the first set by frame 3, and the
+  text audit samples each beat once its entrances have landed.
+
+Trap: a card line that copies the narration is refused because the captions already carry those
+words, and a map country that is a historical name is refused because the atlas has today's borders
+only.
+
+### `test_midcentury_howto.py`
+
+Covers `mcp/midcentury_howto.py`, the shared custom-prop checks in `mcp/character_kit.py`, the
+`character_styles` registry, the checks `write_scene_config` and `validate_job` run on a Mid-century
+How-To config, `render_style_props`, the picture checks and the text audit's per-shot sampling
+([Mid-century How-To](../10-scene-authoring.md#mid-century-how-to)).
+
+- The limits, timings, geometry, catalogues and object boxes equal the renderer's, read from
+  `fixtures/midcentury_howto_contract.json`, and the pack's `extra` lists the same catalogues. Both
+  sides answer the fixture's worked cases (object, label, inset and presenter boxes, the arm's reach,
+  where a press lands, a screen's lines, the blink). After a change to `contract.ts`, `stage.ts` or
+  the library, `node character-tools/sync-contract.mjs` (from `renderer/remotion`) rewrites the
+  fixture and the pack's `extra`; never edit them by hand.
+- The style is registered in `character_styles.BY_ID` and takes no mascot.
+- The skill's worked example passes. Each refusal names its step, shot or event and cause: a title,
+  kicker, header or inset too long, an unknown outfit, ground, object or act, too few steps, a step
+  where no shot starts, a title card under 1.5 seconds, a summary off a shot, anything but poses on
+  the summary card or an arm pose there, the presenter on the left of it, a pose in a shot with no
+  presenter, `at` on a pose that does not aim or naming nothing on stage, an object over the
+  presenter or off the stage, text in an object with no slot, events out of order or before their
+  object lands, an inset over its object, a label that repeats the narration, and a still stretch. A
+  press too close to the last one is refused. A value of the wrong type gets a sentence back and
+  raises nothing.
+- With insert windows passed as `quiet`, a press inside a window is refused, and a window over a
+  stretch that would otherwise be too still is not counted as still.
+- The skill's example prop passes the source rules; a hook, an SVG filter, a dashed stroke,
+  randomness and an import of another style's file are refused.
+- `write_scene_config` writes a sound config with the style's captions, refuses a broken one by the
+  style's name, refuses `MidcenturyHowTo` on another style and a config naming a prop file that does
+  not exist. `validate_job`'s re-check (`_character_custom_prop_errors`) finds a prop redrawn with a
+  hook.
+- `render_style_props` refuses another style, a video with no config and a config with no
+  `customProps`, returns the picture with the character script (the renderer stubbed), and gives up
+  with a retry message when the heavy-check lock stays busy. The preview script's `STYLES` table
+  names this style's preview component.
+- The picture checks find the style, warn when the title card has no object by frame 3, and count a
+  press as a change and a label as none. The text audit samples each shot once, from after its
+  header has come in.
+
+- A summary card whose presenter is `left` or `none` is refused, because the renderer always stands
+  him on the right there.
+
+Trap: a drawing is rasterised once per look outside the render's React tree, so a hook in an
+agent's prop would read no frame and no state. The character styles add the hook rule and the
+strict source rules (`character_kit.py::STRICT_SOURCE`) to Bean Explainer's. The rules read raw text,
+so each looks for the bare word, and a name split from its call by a comment or a bracket must not
+slip past.
+
+### `test_comic_panels.py`
+
+Covers `mcp/comic_panels.py`, the checks `write_scene_config` runs on a Comic Panels config,
+`render_style_props` for this style, the picture checks and the text audit's per-panel sampling
+([Comic Panels](../10-scene-authoring.md#comic-panels)).
+
+- The limits, timings, layouts and catalogues equal the renderer's, read from
+  `fixtures/comic_panels_contract.json`, and the pack's `extra` lists the same catalogues. Both sides
+  answer the fixture's worked cases (balloon and sound-effect boxes). After a change to
+  `contract.ts`, `stage.ts` or the library, `node character-tools/sync-contract.mjs` (from
+  `renderer/remotion`) rewrites the fixture and the pack's `extra`; never edit them by hand.
+- The style is registered in `character_styles.BY_ID` and takes no mascot.
+- The skill's worked example passes. Each refusal names its page, panel or item and the cause: a
+  page or panel out of order or off a word, a layout with the wrong number of panels, a panel read
+  for too short a time, too many items, items out of frame order or too close together, an unknown
+  pose, face, tone, hair, outfit or balloon kind, a character, prop, balloon or sound effect past its
+  panel's edge, text over its limit, a balloon pointing at nothing in its panel, a balloon or caption
+  box repeating the narration, two hits within 8 frames anywhere on a page, a panel with no character or prop, and a
+  still stretch. A value of the wrong type gets a sentence back and raises nothing.
+- Balloons and sound effects in one panel may not cover each other, because they are the panel's
+  words and one hidden behind another cannot be read.
+- A character may be cut off at the bottom of its panel and no other edge, because panels frame
+  people from the waist up. Its box depends on its pose (`actor_box`): a cheer's hands above the
+  hair and a shrug's spread past the shoulders must stay inside the top and sides.
+- The sound-effect box covers the capitals and the burst, both centred on the item, and a `layout`
+  that is not text gets a sentence back.
+- An item, a panel or a page starting inside an insert window is refused.
+- The skill's example prop passes the source rules; a hook, an SVG pattern and an import of another
+  style's file are refused. So are `require`, `eval`, `Function`, a `constructor` lookup, `React[...]`,
+  a dynamic import and `import.meta`, and a hook name split from its call by a comment or a bracket.
+- `write_scene_config` writes a sound config with the style's captions and refuses a broken one by
+  the style's name. `render_style_props` returns the picture for this style (the renderer stubbed),
+  and the preview script's `STYLES` table names this style's preview component.
+- The picture checks find the style and warn when page 1, panel 1 has no character or prop by frame
+  3, and the text audit samples each panel after the camera has arrived and the panel has inked in.
+
+### `test_process_cast.py`
+
+Covers `mcp/process_cast.py`, the checks `write_scene_config` runs on a Process Cast config,
+`render_style_props` for this style, the picture checks and the text audit's per-station sampling
+([Process Cast](../10-scene-authoring.md#process-cast)).
+
+- The limits, timings, geometry and catalogues equal the renderer's, read from
+  `fixtures/process_cast_contract.json`, and the pack's `extra` lists the same catalogues. Both sides
+  answer the fixture's worked cases (body sizes, slot positions and counts, where a prop sits, clone
+  ids, the blink). After a change to `contract.ts`, `stage.ts` or the library,
+  `node character-tools/sync-contract.mjs` (from `renderer/remotion`) rewrites the fixture and the
+  pack's `extra`; never edit them by hand.
+- The style is registered in `character_styles.BY_ID` and takes no mascot.
+- The skill's worked example passes. Each refusal names its event or entry and cause: too many characters,
+  an id ending in a digit, an unknown body, kind or face, too many cubes or cubes on a body that is
+  not `units`, a name or sign too long, a station the camera never shows, events out of order, a slot
+  out of range or taken, a clone count out of range, a join with an actor not on stage, a card or
+  prop text too long, a prop off the library or off screen, nothing entering at frame 0, an event at a
+  station the camera has left, an event off its word, and a still stretch. A card handed by a
+  character that holds none and a clone that splits are refused. A value of the wrong type gets a
+  sentence back and raises nothing.
+- An event inside an insert window is refused.
+- The skill's example prop passes the source rules; a hook, an SVG pattern and an import of another
+  style's file are refused.
+- `write_scene_config` writes a sound config with the style's captions and refuses a broken one by
+  the style's name. `render_style_props` returns the picture for this style (the renderer stubbed),
+  and the preview script's `STYLES` table names this style's preview component.
+- The picture checks find the style and warn when no character enters by frame 3, a camera move
+  counts as a change and a look does not, and the text audit samples each station after the
+  camera's glide.
+- Bodies that would overlap each other or the furniture are refused
+  (`process_cast.py::crowding`), as is a body that would reach past the frame's edge in an outer
+  slot.
+- A slot an exiting actor and its clones leave is not free until the slide-out ends, a `hand` from
+  an actor to itself is refused, and a station id that is not text gets a sentence back.
+
+Trap: the slots are spaced for ordinary bodies, so a `units` body that grows past them by a join
+draws over its neighbour or the furniture unless the crowding check catches it.
 ### `test_choose_script_formula.py`
 
 Covers `choose_script_formula`, `get_video`'s `formula_routing`, the domain's default formula in

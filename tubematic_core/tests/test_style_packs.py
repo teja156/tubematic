@@ -161,7 +161,8 @@ def test_under_the_hood():
     # its own presenter stands where a mascot would: no mascot, like Cartoon 3D
     assert p["mascot"] is False and "presenter" in p["messages"]["mascot"]
     assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood", "case_file_story", "paper_diorama",
-                                         "archive_engraving", "editorial_collage", "storybook_reveal"}
+                                         "archive_engraving", "editorial_collage", "storybook_reveal",
+                                         "midcentury_howto", "comic_panels", "process_cast", "puppet_history"}
     rows = {r["id"]: r for r in tvs.public_list(openai_key_set=True, gpu_status="working")}
     assert rows["under_the_hood"]["mascot"] is False and rows["cartoon_3d"]["mascot"] is False
     assert rows["auto"]["mascot"] is True and rows["stick"]["mascot"] is True
@@ -609,3 +610,85 @@ def test_yields_ties_is_checked_when_present():
     data["routing"] = {**data["routing"], "yields_ties": "yes"}
     with pytest.raises(tvs.PackError, match=r"routing\.yields_ties"):
         tvs._check_pack(pathlib.Path("stick.json"), data)
+
+
+def test_midcentury_howto():
+    p = tvs.pack("midcentury_howto")
+    assert p["renderer"] == "dom" and p["canvas"] == "light" and p["dimension"] == "2d"
+    assert p["authoring_skill"] == "tubematic-midcentury-howto"
+    assert p["experimental"] is True and p["order"] == 160 and p["role"] == "main"
+    assert p["inserts"] == {"host": True, "transition": "wipe"}
+    # its presenter and objects are drawn in code: no generated characters or line art, no keys, no GPU
+    assert tvs.figures_allowed("midcentury_howto") is True
+    assert tvs.line_art_allowed("midcentury_howto") is False
+    assert tvs.characters_allowed("midcentury_howto") is False
+    assert tvs.needs_openai_key("midcentury_howto") is False and tvs.needs_gpu("midcentury_howto") is False
+    assert p["routing"]["images"] == 0
+    assert p["captions"]["background"] == "label"
+    # its presenter holds the stage a mascot would take: no mascot (user, 2026-11-12)
+    assert p["mascot"] is False and "presenter" in p["messages"]["mascot"]
+    rows = {r["id"]: r for r in tvs.public_list(openai_key_set=False, gpu_status="not_configured")}
+    assert rows["midcentury_howto"]["mascot"] is False and rows["midcentury_howto"]["available"] is True
+    # the script names the steps by number, so each gets its own medallion
+    assert "opened by its number" in p["script"] and "never invent a menu" in p["script"]
+
+
+def test_process_cast():
+    p = tvs.pack("process_cast")
+    assert p["renderer"] == "dom" and p["canvas"] == "light" and p["dimension"] == "2d"
+    assert p["authoring_skill"] == "tubematic-process-cast"
+    assert p["experimental"] is True and p["order"] == 180 and p["role"] == "main"
+    assert p["inserts"] == {"host": True, "transition": "cut"}
+    assert tvs.figures_allowed("process_cast") is True
+    assert tvs.line_art_allowed("process_cast") is False and tvs.characters_allowed("process_cast") is False
+    assert tvs.needs_openai_key("process_cast") is False and tvs.needs_gpu("process_cast") is False
+    assert p["routing"]["images"] == 0 and p["captions"]["background"] == "none"
+    # its cast are drawn characters; a mascot would be confused with them (user, 2026-11-12)
+    assert p["mascot"] is False and "cast" in p["messages"]["mascot"]
+    # told apart from the mascot feature: its label, tagline and routing never say "mascot" (user, 2026-11-12)
+    assert "mascot" not in (p["label"] + p["tagline"] + json.dumps(p["routing"])).lower()
+    # Stick Explainer keeps processes acted out by people and requests walked through a system (user, 2026-11-12)
+    assert any("Stick Explainer fits it" in a and "people or roles" in a for a in p["routing"]["avoid_for"])
+
+
+
+def test_comic_panels():
+    p = tvs.pack("comic_panels")
+    assert p["renderer"] == "dom" and p["canvas"] == "light" and p["dimension"] == "2d"
+    assert p["authoring_skill"] == "tubematic-comic-panels"
+    assert p["experimental"] is True and p["order"] == 170 and p["role"] == "main"
+    assert p["inserts"] == {"host": True, "transition": "push"}
+    assert tvs.figures_allowed("comic_panels") is True
+    assert tvs.line_art_allowed("comic_panels") is False and tvs.characters_allowed("comic_panels") is False
+    assert tvs.needs_openai_key("comic_panels") is False and tvs.needs_gpu("comic_panels") is False
+    assert p["routing"]["images"] == 0 and p["captions"]["background"] == "label"
+    # its own comic cast; a mascot would be one character too many (user, 2026-11-12)
+    assert p["mascot"] is False and "cast" in p["messages"]["mascot"]
+    # the routing hands non-fights to Process Cast, roles to Stick, scams to Case File, calm stories to Illustrated
+    avoid = " ".join(p["routing"]["avoid_for"])
+    for neighbour in ("Process Cast", "Stick Explainer", "Case File Story", "Illustrated", "Bean Explainer"):
+        assert f"({neighbour} fits it)" in avoid, neighbour
+    # a balloon is a character's line, never the narration read twice
+    assert "never reads a balloon aloud" in p["script"]
+
+
+def test_puppet_history():
+    p = tvs.pack("puppet_history")
+    assert p["renderer"] == "dom" and p["canvas"] == "light" and p["dimension"] == "2d"
+    assert p["authoring_skill"] == "tubematic-puppet-history"
+    assert p["experimental"] is True and p["order"] == 150 and p["role"] == "main"
+    assert p["inserts"] == {"host": True, "transition": "cut"}
+    assert tvs.figures_allowed("puppet_history") is True
+    assert tvs.line_art_allowed("puppet_history") is False and tvs.characters_allowed("puppet_history") is False
+    assert tvs.needs_openai_key("puppet_history") is False and tvs.needs_gpu("puppet_history") is False
+    assert p["routing"]["images"] == 0 and p["captions"]["background"] == "outline"
+    # its cast is house puppets; a mascot would be one character too many (user, 2026-11-12)
+    assert p["mascot"] is False and "puppets" in p["messages"]["mascot"]
+    # real people only as the house puppet with a name plate; never living; no tragedy for laughs (user, 2026-11-12)
+    avoid = " ".join(p["routing"]["avoid_for"])
+    assert "living person" in avoid and "tragedy" in avoid
+    assert "never a living person" in p["script"] and "Never play a tragedy for laughs" in p["script"]
+    for neighbour in ("Storybook Atlas", "Case File Story", "Photo Explainer", "Illustrated"):
+        assert f"({neighbour} fits it)" in avoid, neighbour
+    # maps show today's countries, and the agent names a historical region by them
+    assert "today's countries" in p["routing"]["cannot_show"] and "today's countries" in p["script"]

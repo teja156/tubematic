@@ -56,6 +56,7 @@ import storybook_atlas  # chapter windows for the whole-video Storybook Atlas sc
 import terminal_doc  # beat windows for the whole-video Terminal Doc scene (TMDEV-199)
 import under_the_hood  # plate windows for the whole-video Under the Hood scene (TMDEV-201)
 import case_file_story  # beat windows for the whole-video Case File Story scene (TMDEV-202)
+import character_styles  # shot windows for the code-drawn character styles (TMDEV-232..235)
 import paper_diorama  # set windows for the whole-video Paper Diorama scene (TMDEV-228)
 import archive_engraving  # beat windows for the whole-video Archive and Engraving scene (TMDEV-230)
 import editorial_collage  # station windows for the whole-video Editorial Collage scene (TMDEV-229)
@@ -327,6 +328,17 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
             for first, b_end in cfs_beats:
                 last = b_end - 1
                 span = last - first
+                count = min(SAMPLES_PER_SCENE, span + 1)
+                step = max(1, span // max(1, count - 1))
+                passes.append({"scene": index, "first": first, "step": step,
+                               "count": min(count, span // step + 1)})
+            continue
+        # The code-drawn character styles span the whole video too; each shot is
+        # a cut, sampled like a scene once its header and pops have settled.
+        char_mod = character_styles.for_scene(scene)
+        if char_mod is not None:
+            for first, end in char_mod.audit_windows(scene_config):
+                span = end - 1 - first
                 count = min(SAMPLES_PER_SCENE, span + 1)
                 step = max(1, span // max(1, count - 1))
                 passes.append({"scene": index, "first": first, "step": step,

@@ -769,6 +769,76 @@ Covers the `tubematic-storybook-reveal` skill ([Storybook Reveal](../10-scene-au
   preview, and its text keeps the docs' writing rules.
 - The worked example is valid JSON with the one `StorybookReveal` scene and three pictures.
 
+### `test_puppet_history_skill.py`
+
+Covers the `tubematic-puppet-history` skill ([Puppet History](../10-scene-authoring.md#puppet-history)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- `reference/contract.md` lists every catalogue the validator accepts, and no others.
+- The limits the skill states are the ones `mcp/puppet_history.py` enforces.
+- The skill keeps a real person unrecognisable (the house puppet in a generic costume with a name
+  plate), keeps living people and leaders of regimes still in power off the plates, and keeps
+  tragedy out of the gags, and the pack carries the same rules in its routing, script and review text.
+- The worked example passes the validator, its worked prop, `example-prop-hourglass.tsx`, passes the
+  source checks, and the uninstaller removes the skill.
+
+Trap: skill text that lets a puppet look like a real person or a tragedy become a gag leads the
+agent to a video the AI review rejects. The test pins the wording.
+
+### `test_midcentury_howto_skill.py`
+
+Covers the `tubematic-midcentury-howto` skill
+([Mid-century How-To](../10-scene-authoring.md#mid-century-how-to)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- `reference/contract.md` lists the pack's objects and no others, each with its text limit and
+  acts, and every catalogue the validator accepts.
+- The limits the skill states are the ones `mcp/midcentury_howto.py` enforces.
+- It names the tools it uses, `render_style_props` among them, never calls `generate_image`, and
+  says the presenter never moves his mouth to talk.
+- The reference files ship, the worked example passes the validator, and the uninstaller removes the
+  skill.
+- The skill teaches objects of the agent's own within the validator's limits, and its worked prop,
+  `example-prop-alarm.tsx`, passes the validator's source checks.
+
+Trap: a skill that teaches a limit the validator does not enforce gets the agent refused on every
+video. Change a limit in `contract.ts`, run the sync script, and change the skill text with it.
+
+### `test_comic_panels_skill.py`
+
+Covers the `tubematic-comic-panels` skill ([Comic Panels](../10-scene-authoring.md#comic-panels)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- `reference/contract.md` lists the pack's props and layouts and every catalogue the validator accepts.
+- The limits the skill states are the ones `mcp/comic_panels.py` enforces.
+- It says the narrator is off screen and a balloon is never the narration read aloud, that the cast
+  is invented and never a real person, and that the style takes no mascot.
+- The worked example passes the validator, its worked prop, `example-prop-trophy.tsx`, passes the
+  source checks, and the uninstaller removes the skill.
+
+Trap: skill text that lets a balloon repeat the narration, or a character look like a real person,
+leads the agent to a video the validator or the AI review refuses. The test pins the wording.
+
+### `test_process_cast_skill.py`
+
+Covers the `tubematic-process-cast` skill ([Process Cast](../10-scene-authoring.md#process-cast)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- `reference/contract.md` lists the pack's props and stations and no others, and every catalogue
+  the validator accepts.
+- The limits and timings the skill states are the ones `mcp/process_cast.py` enforces.
+- It says the cast has nothing to do with an install's mascot and the style takes no mascot, that a
+  face never moves its mouth with the words, never calls `generate_image`, and runs no code or shell.
+- The worked example passes the validator, its worked prop, `example-prop-ticket.tsx`, passes the
+  source checks, and the uninstaller removes the skill.
+
+Trap: skill text that calls the cast mascots, or lets a character talk, leads the agent to the wrong
+video for this style. The test pins the wording that keeps them apart.
+
 ### `test_system_flow_skill.py`
 
 Covers the `tubematic-system-flow` skill ([System Flow](../10-scene-authoring.md#system-flow)).

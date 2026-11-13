@@ -38,6 +38,10 @@ Run it from the repository root. When each skill runs and how the agent layer wo
 | `tubematic-archive-engraving/` | Writes an Archive and Engraving video as data (titles, engraved plates it generates and bakes with `treat_image`, charts, name cards, documents, and the events on them) for the one `ArchiveEngraving` scene, validates and submits it |
 | `tubematic-storybook-reveal/` | Writes a Storybook Reveal video as data (a hero sheet, square pages painted from it with their pencil plates, and the reveal timed to the narration) for the one `StorybookReveal` scene, validates and submits it |
 | `tubematic-paper-diorama/` | Writes a Paper Diorama video as data (rooms, banners, props in named slots, its own props checked with `render_paper_props`, the critter's faces and the events) for the one `PaperDiorama` scene, validates and submits it |
+| `tubematic-puppet-history/` | Writes a Puppet History video as data (puppets in era costumes; sets, document cards and maps of today's countries joined by hard cuts) for the one `PuppetHistory` scene, validates and submits it |
+| `tubematic-midcentury-howto/` | Writes a Mid-century How-To video as data (a title card, numbered steps, the presenter's poses and the objects he presses, timed to the narration) for the one `MidcenturyHowTo` scene, validates and submits it |
+| `tubematic-comic-panels/` | Writes a Comic Panels video as data (comic pages of 3 or 4 panels: a hero, people and a villain, balloons, sound effects and hits, read panel by panel) for the one `ComicPanels` scene, validates and submits it |
+| `tubematic-process-cast/` | Writes a Process Cast video as data (a cast of drawn parts with faces, stations along one ground line, their entrances, hops, task cards, clones and the camera's moves, timed to the narration) for the one `ProcessCast` scene, validates and submits it |
 | `tubematic-mascot-builder/` | Writes or revises one mascot's p5.js drawing code, renders its three model sheets and submits it for human review |
 | `tubematic-troubleshooting/` | Diagnoses a broken install with a person, collects redacted evidence and drafts a bug report. A person must ask for it by name |
 

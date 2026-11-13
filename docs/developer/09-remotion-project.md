@@ -35,20 +35,22 @@ Every composition runs at 30 fps, so frame 30 is one second in. Two rules follow
 
 ## Compositions
 
-`renderer/remotion/src/Root.tsx` registers four compositions.
+`renderer/remotion/src/Root.tsx` registers these compositions.
 
 | Id | Component | Size and duration |
 |---|---|---|
 | `Composition` | `CompositionBuilder` | 1080×1920, duration read from `timeline.json` |
 | `TextLayoutAudit` | `CompositionBuilder` plus `TextLayoutProbe` | The same |
 | `MascotSheet` | `MascotSheet` | One frame, sized per sheet |
+| `BeanPropSheet`, `StorybookSheet`, `PresenterSheet`, `PuppetHistorySheet`, `MidcenturySheet`, `ComicPanelsSheet`, `ProcessCastSheet` | A style's model sheet | 1080×1920, one frame per page |
 | `Placeholder` | A static placeholder | 1080×1920, 90 frames |
 
 A renderer turns `Composition` into a video with `npx remotion render Composition`.
 `TextLayoutAudit` is the same video with an invisible measuring probe on top. The
 [text-layout audit](11-rendering-and-review.md#the-text-layout-audit) drives it through Remotion's
 Node API. `MascotSheet` is listed so that Remotion Studio can show it, and its renders use a separate
-entry point ([The mascot layer](#the-mascot-layer)). The GPU test's `GpuProbe` composition is
+entry point ([The mascot layer](#the-mascot-layer)). The model sheets show a style's fixed cast and
+library for a person to check, and no video uses them. The GPU test's `GpuProbe` composition is
 registered only by its own entry point, `src/gpu-probe/index.ts`.
 
 The first two take their duration from `calculateMetadata` (`Root.tsx::durationFromTimeline`), which
@@ -431,6 +433,18 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
 - A Storybook Reveal video has the one `StorybookReveal` scene and its pages pass the Storybook Reveal
   checks; no other video uses `StorybookReveal`
   ([Scene Authoring](10-scene-authoring.md#storybook-reveal)).
+- A Puppet History video has the one `PuppetHistory` scene and its cast and beats pass the Puppet
+  History checks; no other video uses `PuppetHistory`
+  ([Scene Authoring](10-scene-authoring.md#puppet-history)).
+- A Mid-century How-To video has the one `MidcenturyHowTo` scene and its steps and shots pass the
+  Mid-century How-To checks; no other video uses `MidcenturyHowTo`
+  ([Scene Authoring](10-scene-authoring.md#mid-century-how-to)).
+- A Comic Panels video has the one `ComicPanels` scene and its cast, pages and panels pass the Comic
+  Panels checks; no other video uses `ComicPanels`
+  ([Scene Authoring](10-scene-authoring.md#comic-panels)).
+- A Process Cast video has the one `ProcessCast` scene and its cast, stations and events pass the
+  Process Cast checks; no other video uses `ProcessCast`
+  ([Scene Authoring](10-scene-authoring.md#process-cast)).
 - `inserts`, if present or if the script marks a segment `insert`, passes `mcp/inserts.py::check`:
   the window rules, the style's own checks (`system_flow.check_insert`, `terminal_doc.check_insert`,
   `code_scenes.check_insert`, `format_packs.check_insert`),
@@ -445,7 +459,7 @@ is queued or rendering (`status_mismatch`).
 `canvas` is the only default the tool writes into most files, besides each insert's `src`, `palette`
 and `shift` and the `insertTransition`, which the agent never writes. A System Flow or Whiteboard config
 with no `subtitles` also gets its style pack's caption settings, because its captions are part of the
-style's look. A Bean Explainer, Storybook Atlas, Under the Hood, Case File Story, Paper Diorama, Archive and Engraving, Editorial Collage or Storybook Reveal config gets them under whatever
+style's look. A Bean Explainer, Storybook Atlas, Under the Hood, Case File Story, Paper Diorama, Archive and Engraving, Editorial Collage, Storybook Reveal, Puppet History, Mid-century How-To, Comic Panels or Process Cast config gets them under whatever
 `subtitles` keys it sets, so a config that sets only `emphasis` keeps the look. A Terminal Doc config
 gets them the same way, with its skin's colours and font over the pack's. An Under the Hood config
 also gets each plate's `aspect`, read from its photograph. The
@@ -498,7 +512,8 @@ rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 
 `renderer/remotion/src/scenes/installed/` is the committed library. A config entry can reference
 `KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`.
-`BeanExplainer`, `Whiteboard`, `UnderTheHood`, `CaseFileStory`, `PaperDiorama`, `ArchiveEngraving`, `EditorialCollage` and `StorybookReveal` are referenced the same way, by
+`BeanExplainer`, `Whiteboard`, `StorybookAtlas`, `UnderTheHood`, `CaseFileStory`, `PaperDiorama`, `ArchiveEngraving`, `EditorialCollage`, `StorybookReveal`, `PuppetHistory`, `MidcenturyHowTo`,
+`ComicPanels` and `ProcessCast` are referenced the same way, by
 videos of their own style only. `SystemFlow` and `TerminalDoc` are drawn as
 [insert scenes](#insert-scenes) from the `inserts` list, and as a video's one scene only for a video
 that holds their style from an earlier version. `CodeScenes` and `FormatPacks` are insert scenes
@@ -748,6 +763,103 @@ loads Patrick Hand and Lora from `public/fonts/` before the first frame. The sty
 the `fill` look with no background. The contract and the checks are in
 [Storybook Reveal](10-scene-authoring.md#storybook-reveal).
 
+### `PuppetHistory`
+
+`PuppetHistory` draws a whole Puppet History video from `props.puppetHistory`: the sets as flat
+colour bands with cached decor, the puppets in their costumes with name plates, signs and hand props,
+the document cards with their stamps and struck-out lines, the flat map of today's countries with its
+fills, arrows and labels, and the corner date. Its helpers and libraries are in `puppetHistory/`:
+`contract.ts` (limits, timings, geometry and the costume, set, pose, face and `PROPS` catalogues),
+`stage.ts` (what is on stage at a frame), `puppet.tsx` and `torso.ts`, `costumes.tsx`, `sets.tsx`,
+`props.tsx`, `map.tsx`, `ink.tsx` and `fonts.ts`. It loads Fredoka (700), Kalam (700) and IBM Plex
+Mono (700) from `public/fonts/` before the first frame; the style's captions use Fredoka, which this
+scene loads. The `PuppetHistorySheet` composition renders the costumes with every pose and face, the
+sets, and the hand props with each prop's box outlined in red, one page per frame: `npx remotion still
+src/index.ts PuppetHistorySheet out.png --frame=<page>`.
+
+The map uses three packages: `d3-geo` for the projection, `topojson-client` to read the atlas and
+`world-atlas` for the country shapes (its 1:110m `countries-110m.json`, from Natural Earth). They are
+dependencies of the Remotion project in `package.json`, with `@types/d3-geo` and
+`@types/topojson-client` as development dependencies. The projection is fitted to the beat's focus
+countries by their largest landmass. The country names `contract.ts` exports come from the same file,
+so the catalogue and the drawing cannot disagree.
+
+A Puppet History video can also use props its agent drew, in `generated/<video_id>/prop-*.tsx`,
+imported through `characterKit/customProps.ts`. `character-tools/render-props.mjs` renders them for
+the `render_style_props` tool on the `PuppetHistoryPropPreview` component, and
+`character-tools/sync-contract.mjs` rewrites the style pack's `extra` and
+`mcp/tests/fixtures/puppet_history_contract.json` from the renderer's code. The contract and the
+checks are in [Puppet History](10-scene-authoring.md#puppet-history).
+
+### `MidcenturyHowTo`
+
+`MidcenturyHowTo` draws a whole Mid-century How-To video from `props.midcenturyHowTo`: the title card,
+the step grounds and headers, the presenter, the objects and their acts, the presses, medallions,
+insets and labels, and the summary card. Its helpers and the object library are in
+`midcenturyHowTo/`: `contract.ts` (limits, timings, geometry and the `OBJECTS` catalogue), `stage.ts`
+(what is on stage at a frame), `presenter.tsx`, `cel.tsx` (the palette and the off-register `Cel`
+shape objects are drawn with), `objects/` and `fonts.ts`. It loads Alfa Slab One, Oleo Script and
+Jost (500 and 600) from `public/fonts/` before the first frame; the style's captions use Jost, which
+this scene loads. The `MidcenturySheet` composition renders the presenter's poses and faces, then the
+object library with each object's box outlined in red, one page per frame: `npx remotion still
+src/index.ts MidcenturySheet out.png --frame=<page>`.
+
+A Mid-century How-To video can also use props its agent drew, in `generated/<video_id>/prop-*.tsx`,
+imported through `characterKit/customProps.ts` the same way as Bean Explainer's.
+`character-tools/render-props.mjs` renders them for the `render_style_props` tool on the
+`MidcenturyPropPreview` component, from a bundle entry it writes per call into
+`character-tools/.tmp/` (ignored by git). `character-tools/sync-contract.mjs` rewrites the style
+pack's `extra` and `mcp/tests/fixtures/midcentury_howto_contract.json` from the renderer's code.
+
+`characterKit/` holds what the [character styles](10-scene-authoring.md#character-styles) share:
+`sprite.tsx` (the bitmap cache every character, object and medallion is drawn through), `fonts.ts`
+(the font loader, and `fontFaceCss` for text inside a sprite), `geometry.ts` (seeded randomness, easing
+and shape helpers) and `customProps.ts`. The contract and the checks are in
+[Mid-century How-To](10-scene-authoring.md#mid-century-how-to).
+
+### `ComicPanels`
+
+`ComicPanels` draws a whole Comic Panels video from `props.comicPanels`: the pages with their title
+bars, each panel's border, tone and halftone, the cast framed from the waist up, the props, the
+balloons, caption boxes and drawn sound effects, the speed and focus lines, and the camera reading
+from panel to panel. Its helpers and libraries are in `comicPanels/`: `contract.ts` (limits, timings,
+the five page layouts and the `PROPS` catalogue), `stage.ts` (the camera, how far a panel has inked in
+and what has appeared at a frame), `cast.tsx` (the hero, the invented people and the villain),
+`ink.tsx` (the palette, the halftone `Dots`, burst stars, speed lines and drawn lettering), `props/`
+and `fonts.ts`. It loads Bangers (400) and Comic Neue (700) from `public/fonts/` before the first
+frame; the style's captions use Comic Neue, which this scene loads. The `ComicPanelsSheet`
+composition renders the cast's poses, faces and knobs, then the prop library with each prop's box
+outlined in red, one page per frame: `npx remotion still src/index.ts ComicPanelsSheet out.png
+--frame=<page>`.
+
+A Comic Panels video can also use props its agent drew, in `generated/<video_id>/prop-*.tsx`,
+imported through `characterKit/customProps.ts`. `character-tools/render-props.mjs` renders them for
+the `render_style_props` tool on the `ComicPanelsPropPreview` component, and
+`character-tools/sync-contract.mjs` rewrites the style pack's `extra` and
+`mcp/tests/fixtures/comic_panels_contract.json` from the renderer's code. The contract and the checks
+are in [Comic Panels](10-scene-authoring.md#comic-panels).
+
+### `ProcessCast`
+
+`ProcessCast` draws a whole Process Cast video from `props.processCast`: the paper, the ground line,
+each station's furniture and hanging sign, the cast with their name tags, task cards and marks, the
+props, the cards handed between characters, and the camera travelling along the line. Its helpers
+and libraries are in `processCast/`: `contract.ts` (limits, timings, geometry and the `STATIONS` and
+`PROPS` catalogues), `stage.ts` (what is on stage at a frame), `actor.tsx` (the bodies and faces),
+`ink.tsx` (the palette, the seeded wobbly ink and the pencil hatching), `stations.tsx` (the
+furniture, the signs and the ground), `props/` and `fonts.ts`. It loads JetBrains Mono (700) and
+Nunito (800) from `public/fonts/` before the first frame; the style's captions use Nunito, which this
+scene loads. The `ProcessCastSheet` composition renders the bodies, tints, faces and marks, then the
+stations, then the prop library with each prop's box outlined in red, one page per frame:
+`npx remotion still src/index.ts ProcessCastSheet out.png --frame=<page>`.
+
+A Process Cast video can also use props its agent drew, in `generated/<video_id>/prop-*.tsx`,
+imported through `characterKit/customProps.ts`. `character-tools/render-props.mjs` renders them for
+the `render_style_props` tool on the `ProcessCastPropPreview` component, and
+`character-tools/sync-contract.mjs` rewrites the style pack's `extra` and
+`mcp/tests/fixtures/process_cast_contract.json` from the renderer's code. The contract and the checks
+are in [Process Cast](10-scene-authoring.md#process-cast).
+
 ### Figure and panel components
 
 Four files serve videos that use line-art figures or a light canvas. None paints a background by
@@ -936,3 +1048,19 @@ video. Its fonts are Source Serif 4 and Bricolage Grotesque (SIL Open Font Licen
 `StorybookReveal`'s page, panel and curl are original drawings and its pictures are generated for each
 video. Its fonts are the Patrick Hand and Lora files in `public/fonts/`, each under the SIL Open Font
 License 1.1 (`OFL-PatrickHand.txt` and `OFL-Lora.txt`).
+
+`PuppetHistory`'s puppets, costumes, sets and props are original drawings. Its fonts are the Fredoka,
+Kalam and IBM Plex Mono files in `public/fonts/`, each under the SIL Open Font License 1.1, with the
+license beside them. Its map draws the 1:110m country shapes of `world-atlas` (ISC license), which
+are Natural Earth data in the public domain, with `d3-geo` (ISC) and `topojson-client` (ISC).
+
+`MidcenturyHowTo`'s presenter and objects are original drawings. Its fonts in `public/fonts/` are
+Alfa Slab One, Oleo Script and Jost, each under the SIL Open Font License 1.1, with the license beside
+them.
+
+`ComicPanels`' cast and props are original drawings. Its fonts are the Bangers and Comic Neue files in
+`public/fonts/`, each under the SIL Open Font License 1.1, with the license beside them.
+
+`ProcessCast`'s cast, furniture and props are original drawings. Its fonts are the JetBrains Mono and
+Nunito files in `public/fonts/`, each under the SIL Open Font License 1.1, with the license beside
+them.

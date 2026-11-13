@@ -100,6 +100,44 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   set aside for fiction, and an EXAMPLE tag on every made-up thread or headline.
   [Insert scenes](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#insert-scenes) has
   the details.
+- A new experimental style, **Puppet History**: "you are now a..." history told by round-headed
+  cut-out puppets in costumes of the era, on flat illustrated sets, typed document cards where a
+  stamp lands and a number is struck out, and flat maps of today's countries where regions fill in and
+  arrows grow, with hard cuts between scenes. It suits history told to the viewer as "you" (a Roman
+  legionary, a medieval peasant), why an event happened told with light humour, and an army's march
+  or a trade route, and Auto can pick it. A real person appears only as the same puppet in a generic
+  costume with a name plate, never a living person or a tragedy played for laughs. It needs no API
+  key and no GPU, generates no images, and takes no mascot, because its whole cast is drawn
+  characters and a mascot would be confused with them.
+  [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
+  details.
+- A new experimental style, **Mid-century How-To**: a 1950s classroom-film cartoon in which a gloved
+  presenter walks the viewer through a task in numbered steps, each on its own flat colour, pressing
+  buttons on phones, keypads and other flat objects, with checks, circled numbers and a closing card
+  that lists the steps. It suits a task the viewer can copy, such as turning on two-factor sign-in or
+  backing up a phone, and Auto can pick it. It needs no API key and no GPU, generates no images, and
+  takes no mascot, because its presenter has the stage.
+  [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
+  details.
+- A new experimental style, **Process Cast**: little drawn characters with faces act out an invisible
+  process at stations along one ground line. They carry and hand over task cards, split into copies
+  and merge back, join their cubes into a bigger body and react, while the camera glides from
+  station to station. It suits a process whose actors are things, such as bits adding up to a byte,
+  cells and organs, the layers of a system or the stages of a build, and Auto can pick it. It needs
+  no API key and no GPU, generates no images, and takes no mascot, because its whole cast is drawn
+  characters and a mascot would be confused with them.
+  [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
+  details.
+- A new experimental style, **Comic Panels**: the topic is told as a comic. A page of cream newsprint
+  holds three or four panels that ink in one by one, with a hero, a villain and invented people, speech,
+  thought and shout balloons, sound effects such as POW and CLANG, and speed lines, while the camera
+  moves from panel to panel, punches in on a hit and pulls back to show the whole page at the end. It
+  suits a fight told round by round, such as a password against a guessing attack or an antibiotic
+  against a superbug, an arms race, or a short punchy story of an invented hero and villain, and Auto
+  can pick it. It needs no API key and no GPU, generates no images, and takes no mascot, because its
+  whole cast is drawn characters and a mascot would be confused with them.
+  [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
+  details.
 
 ### Changed
 

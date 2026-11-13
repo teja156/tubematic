@@ -9,10 +9,11 @@
       ],
       "ok": [
         "whiteboard",
-        "scenes"
+        "scenes",
+        "process_cast"
       ],
       "future": "",
-      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out.",
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Process Cast is acceptable: DNS stays with Stick Explainer, which acts a request out through a system's parts as roles (user, 2026-11-12).",
       "inserts_expect": [
         "system_flow"
       ]
@@ -122,14 +123,15 @@
       "title": "How vaccines train your immune system",
       "brief": "What a vaccine shows your immune cells, how they remember it, and why a later real infection is fought off faster.",
       "expect": [
-        "stick"
+        "process_cast"
       ],
       "ok": [
+        "stick",
         "scenes",
         "illustrated"
       ],
       "future": "",
-      "note": ""
+      "note": "Immune cells are the actors of the process: Process Cast takes cells and organs as characters, Stick keeps people and roles (user, 2026-11-12)."
     },
     {
       "title": "Why compound interest grows so fast",
@@ -369,10 +371,11 @@
       ],
       "ok": [
         "illustrated",
-        "motion_graphics"
+        "motion_graphics",
+        "puppet_history"
       ],
       "future": "",
-      "note": "",
+      "note": "Puppet History is acceptable: daily life in a past era, though a walk through one place is Cartoon 3D's.",
       "inserts_expect": []
     },
     {
@@ -517,10 +520,11 @@
       "ok": [
         "scenes",
         "motion_graphics",
-        "archive_engraving"
+        "archive_engraving",
+        "puppet_history"
       ],
       "future": "",
-      "note": "",
+      "note": "Pair probe with Puppet History: the calm history of an invention told through time is Storybook Atlas's; its spread over a map is acceptable as Puppet History.",
       "inserts_expect": []
     },
     {
@@ -1185,10 +1189,11 @@
       ],
       "ok": [
         "cartoon_3d",
-        "under_the_hood"
+        "under_the_hood",
+        "process_cast"
       ],
       "future": "",
-      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Pair probe, System Flow vs Stick: a physical thing travelling a path through machines.",
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Pair probe, System Flow vs Stick: a physical thing travelling a path through machines. Process Cast is acceptable: the bag is a thing passing station by station.",
       "inserts_expect": [
         "system_flow"
       ]
@@ -2047,6 +2052,313 @@
       ],
       "future": "",
       "note": "Pair probe Storybook Reveal vs Bean Explainer: a list of tips, one idea each, stays with Bean Explainer even when the subject is a habit."
+    },
+    {
+      "title": "How to turn on two-factor login",
+      "brief": "Step by step: open your account's security settings, choose an authenticator app, scan the QR code, type the six-digit code, save the backup codes. Why a stolen password is then not enough.",
+      "expect": [
+        "midcentury_howto"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick"
+      ],
+      "future": "",
+      "note": "A numbered procedure a viewer follows on their own phone: Mid-century How-To. Bean Explainer is for a list of named items with no order to follow.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Back up your phone in three steps",
+      "brief": "How to make sure your photos survive a lost or broken phone: turn on cloud backup in settings, plug in on wifi overnight, then check the date of the last backup.",
+      "expect": [
+        "midcentury_howto"
+      ],
+      "ok": [
+        "bean_explainer"
+      ],
+      "future": "",
+      "note": "A short procedure with a done state at the end.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Set up a password manager in four steps",
+      "brief": "Install a password manager, make one strong master password, import the passwords saved in your browser, then turn on autofill so you never type one again.",
+      "expect": [
+        "midcentury_howto"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick"
+      ],
+      "future": "",
+      "note": "Setting something up from start to done.",
+      "inserts_expect": []
+    },
+    {
+      "title": "What to do when a pan catches fire",
+      "brief": "The safe steps when cooking oil catches fire: turn off the heat, slide a lid over the pan, never pour water on it, and leave it covered until it cools. Why water makes it explode.",
+      "expect": [
+        "midcentury_howto"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick"
+      ],
+      "future": "",
+      "note": "A safety rule told as steps to follow, the 1950s safety-film register.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Check a link before you click it",
+      "brief": "How to spot a fake link in a message: hold your finger on it to see the real address, read the domain from right to left, look for swapped letters, and open the site yourself instead.",
+      "expect": [
+        "midcentury_howto"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick"
+      ],
+      "future": "",
+      "note": "Pair probe with Bean Explainer's scam lists: these are steps a viewer does in order, not a catalogue of tricks.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Five password mistakes everyone makes",
+      "brief": "Reusing one password everywhere, using your pet's name, adding 1 at the end, writing it on a sticky note, and never turning on two-factor login: each mistake and why it gets you hacked.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "midcentury_howto",
+        "stick"
+      ],
+      "future": "",
+      "note": "Pair probe with Mid-century How-To: a list of named mistakes, one section each, is Bean Explainer's even though the topic is security advice.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How eight bits make a byte",
+      "brief": "Why computers count in bits, how eight of them make a byte, why a byte holds 256 patterns, and how one byte stores the letter A.",
+      "expect": [
+        "process_cast"
+      ],
+      "ok": [
+        "whiteboard",
+        "bean_explainer"
+      ],
+      "future": "",
+      "note": "Units that add up, drawn as cubes that join: Process Cast. Whiteboard is acceptable for the arithmetic.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How your white blood cells catch a virus",
+      "brief": "A virus gets into your body; the cells that patrol your blood spot it, call for help, copy themselves and swallow it, and remember it for next time.",
+      "expect": [
+        "process_cast"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Cells as the characters of a process inside the body.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Meet the seven layers of the OSI model",
+      "brief": "The seven layers of networking introduced one by one, from the cable up to the app, each with the one job it does for a message passing through.",
+      "expect": [
+        "process_cast"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick"
+      ],
+      "future": "",
+      "note": "Pair probe with Bean Explainer's lists: named parts of a system introduced one by one as characters is Process Cast's meet-the-cast.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "What a compiler does to your code, stage by stage",
+      "brief": "Your source code goes through the lexer, the parser, the type checker, the optimiser and the code generator, and each stage hands the next a different version of it.",
+      "expect": [
+        "process_cast"
+      ],
+      "ok": [
+        "stick",
+        "whiteboard"
+      ],
+      "future": "",
+      "note": "A pipeline of named stages each part passes through.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "What happens to a sandwich after you swallow it",
+      "brief": "The trip through your stomach, small intestine and liver: what each organ does to the food, which parts become energy, and what is left over.",
+      "expect": [
+        "process_cast"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Organs and food as characters at stations along one path.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How a phishing attacker steals your login",
+      "brief": "An attacker sends a fake email, you click the link, a copy of your bank's page takes your password, and the attacker logs in as you before you notice.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "bean_explainer",
+        "case_file_story",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe with Process Cast: the actors are people and roles (an attacker and a user), which is Stick Explainer's.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "Antibiotics vs superbugs: the arms race",
+      "brief": "Round one, a new antibiotic knocks the bacteria out. A few survivors carry a gene that resists it; they multiply, and the next drug has to hit harder. Who is winning now, and what keeps the drugs working.",
+      "expect": [
+        "comic_panels"
+      ],
+      "ok": [
+        "stick",
+        "process_cast",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Two sides fighting round by round, a move and an answer: Comic Panels.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "Your password vs a guessing attack",
+      "brief": "Round one, the attacker tries the hundred most common passwords. Round two, a whole dictionary. Round three, every combination. How each extra character holds the attack off for years longer.",
+      "expect": [
+        "comic_panels"
+      ],
+      "ok": [
+        "whiteboard",
+        "stick",
+        "bean_explainer",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A defender against an invader, told as a showdown. Whiteboard is acceptable for the arithmetic of the guesses.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "Spam filter vs spammer: the endless fight",
+      "brief": "Spammers misspell words, hide text in pictures and rent fresh addresses; each time, the filter learns the trick and blocks it, and the spammer comes back with a new one.",
+      "expect": [
+        "comic_panels"
+      ],
+      "ok": [
+        "stick",
+        "bean_explainer",
+        "scenes"
+      ],
+      "future": "",
+      "note": "An arms race told move by move between a hero and a villain.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "Captain Patch and the zero-day villain",
+      "brief": "A short comic about Captain Patch, an invented hero who guards a city's computers, and the villain who slips in through a hole nobody knew about, until Patch closes it.",
+      "expect": [
+        "comic_panels"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe, Comic Panels vs Illustrated: an invented hero, but a villain and a fight, told in balloons and sound effects.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How a firewall decides what gets in",
+      "brief": "Every packet that reaches your network is checked against a list of rules: where it comes from, which port it wants, and whether it belongs to a connection you started.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "process_cast",
+        "comic_panels",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe with Comic Panels: a defender, but no fight told round by round; a mechanism walked through by roles, which is Stick Explainer's.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "You're a Roman legionary for twenty-five years",
+      "brief": "You sign up at seventeen: the pay is docked for your own gear, you march twenty miles a day into Gaul, and twenty-five years later you retire with a small farm.",
+      "expect": [
+        "puppet_history"
+      ],
+      "ok": [
+        "storybook_atlas",
+        "illustrated",
+        "cartoon_3d",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Second-person history: a job and its rules in a past era, with a contract, a map and a reversal at the end.",
+      "inserts_expect": []
+    },
+    {
+      "title": "A week as a medieval peasant",
+      "brief": "You farm the lord's land three days a week for free, hand a tenth of your harvest to the church, pay to grind your grain at his mill, and still owe rent.",
+      "expect": [
+        "puppet_history"
+      ],
+      "ok": [
+        "cartoon_3d",
+        "illustrated",
+        "storybook_atlas",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Daily life and work in a past era told to 'you', the rules stacking up against you: Puppet History. Cartoon 3D is acceptable for the place.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Why the US bought Alaska for two cents an acre",
+      "brief": "In 1867 Russia sells Alaska to the United States for 7.2 million dollars; newspapers mock it as Seward's Folly, until gold is found thirty years later.",
+      "expect": [
+        "puppet_history"
+      ],
+      "ok": [
+        "storybook_atlas",
+        "motion_graphics",
+        "scenes",
+        "archive_engraving"
+      ],
+      "future": "",
+      "note": "Why a historical event happened, with a map, a price on a contract and a reversal; the real people appear only by name. Pair probe with Archive and Engraving: told as a serious documentary on old maps and newspapers, that style fits too.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Life in the trenches of World War One",
+      "brief": "What a soldier's day in a Western Front trench was like in 1916: the mud, the rats, the rotation between the front line and reserve, and the shelling.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "storybook_atlas",
+        "cartoon_3d"
+      ],
+      "future": "",
+      "note": "Pair probe with Puppet History: a past-era daily life, but a war's suffering is a tragedy, which that style never plays for laughs. Told through pictures of the real place: Photo Explainer.",
+      "inserts_expect": []
     }
   ]
 }
