@@ -116,5 +116,5 @@ never uses a hook (`useCurrentFrame`, `useState`...): it draws from its props al
 SVG filter, a gradient (SVG or CSS), a pattern, a dashed stroke (`Cel` breaks the ink line for you), a backdrop filter or blend mode, an image, embedded
 HTML or a fetch, a Remotion media or render-control part (`Img`, `Audio`, `Video`, `staticFile`,
 `delayRender`...), `Math.random`, `Date`, a timer, a dynamic import, `performance`, `crypto`,
-`window`, `document`, `globalThis`, `eval` or a `Function` constructor. The check reads comments too.
+`window`, `document`, `globalThis`, `eval`, `require`, a `constructor` lookup, `React[...]` or a `Function` constructor. The check reads comments too.
 `example-prop-alarm.tsx` is a finished one.

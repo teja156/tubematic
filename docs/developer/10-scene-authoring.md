@@ -1411,7 +1411,8 @@ On the renderer's side the shared parts are in `src/scenes/installed/characterKi
   so a held picture has three looks to cache, Process Cast's wobble is seeded once per drawing,
   so a held picture has one, and Comic Panels draws a character once per pose, face and blink; motion that changes every frame (a pop, a slide, a press) is a
   transform on the bitmap. A cache miss holds the frame with `delayRender`, and a drawing that cannot
-  be rasterised fails the render.
+  be rasterised fails the render. The cache key holds the drawing's box as well as its id and scale,
+  so two looks that share an id but need different boxes never share a bitmap.
 - `fonts.ts` loads a style's bundled faces from `public/fonts/` before the first frame
   (`useStyleFonts`). An SVG drawn as an image cannot see the page's fonts, so `fontFaceCss` inlines
   the same files as data URLs into a sprite that holds text.
@@ -1423,7 +1424,11 @@ On the MCP side:
 
 - `mcp/character_kit.py` holds the custom-prop checks every character style applies
   (`custom_prop_errors`): the id, `src`, box, text and acts limits the style passes in, and the
-  source rules, which are Bean Explainer's `FORBIDDEN_SOURCE` plus no React or Remotion hook. A
+  source rules, which are Bean Explainer's `FORBIDDEN_SOURCE`, no React or Remotion hook (any
+  `use<Name>` word, with or without a call after it), no `require`, `eval`, `Function`, `constructor`
+  lookup or `React[...]` (`STRICT_SOURCE`), and no `import` other than a static `import ... from` at the
+  top of the file, so a dynamic import and `import.meta` are refused. The rules read raw text, so each
+  looks for the bare word: a name split from its call by a comment or a bracket must not slip past. A
   drawing is rasterised outside the render's React tree, so a hook has no frame or state there; it
   draws from the props it is given (`phase`, `act`, `actT` and `text` in Mid-century How-To, `text`
   alone in Comic Panels and Process Cast). Each style names the imports it
@@ -1500,7 +1505,11 @@ territory such as France's French Guiana would stretch the fit across an ocean a
 to sea. `extra.countries` in the pack lists the names the tools accept.
 
 A held sign is drawn in front of the chest (`GEOMETRY.signY`) with both hands at its sides, because the
-rig's straight arms cannot reach above the head. Nobody carries over a hard cut, so each beat's
+rig's straight arms cannot reach above the head. A wide sign held from a side slot is pulled in from
+the frame's edges (`contract.ts::signX`), and the validator refuses a sign that would overlap the sign
+another puppet on stage holds. A puppet that holds the video's own prop draws it, reading its box from
+`customProps`. The map fills the area from y 500 to 1080 (`GEOMETRY.map`), under the date tag, and a
+card's stamp lands at y 1285 (`GEOMETRY.cardStampY`), under the card's lines. Nobody carries over a hard cut, so each beat's
 puppets `enter` in it (a puppet is busy for 16 frames after a slide-in or a move and 8 after a
 pop-in), while a costume swap lasts into later beats. A puppet in the right slot faces left and the
 others face right, so every puppet looks toward the middle of the frame. What starts at frame 0 is
@@ -1587,7 +1596,8 @@ field and the object library, and whose `reference/example-config.json` is the w
 - `summary`, when given, is the frame a summary card starts: every step listed beside a teal
   medallion, to the end of the video.
 - `shots` are cuts, each `{start, presenter, events}`; `presenter` is `left`, `right` or `none`
-  for a close-up without him. A step starts where a shot starts.
+  for a close-up without him. A step starts where a shot starts. The summary card's shot always has
+  him on the right, so its `presenter` is `right` or left out, and `left` or `none` is refused.
 - `presenter` picks the presenter's `outfit` and `hair`; the drawing is fixed.
 
 | Event | What the scene draws |
@@ -1736,8 +1746,11 @@ submits. A Comic Panels prop has no acts and draws from its `text` alone.
 The renderer's side is `src/scenes/installed/ComicPanels.tsx` with `comicPanels/`:
 
 - `contract.ts` holds the limits, timings, layouts, catalogues and the box helpers (a character is 260
-  by 300 units at scale 1, a balloon is sized from its text at about 16 characters a line, and a
-  sound effect at about 52 units a character).
+  by 300 units at scale 1 and its box grows per pose with `POSE_REACH`: a cheer's hands rise above the
+  hair, and a shrug or a point spreads past the shoulders. A balloon is sized from its text at about
+  16 characters a line, and a sound effect's box (`sfxSize`) covers both its capitals and the burst
+  behind them, centred on the item. A balloon or caption box sets smaller text when a line is longer
+  than the box takes).
 - `stage.ts` works out the camera at a frame (the panel it frames with `readRect`, its glide, a hit's punch and
   shake, the splash), how far a panel has inked in and which items have appeared.
 - `cast.tsx` draws the hero, the invented people and the villain, `ink.tsx` the palette, the halftone
@@ -1759,14 +1772,14 @@ drawn inside bitmaps, so the validator sizes their boxes itself.
 - A `comic_panels` video has anything but the one `ComicPanels` scene, from frame 0 for `totalFrames`,
   or another style uses `ComicPanels`.
 - A count or a text runs past its limit above, a layout, tone, hair, outfit, skin, kind, pose, face,
-  balloon kind or lines kind is not in the catalogue, a cast id is repeated, there is more than one
-  hero, or a prop is not in the library or the video's `customProps`.
+  balloon kind or lines kind is not in the catalogue, `layout` is not text, a cast id is repeated,
+  there is more than one hero, or a prop is not in the library or the video's `customProps`.
 - Pages or panels start out of order, a panel's start is not on a word, a layout has the wrong number
   of panels, a panel is read for under 1.5 seconds, or the splash is not on the last page.
 - An item is out of frame order, outside the frames its panel is read, within 6 frames of the panel's
   end, not within 2 frames of a word, or less than 4 frames after the item before it. Two hits on a
   page within 8 frames blur into one shake, so the check spans the page's panels, as the shake does.
-- A character reaches past its panel's top or sides, or a prop, balloon or sound effect reaches past
+- A character, with its hands and hair in its pose, reaches past its panel's top or sides, or a prop, balloon or sound effect reaches past
   any edge. A character may be cut off at the bottom, because panels frame people from the waist up.
 - A balloon or sound effect overlaps another in its panel, because they are the panel's words and one
   hidden behind another cannot be read. A balloon's `to` names nothing in its panel.
@@ -1827,6 +1840,9 @@ mascot feature.
 | `focus` | One character grows and the others at its station shrink. `""` ends it |
 | `camera` | The camera glides (20 frames) or cuts to another station |
 
+A focus ends when its actor leaves, so the others at that station are not left shrunk. A station id
+that is not text is refused with a message that says so.
+
 A face shows a feeling and never moves to the words: the narrator is off screen. The camera starts
 at the first station, and everything happens at the station it shows. Slots are never shared, and no two bodies at a station, nor a body and the furniture,
 overlap (`process_cast.py::crowding`), so a wide `units` body needs the slot beside it free.
@@ -1875,10 +1891,12 @@ card or sign is sized to its text, and a prop's label is fitted to its prop.
 - The camera moves less than 1.5 seconds after its last move, or never shows one of the stations.
 - Anything happens at a station the camera does not show: an entrance, a prop, a hand-over, a focus
   or anything a character does there. A trip is refused only when the camera shows neither end.
-- A slot is taken, or bodies overlap each other or the furniture by more than 12 px.
+- A slot is taken, or bodies overlap each other or the furniture by more than 12 px. A slot an
+  actor is leaving, an exit and its clones, stays taken until the exit's slide-out ends (`TIMING.enter`
+  frames). A body would reach past the frame's edge from an outer slot (`crowding`).
 - A character acts again while it is still entering, hopping, travelling, handing over, merging or
   joining, or less than 6 frames after its last change. A reaction or a look may come sooner.
-- A card is handed by a character that holds none or between two stations, a clone splits, a split
+- A card is handed by a character that holds none or between two stations, or to itself, a clone splits, a split
   has too few free slots, a merge has no clones, or a join is not two `units` bodies at one station
   of at most 16 cubes together.
 - An event starts inside an insert window.

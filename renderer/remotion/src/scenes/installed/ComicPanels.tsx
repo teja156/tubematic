@@ -32,7 +32,7 @@ import { hashSeed } from "./characterKit/geometry";
 import { Sprite, type SpriteBox } from "./characterKit/sprite";
 import { BUST_BOX, Bust, bustKey, type BustLook } from "./comicPanels/cast";
 import {
-  ACTOR, LAYOUTS, PAGE, PROPS, TONES, W, H, balloonSize, sfxSize,
+  ACTOR, LAYOUTS, PAGE, PROPS, TONES, W, H, balloonSize, sfxBurst, sfxSize,
   type CPActor, type CPItem, type CPPage, type ComicPanelsData,
 } from "./comicPanels/contract";
 import { FONTS } from "./comicPanels/fonts";
@@ -59,7 +59,8 @@ const PanelBorder: React.FC<{ w: number; h: number }> = ({ w, h }) => (
 // ── items ─────────────────────────────────────────────────────────────────────
 const Balloon: React.FC<{ text: string; kind: string; w: number; h: number; tip: [number, number]; seed: number }> = ({ text, kind, w, h, tip, seed }) => {
   const lines = wrap(text.toUpperCase(), 16, 3);
-  const size = 40;
+  // the balloon is sized for 16 characters a line: a longer line (a long word, a merged third line) sets smaller
+  const size = 40 * Math.min(1, 16 / Math.max(1, ...lines.map((l) => l.length)));
   const ang = Math.atan2(tip[1], tip[0]);
   const b1 = [Math.cos(ang - 0.25) * w * 0.36, Math.sin(ang - 0.25) * h * 0.36];
   const b2 = [Math.cos(ang + 0.25) * w * 0.36, Math.sin(ang + 0.25) * h * 0.36];
@@ -89,23 +90,28 @@ const Balloon: React.FC<{ text: string; kind: string; w: number; h: number; tip:
 const Sfx: React.FC<{ text: string; seed: number }> = ({ text, seed }) => {
   const size = 92;
   const rot = ((seed % 21) - 10) * 0.9;
+  const r = sfxBurst(text);
+  const base = size * 0.34; // the capitals' baseline, so they sit centred on (0, 0) with the burst
   return (
     <g transform={`rotate(${rot})`}>
-      <polygon points={starPoints(0, -size * 0.3, 12, size * 0.7, size * 1.15 + text.length * 8, seed)} fill={INK} transform="translate(7 7)" />
-      <polygon points={starPoints(0, -size * 0.3, 12, size * 0.7, size * 1.15 + text.length * 8, seed)} fill={YEL} stroke={INK} strokeWidth={5} />
-      <text x={6} y={6} textAnchor="middle" fontFamily={BANG} fontSize={size} fill={INK} stroke={INK} strokeWidth={size * 0.16} strokeLinejoin="round" letterSpacing={2}>{text}</text>
-      <text x={0} y={0} textAnchor="middle" fontFamily={BANG} fontSize={size} fill={RED} stroke={INK} strokeWidth={size * 0.12} strokeLinejoin="round" paintOrder="stroke" letterSpacing={2}>{text}</text>
+      <polygon points={starPoints(0, 0, 12, r * 0.6, r, seed)} fill={INK} transform="translate(7 7)" />
+      <polygon points={starPoints(0, 0, 12, r * 0.6, r, seed)} fill={YEL} stroke={INK} strokeWidth={5} />
+      <text x={6} y={base + 6} textAnchor="middle" fontFamily={BANG} fontSize={size} fill={INK} stroke={INK} strokeWidth={size * 0.16} strokeLinejoin="round" letterSpacing={2}>{text}</text>
+      <text x={0} y={base} textAnchor="middle" fontFamily={BANG} fontSize={size} fill={RED} stroke={INK} strokeWidth={size * 0.12} strokeLinejoin="round" paintOrder="stroke" letterSpacing={2}>{text}</text>
     </g>
   );
 };
 
 const CaptionBox: React.FC<{ text: string; w: number }> = ({ text, w }) => {
-  const lines = wrap(text.toUpperCase(), Math.max(10, Math.floor((w - 40) / 22)), 2);
+  const per = Math.max(10, Math.floor((w - 40) / 22));
+  const lines = wrap(text.toUpperCase(), per, 2);
+  // a line longer than the box takes (the second line takes the rest of the text) sets smaller
+  const size = 34 * Math.min(1, per / Math.max(1, ...lines.map((l) => l.length)));
   return (
     <g>
       <rect x={0} y={0} width={w} height={lines.length * 42 + 28} fill={YEL} stroke={INK} strokeWidth={5} />
       {lines.map((l, i) => (
-        <text key={i} x={18} y={46 + i * 42} fontFamily={COMIC} fontWeight={700} fontSize={34} fill={INK}>{l}</text>
+        <text key={i} x={18} y={46 + i * 42} fontFamily={COMIC} fontWeight={700} fontSize={size} fill={INK}>{l}</text>
       ))}
     </g>
   );
@@ -192,7 +198,7 @@ const Page: React.FC<{ data: ComicPanelsData; page: CPPage; pi: number; frame: n
       } else if (it.type === "sfx") {
         const size = sfxSize(it.text);
         const seed = hashSeed(it.text + it.frame) % 997;
-        panelNodes.push(<Sprite key={`s${k}`} id={`cp-sfx|${it.text}|${seed}`} box={{ left: -size.w / 2 - 70, top: -size.h - 60, width: size.w + 140, height: size.h * 2 + 60 }}
+        panelNodes.push(<Sprite key={`s${k}`} id={`cp-sfx|${it.text}|${seed}`} box={{ left: -size.w / 2 - 40, top: -size.h / 2 - 40, width: size.w + 80, height: size.h + 80 }}
           x={ix(it.x)} y={iy(it.y)} scale={R} draw={() => <Sfx text={it.text} seed={seed} />} fonts={FONTS} transform={p < 1 ? `scale(${1 + (1 - p) * 1.1})` : undefined} />);
       }
     });

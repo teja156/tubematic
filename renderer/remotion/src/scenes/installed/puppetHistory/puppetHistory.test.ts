@@ -7,7 +7,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   BEAT_EVENTS, BEAT_TYPES, COSTUMES, COUNTRIES, CUSTOM, ENTRANCES, EVENT_TYPES, FACES, FILLS, GEOMETRY, LIMITS, POSES, PROPS, SETS,
-  STAMP_COLORS, TIMING, puppetBox, signWidth, type PuppetHistoryData,
+  STAMP_COLORS, TIMING, puppetBox, signWidth, signX, type PuppetHistoryData,
 } from "./contract";
 import { COSTUME_DRAWINGS } from "./costumes";
 import { mapProjection, regionCentre } from "./map";
@@ -29,6 +29,9 @@ describe("the shared contract", () => {
     })));
     for (const c of CASES.puppet_box) expect(puppetBox(c.slot)).toEqual(c.box);
     for (const c of CASES.sign_width) expect(signWidth(c.text)).toBe(c.w);
+    for (const c of CASES.sign_x) expect(signX(c.slot, c.text)).toBeCloseTo(c.x);
+    // a wide sign from a side slot is pulled in to stay whole on the frame
+    expect(signX(0, "20 MILES A DAY") - signWidth("20 MILES A DAY") / 2).toBeGreaterThanOrEqual(20);
     for (const c of CASES.blink) expect(blinkAt(c.frame, c.seed)).toBe(c.blink);
   });
 
@@ -112,9 +115,9 @@ describe("the map", () => {
     expect(p[0]).toBeLessThan(x + w);
     expect(p[1]).toBeGreaterThan(y);
     expect(p[1]).toBeLessThan(y + h);
-    // France's mainland fills a good part of the map, not a speck beside French Guiana
+    // France's mainland fills a good part of the map, not a speck beside French Guiana (under a tenth of it)
     const proj = mapProjection(["France"]);
     const [ax] = proj([-4.5, 48.4])!, [bx] = proj([7.5, 48.4])!;
-    expect(bx - ax).toBeGreaterThan(w * 0.5);
+    expect(bx - ax).toBeGreaterThan(w * 0.35);
   });
 });

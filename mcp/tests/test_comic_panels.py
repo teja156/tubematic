@@ -294,3 +294,24 @@ def test_the_picture_checks_and_the_audit_read_this_style():
     assert [p["first"] for p in passes] == [w[0] for w in cp.audit_windows(EXAMPLE)]
     # each window waits until the camera has arrived and the first item has popped
     assert cp.audit_windows(EXAMPLE)[1][0] >= _panel(_data(), 0, 1)["start"] + cp.TIMING["read"]
+
+
+def test_a_characters_reach_in_its_pose_counts_against_its_panel():
+    """A cheer's hands rise above the hair and a shrug's spread past the
+    shoulders: the box the check uses is the pose's, so neither spills into the
+    gutter or the next panel."""
+    for c in CASES["actor_box"]:
+        rect = cp.LAYOUTS[c["layout"]][c["panel"]]
+        assert list(cp.actor_box(rect, c["x"], c["y"], c["pose"], c["scale"])) == pytest.approx(c["box"])
+    assert C["POSE_REACH"] == cp.POSE_REACH
+
+    def cheer_high(d):
+        a = _item(d, "actor")
+        a.update(pose="cheer", y=0.24)  # a stand fits here; a cheer's hands cross the panel's top
+    assert _check(_with(lambda d: _item(d, "actor").update(y=0.24))) == []
+    assert any("hands and hair included" in p for p in _check(_with(cheer_high)))
+
+
+def test_a_layout_of_the_wrong_type_is_a_sentence():
+    problems = _check(_with(lambda d: d["pages"][0].update(layout=["2+2"])))
+    assert any("layout must be one of" in p for p in problems)

@@ -38,6 +38,9 @@ LIMITS = {"maxCast": 4, "maxBeats": 14, "maxEvents": 100, "nameChars": 18, "sign
 TIMING = {"slide": 16, "pop": 8, "move": 16, "minActorGap": 6, "stamp": 7, "strike": 14, "fill": 12, "arrow": 18,
           "endMargin": 6}
 SLOTS = 3
+SLOT_X = (210, 540, 870)
+W = 1080
+SIGN_EDGE = 20
 POSES = ("stand", "point", "salute", "wave", "shrug", "hold", "cheer", "panic", "think", "sign")
 FACES = ("stern", "happy", "proud", "worried", "shock", "sad", "smug", "angry")
 COSTUMES = ("plain", "dress", "peasant", "farmer", "worker", "clerk", "noble", "royal", "knight", "legionary",
@@ -86,6 +89,26 @@ def check_scene_use(visual_style: str, scenes: list) -> str:
 
 def custom_prop_errors(custom, video_id: str, library: dict, sources: dict | None):
     return ck.custom_prop_errors(custom, video_id, library, sources, CUSTOM, _ALLOWED_IMPORT, _ALLOWED_TEXT)
+
+
+def sign_width(text: str) -> int:
+    return max(160, len(text) * 34 + 60)
+
+
+def sign_x(slot: int, text: str) -> float:
+    """A sign's centre (contract.ts signX): on its puppet, pulled in from the frame's edges."""
+    half = sign_width(text) / 2
+    return min(max(SLOT_X[slot], SIGN_EDGE + half), W - SIGN_EDGE - half)
+
+
+def _sign_clash(on: dict) -> tuple[str, str] | None:
+    """Two puppets on stage whose held signs overlap, or None."""
+    held = [(who, p["slot"], p["sign"]) for who, p in on.items() if p["sign"] and p.get("gone") is None]
+    for i, (a, sa, ta) in enumerate(held):
+        for b, sb, tb in held[i + 1:]:
+            if abs(sign_x(sa, ta) - sign_x(sb, tb)) < (sign_width(ta) + sign_width(tb)) / 2 - 8:
+                return a, b
+    return None
 
 
 def _text_ok(v, limit: int, empty: bool = False) -> bool:
@@ -313,6 +336,10 @@ def _check_events(events, where, kind, start, end, cast_ids, catalog, focus, n_l
                     slots[slot] = who
                     p["slot"] = slot
                     p["busy"] = f + TIMING["move"]
+                    clash = _sign_clash(on)
+                    if clash:
+                        err(f"{at}: the signs {clash[0]} and {clash[1]} hold up would overlap; lower one first or "
+                            "shorten them.")
             elif t == "exit":
                 p["gone"] = f + TIMING["slide"]
             elif t == "act":
@@ -328,6 +355,12 @@ def _check_events(events, where, kind, start, end, cast_ids, catalog, focus, n_l
             elif t == "sign":
                 if not _text_ok(e.get("text"), LIMITS["signChars"], empty=True):
                     err(f"{at}: text must be at most {LIMITS['signChars']} characters (\"\" lowers the sign).")
+                else:
+                    p["sign"] = e["text"]
+                    clash = _sign_clash(on)
+                    if clash:
+                        err(f"{at}: the signs {clash[0]} and {clash[1]} hold up would overlap; lower one first, "
+                            "shorten them or stand the puppets further apart.")
             elif t == "hold":
                 prop = e.get("prop")
                 if prop == "":

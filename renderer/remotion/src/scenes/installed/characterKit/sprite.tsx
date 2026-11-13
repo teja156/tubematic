@@ -76,7 +76,8 @@ export type SpriteProps = {
 /** A drawing at (x, y) as a cached bitmap. */
 export const Sprite: React.FC<SpriteProps> = ({ id, draw, box, x, y, scale = 1, transform, opacity, flip, fonts }) => {
   const s = Math.round(scale * 100) / 100;
-  const key = `${id}@${s}`;
+  // the box is part of the key: two looks that round to one id but need different boxes never share a bitmap
+  const key = `${id}@${s}@${box.left},${box.top},${box.width},${box.height}`;
   const url = urls.get(key);
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   useLayoutEffect(() => {

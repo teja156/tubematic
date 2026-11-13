@@ -822,6 +822,8 @@ Covers `mcp/puppet_history.py`, the checks `write_scene_config` runs on a Puppet
   an event off its word, nothing on the first set at frame 0, and a still stretch. A value of the
   wrong type gets a sentence back and raises nothing.
 - A puppet is busy while it slides in, and its slot is free again once it has slid out.
+- A wide sign held from a side slot is pulled in from the frame's edges (`sign_x`, equal to the
+  renderer's `signX`), and two puppets whose signs would overlap are refused.
 - An event inside an insert window is refused, and the scene may be used only by this style.
 - The skill's example prop passes the source rules; a hook, an SVG pattern and an import of another
   style's file are refused.
@@ -874,9 +876,14 @@ How-To config, `render_style_props`, the picture checks and the text audit's per
   press as a change and a label as none. The text audit samples each shot once, from after its
   header has come in.
 
+- A summary card whose presenter is `left` or `none` is refused, because the renderer always stands
+  him on the right there.
+
 Trap: a drawing is rasterised once per look outside the render's React tree, so a hook in an
-agent's prop would read no frame and no state. The hook rule is the one source rule the character
-styles add to Bean Explainer's.
+agent's prop would read no frame and no state. The character styles add the hook rule and the
+strict source rules (`character_kit.py::STRICT_SOURCE`) to Bean Explainer's. The rules read raw text,
+so each looks for the bare word, and a name split from its call by a comment or a bracket must not
+slip past.
 
 ### `test_comic_panels.py`
 
@@ -900,10 +907,14 @@ Covers `mcp/comic_panels.py`, the checks `write_scene_config` runs on a Comic Pa
 - Balloons and sound effects in one panel may not cover each other, because they are the panel's
   words and one hidden behind another cannot be read.
 - A character may be cut off at the bottom of its panel and no other edge, because panels frame
-  people from the waist up.
+  people from the waist up. Its box depends on its pose (`actor_box`): a cheer's hands above the
+  hair and a shrug's spread past the shoulders must stay inside the top and sides.
+- The sound-effect box covers the capitals and the burst, both centred on the item, and a `layout`
+  that is not text gets a sentence back.
 - An item, a panel or a page starting inside an insert window is refused.
 - The skill's example prop passes the source rules; a hook, an SVG pattern and an import of another
-  style's file are refused.
+  style's file are refused. So are `require`, `eval`, `Function`, a `constructor` lookup, `React[...]`,
+  a dynamic import and `import.meta`, and a hook name split from its call by a comment or a bracket.
 - `write_scene_config` writes a sound config with the style's captions and refuses a broken one by
   the style's name. `render_style_props` returns the picture for this style (the renderer stubbed),
   and the preview script's `STYLES` table names this style's preview component.
@@ -941,7 +952,10 @@ Covers `mcp/process_cast.py`, the checks `write_scene_config` runs on a Process 
   counts as a change and a look does not, and the text audit samples each station after the
   camera's glide.
 - Bodies that would overlap each other or the furniture are refused
-  (`process_cast.py::crowding`).
+  (`process_cast.py::crowding`), as is a body that would reach past the frame's edge in an outer
+  slot.
+- A slot an exiting actor and its clones leave is not free until the slide-out ends, a `hand` from
+  an actor to itself is refused, and a station id that is not text gets a sentence back.
 
 Trap: the slots are spaced for ordinary bodies, so a `units` body that grows past them by a join
 draws over its neighbour or the furniture unless the crowding check catches it.

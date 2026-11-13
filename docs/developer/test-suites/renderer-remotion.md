@@ -157,6 +157,8 @@ Covers `contract.ts`, `stage.ts`, the library and the map
   edge and stops dead in its slot, a puppet in the right slot faces left, a swapped costume lasts
   into later beats, and a card line is struck out before the new value is scrawled. Beats change
   with a hard cut.
+- A sign's centre is pulled in from the frame's edges for a wide sign in a side slot (`signX`, the
+  cases `mcp/tests/test_puppet_history.py` runs).
 - The map knows today's countries by `world-atlas`'s names and fits the focus countries by their
   largest landmass, so a far territory does not pull the map across an ocean.
 
@@ -215,7 +217,8 @@ Covers `contract.ts`, `stage.ts` and the library
 - The worked example brings its first character in at frame 0 at the first station with the camera
   there; a split shows its clones as silhouettes for the first frames and a merge takes them back;
   a join adds the cubes up and removes the other body; the camera glides to the next station while
-  the character makes the trip; a focus holds until it is cleared.
+  the character makes the trip; a focus holds until it is cleared and ends when its actor leaves, so
+  the others at the station are not left shrunk.
 
 ## System Flow
 

@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  ACTOR, BALLOONS, CAST_KINDS, CUSTOM, FACES, HAIRS, ITEM_TYPES, LAYOUTS, LIMITS, LINES, OUTFITS, PAGE, POSES, PROPS, SCALE, SKINS,
+  ACTOR, BALLOONS, CAST_KINDS, POSE_REACH, CUSTOM, FACES, HAIRS, ITEM_TYPES, LAYOUTS, LIMITS, LINES, OUTFITS, PAGE, POSES, PROPS, SCALE, SKINS,
   TIMING, TONES, balloonSize, itemBox, sfxSize, type ComicPanelsData,
 } from "./contract";
 import { PROP_DRAWINGS } from "./props";
@@ -22,7 +22,7 @@ describe("the shared contract", () => {
   it("has the constants the validator uses", () => {
     expect(CASES.constants).toEqual(JSON.parse(JSON.stringify({
       LIMITS, TIMING, PAGE, LAYOUTS, TONES: Object.keys(TONES), CAST_KINDS, HAIRS, OUTFITS, SKINS, POSES, FACES, BALLOONS, LINES, ITEM_TYPES,
-      PROPS, SCALE, CUSTOM, ACTOR,
+      PROPS, SCALE, CUSTOM, ACTOR, POSE_REACH,
     })));
   });
 

@@ -100,4 +100,17 @@ describe("the stage", () => {
     expect(focusAt(data, 49)).toBe("");
     expect(focusAt(data, 60)).toBe("bit");
   });
+
+  it("ends a focus when its actor leaves, so the others at its station are not left shrunk", () => {
+    const events = [
+      { type: "enter" as const, frame: 0, who: "bit", station: DATA.stations[0].id, slot: 1 },
+      { type: "enter" as const, frame: 10, who: "more", station: DATA.stations[0].id, slot: 3 },
+      { type: "focus" as const, frame: 30, who: "bit" },
+      { type: "exit" as const, frame: 60, who: "bit" },
+    ];
+    const data: ProcessCastData = { ...DATA, events };
+    const more = (f: number) => castAt(data, f).actors.find((a) => a.id === "more")!.scale;
+    expect(more(40)).toBeLessThan(1);
+    expect(more(61)).toBe(GEOMETRY.stageScale);
+  });
 });

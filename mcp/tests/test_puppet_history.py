@@ -191,6 +191,14 @@ def test_the_example_prop_passes_the_source_rules():
     ("const f = useCurrentFrame();", "a React or Remotion hook"),
     ('<pattern id="p" />', "an SVG pattern"),
     ('import x from "../../installed/comicPanels/ink";', "imports ../../installed/comicPanels/ink"),
+    # found in review: names split from their call by a comment, a comma or a bracket
+    ('import/**/("https://x/y.js")', "an import other than a static"),
+    ("const m = import.meta;", "an import other than a static"),
+    ('(0,eval)("1")', "eval"),
+    ('require/**/("fs")', "require"),
+    ('(()=>{}).constructor("return window")()', "a constructor lookup"),
+    ('React["useState"](0)', "React[...] lookups"),
+    ("const {useState: u} = React; u(0);", "a React or Remotion hook"),
 ])
 def test_a_custom_prop_breaking_a_source_rule_is_refused(bad, fragment):
     problems = _check(_with_hourglass(), sources={"vid_ph1/prop-hourglass": HOURGLASS + "\n" + bad}, video_id="vid_ph1")
@@ -265,3 +273,27 @@ def test_the_picture_checks_and_the_audit_read_this_style():
     assert [p["first"] for p in passes] == [w[0] for w in ph.audit_windows(EXAMPLE)]
     # each window waits until a slide-in has landed
     assert ph.audit_windows(EXAMPLE)[1][0] >= _beat(_data(), "card")["start"] + ph.TIMING["slide"]
+
+
+def test_a_wide_sign_from_a_side_slot_is_pulled_in_and_two_signs_never_overlap():
+    """A 14-character sign is 536 wide: centred on a side slot it would leave
+    the frame, so it is pulled in; two puppets' signs side by side would cover
+    each other, so the second is refused."""
+    for c in CASES["sign_x"]:
+        assert ph.sign_x(c["slot"], c["text"]) == pytest.approx(c["x"])
+    for c in CASES["sign_width"]:
+        assert ph.sign_width(c["text"]) == c["w"]
+    assert tuple(C["GEOMETRY"]["slots"]) == ph.SLOT_X
+
+    def two_signs(d):
+        b = _beat(d, "set", 1)
+        b["events"][1:1] = [{"type": "enter", "frame": 390, "who": "caesar", "slot": 2, "from": "cut"}]
+        b["events"].insert(3, {"type": "sign", "frame": 429, "who": "caesar", "text": "SO FAR"})
+    assert any("would overlap" in p for p in _check(_with(two_signs)))
+
+    def short_signs(d):
+        two_signs(d)
+        for e in _beat(d, "set", 1)["events"]:
+            if e["type"] == "sign" and e["text"]:
+                e["text"] = "NO" if e["who"] == "caesar" else "20 MILES"
+    assert not any("would overlap" in p for p in _check(_with(short_signs)))

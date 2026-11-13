@@ -109,6 +109,9 @@ def crowding(on: dict, kinds: dict) -> str:
                     return f"{a} and {b} overlap at {st}: leave a slot between them, or put one at another station"
             if kind != "stage" and xa + ha - tol > GEOMETRY["furnitureX"] - FURNITURE_W[kind] / 2:
                 return f"{a} overlaps the {kind} at {st}: put it in a slot further left"
+            # the camera centres the station on the frame (W / 2): a wide body in an outer slot can reach past its edge
+            if W / 2 + xa - ha < -tol or W / 2 + xa + ha > W + tol:
+                return f"{a} reaches past the frame's edge at {st}: put it in a slot nearer the middle"
     return ""
 
 
@@ -222,7 +225,9 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], extr
     last_ok = total - TIMING["enter"]
 
     on: dict[str, dict] = {}    # actor id (clones too) -> {station, slot, busy_until, last, card, units, clones}
-    cam = {"station": stations[0].get("id") if isinstance(stations[0], dict) else None, "at": -10**6}
+    first = stations[0].get("id") if isinstance(stations[0], dict) else None
+    cam = {"station": first if isinstance(first, str) else None, "at": -10**6}
+    leaving: dict[tuple, int] = {}  # (station, slot) -> the frame an exiting actor is gone from it
     changes: set[int] = {0}
     seen_stations = {cam["station"]}
 
@@ -233,6 +238,8 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], extr
         if not ck.is_int(slot) or not 0 <= slot < slot_count(kinds[station]):
             return f"slot must be a whole number from 0 to {slot_count(kinds[station]) - 1} at a {kinds[station]} station"
         taken = [a for a, s in on.items() if a != who and s["station"] == station and s["slot"] == slot]
+        if not taken and leaving.get((station, slot), -1) > f:
+            return f"slot {slot} at {station} is still being left until frame {leaving[(station, slot)]}"
         return f"slot {slot} at {station} is taken by {taken[0]}" if taken else ""
 
     def at_camera(station: str, f: int) -> bool:
@@ -302,8 +309,8 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], extr
             continue
         if t == "hand":
             a, b = present(e.get("from")), present(e.get("to"))
-            if not a or not b:
-                err(f"{at}: from and to must be two actors on stage.")
+            if not a or not b or a is b:
+                err(f"{at}: from and to must be two different actors on stage.")
                 continue
             if not a["card"]:
                 err(f"{at}: {e['from']} holds no card to hand over (give it one with carry first).")
@@ -369,9 +376,11 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], extr
             s["busy_until"] = f + (TIMING["trip"] if trip else TIMING["hop"])
             s["station"], s["slot"] = st, e["slot"]
         elif t == "exit":
-            del on[who]
-            for c in s["clones"]:
-                on.pop(c, None)
+            # the renderer draws it leaving for TIMING["enter"] frames: its slot (and its clones') is not free yet
+            for gone in [who, *s["clones"]]:
+                g = on.pop(gone, None)
+                if g:
+                    leaving[(g["station"], g["slot"])] = f + TIMING["enter"]
         elif t == "clone":
             n = e.get("count")
             if s["of"]:

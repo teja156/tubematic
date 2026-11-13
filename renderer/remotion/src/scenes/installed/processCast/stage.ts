@@ -246,8 +246,11 @@ export function focusAt(data: ProcessCastData, frame: number): string {
 /** The whole cast at a frame, in the world's coordinates. */
 export function castAt(data: ProcessCastData, frame: number): CastState {
   const { tracks, props, flying, camera } = tracksAt(data, frame);
-  const focus = focusAt(data, frame);
-  const focusStation = focus ? tracks.get(focus)?.station ?? -1 : -1;
+  // a focus ends when its actor leaves (an exit, or merging back into another), even without a focus "" event
+  const focusTrack = tracks.get(focusAt(data, frame));
+  const focusGone = !focusTrack || (focusTrack.exitAt >= 0 && frame >= focusTrack.exitAt) || (focusTrack.vanishAt >= 0 && frame >= focusTrack.vanishAt);
+  const focus = focusGone ? "" : focusAt(data, frame);
+  const focusStation = focus ? focusTrack!.station : -1;
   const actors: ActorState[] = [];
   for (const t of tracks.values()) {
     if (t.exitAt >= 0 && frame >= t.exitAt + TIMING.enter) continue;

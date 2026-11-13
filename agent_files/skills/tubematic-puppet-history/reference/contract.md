@@ -80,8 +80,10 @@ The frame is 1080 x 1920. Puppets are framed from the waist up; the waist is at 
 set's foreground band (from y 1600). The three slots are at x 210, 540 and 870, and a puppet in the
 right slot faces left, the others right. A puppet is about 330 wide and 470 tall from the waist, its
 hat included. Name plates sit on the foreground band near y 1735; a sign is held in front of the
-chest near y 1440; a stamp lands near y 860 (y 1180 on a card); the date sits near the top left (y
-400). Captions sit near the top, about y 270. A map fills x 40 to 1040, y 330 to 1070; a card x 150
+chest near y 1440 (a wide sign from a side slot is pulled in from the frame's edge, and two signs
+on stage may not overlap); a stamp lands near y 860 (y 1285 on a card, under its lines); the date sits
+near the top left (y 400). Captions sit near the top, about y 270. A map fills x 40 to 1040, y 500 to
+1080, under the date; a card x 150
 to 930, y 430 to 1370.
 
 ## Hand props
@@ -118,6 +120,6 @@ prop is drawn once into a cached picture, so it never uses a hook (`useCurrentFr
 it draws from `text` alone. It never uses an SVG filter, a gradient (SVG or CSS), a dashed stroke, a
 backdrop filter or blend mode, an image, embedded HTML or a fetch, a Remotion media or render-control
 part (`Img`, `Audio`, `Video`, `staticFile`, `delayRender`...), `Math.random`, `Date`, a timer, a
-dynamic import, `performance`, `crypto`, `window`, `document`, `globalThis`, `eval` or a `Function`
+dynamic import, `performance`, `crypto`, `window`, `document`, `globalThis`, `eval`, `require`, a `constructor` lookup, `React[...]` or a `Function`
 constructor, and no SVG pattern. The check reads comments too. `example-prop-hourglass.tsx` is a
 finished one.

@@ -103,6 +103,6 @@ prop is drawn once into a cached picture, so it never uses a hook (`useCurrentFr
 it draws from `text` alone. It never uses an SVG filter, a gradient (SVG or CSS), a dashed stroke, a
 backdrop filter or blend mode, an image, embedded HTML or a fetch, a Remotion media or render-control
 part (`Img`, `Audio`, `Video`, `staticFile`, `delayRender`...), `Math.random`, `Date`, a timer, a
-dynamic import, `performance`, `crypto`, `window`, `document`, `globalThis`, `eval` or a `Function`
+dynamic import, `performance`, `crypto`, `window`, `document`, `globalThis`, `eval`, `require`, a `constructor` lookup, `React[...]` or a `Function`
 constructor, and no SVG pattern of its own: halftone dots come from `Dots` in `ink`. The check reads
 comments too. `example-prop-trophy.tsx` is a finished one.

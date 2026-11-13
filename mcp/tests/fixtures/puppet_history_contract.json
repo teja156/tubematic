@@ -46,14 +46,14 @@
       "signY": 1440,
       "signH": 128,
       "stampY": 860,
-      "cardStampY": 1180,
+      "cardStampY": 1285,
       "dateX": 70,
       "dateY": 400,
       "map": [
         40,
-        330,
+        500,
         1000,
-        740
+        580
       ],
       "card": [
         150,
@@ -348,6 +348,33 @@
     {
       "text": "20 MILES A DAY",
       "w": 536
+    }
+  ],
+  "sign_x": [
+    {
+      "slot": 0,
+      "text": "TAX",
+      "x": 210
+    },
+    {
+      "slot": 0,
+      "text": "20 MILES A DAY",
+      "x": 288
+    },
+    {
+      "slot": 1,
+      "text": "20 MILES A DAY",
+      "x": 540
+    },
+    {
+      "slot": 2,
+      "text": "NO",
+      "x": 870
+    },
+    {
+      "slot": 2,
+      "text": "TAXES TOO HIGH",
+      "x": 792
     }
   ],
   "blink": [

@@ -26,8 +26,21 @@ ID = re.compile(r"^[a-z0-9_]{1,24}$")
 # A character style's drawing is rasterised into a cached bitmap outside the
 # render's React tree, so a hook (useCurrentFrame, useState...) has no frame or
 # state to read there: the drawing gets everything it needs as props.
-HOOK = (re.compile(r"\buse[A-Z]\w*\s*\("),
+HOOK = (re.compile(r"\buse[A-Z]\w*\b"),
         "a React or Remotion hook (useCurrentFrame, useState...): the drawing gets its phase, act and text as props")
+# The source rules read the raw text, so each looks for the bare word: a comment, a bracket or a
+# comma between the name and its call (`import/**/(...)`, `(0, eval)(...)`, `React["useState"]`)
+# must not slip a dynamic import, an eval or a hook past them.
+STRICT_SOURCE = (
+    (re.compile(r"\brequire\b"), "require: a prop imports with `import` only"),
+    (re.compile(r"\beval\b"), "eval"),
+    (re.compile(r"\bFunction\b"), "the Function constructor"),
+    (re.compile(r"\.constructor\b|\bconstructor\s*\]|[\"']constructor[\"']"), "a constructor lookup, which can build a function from text"),
+    (re.compile(r"\bReact\s*\["), "React[...] lookups (a hook by another name)"),
+)
+# A static import at the top of the file; once these are taken out, any other `import` is dynamic or import.meta.
+_STATIC_IMPORT = re.compile(r"""^\s*import\s[^;]*?\bfrom\s*["'][^"']+["']\s*;?|^\s*import\s*["'][^"']+["']\s*;?""", re.M)
+_OTHER_IMPORT = re.compile(r"\bimport\b")
 
 
 def is_int(v) -> bool:
@@ -108,9 +121,12 @@ def custom_prop_errors(custom, video_id: str, library: dict, sources: dict | Non
             if body is None:
                 errs.append(f"{where} ({cid}): there is no {src}.tsx; write it with write_scene_file first.")
                 continue
-            for pattern, why in (*FORBIDDEN_SOURCE, HOOK):
+            for pattern, why in (*FORBIDDEN_SOURCE, HOOK, *STRICT_SOURCE):
                 if pattern.search(body):
                     errs.append(f"{where} ({cid}): the drawing uses {why}.")
+            if _OTHER_IMPORT.search(_STATIC_IMPORT.sub("", body)):
+                errs.append(f"{where} ({cid}): the drawing uses an import other than a static `import ... from` at the "
+                            "top of the file (a dynamic import or import.meta).")
             named = [next((g for g in groups if g), "") for groups in _IMPORT.findall(body)]
             bad = [m or '""' for m in named if not allowed_import.match(m)]
             if bad:

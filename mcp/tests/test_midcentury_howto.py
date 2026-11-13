@@ -344,3 +344,12 @@ def test_the_text_audit_samples_each_shot_once_settled():
     assert [p["first"] for p in passes] == [w[0] for w in windows]
     starts = [s["start"] for s in _data()["shots"]]
     assert all(w[0] >= s + mc.TIMING["headerIn"] for w, s in zip(windows, starts))
+
+
+def test_the_summary_cards_presenter_stands_on_the_right_only():
+    """The renderer always stands the presenter right of the summary list, so
+    "none" there would be accepted and then drawn anyway."""
+    for side in ("none", "left"):
+        problems = _check(_with(lambda d: d["shots"][-1].update(presenter=side)))
+        assert any("the presenter stands on the right" in p for p in problems), (side, problems)
+    assert _check(_with(lambda d: d["shots"][-1].update(presenter="right"))) == []

@@ -317,11 +317,12 @@ def _check_shot(shot, i, start, end, kind, catalog, boxes, extra, on_word, runs,
     if side not in SIDES:
         err(f"{where}: presenter must be one of {', '.join(SIDES)}.")
         return
-    if kind == "summary" and side == "left":
-        side = "right"
+    if kind == "summary" and side != "right":
+        # the renderer always stands the presenter on the right of the summary card
         if "presenter" in shot:
             err(f"{where} is the summary card, which lists the steps on the left: the presenter stands on the "
-                "right (leave presenter out, or set it to right or none).")
+                "right (leave presenter out, or set it to right).")
+        side = "right"
     events = shot.get("events")
     if not isinstance(events, list) or len(events) > LIMITS["maxEventsPerShot"]:
         err(f"{where}: events must be a list of at most {LIMITS['maxEventsPerShot']}.")

@@ -78,11 +78,12 @@ export const GEOMETRY = {
   signH: 128,
   // A stamp's centre on a set or a map, on a card (under its lines), and the hand-lettered date tag's top-left corner.
   stampY: 860,
-  cardStampY: 1180,
+  cardStampY: 1285,
   dateX: 70,
   dateY: 400,
   // The map's area on a map beat; the card's box on a card beat.
-  map: [40, 330, 1000, 740],
+  // The map starts under the date tag (top 400, about 90 tall) and ends above the tallest hat.
+  map: [40, 500, 1000, 580],
   card: [150, 430, 780, 940],
 } as const;
 
@@ -207,3 +208,9 @@ export function puppetBox(slot: number): [number, number, number, number] {
 
 /** A held-up sign's width for its text: about 34 px a character plus its frame. */
 export const signWidth = (text: string) => Math.max(160, text.length * 34 + 60);
+
+/** A sign's centre: on its puppet, pulled in from the frame's edges so a wide sign from a side slot stays whole. */
+export function signX(slot: number, text: string): number {
+  const half = signWidth(text) / 2, edge = 20;
+  return Math.min(Math.max(GEOMETRY.slots[slot], edge + half), W - edge - half);
+}

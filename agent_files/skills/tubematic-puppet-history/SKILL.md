@@ -66,6 +66,9 @@ wrong. Fix every problem it lists, then write again.
   (left, middle, right), one puppet a slot. A puppet is busy for 16 frames after a slide-in or a move
   and 8 after a pop-in, and two of its changes are at least 6 frames apart (or on the same frame).
   Every other puppet event needs it on stage.
+- **Signs:** two puppets' signs on stage never overlap (a 14-character sign is about 540 wide, so
+  hold long signs one at a time or from slots 0 and 2); a wide sign from a side slot is pulled in from
+  the frame's edge.
 - **Text:** a sign at most 14 characters, a stamp at most 10, a date at most 12, a struck-out line's
   new value at most 12, a map label at most 18, a prop's label no more than its slot takes.
 - **Maps:** a fill, an arrow or a label names countries from the beat's `focus`; at most 6 arrows.

@@ -21,7 +21,7 @@ import { useCustomDrawings } from "./characterKit/customProps";
 import { useStyleFonts } from "./characterKit/fonts";
 import { hashSeed } from "./characterKit/geometry";
 import { Sprite, type SpriteBox } from "./characterKit/sprite";
-import { GEOMETRY, POSES, PROPS, signWidth, type PHBeat, type PuppetHistoryData } from "./puppetHistory/contract";
+import { GEOMETRY, POSES, PROPS, signWidth, signX, type PHBeat, type PHCustomProp, type PuppetHistoryData } from "./puppetHistory/contract";
 import { FONTS } from "./puppetHistory/fonts";
 import { CREAM, HAND, INK, LW, PAPER, RED, ROUND, TYPE, WOOD, WOOD_LIGHT, inked, type PropDrawProps } from "./puppetHistory/ink";
 import { MapView } from "./puppetHistory/map";
@@ -67,7 +67,7 @@ const stampBox = (text: string): SpriteBox => {
 // the right arm's raise per pose, for where a held prop sits
 const POSE_R: Record<string, number> = Object.fromEntries(Object.entries(POSES).map(([k, v]) => [k, v.r]));
 
-const PuppetSprite: React.FC<{ p: PuppetState; custom: Record<string, PropDrawing>; frame: number }> = ({ p, custom, frame }) => {
+const PuppetSprite: React.FC<{ p: PuppetState; custom: Record<string, PropDrawing>; specs: readonly PHCustomProp[]; frame: number }> = ({ p, custom, specs, frame }) => {
   const look = { costume: p.costume, pose: p.pose, face: p.face, blink: p.blink };
   const sq = frame - p.since;
   const squash = sq >= 0 && sq < 2 && p.pop >= 1 ? (sq === 0 ? "scale(1.04, 0.96)" : "scale(1.02, 0.98)") : undefined;
@@ -79,7 +79,7 @@ const PuppetSprite: React.FC<{ p: PuppetState; custom: Record<string, PropDrawin
   ];
   if (p.prop && p.pop >= 1) {
     const Draw = (PROP_DRAWINGS as Record<string, PropDrawing>)[p.prop] ?? custom[p.prop];
-    const box = (PROPS as Record<string, { w: number; h: number }>)[p.prop];
+    const box = (PROPS as Record<string, { w: number; h: number }>)[p.prop] ?? specs.find((c) => c.id === p.prop);
     if (Draw && box) {
       const [hx, hy] = handAt(1, POSE_R[p.pose] ?? -14);
       const x = p.x + (p.flip ? -hx : hx) * S, y = GEOMETRY.waistY + hy * S - (box.h * S) / 2 + 24;
@@ -89,8 +89,10 @@ const PuppetSprite: React.FC<{ p: PuppetState; custom: Record<string, PropDrawin
   }
   if (p.sign && p.pop >= 1) {
     const w = signWidth(p.sign);
+    // centred on the puppet, pulled in from the edge for a wide sign held from a side slot (it moves with a moving puppet)
+    const x = p.x + signX(p.slot, p.sign) - GEOMETRY.slots[p.slot];
     parts.push(<Sprite key="sign" id={`ph-sign|${p.sign}`} draw={() => <SignBoard text={p.sign} />}
-      box={{ left: -w / 2 - 8, top: -GEOMETRY.signH / 2 - 8, width: w + 16, height: GEOMETRY.signH + 16 }} x={p.x} y={GEOMETRY.signY} fonts={FONTS} />);
+      box={{ left: -w / 2 - 8, top: -GEOMETRY.signH / 2 - 8, width: w + 16, height: GEOMETRY.signH + 16 }} x={x} y={GEOMETRY.signY} fonts={FONTS} />);
   }
   return <>{parts}</>;
 };
@@ -170,7 +172,7 @@ export const PuppetHistory: React.FC<PuppetHistoryProps> = ({ puppetHistory: dat
         </>
       ) : null}
       {beat.type === "card" ? <div style={{ position: "absolute", inset: 0, background: WOOD_LIGHT }} /> : null}
-      {puppets.map((p) => <PuppetSprite key={p.id} p={p} custom={custom} frame={frame} />)}
+      {puppets.map((p) => <PuppetSprite key={p.id} p={p} custom={custom} specs={data.customProps ?? []} frame={frame} />)}
       {beat.type !== "card" ? <Front color={beat.type === "set" ? SET_DRAWINGS[beat.set].front : WOOD} /> : null}
       {puppets.filter((p) => names.get(p.id) && p.pop >= 1).map((p) => <NamePlate key={`n-${p.id}`} x={p.x} text={names.get(p.id)!} />)}
       {beat.type === "card" ? <Card beat={beat} frame={frame} /> : null}

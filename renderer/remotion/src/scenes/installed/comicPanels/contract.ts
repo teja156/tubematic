@@ -136,6 +136,30 @@ export const CUSTOM = { maxProps: 8, minSide: 60, maxSide: 500, maxText: 24, max
 // A character in a panel, in page units at scale 1: its box from the waist up (panels frame characters as busts).
 export const ACTOR = { w: 260, h: 300 } as const;
 
+/*
+ * How far a character reaches from its centre in each pose, at scale 1: to
+ * each side (raised or spread hands) and upwards (hair, a hood, hands over the
+ * head). It stands on its bust's bottom edge, ACTOR.h / 2 below the centre.
+ * The checks use these, so a cheer or a shrug cannot spill out of its panel.
+ */
+export const POSE_REACH = {
+  stand: { side: 135, up: 180 },
+  point: { side: 180, up: 180 },
+  panic: { side: 150, up: 180 },
+  cheer: { side: 140, up: 210 },
+  think: { side: 135, up: 180 },
+  type: { side: 135, up: 180 },
+  shrug: { side: 180, up: 180 },
+  facepalm: { side: 135, up: 180 },
+} as const;
+
+/** A character's box in page units (x0, y0, x1, y1) at (x, y), fractions of its panel. */
+export function actorBox(rect: readonly number[], x: number, y: number, pose: keyof typeof POSE_REACH, scale = 1): [number, number, number, number] {
+  const cx = rect[0] + x * rect[2], cy = rect[1] + y * rect[3];
+  const r = POSE_REACH[pose];
+  return [cx - r.side * scale, cy - r.up * scale, cx + r.side * scale, cy + (ACTOR.h / 2) * scale];
+}
+
 export type Layout = keyof typeof LAYOUTS;
 export type Tone = keyof typeof TONES;
 export type CastKind = (typeof CAST_KINDS)[number];
@@ -179,5 +203,13 @@ export function balloonSize(text: string): { w: number; h: number } {
   return { w: Math.max(140, chars * 20 + 70), h: lines * 46 + 60 };
 }
 
-/** A sound effect's box: slammed capitals about 70 units tall. */
-export const sfxSize = (text: string) => ({ w: Math.max(1, text.length) * 52 + 40, h: 110 });
+/*
+ * A sound effect: slammed capitals (92 units, about 46 a character) on a
+ * jagged burst whose points reach `sfxBurst(text)` from its centre across and
+ * 0.78 of that up and down, give or take 15%. Both sit on the item's (x, y).
+ */
+export const sfxBurst = (text: string) => 60 + Math.max(1, text.length) * 7;
+export const sfxSize = (text: string) => {
+  const r = sfxBurst(text) * 1.15;
+  return { w: Math.round(Math.max(Math.max(1, text.length) * 46, 2 * r) + 20), h: Math.round(Math.max(110, 2 * r * 0.78) + 20) };
+};

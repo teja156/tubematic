@@ -53,7 +53,8 @@ wrong. Fix every problem it lists, then write again.
   word's `startFrame`, or at its panel's start), while its panel is read and at least 6 frames
   before the panel ends. Two items in a panel are at least 4 frames apart, or on the same frame.
 - **Inside the panel:** a character, prop, balloon or sound effect stays inside its panel's edges (a
-  character may be cut off at the bottom). Balloons and sound effects in a panel do not overlap each
+  character may be cut off at the bottom). A character's reach depends on its pose: a `cheer` raises
+  its hands above its hair, a `shrug` or a `point` spreads them past its shoulders. Balloons and sound effects in a panel do not overlap each
   other.
 - **Text:** a balloon at most 40 characters, a caption box at most 40, a sound effect at most 10, a
   prop's text no more than its slot takes. A balloon or caption never repeats 5 narration words in a

@@ -299,3 +299,25 @@ def test_an_actor_leaves_with_its_clones():
         d["events"] = [e for e in d["events"] if e.get("who") != "bit" or e["frame"] <= merge["frame"]]
     problems = _check(_with(leave))
     assert not any("bit2" in p and "taken" in p for p in problems), problems
+
+
+def test_review_round_one_cases():
+    """Found in review: a station id of the wrong type, a card handed to its own
+    holder, a slot reused while its last actor is still leaving, and a wide
+    body in an outer slot reaching past the frame's edge."""
+    assert all(isinstance(p, str) for p in _check(_with(lambda d: d["stations"][0].update(id=["bits"]))))
+
+    def self_hand(d):
+        c = next(e for e in d["events"] if e["type"] == "carry")
+        d["events"].insert(d["events"].index(c) + 1, {"type": "hand", "frame": c["frame"], "from": "bit", "to": "bit"})
+    assert any("two different actors" in p for p in _check(_with(self_hand)))
+
+    def leave_and_refill(d):
+        enter = next(e for e in d["events"] if e["type"] == "enter" and e["who"] == "more")
+        d["events"] = [e for e in d["events"] if e["frame"] < enter["frame"]]
+        d["events"] += [{"type": "exit", "frame": enter["frame"], "who": "bit"},
+                        {"type": "enter", "frame": enter["frame"] + 2, "who": "more", "station": "bits", "slot": 1}]
+    assert any("still being left" in p for p in _check(_with(leave_and_refill)))
+
+    assert "past the frame's edge" in pc.crowding({"a": {"station": "s", "slot": 0, "body": "units", "units": 16}}, {"s": "stage"})
+    assert pc.crowding({"a": {"station": "s", "slot": 2, "body": "units", "units": 16}}, {"s": "stage"}) == ""

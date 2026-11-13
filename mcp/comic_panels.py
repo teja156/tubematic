@@ -20,6 +20,7 @@ Free of the database and of I/O.
 """
 from __future__ import annotations
 
+import math
 import re
 
 import character_kit as ck
@@ -52,6 +53,10 @@ LINES = ("speed", "focus")
 ITEM_TYPES = ("actor", "prop", "balloon", "caption", "sfx", "lines", "hit")
 SCALE = (0.5, 1.6)
 ACTOR = {"w": 260, "h": 300}
+# How far a character reaches from its centre in each pose (contract.ts POSE_REACH): hands and hair count.
+POSE_REACH = {"stand": {"side": 135, "up": 180}, "point": {"side": 180, "up": 180}, "panic": {"side": 150, "up": 180},
+              "cheer": {"side": 140, "up": 210}, "think": {"side": 135, "up": 180}, "type": {"side": 135, "up": 180},
+              "shrug": {"side": 180, "up": 180}, "facepalm": {"side": 135, "up": 180}}
 CUSTOM = {"maxProps": 8, "minSide": 60, "maxSide": 500, "maxText": 24, "maxActs": 0}
 # Prop boxes at scale 1, in page units (contract.ts PROPS w and h).
 PROP_BOXES = {
@@ -82,14 +87,27 @@ def item_box(rect, x: float, y: float, w: float, h: float, scale: float = 1) -> 
     return (cx - w * scale / 2, cy - h * scale / 2, cx + w * scale / 2, cy + h * scale / 2)
 
 
+def actor_box(rect, x: float, y: float, pose: str, scale: float = 1) -> tuple:
+    cx, cy = rect[0] + x * rect[2], rect[1] + y * rect[3]
+    r = POSE_REACH.get(pose, POSE_REACH["stand"])
+    return (cx - r["side"] * scale, cy - r["up"] * scale, cx + r["side"] * scale, cy + ACTOR["h"] / 2 * scale)
+
+
 def balloon_size(text: str) -> tuple[int, int]:
     lines = min(3, max(1, -(-len(text) // 16)))
     chars = min(16, len(text))
     return max(140, chars * 20 + 70), lines * 46 + 60
 
 
+def _js_round(v: float) -> int:
+    return int(math.floor(v + 0.5))
+
+
 def sfx_size(text: str) -> tuple[int, int]:
-    return max(1, len(text)) * 52 + 40, 110
+    """The capitals and the burst behind them, both centred on the item (contract.ts sfxSize)."""
+    n = max(1, len(text))
+    r = (60 + n * 7) * 1.15
+    return _js_round(max(n * 46, 2 * r) + 20), _js_round(max(110, 2 * r * 0.78) + 20)
 
 
 def check_scene_use(visual_style: str, scenes: list) -> str:
@@ -192,7 +210,7 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], extr
         if w:
             err(f"{where} starts inside an insert ({window_text(w)}); start it at {w[1]} or before {w[0]}.")
         layout = page.get("layout")
-        if layout not in LAYOUTS:
+        if not isinstance(layout, str) or layout not in LAYOUTS:
             err(f"{where}: layout must be one of {', '.join(LAYOUTS)}.")
             broken = True
             continue
@@ -313,9 +331,10 @@ def _check_panel(panel, where, rect, start, end, catalog, boxes, cast_ids, fps, 
                 err(f"{at}: pose must be one of {', '.join(POSES)}.")
             if it.get("face") not in FACES:
                 err(f"{at}: face must be one of {', '.join(FACES)}.")
-            box = item_box(rect, it["x"], it["y"], ACTOR["w"], ACTOR["h"], sc)
+            box = actor_box(rect, it["x"], it["y"], it.get("pose"), sc)
             if not _inside(box, rect, bottom_free=True):
-                err(f"{at}: the character reaches past its panel's top or sides; move it in or scale it down.")
+                err(f"{at}: the character (its hands and hair included, in this pose) reaches past its panel's top or "
+                    "sides; move it in or scale it down.")
             named.add(it.get("id") or it["who"])
         elif t == "prop":
             prop = it.get("prop")
