@@ -45,7 +45,7 @@
   },
   "routing": {
     "best_for": [
-      "counting units: bits and bytes, packets, memory, anything counted as blocks that add up",
+      "bits, bytes or packets as countable blocks that join and add up (eight bits making a byte, a file split into packets)",
       "a process inside the body or a cell told with its organs, cells or molecules as characters",
       "meet the cast: the layers, codes or parts of a system introduced one by one as characters",
       "a pipeline of named stages each part passes through (a compiler, a CI build, a build system, digestion)"
@@ -53,6 +53,7 @@
     "avoid_for": [
       "a process acted out by people or roles: a user, an attacker, an admin, a customer (Stick Explainer fits it)",
       "a request or message walked through a system's components as roles (Stick Explainer fits it)",
+      "a number, a limit or an encoding worked out step by step: binary maths, base64, a counter's maximum (Whiteboard fits it)",
       "one everyman reacting to everyday life or a list of named items (Bean Explainer fits it)",
       "a real, named person, product or place the viewer must recognise",
       "serious, sombre or tragic topics"

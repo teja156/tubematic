@@ -122,14 +122,15 @@
       "title": "How vaccines train your immune system",
       "brief": "What a vaccine shows your immune cells, how they remember it, and why a later real infection is fought off faster.",
       "expect": [
-        "stick"
+        "process_cast"
       ],
       "ok": [
+        "stick",
         "scenes",
         "illustrated"
       ],
       "future": "",
-      "note": ""
+      "note": "Immune cells are the actors of the process: Process Cast takes cells and organs as characters, Stick keeps people and roles (user, 2026-11-12)."
     },
     {
       "title": "Why compound interest grows so fast",
@@ -369,10 +370,11 @@
       ],
       "ok": [
         "illustrated",
-        "motion_graphics"
+        "motion_graphics",
+        "puppet_history"
       ],
       "future": "",
-      "note": "",
+      "note": "Puppet History is acceptable: daily life in a past era, though a walk through one place is Cartoon 3D's.",
       "inserts_expect": []
     },
     {
@@ -1170,10 +1172,11 @@
       ],
       "ok": [
         "cartoon_3d",
-        "under_the_hood"
+        "under_the_hood",
+        "process_cast"
       ],
       "future": "",
-      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Pair probe, System Flow vs Stick: a physical thing travelling a path through machines.",
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Pair probe, System Flow vs Stick: a physical thing travelling a path through machines. Process Cast is acceptable: the bag is a thing passing station by station.",
       "inserts_expect": [
         "system_flow"
       ]

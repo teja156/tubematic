@@ -42,7 +42,7 @@ STRICT_SOURCE = (
 # Between `import` and `from` a static import holds only names, braces, commas, `*` and spaces: no
 # comment, string or parenthesis, so a dynamic `import (...)` cannot hide behind a `from "..."` written
 # in a comment. An import may follow another on the same line after a `;`.
-_STATIC_IMPORT = re.compile(r"""(?:^|(?<=;))\s*import\s+(?=[\w{*$])[\w\s{},*$]*?\bfrom\s*["'][^"']+["']\s*;?"""
+_STATIC_IMPORT = re.compile(r"""(?:^|(?<=;))\s*import(?:\s+(?=[\w$])|\s*(?=[{*]))[\w\s{},*$]*?\bfrom\s*["'][^"']+["']\s*;?"""
                             r"""|(?:^|(?<=;))\s*import\s*["'][^"']+["']\s*;?""", re.M)
 _OTHER_IMPORT = re.compile(r"\bimport\b")
 

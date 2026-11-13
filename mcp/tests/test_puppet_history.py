@@ -309,7 +309,7 @@ def test_a_wide_sign_from_a_side_slot_is_pulled_in_and_two_signs_never_overlap()
 
 
 def test_two_static_imports_on_one_line_are_fine():
-    body = HOURGLASS.replace('import React from "react";', 'import React from "react"; import { Easing } from "remotion";')
+    body = HOURGLASS.replace('import React from "react";', 'import React from "react"; import{Easing}from"remotion";')
     assert _check(_with_hourglass(), sources={"vid_ph1/prop-hourglass": body}, video_id="vid_ph1") == []
 
 
