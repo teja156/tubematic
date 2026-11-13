@@ -12,6 +12,7 @@
     ],
     "props_key": "terminalDoc",
     "component": "TerminalDoc",
+    "block": [230, 1344],
     "review": "- Between these times the video cuts to a short Terminal Doc scene, on purpose: sparse monospace capitals where the text is the picture, a string flying into a labelled box and out as another, a number resolving out of flickering glyphs, one red or blue glow at a time, sometimes a faint wall of grey ciphertext behind it. On a light video it is dark ink on paper; on a dark video it is white and grey on near-black. The change of look into it and out of it, and the video's own captions staying on screen over it, are intended. Do NOT report the switch of style, the on-screen text, the typing or the noise glyphs as defects.\n- Do report inside it: text cut off at the frame edge or running into other text or the captions, text too small to read on a phone, a value shown wrong (a hash, a count or a number that does not match what is said), and stage text that repeats the sentence being spoken.\n"
   },
   "dimension": "2d",

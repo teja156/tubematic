@@ -18,12 +18,12 @@ from tubematic_core import inserts as tinserts
 from tubematic_core import visual_styles as tvs
 
 H = 1920
-# Where each insert style draws on the frame, top to bottom, at shift 0: the
-# headline and diagram band of SystemFlow (systemFlow/camera.ts BAND, the
-# header 0.115 of the height above it) and the stage slots of TerminalDoc
-# (terminalDoc/contract.ts SLOTS, context top to note bottom). The shift moves
-# this block clear of the main style's captions.
-BLOCKS = {"system_flow": (221, 1325), "terminal_doc": (230, 1344)}
+# Where each insert style draws on the frame, top to bottom, at shift 0, from
+# its pack's insert.block: for SystemFlow the headline and diagram band
+# (systemFlow/camera.ts BAND, the header 0.115 of the height above it), for
+# TerminalDoc the stage slots (terminalDoc/contract.ts SLOTS, context top to
+# note bottom). The shift moves this block clear of the main style's captions.
+BLOCKS = {sid: tuple(p["insert"]["block"]) for sid, p in tvs.INSERT_PACKS.items()}
 # Room kept between the captions and an insert, and at the frame's edges.
 CAPTION_GAP = 24
 EDGE = 60
