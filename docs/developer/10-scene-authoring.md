@@ -1602,8 +1602,8 @@ Flow's example.
 - A pin names no prop of its board or builds before that prop lands, or its label (1 to 12), value (1 to
   8) or unit (4) is over its limit.
 - A camera move's zoom is outside 1 to 2 or its focus is not a prop of the board, a cutaway opens a
-  building with no inside or shows other than 1 to 3 props, or an explode separates something that is
-  not a stack.
+  building with no inside or shows other than 1 to 3 props, an explode separates something that is
+  not a stack, or a lift, cutaway or explode starts before its prop lands or out of time order.
 - The readout has more than 8 steps or turns red more than once, its cubes count fewer than 1 unit each
   or would need more than 12, or the legend has more than 5 entries of 12 characters or does not fit the
   frame.

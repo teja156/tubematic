@@ -293,3 +293,24 @@ def test_a_wrong_typed_value_is_reported_not_raised():
     assert any("wrong type" in p for p in problems), problems
     assert _check(_with(lambda d: _b(d).update(props=True)))
 
+
+
+def test_lifts_cutaways_and_explodes_wait_for_their_prop_and_come_in_order():
+    d = _data(EXAMPLE)
+    landing = next(p for p in _b(d)["props"] if "enter" in p)
+
+    def early(dd):
+        _b(dd)["lifts"][0].update(prop=landing["id"], at=landing["enter"] - 30)
+    problems = iso.check(_with(early), 30, WORD_STARTS + [landing["enter"] - 30], EXTRA, "vid_example")
+    assert any("before " + landing["id"] + " lands" in p for p in problems), problems
+
+    def out_of_order(dd):
+        lifts = _b(dd)["lifts"]
+        lifts.append(dict(lifts[0], at=lifts[0]["at"] - 1))
+    problems = iso.check(_with(out_of_order), 30, WORD_STARTS + [_b(d)["lifts"][0]["at"] - 1], EXTRA, "vid_example")
+    assert any("in time order" in p for p in problems), problems
+
+
+def test_names_and_clocks_end_at_the_end():
+    assert not iso._ID.match("abc\n")
+    assert iso.grouped(2.5) == "3" and iso.grouped(1234.5) == "1,235"

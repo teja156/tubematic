@@ -93,10 +93,10 @@ GEOMETRY = {
 
 MAX_ERRORS = 12
 CUSTOM_SIDE = (60, 1000)
-_ID = re.compile(r"^[a-z][a-z0-9_]{1,23}$")
-_CUSTOM_FILE = re.compile(r"^prop-[a-z0-9-]{1,40}$")
-_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
-_ALLOWED_IMPORT = re.compile(r"^(react|\.\./\.\./installed/flatVector/toon)$")
+_ID = re.compile(r"^[a-z][a-z0-9_]{1,23}\Z")
+_CUSTOM_FILE = re.compile(r"^prop-[a-z0-9-]{1,40}\Z")
+_COLOR = re.compile(r"^#[0-9a-fA-F]{6}\Z")
+_ALLOWED_IMPORT = re.compile(r"^(react|\.\./\.\./installed/flatVector/toon)\Z")
 # A prop is a still drawing, rasterised once: anything that changes with the
 # frame would be frozen at its first value, and state would differ between the
 # render's parallel tabs.

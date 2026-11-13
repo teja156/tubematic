@@ -894,9 +894,10 @@ entirely.
 | `fontFamily` | container default | A CSS family, or one of `Inter`, `Oswald`, `Roboto`, `Montserrat` |
 | `fontSize` | `62` | 28–120 |
 | `color` | `null` | `null` follows the canvas — black on light, white on dark. Set one only for a real reason |
-| `background` | `"pill"` | `"pill"`, `"shadow"`, `"outline"`, `"label"`, `"none"` or `"log"`. `"pill"` is the safe choice over busy imagery; `"outline"` (bold text, thick dark stroke, no plate) suits illustrated and 3D cartoon scenes; `"label"` (a small printed ivory label) is the Storybook Atlas look; `"log"` (typed into a terminal log strip) is the Terminal Doc look |
+| `background` | `"pill"` | `"pill"`, `"shadow"`, `"outline"`, `"label"`, `"none"`, `"log"` or `"card"`. `"pill"` is the safe choice over busy imagery; `"outline"` (bold text, thick dark stroke, no plate) suits illustrated and 3D cartoon scenes; `"label"` (a small printed ivory label) is the Storybook Atlas look; `"log"` (typed into a terminal log strip) is the Terminal Doc look; `"card"` (a warm white card with an ink border and a cube chip) is the Isometric Infographic look |
 | `position` | `0.78` | Vertical centre as a fraction of frame height |
 | `uppercase` | `false` | |
+| `letterSpacing` | none | -0.05 to 0.3, in em: spaced capitals (the Night Signal look) |
 
 Match them to the video: a playful topic can take a tighter `maxWords` and `uppercase`; a serious
 one is better at the defaults. On a light canvas check the contrast — `"pill"` handles it.

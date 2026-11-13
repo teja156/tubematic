@@ -51,7 +51,8 @@ board and which field:
   characters, a value of 1 to 8, a unit of up to 4.
 - A camera move centres on a prop (`focus`) or the whole board, at a zoom from 1 to 2, in order.
 - A cutaway opens a building that has an inside (`house`, `office`, `factory`, `warehouse`, `data_centre`, `shop`, `bank`, `hospital`, `school`, `power_plant`), with 1 to 3 props shown inside; an
-  explode separates a stack (`server_rack`, `container_stack`).
+  explode separates a stack (`server_rack`, `container_stack`). Lifts, cutaways and explodes start no
+  earlier than their prop lands, each list in time order.
 - The readout has 1 to 8 steps in order, red at most once; its cubes count one per `per` units (`per`
   1 or more), at most 12.
 - A board's last change has finished at least 20 frames before the board ends (a route draws for 20

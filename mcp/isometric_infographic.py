@@ -22,6 +22,7 @@ Free of the database and of I/O.
 """
 from __future__ import annotations
 
+import math
 import re
 
 from quiet_windows import uncovered, window_at, window_text
@@ -88,7 +89,7 @@ GEOMETRY = {
 }
 
 MAX_ERRORS = 12
-_ID = re.compile(r"^[a-z][a-z0-9_]{0,23}$")
+_ID = re.compile(r"^[a-z][a-z0-9_]{0,23}\Z")
 _BOARD_KEYS = {"start", "areas", "props", "routes", "movers", "pins", "camera", "lifts", "cutaways", "explodes"}
 
 
@@ -114,7 +115,7 @@ def _text(v, limit: int) -> bool:
 
 
 def grouped(n) -> str:
-    s = str(round(abs(n)))
+    s = str(math.floor(abs(n) + 0.5))  # Math.round, half up (Python's round goes half to even)
     out = ""
     for i, ch in enumerate(s):
         if i > 0 and (len(s) - i) % 3 == 0:
@@ -575,6 +576,11 @@ def _check_board(b, where, start, end, names, rooms, stacks, colors, timed, err,
             if not isinstance(e, dict) or set(e) != fields or e.get("prop") not in ids:
                 err(f"{w} must be {sorted(fields)} with prop one of the board's prop ids.")
                 continue
+            lands = ids[e["prop"]].get("enter")
+            if _int(e.get("at")) and _int(lands) and e["at"] < lands:
+                err(f"{w} starts at frame {e['at']}, before {e['prop']} lands at {lands}.")
+            if _int(e.get("at")) and n and isinstance(lst[n - 1], dict) and _int(lst[n - 1].get("at")) and e["at"] <= lst[n - 1]["at"]:
+                err(f"{w} starts at frame {e['at']}, not after the one before it: list {key} in time order.")
             if allowed is not None and ids[e["prop"]].get("what") not in allowed:
                 err(f"{w}: {e['prop']} ({ids[e['prop']].get('what')}) is not {what}; use one of {sorted(allowed)}.")
             if key == "cutaways" and (not isinstance(e["inside"], list) or not 1 <= len(e["inside"]) <= 3

@@ -312,3 +312,7 @@ def test_a_wrong_typed_value_is_reported_not_raised():
     problems = _check(_with(lambda d: d["scenes"][0]["items"][0].update(what=["door"])))
     assert any("wrong type" in p for p in problems), problems
 
+
+
+def test_a_clock_with_a_trailing_newline_is_refused():
+    assert not ns._CLOCK.match("12:30\n") and ns._CLOCK.match("12:30")

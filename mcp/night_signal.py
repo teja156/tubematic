@@ -105,8 +105,8 @@ GEOMETRY = {
 MAX_ERRORS = 12
 # Coordinates of a custom part's shapes: x from -HALF to HALF, y from -BOX to 0 (the ground).
 _HALF = LIMITS["partBox"] // 2
-_PART_ID = re.compile(r"^[a-z][a-z0-9_]{1,23}$")
-_CLOCK = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+_PART_ID = re.compile(r"^[a-z][a-z0-9_]{1,23}\Z")
+_CLOCK = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]\Z")
 
 _BASE = {"kind", "start", "cut"}
 _KEYS = {

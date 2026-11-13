@@ -1142,7 +1142,7 @@ Infographic config, and `render_style_parts` for the style
 - Each refusal names its board and cause: a board off the words or too short, a prop off the board or
   hanging off it at its scale, two big props on each other's ground, a route off the board, a pin on no
   prop of its board or built before its prop lands, a camera move out of range, a cutaway of a building
-  with no inside, a readout that is not an object, turns red twice, has a `red` or `back` that is not
+  with no inside, a lift, cutaway or explode before its prop lands or out of time order, a readout that is not an object, turns red twice, has a `red` or `back` that is not
   true or false, or counts cubes under 1 unit each, a legend that does not fit, and a stretch with
   nothing new for over 4 seconds. A mover that sets off before its route draws is refused, going `back`
   or not.

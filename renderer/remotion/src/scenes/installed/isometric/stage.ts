@@ -78,14 +78,16 @@ export function dropAt(p: PropItem, frame: number): { lift: number; squash: numb
 
 /** How far a lift, a cutaway or an explode on a prop has gone at a frame (0..1), or 0. */
 export function effectAt(list: { prop: string; at: number }[] | undefined, id: string, frame: number, frames: number): number {
-  const e = (list ?? []).filter((x) => x.prop === id && x.at <= frame).pop();
+  // the latest one that has started, whatever order the config lists them in
+  const e = (list ?? []).filter((x) => x.prop === id && x.at <= frame).reduce<{ at: number } | undefined>((a, x) => (!a || x.at >= a.at ? x : a), undefined);
   return e ? easeInOut(ramp(frame, e.at, frames)) : 0;
 }
 
 /** How far the stepping back of every other prop has gone: the strongest running lift. */
 export function dimAt(b: Board, frame: number): { prop: string | null; amount: number } {
-  const lifts = (b.lifts ?? []).filter((l) => l.at <= frame);
-  const last = lifts[lifts.length - 1];
+  // the latest lift that has started, whatever order the config lists them in
+  const last = (b.lifts ?? []).filter((l) => l.at <= frame).reduce<{ prop: string; at: number } | undefined>(
+    (a, l) => (!a || l.at >= a.at ? l : a), undefined);
   return last ? { prop: last.prop, amount: easeInOut(ramp(frame, last.at, TIMING.lift)) } : { prop: null, amount: 0 };
 }
 
