@@ -2152,8 +2152,15 @@ tenth of a CPU-second a frame.
 - A custom prop is over 520 x 620 pixels, has more than 60 pieces, a piece outside its box, a colour
   outside the palette, or text over 14 characters.
 - More than 3 seconds pass in a set with nothing new: no cut, entrance or event. The critter's idle
-  bob does not count.
+  bob does not count, and a silent pause in the narration is not counted.
 - A set, an entrance or an event lands inside an insert window, where the stage is hidden.
+
+A silent pause (a gap of 12 frames or more between two words of the narration, such as a `[long pause]`)
+does not count as nothing happening, in this style and in Archive and Engraving, Editorial Collage and
+Storybook Reveal. Every event sits on a word, so nothing can be placed inside a pause, and without this
+rule a pause longer than the style's stillness limit made the config impossible to write.
+`write_scene_config` reads the pauses from `timeline.json` (`server.py::_timeline_silences`, built by
+`quiet_windows.silent_windows`) and the validators skip them the way they skip an insert window.
 
 `mcp/tests/test_paper_diorama.py` pins `paper_diorama.py` to `contract.ts`, to the pack and to the
 shipped props. The pack's `captions` fill every `subtitles` key the config leaves out. The text-layout
@@ -2219,7 +2226,7 @@ System Flow does.
   event, or a beat has more than one strike, stamp or magnifier.
 - An event is off a word or less than 8 frames before its beat ends, or names a word that is not in
   the title.
-- More than 3.5 seconds pass in a beat with nothing new.
+- More than 3.5 seconds pass in a beat with nothing new (a silent pause is not counted).
 - A beat, a card part or an event lands inside an insert window, where the page is hidden.
 
 `mcp/tests/test_archive_engraving.py` pins `archive_engraving.py` to `contract.ts` and to the pack.
@@ -2278,7 +2285,7 @@ encoded on every frame, and the glides are most of it.
 - An event is off a word or less than 8 frames before its station ends, marks a word that is not in
   the headline, puts a highlight on anything but a clipping, or repeats (one circle, stamp, arrow and
   strike per station).
-- More than 3.5 seconds pass in a station with nothing new.
+- More than 3.5 seconds pass in a station with nothing new (a silent pause is not counted).
 - A station's glide, an event, a line or a count lands inside an insert window, where the desk is
   hidden.
 
@@ -2332,13 +2339,16 @@ redrawing the panel on every frame after the colour lands.
 - A title is over 3 words or 24 characters.
 - An image is not one of this video's stills, is the hero sheet, or the pages show more than 12
   different stills; a pencil plate is not the page's own image's plate.
-- The pencil plate wipes in off a word or sooner than 6 frames into the page (page 1 may open on it
-  at frame 0), the colour floods in off a word, less than 12 or more than 30 frames after the pencil,
+- The pencil plate wipes in off a word and outside a silent pause, sooner than 6 or later than 30 frames of
+  narration into the page (page 1 may open on it at frame 0), the colour floods in off a word and outside a
+  silent pause, less than 12 or more than 30 frames after the pencil,
   or too close to the page's end to be seen. From the first pencil line to the finished colour takes
   at most about 1.6 seconds, so the picture never waits half-drawn.
 - The first page turns in with a curl, or more than 2 pages do.
-- More than 6 seconds pass on a page with nothing new (the push does not count).
-- A page, its pencil or its colour lands inside an insert window, where the page is hidden.
+- More than 6 seconds pass on a page with nothing new (the push does not count, nor does a silent pause).
+- A page, its pencil or its colour lands inside an insert window, where the page is hidden. The pencil
+  and the colour may also start inside a silent pause, which keeps a page from staying an empty card
+  until the next word after it.
 
 `mcp/tests/test_storybook_reveal.py` pins `storybook_reveal.py` to `contract.ts` and to the pack. The
 pack's `captions` fill every `subtitles` key the config leaves out. The text-layout audit samples each

@@ -28,7 +28,7 @@ from __future__ import annotations
 import math
 import re
 
-from quiet_windows import uncovered, window_at, window_text
+from quiet_windows import uncovered, window_at, window_text, merged
 
 SCENE_SRC = "StorybookReveal"
 PROPS_KEY = "reveal"
@@ -51,7 +51,7 @@ LIMITS = {
     "maxHoldSeconds": 6,
 }
 TIMING = {
-    "snap": 2, "title": 10, "pencilAfter": 6, "pencil": 12, "colourWithin": 30, "colour": 18, "read": 8, "curl": 14,
+    "snap": 2, "title": 10, "pencilAfter": 6, "pencilWithin": 30, "pencil": 12, "colourWithin": 30, "colour": 18, "read": 8, "curl": 14,
     "push": 0.06,
 }
 
@@ -133,7 +133,13 @@ def check_scene_use(visual_style: str, scenes: list) -> str:
     return ""
 
 
-def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "", quiet=()) -> list[str]:
+def _awake(a: int, c: int, idle) -> int:
+    """The frames from a to c outside `idle` (insert windows and silent pauses)."""
+    return sum(y - x for x, y in uncovered(a, c, idle))
+
+
+def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "", quiet=(),
+          silences=()) -> list[str]:
     """Every problem with a Storybook Reveal config, one sentence each (at most
     MAX_ERRORS), or [] when it may be written. `extra` is the style pack's
     catalogue block. `quiet` holds the config's insert windows
@@ -178,8 +184,17 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
 
     snaps = sorted(set(word_starts))
 
+    idle = merged(quiet, silences)   # an insert's window or a silent pause: no narration, nothing is waited for
+
     def on_word(frame) -> bool:
         return not snaps or any(abs(frame - w) <= TIMING["snap"] for w in snaps)
+
+    pauses = merged(silences)
+
+    def on_beat(frame) -> bool:
+        """On a word, or inside a silent pause: the pencil and the colour may play through a pause, which is
+        what keeps a page from sitting empty until the next word after one."""
+        return on_word(frame) or window_at(frame, pauses) is not None
 
     images: set[str] = set()
     curls = 0
@@ -248,21 +263,27 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
             err(f"{where}: pencilAt is frame {pa}; the pencil plate wipes in at least {TIMING['pencilAfter']} "
                 "frames after its page starts, after the title (the first page may instead give its start, 0).")
             pa = None
-        elif not on_word(pa):
-            err(f"{where}: pencilAt is frame {pa}, which is not on a word.")
+        elif not on_beat(pa):
+            err(f"{where}: pencilAt is frame {pa}, which is not on a word (or inside a pause).")
+            pa = None
+        elif _awake(start, pa, idle) > TIMING["pencilWithin"]:
+            err(f"{where}: the pencil plate wipes in at frame {pa}, {_awake(start, pa, idle)} frames of narration "
+                f"after its page starts ({start}); until then the page is an empty card. Wipe it in on a word at "
+                f"most {TIMING['pencilWithin']} frames (a second) after the page starts, or start the page later.")
             pa = None
         if pa is not None:
             marks.append(pa)
         if not _int(ca) or not start <= ca < end:
             err(f"{where}: colourAt must be a frame inside the page.")
             ca = None
-        elif pa is not None and not pa + TIMING["pencil"] <= ca <= pa + TIMING["colourWithin"]:
+        elif pa is not None and (ca < pa + TIMING["pencil"] or _awake(pa, ca, idle) > TIMING["colourWithin"]):
             err(f"{where}: colourAt is frame {ca}, {ca - pa} frames after pencilAt ({pa}); the colour follows the "
-                f"pencil on a word {TIMING['pencil']} to {TIMING['colourWithin']} frames after it (within a "
-                "second), once the pencil plate has wiped in. Move the colour, or the pencil, to a nearer word.")
+                f"pencil on a word at least {TIMING['pencil']} frames after it and at most {TIMING['colourWithin']} "
+                "frames of narration after it (within a second; a silent pause does not count), once the pencil "
+                "plate has wiped in. Move the colour, or the pencil, to a nearer word.")
             ca = None
-        elif not on_word(ca):
-            err(f"{where}: colourAt is frame {ca}, which is not on a word.")
+        elif not on_beat(ca):
+            err(f"{where}: colourAt is frame {ca}, which is not on a word (or inside a pause).")
             ca = None
         elif land_frame(ca) + TIMING["read"] > end:
             err(f"{where}: the colour finishes flooding at frame {land_frame(ca)}, too close to the page's end "
@@ -294,7 +315,7 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
         for i, (start, pa, ca, land) in enumerate(marks_of):
             # the stretches with nothing new: page start to pencil, pencil to colour, colour landed to page end
             for a, c in ((start, pa), (pa, ca), (land, ends[i])):
-                for x, y in uncovered(a, c, quiet):
+                for x, y in uncovered(a, c, idle):
                     if y - x > hold:
                         err(f"Page {i + 1}: nothing new happens from frame {x} to {y} ({(y - x) / fps:.1f} s); the "
                             f"longest stretch allowed is {LIMITS['maxHoldSeconds']} s (the slow push does not "

@@ -36,3 +36,38 @@ def uncovered(a: int, c: int, quiet) -> list[tuple[int, int]]:
     if x < c:
         out.append((x, c))
     return out
+
+
+# A gap between two spoken words at least this long (frames) is a pause the
+# script asked for: [pause] or [long pause] voiced as silence.
+MIN_SILENCE = 12
+
+
+def silent_windows(words, min_gap: int = MIN_SILENCE) -> list[tuple[int, int]]:
+    """The stretches of the narration with no word in them, as windows
+    (end of one word, start of the next), for gaps of at least `min_gap`.
+
+    A style's stillness rule measures how long nothing new happens. Events
+    sit on words, so nothing can be placed inside a pause, and a stage that
+    holds through the silence has not stalled: the rule skips these stretches,
+    as it skips an insert's window. `words` is the timeline's word list."""
+    spans = []
+    for w in words or []:
+        try:
+            spans.append((int(w["startFrame"]), int(w["endFrame"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    spans.sort()
+    return [(a_end, b_start) for (_, a_end), (b_start, _) in zip(spans, spans[1:]) if b_start - a_end >= min_gap]
+
+
+def merged(*lists) -> list[tuple[int, int]]:
+    """Several window lists as one, sorted and without overlaps, the shape
+    `uncovered` reads."""
+    out: list[list[int]] = []
+    for a, b in sorted(w for lst in lists for w in (lst or ())):
+        if out and a <= out[-1][1]:
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return [(a, b) for a, b in out]

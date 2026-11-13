@@ -173,6 +173,14 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   show what the topic needs. A video whose style was already picked keeps it.
   [How Auto picks a style](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#what-auto-does)
   has the details.
+- A script with a `[long pause]` (about three seconds of silence) made it impossible to finish a
+  Paper Diorama video. The agent kept trying for about 40 minutes and stopped, and the only way out
+  was to remove the pause and pay for the voice again. A silent pause is not counted as nothing
+  happening, so the stage may hold through it. The same applies to Archive and Engraving,
+  Editorial Collage and Storybook Reveal.
+- Storybook Reveal pages showed an empty paper card, with only the title, for several seconds before
+  the pencil drawing began. A page's pencil drawing now starts within a second of the page (a silent
+  pause does not count against that second), and the example in the style's skill shows it.
 
 ## v2.2.0
 

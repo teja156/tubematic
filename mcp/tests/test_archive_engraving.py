@@ -59,8 +59,14 @@ def _data(cfg):
     return cfg["scenes"][0]["props"]["archive"]
 
 
-def _check(cfg=None, quiet=(), video_id=VID):
-    return ae.check(cfg or EXAMPLE, 30, WORD_STARTS, EXTRA, video_id, quiet=quiet)
+def _check(cfg=None, quiet=(), video_id=VID, silences=()):
+    return ae.check(cfg or EXAMPLE, 30, WORD_STARTS, EXTRA, video_id, quiet=quiet, silences=silences)
+
+
+def _stalls(errors):
+    """Every "nothing new happens from frame A to C" refusal as (A, C)."""
+    return [(int(a), int(c)) for e in errors if "nothing new happens" in e
+            for a, c in [re.search(r"from frame (\d+) to (\d+)", e).groups()]]
 
 
 def _with(mutate):
@@ -250,6 +256,15 @@ def test_a_still_page_is_refused():
         _beat(d, PLATE)["events"] = [_beat(d, PLATE)["events"][0]]
     errors = _check(_with(still))
     assert any("nothing new happens" in e for e in errors), errors
+
+
+def test_a_silent_pause_is_not_a_stall():
+    cfg = _with(lambda d: _beat(d, PLATE).update(events=[]))
+    stalls = _stalls(_check(cfg))
+    assert stalls
+    assert _check(cfg, silences=[(a + 5, c - 5) for a, c in stalls]) == []
+    a, c = stalls[0]
+    assert any("nothing new happens" in e for e in _check(cfg, silences=[(a + 5, a + 20)]))   # a short gap is no cover
 
 
 def test_nothing_starts_inside_an_insert_window_and_a_window_is_not_still():
