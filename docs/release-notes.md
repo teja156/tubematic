@@ -19,11 +19,14 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 2. To go back to 2.2.x after upgrading, restore the database backup the upgrade took. 2.2.x cannot
    read the new voice speed column, and it reads a voice list with a speed on an `eleven_v3` or
    `eleven_v4` voice as empty. Restoring the backup also returns the videos the upgrade sent back to
-   Auto (point 4) to their 2.2.x state, and any script written for them since is lost.
+   Auto (point 5) to their 2.2.x state, and any script written for them since is lost.
 3. Run this upgrade without `--no-stop`. `upgrade.py` refuses `--no-stop` for it, because old and new
    containers running side by side could pick System Flow or Terminal Doc again for the videos the
    upgrade moves.
-4. System Flow and Terminal Doc are now insert styles, never a style for a whole video (see Changed). On upgrade, a
+4. A video whose scene was written before the upgrade and is not queued for rendering yet is not
+   queued until its scene has been looked at (see Added). Its agent does this on its next run, and a
+   session started before the upgrade is told what to do by the refusal it gets.
+5. System Flow and Terminal Doc are now insert styles, never a style for a whole video (see Changed). On upgrade, a
    video in one of them that is not voiced yet (a topic waiting for approval, an approved topic, a
    script waiting at Script Ready, or a topic or script sent back for revision before it was voiced)
    goes back to Auto: its agent picks a new style and writes a new
