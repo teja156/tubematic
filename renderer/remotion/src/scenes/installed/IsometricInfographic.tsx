@@ -95,7 +95,7 @@ export default function IsometricInfographic({ isometric }: IsometricInfographic
   const cache = useMemo(makeBoardCache, []);
   const bi = boardIndexAt(data, frame);
   const board = data.boards[bi];
-  const layout = useMemo(() => (board ? pinLayout(data, board) : []), [data, board]);
+  const layout = useMemo(() => (board ? pinLayout(data, board) : []), [isometric, board]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useLayoutEffect(() => {
     if (paper.current) paintPaper(paper.current);
