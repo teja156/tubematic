@@ -8,11 +8,11 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { StylePicker, StylePreviewButton } from "@/components/StylePicker";
 import type { VisualStyleInfo } from "@/lib/types";
-import { PACK_STYLES } from "./packStyles";
+import { INSERT_IDS, PACK_STYLES } from "./packStyles";
 import { openStyleList, pickStyle, styleOption, styleValue } from "./stylePickerHelpers";
 
 const WITH_INSERTS: VisualStyleInfo[] = PACK_STYLES.map((s) =>
-  s.id === "system_flow" || s.id === "terminal_doc" ? { ...s, role: "insert" } : s);
+  INSERT_IDS.includes(s.id) ? { ...s, role: "insert" } : s);
 
 function Harness({ initial = "auto", onChange = () => {}, styles = WITH_INSERTS, gpu = { status: "working" as const },
                    canUseOpenAI = true, noneLabel }: {
