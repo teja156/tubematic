@@ -59,13 +59,23 @@ def _check_frames(frames, total: int) -> list[int]:
 
 def _clear(folder: Path) -> None:
     """The previous call's pictures and mascot file; nothing else in the folder.
-    A symlink under one of those names is removed itself (unlink never follows
-    it), so the mascot file is never written through a planted link."""
-    if not folder.is_dir():
+    The folder is opened without following a link and its entries removed
+    beside that handle, so a folder swapped for a link is never followed, and
+    a link under one of those names is removed itself (unlink never follows it)."""
+    try:
+        dir_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except FileNotFoundError:
         return
-    for p in folder.iterdir():
-        if (p.is_file() or p.is_symlink()) and (p.name == MASCOT_FILE or _PNG_RE.match(p.name)):
-            p.unlink()
+    except OSError as e:
+        raise PreviewError(f"{PREVIEW_DIR}/ cannot be cleared: {e.strerror or e}")
+    try:
+        with os.scandir(dir_fd) as entries:
+            names = [e.name for e in entries
+                     if (e.name == MASCOT_FILE or _PNG_RE.match(e.name)) and (e.is_symlink() or e.is_file(follow_symlinks=False))]
+        for name in names:
+            os.unlink(name, dir_fd=dir_fd)
+    finally:
+        os.close(dir_fd)
 
 
 def preview(jobs_dir, video_id: str, remotion_dir: Path, frames, *, watermark: bool,
