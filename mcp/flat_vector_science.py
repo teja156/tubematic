@@ -227,6 +227,33 @@ def check_scene_use(visual_style: str, scenes: list) -> str:
     return ""
 
 
+def _code_only(src: str) -> str:
+    """The source with its comments removed and every string and template literal emptied, so a word
+    inside either is never read as code (a `//` in a URL, a `/*` in a string). Regex literals are read as
+    code: a prop has no reason to hold one near its export."""
+    out: list[str] = []
+    i, n = 0, len(src)
+    while i < n:
+        c, nxt = src[i], src[i + 1:i + 2]
+        if c == "/" and nxt == "/":
+            j = src.find("\n", i)
+            i = n if j < 0 else j
+        elif c == "/" and nxt == "*":
+            j = src.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            out.append(" ")
+        elif c in "\"'`":
+            j = i + 1
+            while j < n and src[j] != c:
+                j += 2 if src[j] == "\\" else 1
+            out.append(c + c)
+            i = j + 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
 def custom_prop_errors(custom, video_id: str, library_names, sources: dict | None) -> tuple[list[str], dict]:
     """Problems with config's customProps, and their boxes by id. `sources`
     maps each src to its file's text, or is None to skip the source checks."""
@@ -277,8 +304,7 @@ def custom_prop_errors(custom, video_id: str, library_names, sources: dict | Non
                             "and ../../installed/flatVector/toon.")
             # every default export outside comments must be the function: a commented-out one exports nothing,
             # and a decoy cannot cover an "export default null" (the forbidden patterns above read the raw file)
-            code = re.sub(r"/\*.*?\*/|//[^\n]*", "", body, flags=re.S)
-            exports = re.findall(r"\bexport\s+default\s+(\w*)", code)
+            exports = re.findall(r"\bexport\s+default\s+(\w*)", _code_only(body))
             if not exports or any(e != "function" for e in exports):
                 errs.append(f"{where} ({cid}): the file must default-export the drawing as a function "
                             "(\"export default function Name() { ... }\").")

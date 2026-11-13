@@ -160,7 +160,8 @@ function route(ctx: Ctx, pr: Proj, pts: [number, number][], progress: number, co
   ctx.beginPath();
   for (let d = 0; d <= len; d += 0.1) {
     const p = at(d);
-    d ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]);
+    if (d) ctx.lineTo(p[0], p[1]);
+    else ctx.moveTo(p[0], p[1]);
   }
   const e = at(len);
   ctx.lineTo(e[0], e[1]);

@@ -14,6 +14,7 @@ Run from repo root: pytest mcp/tests/
 """
 import copy
 import json
+import re
 import pathlib
 from datetime import datetime, timezone
 
@@ -360,3 +361,16 @@ def test_a_wrong_typed_value_is_reported_not_raised():
     assert problems
     problems = _check(_with(lambda d: d["shots"][0]["items"][0].update(slot=["center"])))
     assert any("slot must be one of" in p for p in problems), problems
+
+
+@pytest.mark.parametrize("src, exports", [
+    ('const u = "http://x"; export default function A() { return null }', ["function"]),
+    ('const s = "/*"; export default function A() {} const t = "*/";', ["function"]),
+    ('const s = "export default function X() {}"; export default null;', ["null"]),
+    ("/* export default null */ export default function A() {}", ["function"]),
+    ("const t = `a // b ${1}`; export default function A() {}", ["function"]),
+    ('const s = "a\\" // b"; export default function A() {}', ["function"]),
+])
+def test_the_export_check_reads_code_only(src, exports):
+    # strings and comments never hide an export nor make one up
+    assert re.findall(r"\bexport\s+default\s+(\w*)", fv._code_only(src)) == exports
