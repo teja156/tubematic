@@ -2537,7 +2537,9 @@ The renderer's side is `src/scenes/installed/IsometricInfographic.tsx` with `iso
   and legend are DOM text, so the text audit can measure them.
 - `pins.ts` lays a board's pins out once, in the order the config lists them, for the whole board in
   view: a pin keeps its default (or `side`) place while that is free, then tries the other side, then
-  rises one label height at a time (up to 3), so labels of props that stand close never overlap. The
+  rises one label height at a time (up to 3), so labels of props that stand close never overlap. It
+  prefers a place inside the safe margins and off the title and readout, and keeps the last resort
+  for a clash with no clear place. Two leaders or rules that run together are not a clash. The
   layout does not depend on the frame, so a label never moves when another pin builds or the camera
   glides, and a zoom only spreads the props further apart than the layout assumed.
 - `IsometricPartsSheet.tsx` is the `render_style_parts` sheet, and

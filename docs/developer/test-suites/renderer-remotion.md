@@ -388,8 +388,9 @@ Covers `contract.ts`, `kit.ts` and `stage.ts`
 - A camera move that starts while another still glides starts from the view on screen, so it never jumps.
 - A prop drops in from above with a squash, and one with no `enter` stays where it is.
 - The pin layout leaves a lone pin and pins far apart at their default place, moves the second of two
-  close pins to the other side or up a lane (up a lane only when `side` fixes the side), and gives the same
-  answer every time it is asked.
+  close pins to the other side or up a lane (up a lane only when `side` fixes the side or the other side
+  would leave the frame), never puts a label outside the safe margins when a clear place exists, and gives
+  the same answer every time it is asked.
 
 ## System Flow
 

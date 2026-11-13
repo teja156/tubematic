@@ -117,6 +117,22 @@ describe("the pin layout", () => {
     expect(pinLayout(d, d.boards[0])).toEqual(pinLayout(d, d.boards[0]));
   });
 
+  it("never moves a label out of the frame: near the right edge the second pin rises instead of flipping right", () => {
+    const d = data([["a", "warehouse", [9, 1]], ["b", "house", [8.6, 1.4]]], [pin("a", "Far east hub", { value: "3", unit: "h" }), pin("b", "Far east depot", { value: "4", unit: "h" })]);
+    const [first, second] = pinLayout(d, d.boards[0]);
+    expect(first.right).toBe(false); // too far right for a label on its right
+    expect(second.right).toBe(false);
+    expect(second.lane).toBeGreaterThan(0);
+  });
+
+  it("near the left edge a clash rises on the same side: a label never starts left of the safe margin", () => {
+    const d = data([["a", "warehouse", [2, 7]], ["b", "house", [2.4, 7.4]]], [pin("a", "West hub"), pin("b", "West depot")]);
+    const [first, second] = pinLayout(d, d.boards[0]);
+    expect(first).toEqual({ right: true, lane: 0 });
+    expect(second.right).toBe(true);
+    expect(second.lane).toBeGreaterThan(0);
+  });
+
   it("leaves pins that are far apart where they are", () => {
     const d = data([["a", "house", [1, 1]], ["b", "house", [8, 8]]], [pin("a", "Start"), pin("b", "End")]);
     expect(pinLayout(d, d.boards[0]).every((s) => s.lane === 0)).toBe(true);
