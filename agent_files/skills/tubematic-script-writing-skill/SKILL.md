@@ -335,7 +335,8 @@ by trimming and joining each segment's `voice` with a single space.
 
 ### Insert marks
 
-An insert is a short scene in another look (a System Flow diagram, a Terminal Doc string) that the
+An insert is a short scene in another look (a System Flow diagram, a Terminal Doc string, a Code
+Scenes code card, a Format Packs message thread) that the
 scene author draws over the video's main style, inside a segment you mark. The
 tubematic-insert-routing skill chose the video's insert styles before you were called:
 `get_video`'s `insert_styles` lists them, and `insert_routing.reason` says which beat each is for.
@@ -354,7 +355,10 @@ tubematic-insert-routing skill chose the video's insert styles before you were c
 - **Write the marked segment for its insert.** Take the candidate with the style's id from
   `insert_routing.candidates` and follow its `script` text for this one segment's `voice` and
   `visual`: for System Flow, name the components in the order things travel and say the value worth
-  showing; for Terminal Doc, name the exact string, number or source the viewer should watch. Its
+  showing; for Terminal Doc, name the exact string, number or source the viewer should watch; for
+  Code Scenes, name the line or piece of code the viewer should look at, and say what it prints
+  only when that is certain from the code; for Format Packs, read the messages, rows or options in
+  the order they appear. Its
   `visual` is that insert style's brief (a component brief, a text brief), not a brief for the main
   style. Where that text speaks of the whole video, it holds for the marked segment only; the rest
   of the script follows `style.script` (Step 7).
@@ -570,9 +574,10 @@ checkpoint, or leaves it on Auto, and then the tubematic-style-routing skill has
 before you were called (a picked style is the video's `visual_style` now). Either way it is settled
 before you write a word, which is precisely so that it is knowable *here* — changing it after the
 script exists invalidates every brief below and means a rewrite, not a re-render. A `visual_style`
-still at `"auto"` means mixed scenes: no style fit better. `system_flow` and `terminal_doc` are
-insert styles, never a video's style: they appear only in segments you mark (Step 5, *Insert
-marks*). A `visual_style` still at one of them is a legacy whole video, voiced before they became
+still at `"auto"` means mixed scenes: no style fit better. `system_flow`, `terminal_doc`,
+`code_scenes` and `format_packs` are insert styles, never a video's style: they appear only in
+segments you mark (Step 5, *Insert marks*). A `visual_style` still at `system_flow` or
+`terminal_doc` is a legacy whole video, voiced before they became
 insert styles; its `style.script` still applies to the whole script.
 
 **When `get_video`'s `style.script` is not empty, follow it.** It is the style's own guidance for

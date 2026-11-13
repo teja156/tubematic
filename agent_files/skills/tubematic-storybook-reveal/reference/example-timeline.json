@@ -1,0 +1,287 @@
+{
+ "totalFrames": 797,
+ "fps": 30,
+ "audioDurationSeconds": 26.57,
+ "words": [
+  {
+   "word": "Every",
+   "startFrame": 6,
+   "endFrame": 18
+  },
+  {
+   "word": "evening",
+   "startFrame": 20,
+   "endFrame": 36
+  },
+  {
+   "word": "for",
+   "startFrame": 38,
+   "endFrame": 46
+  },
+  {
+   "word": "forty",
+   "startFrame": 48,
+   "endFrame": 60
+  },
+  {
+   "word": "years,",
+   "startFrame": 62,
+   "endFrame": 74
+  },
+  {
+   "word": "an",
+   "startFrame": 76,
+   "endFrame": 83
+  },
+  {
+   "word": "old",
+   "startFrame": 85,
+   "endFrame": 93
+  },
+  {
+   "word": "keeper",
+   "startFrame": 95,
+   "endFrame": 109
+  },
+  {
+   "word": "climbed",
+   "startFrame": 111,
+   "endFrame": 127
+  },
+  {
+   "word": "the",
+   "startFrame": 129,
+   "endFrame": 137
+  },
+  {
+   "word": "lighthouse",
+   "startFrame": 139,
+   "endFrame": 160
+  },
+  {
+   "word": "stairs.",
+   "startFrame": 162,
+   "endFrame": 176
+  },
+  {
+   "word": "Nobody",
+   "startFrame": 188,
+   "endFrame": 202
+  },
+  {
+   "word": "ever",
+   "startFrame": 204,
+   "endFrame": 214
+  },
+  {
+   "word": "thanked",
+   "startFrame": 216,
+   "endFrame": 232
+  },
+  {
+   "word": "her,",
+   "startFrame": 234,
+   "endFrame": 242
+  },
+  {
+   "word": "but",
+   "startFrame": 244,
+   "endFrame": 252
+  },
+  {
+   "word": "she",
+   "startFrame": 254,
+   "endFrame": 262
+  },
+  {
+   "word": "lit",
+   "startFrame": 264,
+   "endFrame": 272
+  },
+  {
+   "word": "the",
+   "startFrame": 274,
+   "endFrame": 282
+  },
+  {
+   "word": "lamp",
+   "startFrame": 284,
+   "endFrame": 294
+  },
+  {
+   "word": "every",
+   "startFrame": 296,
+   "endFrame": 308
+  },
+  {
+   "word": "single",
+   "startFrame": 310,
+   "endFrame": 324
+  },
+  {
+   "word": "night.",
+   "startFrame": 326,
+   "endFrame": 338
+  },
+  {
+   "word": "One",
+   "startFrame": 350,
+   "endFrame": 358
+  },
+  {
+   "word": "stormy",
+   "startFrame": 360,
+   "endFrame": 374
+  },
+  {
+   "word": "night,",
+   "startFrame": 376,
+   "endFrame": 388
+  },
+  {
+   "word": "her",
+   "startFrame": 390,
+   "endFrame": 398
+  },
+  {
+   "word": "beam",
+   "startFrame": 400,
+   "endFrame": 410
+  },
+  {
+   "word": "found",
+   "startFrame": 412,
+   "endFrame": 424
+  },
+  {
+   "word": "a",
+   "startFrame": 426,
+   "endFrame": 431
+  },
+  {
+   "word": "lost",
+   "startFrame": 433,
+   "endFrame": 443
+  },
+  {
+   "word": "boat.",
+   "startFrame": 445,
+   "endFrame": 455
+  },
+  {
+   "word": "At",
+   "startFrame": 467,
+   "endFrame": 474
+  },
+  {
+   "word": "dawn,",
+   "startFrame": 476,
+   "endFrame": 486
+  },
+  {
+   "word": "the",
+   "startFrame": 488,
+   "endFrame": 496
+  },
+  {
+   "word": "fisherman",
+   "startFrame": 498,
+   "endFrame": 517
+  },
+  {
+   "word": "waved",
+   "startFrame": 519,
+   "endFrame": 531
+  },
+  {
+   "word": "to",
+   "startFrame": 533,
+   "endFrame": 540
+  },
+  {
+   "word": "her",
+   "startFrame": 542,
+   "endFrame": 550
+  },
+  {
+   "word": "from",
+   "startFrame": 552,
+   "endFrame": 562
+  },
+  {
+   "word": "the",
+   "startFrame": 564,
+   "endFrame": 572
+  },
+  {
+   "word": "harbour.",
+   "startFrame": 574,
+   "endFrame": 590
+  },
+  {
+   "word": "Small",
+   "startFrame": 602,
+   "endFrame": 614
+  },
+  {
+   "word": "kindness,",
+   "startFrame": 616,
+   "endFrame": 633
+  },
+  {
+   "word": "done",
+   "startFrame": 635,
+   "endFrame": 645
+  },
+  {
+   "word": "quietly",
+   "startFrame": 647,
+   "endFrame": 663
+  },
+  {
+   "word": "every",
+   "startFrame": 665,
+   "endFrame": 677
+  },
+  {
+   "word": "day,",
+   "startFrame": 679,
+   "endFrame": 687
+  },
+  {
+   "word": "is",
+   "startFrame": 689,
+   "endFrame": 696
+  },
+  {
+   "word": "how",
+   "startFrame": 698,
+   "endFrame": 706
+  },
+  {
+   "word": "we",
+   "startFrame": 708,
+   "endFrame": 715
+  },
+  {
+   "word": "keep",
+   "startFrame": 717,
+   "endFrame": 727
+  },
+  {
+   "word": "each",
+   "startFrame": 729,
+   "endFrame": 739
+  },
+  {
+   "word": "other",
+   "startFrame": 741,
+   "endFrame": 753
+  },
+  {
+   "word": "safe.",
+   "startFrame": 755,
+   "endFrame": 765
+  }
+ ]
+}

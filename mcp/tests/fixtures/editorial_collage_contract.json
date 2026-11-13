@@ -1,0 +1,516 @@
+{
+ "_about": "Shared cases for the Editorial Collage contract (TMDEV-229): mcp/tests/test_editorial_collage.py and renderer/remotion/src/scenes/installed/editorialCollage/editorialCollage.test.ts both compute these and compare. Regenerate the expected values from mcp/editorial_collage.py only after changing both sides.",
+ "stepped": [
+  {
+   "frame": 0,
+   "stepped": 0.0
+  },
+  {
+   "frame": 1,
+   "stepped": 0.0
+  },
+  {
+   "frame": 2,
+   "stepped": 0.0
+  },
+  {
+   "frame": 2.5,
+   "stepped": 2.5
+  },
+  {
+   "frame": 3,
+   "stepped": 2.5
+  },
+  {
+   "frame": 4.9,
+   "stepped": 2.5
+  },
+  {
+   "frame": 5,
+   "stepped": 5.0
+  },
+  {
+   "frame": 7.4,
+   "stepped": 5.0
+  },
+  {
+   "frame": 10,
+   "stepped": 10.0
+  },
+  {
+   "frame": 61,
+   "stepped": 60.0
+  }
+ ],
+ "station_center": [
+  {
+   "i": 0,
+   "xy": [
+    0,
+    0
+   ]
+  },
+  {
+   "i": 1,
+   "xy": [
+    620,
+    1140
+   ]
+  },
+  {
+   "i": 2,
+   "xy": [
+    0,
+    2280
+   ]
+  },
+  {
+   "i": 3,
+   "xy": [
+    620,
+    3420
+   ]
+  },
+  {
+   "i": 4,
+   "xy": [
+    0,
+    4560
+   ]
+  }
+ ],
+ "camera_at": [
+  {
+   "starts": [
+    0,
+    100,
+    250
+   ],
+   "frame": 0,
+   "xy": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "starts": [
+    0,
+    100,
+    250
+   ],
+   "frame": 50,
+   "xy": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "starts": [
+    0,
+    100,
+    250
+   ],
+   "frame": 100,
+   "xy": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "starts": [
+    0,
+    100,
+    250
+   ],
+   "frame": 109,
+   "xy": [
+    90.79689783217026,
+    166.9491347236679
+   ]
+  },
+  {
+   "starts": [
+    0,
+    100,
+    250
+   ],
+   "frame": 118,
+   "xy": [
+    309.99999999999994,
+    569.9999999999999
+   ]
+  },
+  {
+   "starts": [
+    0,
+    100,
+    250
+   ],
+   "frame": 127,
+   "xy": [
+    529.2031021678297,
+    973.050865276332
+   ]
+  },
+  {
+   "starts": [
+    0,
+    100,
+    250
+   ],
+   "frame": 136,
+   "xy": [
+    620.0,
+    1140.0
+   ]
+  },
+  {
+   "starts": [
+    0,
+    100,
+    250
+   ],
+   "frame": 200,
+   "xy": [
+    620.0,
+    1140.0
+   ]
+  },
+  {
+   "starts": [
+    0,
+    100,
+    250
+   ],
+   "frame": 250,
+   "xy": [
+    620.0,
+    1140.0
+   ]
+  },
+  {
+   "starts": [
+    0,
+    100,
+    250
+   ],
+   "frame": 268,
+   "xy": [
+    310.00000000000006,
+    1710.0
+   ]
+  },
+  {
+   "starts": [
+    0,
+    100,
+    250
+   ],
+   "frame": 286,
+   "xy": [
+    0.0,
+    2280.0
+   ]
+  },
+  {
+   "starts": [
+    0,
+    100,
+    250
+   ],
+   "frame": 400,
+   "xy": [
+    0.0,
+    2280.0
+   ]
+  }
+ ],
+ "headline_layout": [
+  {
+   "text": "The typo that took down the internet",
+   "kind": "clipping",
+   "kicker": true,
+   "size": 72,
+   "lines": [
+    "The typo that took",
+    "down the internet"
+   ],
+   "fits": true
+  },
+  {
+   "text": "The typo that took down the internet",
+   "kind": "clipping",
+   "kicker": false,
+   "size": 84,
+   "lines": [
+    "The typo that",
+    "took down the",
+    "internet"
+   ],
+   "fits": true
+  },
+  {
+   "text": "One routine fix",
+   "kind": "label",
+   "kicker": false,
+   "size": 72,
+   "lines": [
+    "One routine fix"
+   ],
+   "fits": true
+  },
+  {
+   "text": "S3 goes dark",
+   "kind": "label",
+   "kicker": true,
+   "size": 72,
+   "lines": [
+    "S3 goes dark"
+   ],
+   "fits": true
+  },
+  {
+   "text": "A third of the web, broken",
+   "kind": "clipping",
+   "kicker": false,
+   "size": 96,
+   "lines": [
+    "A third of the",
+    "web, broken"
+   ],
+   "fits": true
+  },
+  {
+   "text": "Far more than planned",
+   "kind": "blackFull",
+   "kicker": false,
+   "size": 128,
+   "lines": [
+    "Far more",
+    "than",
+    "planned"
+   ],
+   "fits": true
+  },
+  {
+   "text": "The wrong desk",
+   "kind": "black",
+   "kicker": true,
+   "size": 96,
+   "lines": [
+    "The wrong desk"
+   ],
+   "fits": true
+  },
+  {
+   "text": "Why one engineer's mistyped number took down a third of the web",
+   "kind": "clipping",
+   "kicker": true,
+   "size": 62,
+   "lines": [
+    "Why one engineer's",
+    "mistyped number took",
+    "down a third of the",
+    "web"
+   ],
+   "fits": false
+  },
+  {
+   "text": "Eleven words that never fit one label bar at all whatever size",
+   "kind": "label",
+   "kicker": false,
+   "size": 44,
+   "lines": [
+    "Eleven words that never fit",
+    "one label bar at all",
+    "whatever size"
+   ],
+   "fits": false
+  },
+  {
+   "text": "Ünïcödé headline façade",
+   "kind": "clipping",
+   "kicker": false,
+   "size": 84,
+   "lines": [
+    "Ünïcödé headline",
+    "façade"
+   ],
+   "fits": true
+  }
+ ],
+ "typed_chars": [
+  {
+   "text": "$ remove servers",
+   "at": 10,
+   "frame": 9,
+   "n": 0
+  },
+  {
+   "text": "$ remove servers",
+   "at": 10,
+   "frame": 10,
+   "n": 1
+  },
+  {
+   "text": "$ remove servers",
+   "at": 10,
+   "frame": 11,
+   "n": 1
+  },
+  {
+   "text": "$ remove servers",
+   "at": 10,
+   "frame": 12,
+   "n": 1
+  },
+  {
+   "text": "$ remove servers",
+   "at": 10,
+   "frame": 40,
+   "n": 14
+  },
+  {
+   "text": "$ remove servers",
+   "at": 10,
+   "frame": 400,
+   "n": 16
+  },
+  {
+   "text": "x",
+   "at": 0,
+   "frame": 0,
+   "n": 1
+  }
+ ],
+ "type_frames": [
+  {
+   "text": "x",
+   "frames": 0
+  },
+  {
+   "text": "ab",
+   "frames": 4
+  },
+  {
+   "text": "$ remove servers",
+   "frames": 36
+  },
+  {
+   "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "frames": 78
+  }
+ ],
+ "figure_text": [
+  {
+   "value": 4,
+   "prefix": "",
+   "suffix": "hours",
+   "k": 1,
+   "text": "4 hours"
+  },
+  {
+   "value": 4,
+   "prefix": "",
+   "suffix": "hours",
+   "k": 0.5,
+   "text": "2 hours"
+  },
+  {
+   "value": 4,
+   "prefix": "",
+   "suffix": "hours",
+   "k": 0,
+   "text": "0 hours"
+  },
+  {
+   "value": 33,
+   "prefix": "",
+   "suffix": "%",
+   "k": 1,
+   "text": "33%"
+  },
+  {
+   "value": 150000000,
+   "prefix": "$",
+   "suffix": "",
+   "k": 1,
+   "text": "$150,000,000"
+  },
+  {
+   "value": 150000000,
+   "prefix": "$",
+   "suffix": "",
+   "k": 0.37,
+   "text": "$55,500,000"
+  },
+  {
+   "value": 2.5,
+   "prefix": "",
+   "suffix": "x",
+   "k": 1,
+   "text": "2.5x"
+  },
+  {
+   "value": 2.5,
+   "prefix": "",
+   "suffix": "x",
+   "k": 0.5,
+   "text": "1.2x"
+  },
+  {
+   "value": 99.99,
+   "prefix": "",
+   "suffix": "%",
+   "k": 1,
+   "text": "99.99%"
+  },
+  {
+   "value": 99.99,
+   "prefix": "",
+   "suffix": "%",
+   "k": 0.3,
+   "text": "29.99%"
+  },
+  {
+   "value": 1234.5,
+   "prefix": "",
+   "suffix": "",
+   "k": 1,
+   "text": "1,234.5"
+  },
+  {
+   "value": 3,
+   "prefix": "$",
+   "suffix": "bn",
+   "k": 1,
+   "text": "$3bn"
+  }
+ ],
+ "clean_word": [
+  {
+   "word": "Typo,",
+   "clean": "typo"
+  },
+  {
+   "word": "fix:",
+   "clean": "fix"
+  },
+  {
+   "word": "S3",
+   "clean": "s3"
+  },
+  {
+   "word": "third.",
+   "clean": "third"
+  },
+  {
+   "word": "e-mail",
+   "clean": "e-mail"
+  },
+  {
+   "word": "Ünï",
+   "clean": "ünï"
+  }
+ ]
+}

@@ -81,7 +81,7 @@ correct and re-spends `generate_image` on every image beat.
    inside an insert's window: let the scene before it run on under the insert, and start the next
    scene at the window's end (its last frame + 1) or at the next segment. A DIAGRAM beat the script
    marked as a `system_flow` insert is drawn by the insert, not as a diagram scene of your own, and
-   a beat marked `terminal_doc` likewise. No mascot cue lands inside a window. With no marked
+   a beat marked with any other insert style likewise. No mascot cue lands inside a window. With no marked
    segment, write no `inserts`.
    Then call `write_scene_config(video_id, config)`, with the scenes and any `inserts` — **never** write `scene-config.json` with your own file tools. This writes the file and saves `scene_config_path` in one call.
 9. Hand back to the operator to call `validate_job`
@@ -238,10 +238,11 @@ and `process_cast` is one scene of drawn parts acting out a process at stations,
 written as data. None of them is this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
 when it is not `tubematic-scene-config`, stop here and invoke that skill.
 
-`system_flow` and `terminal_doc` are **insert styles**, never a video's style: a short System Flow
-diagram or Terminal Doc string drawn over your scenes inside a segment the script marked (Workflow
-step 8). A video whose `visual_style` is still one of them is a legacy whole video, voiced before
-they became insert styles; its style's own skill authors it, as the table says.
+`system_flow`, `terminal_doc`, `code_scenes` and `format_packs` are **insert styles**, never a
+video's style: a short diagram, string, code card or message thread drawn over your scenes inside a
+segment the script marked (Workflow step 8). A video whose `visual_style` is still `system_flow` or
+`terminal_doc` is a legacy whole video, voiced before they became insert styles; its style's own
+skill authors it, as the table says.
 
 Read `visual_style` from `get_video`:
 
@@ -896,7 +897,7 @@ entirely.
 | `fontFamily` | container default | A CSS family, or one of `Inter`, `Oswald`, `Roboto`, `Montserrat` |
 | `fontSize` | `62` | 28–120 |
 | `color` | `null` | `null` follows the canvas — black on light, white on dark. Set one only for a real reason |
-| `background` | `"pill"` | `"pill"`, `"shadow"`, `"outline"`, `"label"`, `"none"` or `"log"`. `"pill"` is the safe choice over busy imagery; `"outline"` (bold text, thick dark stroke, no plate) suits illustrated and 3D cartoon scenes; `"label"` (a small printed ivory label) is the Storybook Atlas look; `"log"` (typed into a terminal log strip) is the Terminal Doc look |
+| `background` | `"pill"` | `"pill"`, `"shadow"`, `"outline"`, `"label"`, `"none"`, `"log"` or `"chip"`. `"pill"` is the safe choice over busy imagery; `"outline"` (bold text, thick dark stroke, no plate) suits illustrated and 3D cartoon scenes; `"label"` (a small printed ivory label) is the Storybook Atlas look; `"log"` (typed into a terminal log strip) is the Terminal Doc look; `"chip"` (a cream paper chip) is the Archive and Engraving look |
 | `position` | `0.78` | Vertical centre as a fraction of frame height |
 | `uppercase` | `false` | |
 

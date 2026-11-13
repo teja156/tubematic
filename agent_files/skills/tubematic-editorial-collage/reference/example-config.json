@@ -1,0 +1,194 @@
+{
+ "totalFrames": 1023,
+ "canvas": "light",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "EditorialCollage",
+   "startFrame": 0,
+   "durationInFrames": 1023,
+   "props": {
+    "collage": {
+     "stations": [
+      {
+       "start": 0,
+       "headline": {
+        "text": "The typo that took down the internet",
+        "kind": "clipping",
+        "kicker": "TECH · FEB 28, 2017"
+       },
+       "hero": {
+        "kind": "print",
+        "image": "/public/vid_example01/images/treated/print-aisle.print.png",
+        "caption": "A data-centre aisle"
+       },
+       "events": [
+        {
+         "at": 55,
+         "do": "highlight",
+         "word": "typo"
+        },
+        {
+         "at": 124,
+         "do": "circle"
+        }
+       ]
+      },
+      {
+       "start": 145,
+       "headline": {
+        "text": "One routine fix",
+        "kind": "label"
+       },
+       "hero": {
+        "kind": "index",
+        "recreation": true,
+        "lines": [
+         {
+          "text": "# billing system: slow",
+          "at": 145
+         },
+         {
+          "text": "$ remove servers",
+          "at": 269
+         },
+         {
+          "text": "  --count 100",
+          "at": 373
+         }
+        ]
+       },
+       "events": [
+        {
+         "at": 205,
+         "do": "underline",
+         "word": "routine"
+        },
+        {
+         "at": 408,
+         "do": "circle"
+        }
+       ]
+      },
+      {
+       "start": 429,
+       "headline": {
+        "text": "Far more than planned",
+        "kind": "black"
+       },
+       "events": [
+        {
+         "at": 458,
+         "do": "underline",
+         "word": "more"
+        },
+        {
+         "at": 518,
+         "do": "strike",
+         "word": "planned"
+        }
+       ]
+      },
+      {
+       "start": 560,
+       "headline": {
+        "text": "S3 goes dark",
+        "kind": "label",
+        "kicker": "US-EAST-1"
+       },
+       "hero": {
+        "kind": "figure",
+        "value": 4,
+        "suffix": "hours",
+        "label": "Sites and apps down",
+        "countAt": 581
+       },
+       "events": [
+        {
+         "at": 677,
+         "do": "stamp",
+         "text": "OFFLINE"
+        }
+       ]
+      },
+      {
+       "start": 698,
+       "headline": {
+        "text": "A third of the web, broken",
+        "kind": "clipping"
+       },
+       "hero": {
+        "kind": "print",
+        "image": "/public/vid_example01/images/treated/print-aisle.print.png",
+        "caption": "Servers in one region"
+       },
+       "events": [
+        {
+         "at": 771,
+         "do": "highlight",
+         "word": "third"
+        },
+        {
+         "at": 798,
+         "do": "arrow",
+         "from": "right"
+        }
+       ]
+      },
+      {
+       "start": 815,
+       "headline": {
+        "text": "The fix: slower, safer deletes",
+        "kind": "clipping",
+        "kicker": "AFTERWARD"
+       },
+       "hero": {
+        "kind": "index",
+        "lines": [
+         {
+          "text": "removes servers slowly",
+          "at": 887
+         },
+         {
+          "text": "never below a safe minimum",
+          "at": 936
+         }
+        ]
+       },
+       "events": [
+        {
+         "at": 839,
+         "do": "underline",
+         "word": "fix"
+        },
+        {
+         "at": 966,
+         "do": "highlight",
+         "word": "safer"
+        },
+        {
+         "at": 976,
+         "do": "stamp",
+         "text": "FIXED"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "subtitles": {
+  "emphasis": [
+   11,
+   23,
+   36,
+   40,
+   50,
+   67,
+   80,
+   86
+  ]
+ }
+}

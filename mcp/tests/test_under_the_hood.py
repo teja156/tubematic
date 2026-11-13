@@ -486,3 +486,9 @@ def test_regenerating_a_photograph_and_other_styles_are_not_capped(make_video, m
     assert "the most a video may use" in server._image_cap_error(vid, "p12", images)
     other = make_video("vid_mixed", style="auto", images=[f"p{k}" for k in range(12)])
     assert server._image_cap_error(other, "p12", server.JOBS_DIR / other / "images") == ""
+
+
+def test_the_prompt_goes_out_as_the_agent_wrote_it():
+    # The pack's pictures block only caps the photographs: no text, shape or reference is added.
+    plan = server._image_plan("under_the_hood", "vid_x", "p1", "A watch movement, macro", "1:1", "")
+    assert plan == {"prompt": "A watch movement, macro", "aspect_ratio": "1:1", "ref_path": None}

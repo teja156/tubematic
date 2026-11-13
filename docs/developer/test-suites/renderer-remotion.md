@@ -8,6 +8,10 @@ The suite covers the pure TypeScript helpers of the Remotion project's
 [`TerminalDoc`](../09-remotion-project.md#terminaldoc),
 [`UnderTheHood`](../09-remotion-project.md#underthehood),
 [`CaseFileStory`](../09-remotion-project.md#casefilestory),
+[`PaperDiorama`](../09-remotion-project.md#paperdiorama),
+[`ArchiveEngraving`](../09-remotion-project.md#archiveengraving),
+[`EditorialCollage`](../09-remotion-project.md#editorialcollage),
+[`StorybookReveal`](../09-remotion-project.md#storybookreveal),
 [`PuppetHistory`](../09-remotion-project.md#puppethistory),
 [`MidcenturyHowTo`](../09-remotion-project.md#midcenturyhowto),
 [`ComicPanels`](../09-remotion-project.md#comicpanels) and
@@ -28,6 +32,20 @@ does not run `npm test`, so run the suite yourself after you change either modul
 The soundtrack tools under `cartoon-tools/audio/` have a pytest suite of their own, described on
 [`cartoon-audio.md`](cartoon-audio.md).
 
+## Caption looks
+
+### `src/scenes/installed/subtitleLooks.test.ts`
+
+Covers the `tags` and `highlight` looks of `Subtitles.tsx`
+([Grouping words](../09-remotion-project.md#grouping-words)).
+
+- A word's tag has the same tilt and torn edge on every frame and every render, and two words get
+  different edges. The torn outline stays inside the tag's box.
+- A tag pops from 0.6 past 1 and is back at 1 from its fourth frame, so a still tag costs nothing to
+  repaint.
+- The marker under an emphasis word starts at the word's first frame, wipes in over 8 frames and
+  holds.
+
 ## Insert scenes
 
 ### `src/inserts/transitions.test.ts`
@@ -42,6 +60,43 @@ Covers `src/inserts/transitions.ts`, how an insert scene goes in and out over it
   shows. A dip veils the main in the canvas colour before the insert fades up; a push moves the main
   out as the insert comes in; a wipe uncovers the insert from the right.
 - `activeInsert` finds the window a frame falls in.
+- `heldFrame` is the way in plus the insert's `firstFrames`, never before the way in ends and never
+  past the window: the frame `CompositionBuilder` freezes the scene on until then, so no insert opens
+  on an empty board.
+
+### `src/scenes/installed/codeScenes/codeScenes.test.ts`
+
+Covers `codeScenes/contract.ts`, `tokens.ts` and `morph.ts`
+([Code Scenes](../10-scene-authoring.md#code-scenes)).
+
+- The languages, limits, timings and band equal `mcp/tests/fixtures/code_scenes_contract.json`, and
+  the fixture's font sizes, typing frames and output panes come out the same as in
+  `mcp/code_scenes.py`.
+- The largest code the limits allow, a callout and a full output pane fit inside the band at 32 px
+  or more.
+- Every language colours without throwing, pieces keep their columns, and keywords take a colour of
+  their own.
+- The morph keeps unchanged pieces still, moves the pieces a new line pushes down, fades new pieces
+  in and removed ones out.
+
+### `src/scenes/installed/formatPacks/formatPacks.test.ts`
+
+Covers `formatPacks/contract.ts` and `draw.ts` ([Format Packs](../10-scene-authoring.md#format-packs)).
+
+- The formats, limits, timings, band and lists equal `mcp/tests/fixtures/format_packs_contract.json`;
+  wrapping and thread heights come out as in `mcp/format_packs.py`, and the largest thread and the
+  phone stay inside the band.
+- Fiction-range phone numbers are told from real-looking ones the same way as the validator.
+- Every change is listed in order with the insert's first frame first; rows ease on the card's
+  curve, and marks are drawn as single paths.
+
+### `src/scenes/installed/fitText.test.ts`
+
+Covers `fitText.ts`, the width estimate that sizes a one-line text down to fit its box and counts a
+wrapped text's lines ([Format Packs](../10-scene-authoring.md#format-packs)). Its widths, fitted
+sizes and line counts equal `mcp/tests/fixtures/text_fit_contract.json`, which `mcp/text_fit.py`
+runs too; wide letters count wider than narrow ones, the base size is kept when the text fits, a
+long wide line shrinks until its estimate fits, and the size never goes under the minimum.
 
 ## Storybook Atlas
 
@@ -140,6 +195,71 @@ Covers `contract.ts`, `stage.ts` and the icon tables
   stretch over the stillness limit.
 - Under the `fill` caption look a word is grey until it is spoken, then the text colour, and a
   text colour the blend cannot parse switches on the word's frame without throwing.
+
+## Paper Diorama
+
+### `src/scenes/installed/paperDiorama/paperDiorama.test.ts`
+
+Covers `contract.ts`, `stage.ts`, `paint.ts`, `critter.ts` and the shipped props
+([Paper Diorama](../10-scene-authoring.md#paper-diorama)).
+
+- The pop, a prop's box in a slot, the stage scale, the banner's font size and the critter's box are
+  computed as in the shared cases `mcp/tests/test_paper_diorama.py` runs.
+- An item is hidden before its frame, pops in, moves to another slot, swaps its prop and leaves on
+  its events, and the critter changes its face on its event.
+- A torn reveal grows over its frames, and a ring is drawn partway when it is partly through.
+- A rounded rectangle's outline stays inside its box with a rough edge of about a pixel.
+- Every shipped prop uses the palette and keeps its pieces inside its box, the critter is drawn
+  inside its own box in every expression, and every room has its picture.
+
+## Archive and Engraving
+
+### `src/scenes/installed/archiveEngraving/archiveEngraving.test.ts`
+
+Covers `contract.ts`, `stage.ts` and `emblems.ts` ([Archive and Engraving](../10-scene-authoring.md#archive-and-engraving)).
+
+- Title layout, the plate's push and crop, a still's point on the page, the ruler's scale and a
+  cleaned title word are computed as in the shared cases `mcp/tests/test_archive_engraving.py` runs.
+- The renderer draws the "Illustration" and "Recreation" footnotes itself, and a person has no
+  picture, face or portrait field in the contract.
+- The ruler's marker slides from one year to the next, a document line writes on and a route is drawn
+  dot by dot, and the magnifier goes to the side away from its point.
+- Plates are numbered in Roman numerals.
+- Every emblem is drawn inside the roundel's field and the ring stays inside its box.
+
+## Editorial Collage
+
+### `src/scenes/installed/editorialCollage/editorialCollage.test.ts`
+
+Covers `contract.ts`, `stage.ts` and `paint.ts` ([Editorial Collage](../10-scene-authoring.md#editorial-collage)).
+
+- The stepped motion, the station layout, the camera, the headline layout, a typed index line, a
+  figure's text and a cleaned headline word are computed as in the shared cases
+  `mcp/tests/test_editorial_collage.py` runs.
+- Stations zig-zag down the desk, a column each side. The camera rests, then glides for
+  `TIMING.glide` frames from a station's start, and never scales.
+- Pieces move on twelve steps a second, the string sags below the straight line between its pins, the
+  pen ellipse is an unclosed stroke, and a figure counts up from zero over `TIMING.count` frames.
+- Every hero kind, at every picture aspect, stays inside the station's zones.
+- The renderer paints the "Illustration" and "Recreation" notes itself, which no data can switch
+  off, and the contract has no field for a person's face.
+
+## Storybook Reveal
+
+### `src/scenes/installed/storybookReveal/storybookReveal.test.ts`
+
+Covers `contract.ts` and `stage.ts` ([Storybook Reveal](../10-scene-authoring.md#storybook-reveal)).
+
+- The title size, the picture's fit in the panel, the push and where the colour lands are computed as
+  in the shared cases `mcp/tests/test_storybook_reveal.py` runs.
+- The title wipes in (whole at once on the first page), the pencil wipes in (whole at frame 0 on a
+  first page that opens on it), and the push holds until the colour has landed and never goes past it.
+- A square still fills the panel's height, whole and centred, a tall one stays whole inside the panel,
+  and the push keeps its focus point.
+- The colour flood starts left of the panel and ends right of it even at its softest edge, runs from
+  top to bottom with a ragged edge, and the page curl turns the old page away over `TIMING.curl`
+  frames from the bottom-right corner.
+- The scene's source holds no SVG filter, gradient or blur, which keeps its render cost low.
 
 ## Puppet History
 

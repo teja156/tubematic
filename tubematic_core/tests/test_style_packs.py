@@ -160,10 +160,112 @@ def test_under_the_hood():
     assert tvs.effective_canvas("under_the_hood", "light") == "dark"
     # its own presenter stands where a mascot would: no mascot, like Cartoon 3D
     assert p["mascot"] is False and "presenter" in p["messages"]["mascot"]
-    assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood", "case_file_story", "midcentury_howto", "comic_panels", "process_cast", "puppet_history"}
+    assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood", "case_file_story", "paper_diorama",
+                                         "archive_engraving", "editorial_collage", "storybook_reveal",
+                                         "midcentury_howto", "comic_panels", "process_cast", "puppet_history"}
     rows = {r["id"]: r for r in tvs.public_list(openai_key_set=True, gpu_status="working")}
     assert rows["under_the_hood"]["mascot"] is False and rows["cartoon_3d"]["mascot"] is False
     assert rows["auto"]["mascot"] is True and rows["stick"]["mascot"] is True
+
+
+def test_paper_diorama():
+    p = tvs.pack("paper_diorama")
+    assert p["renderer"] == "dom" and p["canvas"] == "light" and p["role"] == "main"
+    assert p["authoring_skill"] == "tubematic-paper-diorama"
+    assert p["experimental"] is True and p["order"] == 110
+    assert p["inserts"] == {"host": True, "transition": "cut"}
+    # code-drawn paper: no images, no key, no GPU, its own critter in place of a mascot
+    assert tvs.needs_openai_key("paper_diorama") is False and tvs.needs_gpu("paper_diorama") is False
+    assert p["routing"]["images"] == 0 and "pictures" not in p
+    assert "paper_diorama" in tvs.NO_MASCOT_STYLES and "critter" in p["messages"]["mascot"]
+    assert p["captions"]["look"] == "tags" and p["captions"]["maxWords"] == 3
+    assert "Bean Explainer" in " ".join(p["routing"]["avoid_for"])
+    assert "Stick Explainer" in " ".join(p["routing"]["avoid_for"])
+    for phrase in ("room", "banner", "stressed word", "brand"):
+        assert phrase in p["script"], phrase
+
+
+def test_archive_engraving():
+    p = tvs.pack("archive_engraving")
+    assert p["renderer"] == "dom" and p["canvas"] == "light" and p["role"] == "main"
+    assert p["authoring_skill"] == "tubematic-archive-engraving"
+    assert p["experimental"] is True and p["order"] == 130 and p["dimension"] == "2d"
+    assert p["inserts"] == {"host": True, "transition": "dip"}
+    # built on generated engravings: refused without an OpenAI key, no GPU, no mascot
+    assert tvs.needs_openai_key("archive_engraving") is True and tvs.needs_gpu("archive_engraving") is False
+    assert "OpenAI" in tvs.openai_key_error("archive_engraving")
+    assert tvs.characters_allowed("archive_engraving") is False
+    assert "archive_engraving" in tvs.NO_MASCOT_STYLES and p["mascot"] is False
+    # ten engravings, each baked with the engraving treatment, every still tall
+    assert p["routing"]["images"] == 10
+    pics = p["pictures"]
+    assert pics["treatments"] == ["engraving"] and pics["still_aspect"] == "9:16"
+    assert "{count}" in pics["cap_message"] and "{cap}" in pics["cap_message"]
+    for phrase in ("engraving", "no detailed face", "No text"):
+        assert phrase in pics["still_style"], phrase
+    assert p["captions"]["look"] == "fill" and p["captions"]["background"] == "chip"
+    assert p["captions"]["position"] == 0.73 and p["captions"]["maxWords"] == 5
+    assert "face" in p["routing"]["cannot_show"]
+    for name in ("Storybook Atlas", "Photo Explainer", "Paper Diorama"):
+        assert name in " ".join(p["routing"]["avoid_for"]), name
+    for phrase in ("name card", "dates", "red", "brands"):
+        assert phrase in p["script"], phrase
+
+
+def test_editorial_collage():
+    p = tvs.pack("editorial_collage")
+    assert p["renderer"] == "dom" and p["canvas"] == "light" and p["role"] == "main"
+    assert p["authoring_skill"] == "tubematic-editorial-collage"
+    assert p["experimental"] is True and p["order"] == 120 and p["dimension"] == "2d"
+    assert p["inserts"] == {"host": True, "transition": "cut"}
+    # built on generated prints and cut-outs: refused without an OpenAI key, no GPU, no mascot
+    assert tvs.needs_openai_key("editorial_collage") is True and tvs.needs_gpu("editorial_collage") is False
+    assert "OpenAI" in tvs.openai_key_error("editorial_collage")
+    assert tvs.characters_allowed("editorial_collage") is False and tvs.figures_allowed("editorial_collage") is True
+    assert "editorial_collage" in tvs.NO_MASCOT_STYLES and p["mascot"] is False
+    # ten stills, each baked as a print or a sticker, in the shape the agent asks for
+    assert p["routing"]["images"] == 10
+    pics = p["pictures"]
+    assert pics["treatments"] == ["print", "sticker"] and "still_aspect" not in pics
+    assert "{count}" in pics["cap_message"] and "{cap}" in pics["cap_message"]
+    for phrase in ("No text, no letters, no logos, no watermark, no brand names", "no detailed face"):
+        assert phrase in pics["still_style"], phrase
+    caps = p["captions"]
+    assert caps["look"] == "highlight" and caps["position"] == 0.73 and caps["maxWords"] == 4
+    assert "Source Serif 4" in caps["fontFamily"]
+    assert "face" in p["routing"]["cannot_show"] and "logo" in p["routing"]["cannot_show"]
+    for name in ("Photo Explainer", "Case File Story", "Stick Explainer", "Bean Explainer", "Paper Diorama"):
+        assert name in " ".join(p["routing"]["avoid_for"]), name
+    for phrase in ("station", "dates", "numbers", "never describe a face", "newspaper"):
+        assert phrase in p["script"], phrase
+
+
+def test_storybook_reveal():
+    p = tvs.pack("storybook_reveal")
+    assert p["renderer"] == "dom" and p["canvas"] == "light" and p["role"] == "main"
+    assert p["authoring_skill"] == "tubematic-storybook-reveal"
+    assert p["experimental"] is True and p["order"] == 140 and p["dimension"] == "2d"
+    assert p["inserts"] == {"host": True, "transition": "wipe"}
+    # built on generated pages: refused without an OpenAI key, no GPU, no mascot
+    assert tvs.needs_openai_key("storybook_reveal") is True and tvs.needs_gpu("storybook_reveal") is False
+    assert "OpenAI" in tvs.openai_key_error("storybook_reveal")
+    assert tvs.characters_allowed("storybook_reveal") is False and tvs.figures_allowed("storybook_reveal") is True
+    assert "storybook_reveal" in tvs.NO_MASCOT_STYLES and p["mascot"] is False
+    # twelve pages and the hero sheet in a slot of its own, made from a description alone (no house file)
+    assert p["routing"]["images"] == 13
+    pics = p["pictures"]
+    assert pics["apart"] == ["hero"] and pics["sheet"]["name"] == "hero" and "house" not in pics["sheet"]
+    assert pics["treatments"] == ["pencil"] and pics["still_aspect"] == "1:1"
+    assert pics["still_lead"].startswith("The character from the reference picture")
+    for phrase in ("coloured pencil", "watercolour", "cream paper", "No text"):
+        assert phrase in pics["still_style"], phrase
+    assert p["captions"]["look"] == "fill" and p["captions"]["background"] == "none"
+    assert p["captions"]["position"] == 0.72 and p["captions"]["maxWords"] == 5
+    assert "real people" in p["routing"]["cannot_show"]
+    for name in ("Storybook Atlas", "Archive and Engraving", "Illustrated", "Stick Explainer", "Bean Explainer"):
+        assert name in " ".join(p["routing"]["avoid_for"]), name
+    for phrase in ("one protagonist", "moral", "brand"):
+        assert phrase in p["script"], phrase
 
 
 def test_case_file_story():
@@ -188,8 +290,10 @@ def test_case_file_story():
     assert rows["case_file_story"]["mascot"] is False
     assert rows["case_file_story"]["unavailable_reason"] == "needs an OpenAI key"
     # what generate_image adds to this style's prompts
-    for key in ("sheet_lead", "sheet_style", "still_lead", "still_style"):
-        assert p["extra"][key].strip()
+    pics = p["pictures"]
+    assert pics["still_lead"].strip() and pics["still_style"].strip() and pics["still_aspect"] == "9:16"
+    assert pics["sheet"]["name"] == "lead" and pics["sheet"]["house"] == "house" and pics["apart"] == ["lead"]
+    assert pics["sheet"]["lead"].strip() and pics["sheet"]["style"].strip()
     # the script text carries the ending and the subject line the user set
     script = p["script"]
     for phrase in ("second person", "the last sentence is only the two options", "invented",
@@ -275,6 +379,40 @@ def test_a_malformed_pack_is_refused(over, fragment):
         tvs._check_pack(pathlib.Path("stick.json"), _valid(**over))
 
 
+def _pictured(**pics):
+    """Case File Story's pack with its pictures block changed."""
+    data = json.loads((tvs.PACKS_DIR / "case_file_story.json").read_text())
+    data["pictures"] = {**data["pictures"], **pics}
+    return data
+
+
+@pytest.mark.parametrize("pics, fragment", [
+    ({"cap_message": "too many"}, "cap_message"),
+    ({"still_style": ""}, "still_style"),
+    ({"still_aspect": "4:3"}, "still_aspect"),
+    ({"treatments": ["sepia"]}, "treatments"),
+    ({"treatments": ["print", "print"]}, "treatments"),
+    ({"apart": []}, "sheet.name must be in pictures.apart"),
+    ({"sheet": {"name": "lead", "lead": "a", "style": "b", "house": "house"}}, "house and house_file"),
+    ({"sheet": {"name": "lead", "lead": "a"}}, "pictures.sheet must have"),
+    ({"colour": "red"}, "has only the keys"),
+])
+def test_a_malformed_pictures_block_is_refused(pics, fragment):
+    with pytest.raises(tvs.PackError, match=fragment.replace(".", r"\.")):
+        tvs._check_pack(pathlib.Path("case_file_story.json"), _pictured(**pics))
+
+
+def test_a_pictures_block_needs_an_openai_key_and_a_cap():
+    data = _pictured()
+    data["needs"] = {"openai_key": False, "gpu": False}
+    with pytest.raises(tvs.PackError, match="needs.openai_key"):
+        tvs._check_pack(pathlib.Path("case_file_story.json"), data)
+    data = _pictured()
+    data["routing"] = {**data["routing"], "images": 0}
+    with pytest.raises(tvs.PackError, match="routing.images"):
+        tvs._check_pack(pathlib.Path("case_file_story.json"), data)
+
+
 def test_auto_cannot_be_a_pack():
     with pytest.raises(tvs.PackError, match="not a style"):
         tvs._check_pack(pathlib.Path("auto.json"), _valid(id="auto"))
@@ -334,8 +472,10 @@ def test_the_agent_view_carries_the_style_script_guidance():
 
 # ── main styles and insert styles (TMDEV-224) ────────────────────────────────
 
-def test_system_flow_and_terminal_doc_are_insert_styles_and_the_rest_are_main():
-    assert set(tvs.INSERT_STYLES) == {"system_flow", "terminal_doc"}
+def test_the_insert_styles_are_the_insert_only_styles_and_the_rest_are_main():
+    # The user's decision (TMDEV-223): these are only ever scenes inside another
+    # style's video, never a whole video.
+    assert set(tvs.INSERT_STYLES) == {"system_flow", "terminal_doc", "code_scenes", "format_packs"}
     assert tvs.MAIN_STYLES == ("auto",) + tuple(s for s in tvs.PACKS if s not in tvs.INSERT_STYLES)
     # A stored legacy value still reads as a style.
     assert {"system_flow", "terminal_doc"} <= set(tvs.VISUAL_STYLES)
@@ -386,14 +526,22 @@ def _insert_pack(**over):
     (lambda: _valid(insert={"max_seconds": 8}), 'no "insert" block'),
     (lambda: _insert_pack(inserts={"host": True, "transition": "cut"}), 'no "inserts" block'),
     (lambda: _insert_pack(insert={"max_seconds": 8}), "insert: {max_seconds"),
-    (lambda: _insert_pack(insert={"max_seconds": 20, "palettes": ["dark"], "props_key": "x", "component": "X", "review": "r"}),
+    (lambda: _insert_pack(insert={"max_seconds": 20, "palettes": ["dark"], "props_key": "x", "component": "X", "block": [200, 1300], "review": "r"}),
      "insert.max_seconds"),
-    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["blue"], "props_key": "x", "component": "X", "review": "r"}),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["blue"], "props_key": "x", "component": "X", "block": [200, 1300], "review": "r"}),
      "insert.palettes"),
-    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "", "component": "X", "review": "r"}),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "", "component": "X", "block": [200, 1300], "review": "r"}),
      "insert.props_key"),
-    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": " ", "review": "r"}),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": " ", "block": [200, 1300], "review": "r"}),
      "insert.component"),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": "X", "review": "r"}),
+     "insert: {max_seconds"),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": "X",
+                                  "block": [1300, 200], "review": "r"}), "insert.block"),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": "X",
+                                  "block": [0.1, 0.6], "review": "r"}), "insert.block"),
+    (lambda: _insert_pack(insert={"max_seconds": 8, "palettes": ["dark"], "props_key": "x", "component": "X",
+                                  "block": [200, 2000], "review": "r"}), "insert.block"),
 ])
 def test_a_malformed_role_block_is_refused(make, fragment):
     data = make()

@@ -438,6 +438,34 @@ def _check_board(board: dict, where: str, start: int, end: int, visible_until: i
             break
 
 
+# Frames of the headline typed (one character a frame) and of the pill tag's
+# fade that make a board's opening readable when its first node comes later.
+HEADLINE_FIRST_FRAMES = 8
+
+
+def insert_first_frames(entry: dict) -> int:
+    """Frames the first board's opening node takes to land and type its label,
+    for the frame the renderer holds while the insert comes in (the caller
+    caps it). 0 when no node starts on the insert's first frame."""
+    try:
+        start = entry["startFrame"]
+        board = entry["props"][PROPS_KEY]["boards"][0]
+        events = board["events"]
+        labels = {n["id"]: len(n.get("label", "")) for n in board.get("nodes", []) if isinstance(n, dict)}
+    except (KeyError, IndexError, TypeError):
+        return 0
+    # The headline types on from the board's first frame, so a board with one
+    # is never empty after HEADLINE_FIRST_FRAMES, even before its first node.
+    held = HEADLINE_FIRST_FRAMES if board.get("headline") and board.get("startFrame") == start else 0
+    for e in events:
+        if isinstance(e, dict) and e.get("at") == start and e.get("type") == "node":
+            typed = TIMING["labelTypeDelay"] + TIMING["labelTypeFrames"] * labels.get(e.get("node"), 0)
+            held = max(held, TIMING["nodeIn"], typed)
+    # Never hold past the next event, which would otherwise show early.
+    later = [e["at"] for e in events if isinstance(e, dict) and _int(e.get("at")) and e["at"] > start]
+    return min([held] + [a - start for a in later])
+
+
 def insert_board_windows(entry: dict) -> list[tuple[int, int]]:
     """(start, end) of each board of one System Flow insert, for the text audit."""
     try:

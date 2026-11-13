@@ -1,0 +1,127 @@
+{
+  "id": "archive_engraving",
+  "label": "Archive and Engraving",
+  "order": 130,
+  "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "dip"
+  },
+  "dimension": "2d",
+  "preview": "archive_engraving",
+  "tagline": "A grave history told as a museum page: engraved plates, name cards and dated titles on parchment.",
+  "renderer": "dom",
+  "canvas": "light",
+  "authoring_skill": "tubematic-archive-engraving",
+  "allows": {
+    "figures": true,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": true,
+    "gpu": false
+  },
+  "mascot": false,
+  "messages": {
+    "openai_key": "OpenAI API key not set. The Archive and Engraving visual style is built on generated engravings, and only OpenAI makes them. Add an OpenAI key on the dashboard Settings page, or choose another visual style.",
+    "mascot": "Mascots are not available in the Archive and Engraving style: its page is a museum plate with name cards and engravings, and a cartoon character would break its grave register. Choose another visual style, or no mascot."
+  },
+  "review": "- This video is an Archive and Engraving history, and the following are its intended, approved look: a warm parchment page with a soft dark vignette, a thin double ruled border and a small-caps running header with a plate number at the top; a short red dash and a date in spaced capitals typed on letter by letter; a large serif title of one or two lines with one word in dark red; one cream museum card under it: a black-and-cream engraving (fine crosshatched lines, no colour) seen through a wide window that pushes in very slowly, with a small-caps name and an italic line under it and a tiny italic footnote 'Illustration'; an antique chart whose route appears as a row of red dots; a name card for a person with a coin-like engraved roundel holding an emblem (a laurel, quill, gear, compass, scroll, book, anchor, telescope, scales or lamp) or the person's initials, the name in small caps, the dates in spaced capitals and the role in italic, with no face or portrait anywhere; a row of such name cards joined by thin red arrows; a lined paper card whose lines write on in handwriting or type, with a tiny italic footnote 'Recreation'; a red line drawn through a title word with an italic red replacement rising under the title; a red underline drawing under a title word; a red rubber stamp landing at an angle with a small kick; a round magnifying roundel labelled 'Fig.' that flies out of the plate and shows a part of it enlarged, with a small red ring on the spot; a timeline ruler at the bottom whose red year marker slides; captions on a small cream chip low in the middle, the whole phrase shown at once with the words not yet spoken in grey and stressed words in red. The footnotes, stamps, dates and names carry their own information and are not redundant text. People are shown only as name cards: do NOT report a missing face, portrait or photograph of a person as a defect, and do not suggest colour pictures, photographs, a presenter, character animation or more on-screen text: their absence is the style.\n- Do report: an engraving that does not show what the narration describes at that moment, a recognisable or detailed face of a real, named person in an engraving, garbled lettering, a real logo, masthead or publication name in a picture or on a card, a date, a name or a number on a card that contradicts the narration, a red ring or a magnified part that points at the wrong thing, a card, stamp or roundel that is cut off or covers the captions, text too small to read on a phone, and a stretch of more than about three and a half seconds where nothing on the page changes apart from the slow push.\n",
+  "captions": {
+    "look": "fill",
+    "background": "chip",
+    "position": 0.73,
+    "color": "#181411",
+    "accent": "#A83A3A",
+    "fontFamily": "'EB Garamond', Garamond, Georgia, serif",
+    "fontSize": 58,
+    "maxWords": 5
+  },
+  "script": "Every beat's `visual` is a **museum card** brief: the dated title with its red word, and the card under it (an engraved plate of a place, a machine or an object; an antique chart with a route; a person's name card with an emblem; a row of people; or a recreated document line by line), plus the moment it changes (\"9 September 1947; title The first computer BUG; plate of the relay cabinets, magnify one relay on 'relay'\"). The video is a grave, scholarly history: an idea, a belief that was overturned, a discovery, a voyage or a dated event, told in order with the dates said out loud. Give each beat one idea and a short title of two to six words with one stressed word (it is drawn in red). Name people with their dates and their role, because each person becomes a name card: never describe a person's face or appearance. Say the years as numerals (\"in 1878\"), because each can move the timeline ruler. When the story turns on a correction (a word that meant something else, a belief proven wrong), say the old word and then the new one, because that is a strike through the title. A document on screen (a log page, a letter, a telegram) carries only a few short lines in the video's own words, so quote a famous line the way the narration says it. Keep the register calm and serious; no jokes, no brands, no logos, no publication names.",
+  "picture": {
+    "opening": "Beat 1 is the dated title with its red word over the card of the first sentence's subject (usually an engraved plate), on screen from frame 0 with the plate already pushing in.",
+    "turn": "A new beat (a new title and card) on the first word of a turn or a re-opening, or a strike through a title word, a stamp or a magnify landing on that word.",
+    "payoff": "The payoff beat: its title names the answer with the answer in red, and a stamp, an underline or a magnify lands on the payoff word.",
+    "ending": "Hold on the payoff beat to the last frame. No closing card, logo, recap or sign-off after it."
+  },
+  "routing": {
+    "best_for": [
+      "the history of an idea, or a belief that was overturned, told in order with dates",
+      "a dated biography told through the person's work, places and machines rather than their face",
+      "economic or scientific history told as documents, maps, machines and dated turning points",
+      "voyages, expeditions and trade routes on old maps",
+      "the day something happened, told gravely and in order"
+    ],
+    "avoid_for": [
+      "a playful origin story of an invention with a guide character (Storybook Atlas fits it)",
+      "a real product, place or machine the viewer came to see whole and in colour (Photo Explainer fits it)",
+      "how something works part by part (Stick Explainer or Under the Hood fits it)",
+      "comedy or a light tone (Paper Diorama or Bean Explainer fits it)",
+      "modern software, apps and user interfaces",
+      "how a machine, code or cipher worked or was cracked, step by step, even inside a history (mixed scenes or Stick Explainer fits it)",
+      "a list of separate inventions, people or facts, one each (Bean Explainer fits it)",
+      "a walk through one real room, mission or day as it happened (Cartoon 3D or Photo Explainer fits it)"
+    ],
+    "cannot_show": "a real person's face, a machine at work, or anything in colour: its pictures are still engravings and its people are name cards",
+    "signals": [
+      "the topic has dates and an order of events that matter",
+      "named people from the past matter, but not what they looked like",
+      "an old word, map, ledger, letter or machine is part of the story",
+      "a belief or a name was corrected over time",
+      "a calm, serious narrator suits it"
+    ],
+    "moods": [
+      "scholarly",
+      "calm",
+      "grave",
+      "documentary"
+    ],
+    "images_per_video": "up to 10 generated engravings",
+    "images": 10
+  },
+  "pictures": {
+    "cap_message": "This Archive and Engraving video already has {count} engravings, counting any being made now, the most a video may use ({cap}). Show one of them again on another beat with a different focus, or regenerate one under its own name to replace it.",
+    "still_aspect": "9:16",
+    "still_style": "Antique copperplate engraving in the style of a 19th-century encyclopedia plate: fine black crosshatched lines on plain cream paper, no colour. Any person is small, seen from behind or in profile, with no detailed face. No text, no letters, no numbers, no labels, no frame, no border, no signature.",
+    "treatments": [
+      "engraving"
+    ]
+  },
+  "extra": {
+    "card_kinds": [
+      "plate",
+      "chart",
+      "person",
+      "people",
+      "document"
+    ],
+    "events": [
+      "strike",
+      "stamp",
+      "magnify",
+      "route",
+      "timeline",
+      "underline"
+    ],
+    "emblems": [
+      "laurel",
+      "quill",
+      "gear",
+      "compass",
+      "scroll",
+      "book",
+      "anchor",
+      "telescope",
+      "scales",
+      "lamp"
+    ],
+    "treatment": "engraving",
+    "footnotes": {
+      "plate": "Illustration",
+      "chart": "Illustration",
+      "document": "Recreation"
+    }
+  }
+}

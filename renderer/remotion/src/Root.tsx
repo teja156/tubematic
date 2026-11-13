@@ -11,6 +11,7 @@ import { ProcessCastSheet, SHEET_PAGES as PROCESS_CAST_SHEET_PAGES } from "./sce
 import { ComicPanelsSheet, SHEET_PAGES as COMIC_PANELS_SHEET_PAGES } from "./scenes/installed/comicPanels/ComicPanelsSheet";
 import { PuppetHistorySheet, SHEET_PAGES as PUPPET_HISTORY_SHEET_PAGES } from "./scenes/installed/puppetHistory/PuppetHistorySheet";
 import { PresenterSheet } from "./scenes/installed/underTheHood/PresenterSheet";
+import { PaperPropSheet, sheetPages as paperSheetPages } from "./scenes/installed/paperDiorama/PaperPropSheet";
 
 // Text-layout audit composition (VQA-9). Renders exactly what "Composition"
 // renders, plus a measurement probe. A separate composition rather than a prop
@@ -181,6 +182,20 @@ export const RemotionRoot: React.FC = () => {
         id="PuppetHistorySheet"
         component={PuppetHistorySheet}
         durationInFrames={PUPPET_HISTORY_SHEET_PAGES}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{}}
+      />
+
+      {/* The Paper Diorama prop sheet: the shipped props and the critter's
+          expressions (no props), or a video's own customProps
+          (render_paper_props), twelve to a page, one page per frame. */}
+      <Composition
+        id="PaperPropSheet"
+        component={PaperPropSheet as unknown as React.ComponentType<Record<string, unknown>>}
+        durationInFrames={paperSheetPages()}
+        calculateMetadata={({ props }) => ({ durationInFrames: paperSheetPages(props.props as never) })}
         fps={30}
         width={1080}
         height={1920}

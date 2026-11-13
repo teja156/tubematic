@@ -24,6 +24,7 @@ interface Pack {
   preview: string;
   tagline: string;
   inserts?: { host: boolean; transition?: string };
+  role?: "main" | "insert";
 }
 
 const packs: Pack[] = fs
@@ -31,6 +32,9 @@ const packs: Pack[] = fs
   .filter((f) => f.endsWith(".json"))
   .map((f) => JSON.parse(fs.readFileSync(path.join(PACKS_DIR, f), "utf8")) as Pack)
   .sort((a, b) => a.order - b.order);
+
+/** The packs whose role is insert, for the tests that mark them. */
+export const INSERT_IDS: string[] = packs.filter((p) => p.role === "insert").map((p) => p.id);
 
 export const PACK_STYLES: VisualStyleInfo[] = [
   { id: "auto", label: "Auto", experimental: false, canvas: null, needs: { openai_key: false, gpu: false }, mascot: true,
