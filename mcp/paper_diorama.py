@@ -28,7 +28,7 @@ from __future__ import annotations
 import math
 import re
 
-from quiet_windows import uncovered, window_at, window_text, merged
+from quiet_windows import awake, uncovered, window_at, window_text
 
 SCENE_SRC = "PaperDiorama"
 PROPS_KEY = "paperDiorama"
@@ -529,11 +529,10 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=(),
 
     if not errors:
         still = round(LIMITS["maxStillSeconds"] * fps)
-        idle = merged(quiet, silences)   # an insert's window or a silent pause is not a stall
         for i, frames in enumerate(change_frames):
             marks = frames + [ends[i]]
-            for a, c in (g for x, y in zip(marks, marks[1:]) for g in uncovered(x, y, idle)):
-                if c - a > still:
+            for a, c in (g for x, y in zip(marks, marks[1:]) for g in uncovered(x, y, quiet)):
+                if awake(a, c, silences) > still:   # a silent pause inside the stretch is not counted
                     err(f"Set {i + 1}: nothing new happens from frame {a} to {c} ({(c - a) / fps:.1f} s); the "
                         f"longest stretch allowed is {LIMITS['maxStillSeconds']} s. Add an event on a word in "
                         "between (a label, a ring, a hop, a swap), or start the next set sooner.")

@@ -28,7 +28,7 @@ from __future__ import annotations
 import math
 import re
 
-from quiet_windows import uncovered, window_at, window_text, merged
+from quiet_windows import awake, merged, uncovered, window_at, window_text
 
 SCENE_SRC = "StorybookReveal"
 PROPS_KEY = "reveal"
@@ -131,11 +131,6 @@ def check_scene_use(visual_style: str, scenes: list) -> str:
                 "\"installed\", \"src\": \"StorybookReveal\", \"startFrame\": 0, \"durationInFrames\": "
                 "<totalFrames>, \"props\": {\"reveal\": {\"pages\": [...]}}}. Put every page in its pages.")
     return ""
-
-
-def _awake(a: int, c: int, idle) -> int:
-    """The frames from a to c outside `idle` (insert windows and silent pauses)."""
-    return sum(y - x for x, y in uncovered(a, c, idle))
 
 
 def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id: str = "", quiet=(),
@@ -266,8 +261,8 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
         elif not on_beat(pa):
             err(f"{where}: pencilAt is frame {pa}, which is not on a word (or inside a pause).")
             pa = None
-        elif _awake(start, pa, idle) > TIMING["pencilWithin"]:
-            err(f"{where}: the pencil plate wipes in at frame {pa}, {_awake(start, pa, idle)} frames of narration "
+        elif awake(start, pa, idle) > TIMING["pencilWithin"]:
+            err(f"{where}: the pencil plate wipes in at frame {pa}, {awake(start, pa, idle)} frames of narration "
                 f"after its page starts ({start}); until then the page is an empty card. Wipe it in on a word at "
                 f"most {TIMING['pencilWithin']} frames (a second) after the page starts, or start the page later.")
             pa = None
@@ -276,7 +271,7 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
         if not _int(ca) or not start <= ca < end:
             err(f"{where}: colourAt must be a frame inside the page.")
             ca = None
-        elif pa is not None and (ca < pa + TIMING["pencil"] or _awake(pa, ca, idle) > TIMING["colourWithin"]):
+        elif pa is not None and (ca < pa + TIMING["pencil"] or awake(pa, ca, idle) > TIMING["colourWithin"]):
             err(f"{where}: colourAt is frame {ca}, {ca - pa} frames after pencilAt ({pa}); the colour follows the "
                 f"pencil on a word at least {TIMING['pencil']} frames after it and at most {TIMING['colourWithin']} "
                 "frames of narration after it (within a second; a silent pause does not count), once the pencil "
@@ -315,8 +310,8 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
         for i, (start, pa, ca, land) in enumerate(marks_of):
             # the stretches with nothing new: page start to pencil, pencil to colour, colour landed to page end
             for a, c in ((start, pa), (pa, ca), (land, ends[i])):
-                for x, y in uncovered(a, c, idle):
-                    if y - x > hold:
+                for x, y in uncovered(a, c, quiet):
+                    if awake(x, y, silences) > hold:   # a silent pause inside the stretch is not counted
                         err(f"Page {i + 1}: nothing new happens from frame {x} to {y} ({(y - x) / fps:.1f} s); the "
                             f"longest stretch allowed is {LIMITS['maxHoldSeconds']} s (the slow push does not "
                             "count). Start the next page sooner, or move the pencil or the colour to a word in "

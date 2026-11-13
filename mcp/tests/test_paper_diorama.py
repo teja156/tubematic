@@ -428,3 +428,18 @@ def test_render_paper_props_returns_the_picture_of_the_videos_own_props(make_vid
 
 def test_the_preview_script_is_shipped():
     assert (REPO / "renderer/remotion" / server.bean_preview.PAPER_SCRIPT).is_file()
+
+
+def test_short_gaps_do_not_add_up_to_a_stall_that_passes():
+    """Gaps between sentences are not pauses: gaps of 20 frames all through a long set must not reset the stall clock."""
+    def stall(d):
+        s = d["sets"][0]
+        s["events"] = []
+    cfg = _with(stall)
+    from quiet_windows import silent_windows
+    words = [{"startFrame": 30 * i, "endFrame": 30 * i + 10} for i in range(30)]   # a 20-frame gap after every word
+    assert silent_windows(words) == []
+    assert any("nothing new happens" in e for e in _check(cfg, silences=silent_windows(words)))
+    # a real pause takes only its own frames out of the stretch
+    a, c = max(_stalls(_check(cfg)), key=lambda s: s[1] - s[0])
+    assert any("nothing new happens" in e for e in _check(cfg, silences=[(a + 10, a + 30)]))   # 20 frames of ~100

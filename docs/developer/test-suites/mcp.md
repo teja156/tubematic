@@ -1543,13 +1543,14 @@ Infographic config, and `render_style_parts` for the style
 
 Covers `mcp/quiet_windows.py`, the windows a style's stillness rule skips.
 
-- A gap of 12 frames or more between two words is a silent window, a shorter one (breathing) is not,
+- A gap of 24 frames or more between two words is a silent window, a shorter one (a comma) is not,
   and a malformed or missing word list has none. These are the pauses a `[pause]` or `[long pause]`
   voices as silence.
-- Several window lists merge into one sorted list without overlaps, the shape `uncovered` reads.
+- Several window lists merge into one sorted list without overlaps, the shape `uncovered` reads, and
+  `awake` counts the frames of a stretch outside them.
 
-Trap: an insert's window and a silent pause are skipped the same way, but only an insert's window also
-forbids a start inside it, since nothing can start inside a pause anyway.
+Trap: an insert's window splits a stretch into two that are measured apart, but a silent pause only
+subtracts its own frames from the stretch, so many short gaps cannot add up to a long stall.
 
 ### `test_picture_checks.py`
 

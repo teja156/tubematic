@@ -52,8 +52,8 @@ At most 12 different `image` pictures per video. A page may show a picture again
 
 In frames at 30 fps: the title wipes in over 10, the pencil plate over 12, the colour over 18, and a
 curl takes 14. Time the colour to a word within a second of the pencil: from the pencil's first frame to
-the colour landing takes at most 48 frames (1.6 s). Every `start` (but the first), `pencilAt` (but a first page's 0) and `colourAt` is within
-2 frames of a word's `startFrame`, or (`pencilAt` and `colourAt` only) inside a silent pause of the narration (a gap of 12 frames or more between two words).
+the colour landing takes at most 48 frames of narration (1.6 s; a silent pause between them is not counted). Every `start` (but the first), `pencilAt` (but a first page's 0) and `colourAt` is within
+2 frames of a word's `startFrame`, or (`pencilAt` and `colourAt` only) inside a silent pause of the narration (a gap of 24 frames or more between two words).
 
 On each page something new must happen at least every 6 seconds: from the page's start to its pencil
 wipe, and from the colour landing to the page's end. The slow push

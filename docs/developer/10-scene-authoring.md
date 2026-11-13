@@ -2155,12 +2155,13 @@ tenth of a CPU-second a frame.
   bob does not count, and a silent pause in the narration is not counted.
 - A set, an entrance or an event lands inside an insert window, where the stage is hidden.
 
-A silent pause (a gap of 12 frames or more between two words of the narration, such as a `[long pause]`)
+A silent pause (a gap of 24 frames or more between two words of the narration, such as a `[long pause]`)
 does not count as nothing happening, in this style and in Archive and Engraving, Editorial Collage and
 Storybook Reveal. Every event sits on a word, so nothing can be placed inside a pause, and without this
 rule a pause longer than the style's stillness limit made the config impossible to write.
 `write_scene_config` reads the pauses from `timeline.json` (`server.py::_timeline_silences`, built by
-`quiet_windows.silent_windows`) and the validators skip them the way they skip an insert window.
+`quiet_windows.silent_windows`) and the validators take the silent frames out of a stretch before
+they compare it with the limit, so a pause shortens what counts and a comma does not reset it.
 
 `mcp/tests/test_paper_diorama.py` pins `paper_diorama.py` to `contract.ts`, to the pack and to the
 shipped props. The pack's `captions` fill every `subtitles` key the config leaves out. The text-layout

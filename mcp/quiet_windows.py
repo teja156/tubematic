@@ -38,9 +38,9 @@ def uncovered(a: int, c: int, quiet) -> list[tuple[int, int]]:
     return out
 
 
-# A gap between two spoken words at least this long (frames) is a pause the
-# script asked for: [pause] or [long pause] voiced as silence.
-MIN_SILENCE = 12
+# A gap between two spoken words at least this long (frames, 0.8 s) is a pause
+# the script asked for ([pause] or [long pause] voiced as silence), not a comma.
+MIN_SILENCE = 24
 
 
 def silent_windows(words, min_gap: int = MIN_SILENCE) -> list[tuple[int, int]]:
@@ -71,3 +71,9 @@ def merged(*lists) -> list[tuple[int, int]]:
         else:
             out.append([a, b])
     return [(a, b) for a, b in out]
+
+
+def awake(a: int, c: int, windows) -> int:
+    """The frames from a to c outside `windows`: the time a stillness rule
+    counts once silent pauses are taken out."""
+    return sum(y - x for x, y in uncovered(a, c, merged(windows)))
