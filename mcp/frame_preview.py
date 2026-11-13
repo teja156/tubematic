@@ -69,13 +69,26 @@ def _content_hash(config_path: Path, timeline_path: Path) -> str:
     return h.hexdigest()
 
 
+def _open_folder(folder: Path) -> int:
+    """A handle on the preview folder, made if it is missing, never following a link: the folder is
+    created with a plain mkdir (which refuses an existing link, dangling or not) and opened with
+    O_NOFOLLOW. Raises OSError."""
+    try:
+        return os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        try:
+            os.mkdir(folder)
+        except FileExistsError:
+            pass
+        return os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+
+
 def _write_record(folder: Path, sha: str, status: str, frames: list[int], why: str = "") -> None:
     """preview/record.json: which scene-config and timeline were looked at, and whether the
     frames drew ("ok") or the tool itself could not ("unavailable"). Written beside a folder
     handle opened without following a link, to a new name and renamed into place."""
     try:
-        folder.mkdir(parents=True, exist_ok=True)
-        dir_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        dir_fd = _open_folder(folder)
         try:
             tmp = RECORD_FILE + ".tmp"
             try:
@@ -162,11 +175,10 @@ def preview(jobs_dir, video_id: str, remotion_dir: Path, frames, *, watermark: b
         props["watermark"] = bool(watermark)
         if mascot_code:
             try:
-                folder.mkdir(parents=True, exist_ok=True)
-                # exclusive and never through a link: a name left by anything else is a refusal
-                # the folder is opened without following a link and the file made beside that handle, so a
-                # folder swapped for a link after the check above is not followed either
-                dir_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                # exclusive and never through a link: a name left by anything else is a refusal. The folder is
+                # opened without following a link and the file made beside that handle, so a folder swapped
+                # for a link after the check above is not followed either
+                dir_fd = _open_folder(folder)
                 try:
                     fd = os.open(MASCOT_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644, dir_fd=dir_fd)
                 finally:

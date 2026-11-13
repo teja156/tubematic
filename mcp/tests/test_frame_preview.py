@@ -403,3 +403,13 @@ def test_a_cli_that_answers_with_the_wrong_shape_is_recorded_as_unavailable(fake
     with pytest.raises(fp.PreviewError):
         _preview(jobs, remotion, [10])
     assert json.loads((jobs / VID / "preview" / "record.json").read_text())["status"] == "unavailable"
+
+
+def test_a_preview_folder_swapped_for_a_dangling_link_creates_nothing_outside(fake_node, jobs, tmp_path):
+    _, remotion, _ = fake_node
+    target = tmp_path / "outside" / "deeper"
+    (jobs / VID / "preview").symlink_to(target)
+    with pytest.raises(fp.PreviewError):
+        _preview(jobs, remotion, [10])
+    fp._write_record(jobs / VID / "preview", "x", "ok", [1])
+    assert not (tmp_path / "outside").exists()
