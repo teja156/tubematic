@@ -1,6 +1,6 @@
 ---
 name: tubematic-inserts
-description: Place a video's insert scenes (System Flow diagrams, Terminal Doc strings) inside its main style — one insert inside each script segment marked as an insert, the main style's data held quiet under it, written in the config's inserts list — the rules every main-style authoring skill follows
+description: Place a video's insert scenes (System Flow diagrams, Terminal Doc strings, Code Scenes code, Format Packs messages and lists) inside its main style — one insert inside each script segment marked as an insert, the main style's data held quiet under it, written in the config's inserts list — the rules every main-style authoring skill follows
 ---
 
 # Tubematic insert scenes
@@ -39,9 +39,10 @@ Inserts go in a top-level list beside `scenes`. You write four keys per insert:
 
 - `style`: the segment's `insert` value from `get_timeline`.
 - `startFrame`, `durationInFrames`: the window, in the video's frames.
-- `props`: the insert style's data, under its props key (`systemFlow`, `terminalDoc`). Write it with
-  the insert style's own skill, section **As an insert** (`tubematic-system-flow`,
-  `tubematic-terminal-doc`). Its frames are the video's frames, like the main style's.
+- `props`: the insert style's data, under its props key (`systemFlow`, `terminalDoc`, `codeScenes`,
+  `formatPacks`). Write it with the insert style's own skill, section **As an insert**
+  (`tubematic-system-flow`, `tubematic-terminal-doc`, `tubematic-code-scenes`,
+  `tubematic-format-packs`; the pack's `authoring_skill`). Its frames are the video's frames, like the main style's.
 
 Leave out `src`, `palette`, `shift` and `insertTransition`: `write_scene_config` fills them. The
 insert follows the video's canvas (a light video gets the insert's light look) and moves clear of the

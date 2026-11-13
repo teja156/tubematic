@@ -1,0 +1,76 @@
+{
+  "_about": "The worked example in SKILL.md: one Code Scenes insert over frames 612-845 of a video whose narration in that segment is: \"Your name goes straight into the query. Type a quote, OR one equals one, and every row comes back. A placeholder keeps what you type out of the SQL.\" The word start frames are in word_starts. scripts/tests/test_code_scenes_skill.py checks it passes the validator.",
+  "word_starts": [
+    612,
+    621,
+    630,
+    645,
+    655,
+    666,
+    676,
+    690,
+    701,
+    712,
+    731,
+    745,
+    760,
+    775,
+    790,
+    804,
+    818
+  ],
+  "insert": {
+    "style": "code_scenes",
+    "startFrame": 612,
+    "durationInFrames": 234,
+    "props": {
+      "codeScenes": {
+        "lang": "python",
+        "file": "users.py",
+        "tag": "SQL injection",
+        "steps": [
+          {
+            "at": 612,
+            "code": "name = input(\"Name: \")\nsql = (\"SELECT * FROM users \"\n       f\"WHERE name = '{name}'\")\nfor row in db.execute(sql):\n    print(row)",
+            "label": "the bug",
+            "focus": [
+              3
+            ]
+          },
+          {
+            "at": 676,
+            "error": {
+              "line": 3,
+              "match": "{name}",
+              "text": "Whatever was typed becomes SQL"
+            }
+          },
+          {
+            "at": 731,
+            "focus": [
+              4,
+              5
+            ],
+            "output": {
+              "lines": [
+                "(1, 'alice', 'admin')",
+                "(2, 'bob', 'user')",
+                "(3, 'carol', 'user')"
+              ],
+              "label": "3 rows"
+            }
+          },
+          {
+            "at": 790,
+            "code": "name = input(\"Name: \")\nsql = (\"SELECT * FROM users \"\n       \"WHERE name = ?\")\nfor row in db.execute(sql, (name,)):\n    print(row)",
+            "label": "the fix",
+            "focus": [
+              3,
+              4
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

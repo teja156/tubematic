@@ -226,11 +226,13 @@ data by the **tubematic-storybook-atlas** skill, with no images.
 pinned to its parts and a house presenter, written as data by the **tubematic-under-the-hood** skill.
 `case_file_story` replaces it too: the whole video is a second-person suspense story in painted stills
 with a meter row and number cards, written as data by the **tubematic-case-file-story** skill.
-`system_flow` and `terminal_doc` are **insert styles**, never a video's style: a short System Flow
-diagram or Terminal Doc string shown over the main style inside a segment the script marked, placed
-by the **tubematic-inserts** skill and written as data by **tubematic-system-flow** or
-**tubematic-terminal-doc**. A video whose `visual_style` is still one of them is a legacy whole video
-voiced before they became insert styles; its style's own skill finishes it.
+`system_flow`, `terminal_doc`, `code_scenes` and `format_packs` are **insert styles**, never a
+video's style: a short System Flow diagram, Terminal Doc string, Code Scenes code card or Format
+Packs message thread, list, quiz or headline shown over the main style inside a segment the script
+marked, placed by the **tubematic-inserts** skill and written as data by the insert style's own
+skill (**tubematic-system-flow**, **tubematic-terminal-doc**, **tubematic-code-scenes**,
+**tubematic-format-packs**). A video whose `visual_style` is still `system_flow` or `terminal_doc` is
+a legacy whole video voiced before they became insert styles; its style's own skill finishes it.
 `auto` means the person left the style to you: at `TOPIC_APPROVED` the
 **tubematic-style-routing** skill picks a style from `style_routing.candidates`, and a picked style
 becomes the video's `visual_style`, so everything after the pick follows that style as if a person

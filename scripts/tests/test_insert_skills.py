@@ -121,6 +121,10 @@ def test_cartoon_3d_takes_no_inserts():
 
 # --- the insert styles' own skills ------------------------------------------
 
+# Insert styles that were whole-video styles before they became inserts.
+LEGACY_WHOLE_VIDEO_STYLES = {"system_flow", "terminal_doc"}
+
+
 def test_the_insert_styles_skills_open_with_an_as_an_insert_section():
     for sid in tvs.INSERT_STYLES:
         name = tvs.PACKS[sid]["authoring_skill"]
@@ -130,8 +134,11 @@ def test_the_insert_styles_skills_open_with_an_as_an_insert_section():
         for phrase in ("tubematic-inserts", "one entry of the config's `inserts`, not a scene",
                        "insert's `startFrame`", "Leave `subtitles` alone", "No mascot cue"):
             assert phrase in section, (name, phrase)
-        # the legacy whole video still takes the whole skill
-        assert "legacy whole video" in text, name
+        # A style that once made whole videos still finishes the ones voiced
+        # before it became an insert; a style that was only ever an insert has
+        # no such videos.
+        if sid in LEGACY_WHOLE_VIDEO_STYLES:
+            assert "legacy whole video" in text, name
 
 
 def test_the_as_an_insert_sections_state_the_validators_limits():
