@@ -1477,7 +1477,8 @@ audit's per-scene sampling and the `letterSpacing` caption key
 - A custom part is refused for a bad shape, a tone, a box overflow (a circle's radius and a line's width
   count) or too many shapes, and can stand in a scene while it cannot reuse a library name.
 - With insert windows passed as `quiet`, nothing starts or lands inside a window, a scene may start on a
-  window's end but its tear may not run on into a window, and a window over a stretch that would
+  window's end but its tear may not run on into a window, a 140-frame window planned into a scene's
+  quiet tail passes (the same gap with no window is the stillness refusal), and a window over a stretch that would
   otherwise sit still is not counted as still.
 - The text audit samples every scene once its text has settled.
 - `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
