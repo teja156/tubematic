@@ -12,7 +12,7 @@
 import React, { useMemo } from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import {
-  ADVANCE, BAND, LAYOUT, TIMING, codeAt, codeLines, insertFontSize, lineHeightFor, outputAt, typeFrames,
+  ADVANCE, BAND, HEADER_RIGHT, LAYOUT, TIMING, codeAt, codeLines, insertFontSize, lineHeightFor, outputAt, typeFrames,
   type CodeScenesData, type CodeStep,
 } from "./codeScenes/contract";
 import { morphAt, matchPieces, still, type Drawn } from "./codeScenes/morph";
@@ -280,7 +280,7 @@ const Header: React.FC<{ data: CodeScenesData; si: number; since: number; P: (ty
   const segW = n > 1 ? (LAYOUT.cardW - (n - 1) * 14) / n : LAYOUT.cardW;
   return (
     <>
-      <div style={{ position: "absolute", left: LAYOUT.cardX, top: BAND.top, width: LAYOUT.cardW, height: LAYOUT.headerH,
+      <div style={{ position: "absolute", left: LAYOUT.cardX, top: BAND.top, width: HEADER_RIGHT - LAYOUT.cardX, height: LAYOUT.headerH,
         display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 40, letterSpacing: 2, color: P.accent,
           textTransform: "uppercase", whiteSpace: "nowrap" }}>

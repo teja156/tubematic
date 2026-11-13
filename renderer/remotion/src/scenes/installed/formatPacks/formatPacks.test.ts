@@ -2,9 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  APPS, BAND, FORMATS, ONE_LINE, WRAP, LAYOUT, LIMITS, TICKS, TIMING, changeFrames, isFictionNumber, threadHeight, wrapLines,
+  APPS, BAND, FORMATS, TOP_TEXT_RIGHT, ONE_LINE, WRAP, LAYOUT, LIMITS, TICKS, TIMING, changeFrames, isFictionNumber, threadHeight, wrapLines,
 } from "./contract";
 import { expoOut, ringPath, underlinePath } from "./draw";
+import { KEEP_OUT_X, WATERMARK_BOTTOM, WATERMARK_LEFT } from "../../../watermarkBox";
 
 const ROOT = path.resolve(__dirname, "../../../../../..");
 const CASES = JSON.parse(fs.readFileSync(path.join(ROOT, "mcp/tests/fixtures/format_packs_contract.json"), "utf8"));
@@ -60,5 +61,15 @@ describe("timing and drawing", () => {
     expect(ringPath(100, 100).startsWith("M")).toBe(true);
     expect((ringPath(100, 100).match(/M/g) ?? []).length).toBe(1);
     expect((underlinePath(100).match(/M/g) ?? []).length).toBe(1);
+  });
+});
+
+describe("the watermark", () => {
+  it("sits where the fixture says, and every top-row text ends left of it", () => {
+    expect(WATERMARK_LEFT).toBe(CASES.watermark.left);
+    expect(WATERMARK_BOTTOM).toBe(CASES.watermark.bottom);
+    expect(KEEP_OUT_X).toBe(CASES.keep_out_x);
+    expect({ ...TOP_TEXT_RIGHT }).toEqual(CASES.top_text_right);
+    for (const x of Object.values(TOP_TEXT_RIGHT)) expect(x).toBeLessThanOrEqual(KEEP_OUT_X);
   });
 });

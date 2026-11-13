@@ -44,6 +44,11 @@ TIMING = {"morph": 15, "focus": 8, "callout": 10, "squiggle": 10, "outputStagger
           "typePerChar": 1}
 BAND = (200, 1340)
 LAYOUT = {"textWidth": 768, "codeBudget": 650, "maxFont": 40, "lineHeight": 1.4}
+# The watermark's keep-out line (renderer/remotion/src/watermarkBox.ts): the
+# header row (tag, step counter and label) ends here, because a lifted insert
+# (inserts.shift_for) puts it beside the mark.
+KEEP_OUT_X = 900
+HEADER_LEFT = 50
 # The smallest size the one-line error callout shrinks to (CodeScenes.tsx).
 CALLOUT_MIN_FONT = 22
 # A step's `at` may sit this many frames from a word's start.
@@ -324,7 +329,7 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
         for i, s in enumerate(steps):
             label = s.get("label") if isinstance(s, dict) and isinstance(s.get("label"), str) else ""
             right = (f"{i + 1}/{len(steps)}" + (f" · {label}" if label else "")) if len(steps) > 1 else label
-            if text_fit.width(tag.upper(), 40, 2) + text_fit.width(right, 36) + 40 > 980:
+            if text_fit.width(tag.upper(), 40, 2) + text_fit.width(right, 36) + 40 > KEEP_OUT_X - HEADER_LEFT:
                 err(f"Step {i + 1}: the tag and the step label do not fit one row above the card; shorten them.")
                 break
     for problem in output_check(entry, run):

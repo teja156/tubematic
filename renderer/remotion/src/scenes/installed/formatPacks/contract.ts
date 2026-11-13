@@ -20,6 +20,8 @@
  */
 import { wrapCount } from "../fitText";
 
+import { KEEP_OUT_X } from "../../../watermarkBox";
+
 export const W = 1080;
 export const H = 1920;
 
@@ -80,10 +82,23 @@ export const TIMING = {
  *  the components draw it. */
 export const WRAP = {
   bubble: [44, 580, false],
-  title: [56, 796, true],
+  title: [56, 736, true],
   item: [36, 686, false],
-  question: [52, 768, false],
-  headline: [60, 756, false],
+  question: [52, 744, false],
+  headline: [60, 728, false],
+} as const;
+
+/** Where the top rows' texts end, for the watermark's keep-out line (KEEP_OUT_X):
+ *  a lifted insert puts them beside the mark. The list title's label has 22 px
+ *  of padding each side and starts at LAYOUT.left; the question starts after
+ *  the card's border and 34 px padding; the headline after the strap's bar
+ *  (it has no left border) and padding. The title label is content-box: its
+ *  `maxWidth` is the text box, the padding comes on top. */
+export const TOP_TEXT_RIGHT = {
+  exampleTag: KEEP_OUT_X,
+  listTitle: 120 + 22 + 736 + 22,
+  question: 120 + 2 + 34 + 744,
+  headline: 120 + 14 + 34 + 728,
 } as const;
 export type WrapKind = keyof typeof WRAP;
 

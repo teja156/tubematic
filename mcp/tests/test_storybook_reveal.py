@@ -25,6 +25,7 @@ import pytest
 import picture_checks
 import server
 import storybook_reveal as sr
+from quiet_windows import silent_windows
 import text_audit
 from tubematic_core import visual_styles as tvs
 
@@ -40,7 +41,7 @@ PACK = tvs.pack("storybook_reveal")
 EXTRA = PACK["extra"]
 PICS = PACK["pictures"]
 VID = "vid_example01"
-STAIRS, STORM, DAWN = 0, 1, 2
+STAIRS, STORM, BEAM, DAWN, KIND = 0, 1, 2, 3, 4
 
 # Marks the tests that need the style wired into write_scene_config, the text
 # audit and the picture checks (mcp/server.py, mcp/text_audit.py,
@@ -64,8 +65,18 @@ def _data(cfg):
     return cfg["scenes"][0]["props"]["reveal"]
 
 
-def _check(cfg=None, quiet=(), video_id=VID, words=None):
-    return sr.check(cfg or EXAMPLE, 30, WORD_STARTS if words is None else words, EXTRA, video_id, quiet=quiet)
+def _check(cfg=None, quiet=(), video_id=VID, words=None, silences=None):
+    # the example's narration has real pauses in it (the way a [long pause] script does), as the server reads them
+    if silences is None:
+        silences = silent_windows(EXAMPLE_TIMELINE["words"])
+    return sr.check(cfg or EXAMPLE, 30, WORD_STARTS if words is None else words, EXTRA, video_id, quiet=quiet,
+                    silences=silences)
+
+
+def _stalls(errors):
+    """Every "nothing new happens from frame A to C" refusal as (A, C)."""
+    return [(int(a), int(c)) for e in errors if "nothing new happens" in e
+            for a, c in [re.search(r"from frame (\d+) to (\d+)", e).groups()]]
 
 
 def _with(mutate):
@@ -182,10 +193,10 @@ def _pencil(d, i, value):
     (lambda d: _page(d, STAIRS).update(turn="curl"), "first page cannot turn"),
     (lambda d: _page(d, STORM).update(pencilAt=_page(d, STORM)["start"] + 2), "at least 6 frames after"),
     (lambda d: _page(d, STORM).update(pencilAt=_page(d, STORM)["pencilAt"] + 5), "pencilAt is frame"),
-    (lambda d: _page(d, STORM).update(pencilAt=_page(d, DAWN)["start"] + 10), "pencilAt must be a frame inside"),
+    (lambda d: _page(d, STORM).update(pencilAt=_page(d, BEAM)["start"] + 10), "pencilAt must be a frame inside"),
     (lambda d: _page(d, STORM).update(colourAt=_page(d, STORM)["pencilAt"] + 10), "once the pencil plate has wiped in"),
     (lambda d: _page(d, STORM).update(colourAt=_page(d, STORM)["colourAt"] + 5), "not on a word"),
-    (lambda d: _page(d, DAWN).update(colourAt=WORD_STARTS[-2]), "within a second"),
+    (lambda d: _page(d, KIND).update(colourAt=WORD_STARTS[-2]), "within a second"),
     (lambda d: _page(d, STAIRS).update(colour="gold"), "unknown field"),
     (lambda d: d.update(music="soft"), "unknown field"),
 ])
@@ -250,9 +261,8 @@ def test_at_most_two_curls():
 
 
 def _early_dawn(d):
-    """The dawn page revealed on its second and fourth words: its colour lands with 9 s of the page left."""
-    start = WORD_STARTS.index(_page(d, DAWN)["start"])
-    _page(d, DAWN).update(pencilAt=WORD_STARTS[start + 1], colourAt=WORD_STARTS[start + 3])
+    """The dawn page left out: the page before it lasts to the end of the dawn, its colour landed 7 s before."""
+    d["pages"].pop(DAWN)
 
 
 def test_the_colour_follows_the_pencil_within_a_second():
@@ -267,16 +277,40 @@ def test_the_colour_follows_the_pencil_within_a_second():
 
 def test_a_still_page_is_refused_and_the_push_does_not_count():
     early = _with(_early_dawn)
-    errors = _check(early)
+    errors = _check(early, silences=[])
     assert any("nothing new happens" in e and "slow push does not count" in e for e in errors), errors
 
 
-def test_a_long_pencil_stage_is_refused():
+def test_a_silent_pause_is_not_a_stall():
+    early = _with(_early_dawn)
+    stalls = _stalls(_check(early, silences=[]))
+    assert stalls
+    assert _check(early, silences=[(a + 5, c - 5) for a, c in stalls]) == []
+    a, c = stalls[0]
+    assert any("nothing new happens" in e for e in _check(early, silences=[(a + 5, a + 20)]))
+
+
+def test_a_page_left_an_empty_card_for_long_is_refused():
     cfg, _ = _many(1)
     words = list(range(0, 600, 10))
     cfg["totalFrames"] = cfg["scenes"][0]["durationInFrames"] = 600
     _data(cfg)["pages"][0].update(pencilAt=300, colourAt=320)
-    assert any("from frame 0 to 300" in e for e in _check(cfg, words=words))
+    errors = _check(cfg, words=words, silences=[])
+    assert any("empty card" in e and "300" in e for e in errors), errors
+
+
+def test_the_pencil_and_the_colour_may_play_through_a_silent_pause():
+    """A pause right after a page starts: no word to wipe on for seconds, so a page would sit empty."""
+    cfg, _ = _many(1)
+    words = [0, 10, 20, 30, 200, 210, 220]
+    cfg["totalFrames"] = cfg["scenes"][0]["durationInFrames"] = 300
+    pause = silent_windows([{"startFrame": 0, "endFrame": 8}, {"startFrame": 10, "endFrame": 18},
+                            {"startFrame": 200, "endFrame": 208}])
+    assert pause == [(18, 200)]
+    page = _data(cfg)["pages"][0]
+    page.update(start=0, pencilAt=40, colourAt=60)   # inside the pause, a second and a bit in
+    assert _check(cfg, words=words, silences=pause) == []
+    assert any("not on a word" in e for e in _check(cfg, words=words, silences=[]))
 
 
 def test_nothing_starts_inside_an_insert_window_and_a_window_is_not_still():
@@ -288,10 +322,10 @@ def test_nothing_starts_inside_an_insert_window_and_a_window_is_not_still():
     late = (storm["colourAt"] + sr.TIMING["colour"] - 4, storm["colourAt"] + sr.TIMING["colour"] + 40)
     assert any("floods its colour" in e and "runs into an insert" in e for e in _check(quiet=[late]))
     early = _with(_early_dawn)
-    dawn = _page(_data(early), DAWN)
-    land = sr.land_frame(dawn["colourAt"])
-    assert any("nothing new happens" in e for e in _check(early))
-    assert _check(early, quiet=[(land + 20, land + 120)]) == []
+    beam = _page(_data(early), BEAM)
+    land = sr.land_frame(beam["colourAt"])
+    assert any("nothing new happens" in e for e in _check(early, silences=[]))
+    assert _check(early, silences=[], quiet=[(land + 20, land + 120)]) == []
 
 
 # ── the text audit and the picture checks ────────────────────────────────────

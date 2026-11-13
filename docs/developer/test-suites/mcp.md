@@ -880,6 +880,8 @@ JSON `true` or `false` (Python reads `true` as 1); a field the event does not
   one and refuses `PaperDiorama` on another style and other scenes on a Paper Diorama video.
 - A list or object where the config names a room, slot, level, scale, prop or item is reported as a
   problem, never raised.
+- A silent pause in the narration is not a stall: a stretch of nothing new that is covered by one passes,
+  one covered by a short gap is refused, and `write_scene_config` reads the pauses from the timeline.
 - `generate_image` on a Paper Diorama video is refused before any request reaches the API.
 - `render_paper_props` refuses a video with no config, with no `customProps` or of another style.
   For a sound one it passes the video's own props and `PAPER_SCRIPT` to `bean_preview.render_preview`
@@ -908,6 +910,7 @@ config, the text audit's per-beat sampling, the picture checks, the cap on engra
   and a page where nothing new happens for too long is refused.
 - With insert windows passed as `quiet`, nothing may start inside a window, and a window over a still
   stretch does not count as still.
+- A silent pause in the narration is not a stall: a stretch of nothing new covered by one passes, and one covered by a short gap is refused.
 - The text audit samples each beat after its last event, and the picture checks read the style.
 - `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
   one and refuses `ArchiveEngraving` on another style.
@@ -938,6 +941,7 @@ config, the text audit's per-station sampling, the picture checks, the cap on st
   treatment and a stack takes either. More than ten different stills are refused, and a desk where
   nothing new happens for too long is refused.
 - With insert windows passed as `quiet`, nothing starts and no glide runs inside a window.
+- A silent pause in the narration is not a stall: a stretch of nothing new covered by one passes, and one covered by a short gap is refused.
 - The text audit samples each station once the camera has stopped, and the picture checks read the
   style.
 - `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
@@ -964,7 +968,9 @@ the text audit's per-page sampling, the picture checks, the hero sheet and page 
   word, and a colour too close to its page's end is refused. Twelve different stills pass and a
   thirteenth is refused (one still on every page is fine), more pages than the limit are refused, at
   most two curls are allowed, and a page where nothing new happens for too long is refused without
-  counting the slow push. A long pencil stage is refused, and the hero sheet cannot be a page.
+  counting the slow push. A page whose pencil wipes in more than a second after it starts (an empty card
+  until then) is refused, unless the wait is a silent pause, in which the pencil and the colour may start;
+  the example's own pages obey this. The hero sheet cannot be a page.
 - With insert windows passed as `quiet`, nothing starts inside a window, a page turn or a colour
   flood still running when a window opens is refused, and a window does not count as still.
 - Each page is sampled once its colour has landed, the change frames are each page's start, pencil
@@ -1315,6 +1321,8 @@ text audit's per-step sampling ([Code Scenes](../10-scene-authoring.md#code-scen
   callout, and a tag and label too wide for the header row.
 - `write_scene_config` writes a Code Scenes insert with its scene, palette and shift filled, names a
   Code Scenes problem in its refusal, and refuses `CodeScenes` as one of the scenes.
+- The header row ends at the watermark's keep-out line (the fixture's `keep_out_x`, 18 px left of the
+  mark), and a tag and step label that would reach it are refused.
 - The output check refuses a pane that differs from what the code printed, accepts one that matches
   (an equal pane, or the start of longer output), and refuses nothing when the run fails, times out,
   is for a language that cannot run, has only a label or has no runner. It is checked through a fake
@@ -1355,6 +1363,8 @@ text audit's sampling between changes ([Format Packs](../10-scene-authoring.md#f
   stretch.
 - `write_scene_config` writes a Format Packs insert with its scene, palette and shift filled, names
   a Format Packs problem in its refusal, and refuses `FormatPacks` as one of the scenes.
+- Every top-row text (the EXAMPLE tag, list title, question, headline) ends at or left of the
+  watermark's keep-out line, as the fixture's `top_text_right` says.
 
 ### `test_system_flow.py`
 
@@ -1501,7 +1511,8 @@ audit's per-scene sampling and the `letterSpacing` caption key
 - A custom part is refused for a bad shape, a tone, a box overflow (a circle's radius and a line's width
   count) or too many shapes, and can stand in a scene while it cannot reuse a library name.
 - With insert windows passed as `quiet`, nothing starts or lands inside a window, a scene may start on a
-  window's end but its tear may not run on into a window, and a window over a stretch that would
+  window's end but its tear may not run on into a window, a 140-frame window planned into a scene's
+  quiet tail passes (the same gap with no window is the stillness refusal), and a window over a stretch that would
   otherwise sit still is not counted as still.
 - The text audit samples every scene once its text has settled.
 - `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
@@ -1560,6 +1571,19 @@ Infographic config, and `render_style_parts` for the style
   rule holds and the audit windows are the boards.
 - `write_scene_config` writes a sound config with the `card` captions and refuses the scene on another
   style. `render_style_parts` sends the video's props to the renderer.
+
+### `test_quiet_windows.py`
+
+Covers `mcp/quiet_windows.py`, the windows a style's stillness rule skips.
+
+- A gap of 24 frames or more between two words is a silent window, a shorter one (a comma) is not,
+  and a malformed or missing word list has none. These are the pauses a `[pause]` or `[long pause]`
+  voices as silence.
+- Several window lists merge into one sorted list without overlaps, the shape `uncovered` reads, and
+  `awake` counts the frames of a stretch outside them.
+
+Trap: an insert's window splits a stretch into two that are measured apart, but a silent pause only
+subtracts its own frames from the stretch, so many short gaps cannot add up to a long stall.
 
 ### `test_picture_checks.py`
 

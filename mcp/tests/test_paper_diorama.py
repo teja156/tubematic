@@ -61,8 +61,14 @@ def _data(cfg):
     return cfg["scenes"][0]["props"]["paperDiorama"]
 
 
-def _check(cfg=None, quiet=()):
-    return pd.check(cfg or EXAMPLE, 30, WORD_STARTS, EXTRA, quiet=quiet)
+def _check(cfg=None, quiet=(), silences=()):
+    return pd.check(cfg or EXAMPLE, 30, WORD_STARTS, EXTRA, quiet=quiet, silences=silences)
+
+
+def _stalls(errors):
+    """Every "nothing new happens from frame A to C" refusal as (A, C)."""
+    return [(int(a), int(c)) for e in errors if "nothing new happens" in e
+            for a, c in [re.search(r"from frame (\d+) to (\d+)", e).groups()]]
 
 
 def _with(mutate):
@@ -236,6 +242,18 @@ def test_a_still_stage_is_refused_and_an_event_fixes_it():
     assert any("nothing new happens" in e for e in errors), errors
 
 
+def test_a_silent_pause_is_not_a_stall():
+    # [long pause] voices as silence: no word to put an event on, so the stretch across it may hold
+    def still(d):
+        d["sets"][0]["events"] = [e for e in d["sets"][0]["events"] if e["do"] != "hop"]
+    cfg = _with(still)
+    stalls = _stalls(_check(cfg))
+    assert stalls
+    assert _check(cfg, silences=[(a + 5, c - 5) for a, c in stalls]) == []
+    a, c = stalls[0]
+    assert any("nothing new happens" in e for e in _check(cfg, silences=[(a + 5, a + 20)]))   # a short gap is no cover   # a short gap is no cover
+
+
 def test_a_custom_prop_is_checked_piece_by_piece():
     good = {"w": 120, "h": 120, "pieces": [{"shape": "rect", "fill": "go", "x": 0, "y": 0, "w": 120, "h": 120, "r": 8},
                                            {"shape": "text", "fill": "white", "text": "OK", "x": 60, "y": 60}]}
@@ -342,6 +360,25 @@ def test_a_paper_diorama_video_never_sends_a_paid_image_request(make_video, monk
     assert "takes no generated images" in err and "Paper Diorama" in err
 
 
+def test_a_long_pause_in_the_script_cannot_wedge_write_scene_config(make_video, tmp_path):
+    """The reported case: [long pause] voiced as ~3 s of silence leaves no word to put an event on."""
+    def still(d):
+        d["sets"][0]["events"] = [e for e in d["sets"][0]["events"] if e["do"] != "hop"]
+    cfg = _with(still)
+    vid = make_video()
+    # as the timeline stands, the stretch with no event is refused
+    assert "nothing new happens" in server.write_scene_config(vid, copy.deepcopy(cfg))["error"]
+    # the same stretch, but the narration is silent through the middle of it
+    stalls = _stalls(_check(cfg))
+    silent = json.loads(json.dumps(EXAMPLE_TIMELINE))
+    silent["words"] = [w for w in silent["words"]
+                       if not any(a + 8 < w["startFrame"] < c for a, c in stalls)]   # one word, then silence
+    (tmp_path / "jobs" / vid / "timeline.json").write_text(json.dumps(silent))
+    assert server._timeline_silences(vid), "the gap is read as a pause"
+    out = server.write_scene_config(vid, copy.deepcopy(cfg))
+    assert "error" not in out, out
+
+
 def test_the_scene_on_another_style_is_refused(make_video):
     with server._conn() as con:
         con.execute("DELETE FROM videos")
@@ -391,3 +428,18 @@ def test_render_paper_props_returns_the_picture_of_the_videos_own_props(make_vid
 
 def test_the_preview_script_is_shipped():
     assert (REPO / "renderer/remotion" / server.bean_preview.PAPER_SCRIPT).is_file()
+
+
+def test_short_gaps_do_not_add_up_to_a_stall_that_passes():
+    """Gaps between sentences are not pauses: gaps of 20 frames all through a long set must not reset the stall clock."""
+    def stall(d):
+        s = d["sets"][0]
+        s["events"] = []
+    cfg = _with(stall)
+    from quiet_windows import silent_windows
+    words = [{"startFrame": 30 * i, "endFrame": 30 * i + 10} for i in range(30)]   # a 20-frame gap after every word
+    assert silent_windows(words) == []
+    assert any("nothing new happens" in e for e in _check(cfg, silences=silent_windows(words)))
+    # a real pause takes only its own frames out of the stretch
+    a, c = max(_stalls(_check(cfg)), key=lambda s: s[1] - s[0])
+    assert any("nothing new happens" in e for e in _check(cfg, silences=[(a + 10, a + 30)]))   # 20 frames of ~100

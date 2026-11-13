@@ -112,6 +112,7 @@ import under_the_hood  # the Under the Hood checks (TMDEV-201), the same way
 import case_file_story  # the Case File Story checks (TMDEV-202), the same way
 import character_styles  # the code-drawn character styles' checks (TMDEV-232..235), the same way
 import treatments  # the looks treat_image bakes into a still (TMDEV-229/230/231)
+from quiet_windows import silent_windows  # the narration's silent pauses, for the stillness rules (TMDEV-228)
 import paper_diorama  # the Paper Diorama checks (TMDEV-228), the same way
 import archive_engraving  # the Archive and Engraving checks (TMDEV-230), the same way
 import editorial_collage  # the Editorial Collage checks (TMDEV-229), the same way
@@ -8417,6 +8418,18 @@ def _timeline_word_starts(video_id: str) -> tuple[int, list[int]]:
         return 30, []
 
 
+def _timeline_silences(video_id: str) -> list[tuple[int, int]]:
+    """The narration's silent pauses (quiet_windows.silent_windows) from
+    timeline.json; [] when there is no readable timeline. The stillness rules
+    of the paper and print styles skip them: nothing can be placed on a word
+    inside a pause, so a stage that holds through one has not stalled."""
+    try:
+        path = tjobs.job_file(JOBS_DIR, video_id, tjobs.TIMELINE)
+        return silent_windows(json.loads(path.read_text(encoding="utf-8")).get("words", []))
+    except (tjobs.UnsafePath, OSError, ValueError, TypeError, KeyError, AttributeError):
+        return []
+
+
 def _bean_custom_prop_errors(video_id: str, config) -> list[str]:
     """validate_job's re-check of a Bean Explainer config's own props against
     their files as they are now; [] when the config has none."""
@@ -9303,7 +9316,8 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     if (row["visual_style"] or "") == paper_diorama.STYLE_ID:
         fps, word_starts = _timeline_word_starts(video_id)
         problems = paper_diorama.check(config, fps, word_starts, tvs.pack(paper_diorama.STYLE_ID)["extra"],
-                                       quiet=quiet)
+                                       quiet=quiet,
+                                       silences=_timeline_silences(video_id))
         if problems:
             return {"error": "The Paper Diorama video has problems: " + " ".join(problems)}
         given = config.get("subtitles")
@@ -9319,7 +9333,8 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     if (row["visual_style"] or "") == archive_engraving.STYLE_ID:
         fps, word_starts = _timeline_word_starts(video_id)
         problems = archive_engraving.check(config, fps, word_starts, tvs.pack(archive_engraving.STYLE_ID)["extra"],
-                                           video_id, quiet=quiet)
+                                           video_id, quiet=quiet,
+                                           silences=_timeline_silences(video_id))
         if problems:
             return {"error": "The Archive and Engraving video has problems: " + " ".join(problems)}
         given = config.get("subtitles")
@@ -9336,7 +9351,8 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     if (row["visual_style"] or "") == editorial_collage.STYLE_ID:
         fps, word_starts = _timeline_word_starts(video_id)
         problems = editorial_collage.check(config, fps, word_starts, tvs.pack(editorial_collage.STYLE_ID)["extra"],
-                                           video_id, quiet=quiet)
+                                           video_id, quiet=quiet,
+                                           silences=_timeline_silences(video_id))
         if problems:
             return {"error": "The Editorial Collage video has problems: " + " ".join(problems)}
         given = config.get("subtitles")
@@ -9353,7 +9369,8 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     if (row["visual_style"] or "") == storybook_reveal.STYLE_ID:
         fps, word_starts = _timeline_word_starts(video_id)
         problems = storybook_reveal.check(config, fps, word_starts, tvs.pack(storybook_reveal.STYLE_ID)["extra"],
-                                          video_id, quiet=quiet)
+                                          video_id, quiet=quiet,
+                                          silences=_timeline_silences(video_id))
         if problems:
             return {"error": "The Storybook Reveal video has problems: " + " ".join(problems)}
         given = config.get("subtitles")

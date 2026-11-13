@@ -28,7 +28,7 @@ from __future__ import annotations
 import math
 import re
 
-from quiet_windows import uncovered, window_at, window_text
+from quiet_windows import awake, uncovered, window_at, window_text
 
 SCENE_SRC = "PaperDiorama"
 PROPS_KEY = "paperDiorama"
@@ -253,7 +253,7 @@ def prop_errors(name: str, prop) -> list[str]:
     return out
 
 
-def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=()) -> list[str]:
+def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=(), silences=()) -> list[str]:
     """Every problem with a Paper Diorama config, one sentence each (at most
     MAX_ERRORS), or [] when it may be written. `extra` is the style pack's
     catalogue block (`props`: the shipped props and their sizes). `quiet`
@@ -532,7 +532,7 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=())
         for i, frames in enumerate(change_frames):
             marks = frames + [ends[i]]
             for a, c in (g for x, y in zip(marks, marks[1:]) for g in uncovered(x, y, quiet)):
-                if c - a > still:
+                if awake(a, c, silences) > still:   # a silent pause inside the stretch is not counted
                     err(f"Set {i + 1}: nothing new happens from frame {a} to {c} ({(c - a) / fps:.1f} s); the "
                         f"longest stretch allowed is {LIMITS['maxStillSeconds']} s. Add an event on a word in "
                         "between (a label, a ring, a hop, a swap), or start the next set sooner.")

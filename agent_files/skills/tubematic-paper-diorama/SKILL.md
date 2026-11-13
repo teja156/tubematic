@@ -57,7 +57,7 @@ or event is wrong. Fix every problem it lists, then write again.
   `expr`, `hop` and `move`).
 - **Lengths:** a banner at most 28 characters, a label 16, a stamp 12.
 - **The camera** holds still: at most 3 `zoom` events in the whole video, for the hits that matter most.
-- **Never still:** something new on the stage (a cut, an entrance, an event) at least every 3 seconds.
+- **Never still:** something new on the stage (a cut, an entrance, an event) at least every 3 seconds. A silent pause in the narration (a `[pause]`, a `[long pause]`) is not counted: the stage may hold through one.
   The critter's idle bob does not count.
 
 ## Step 0 — read
