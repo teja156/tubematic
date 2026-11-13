@@ -1683,10 +1683,11 @@
         "stick"
       ],
       "ok": [
-        "whiteboard"
+        "whiteboard",
+        "night_signal"
       ],
       "future": "",
-      "note": "Insert probe (TMDEV-239/240): two to four numbered points: Format Packs list, or the scam text itself.",
+      "note": "Insert probe (TMDEV-239/240): two to four numbered points: Format Packs list, or the scam text itself. Night Signal is acceptable: three rules against one fake sender.",
       "inserts_expect": [
         "format_packs"
       ]

@@ -48,14 +48,16 @@
   "routing": {
     "best_for": [
       "a security, privacy or scam warning told as rules: if a stranger does X, don't do Y",
-      "safety procedures and steps for a bad moment (a stolen phone, a strange call, a knock at night)",
+      "safety steps for a bad moment that a person or a device causes (a stolen phone, a strange call, a knock at night)",
       "internet mysteries and creepy hypotheticals told as a case file",
       "a device, a camera, a stranger or an intruder at the centre of a short warning"
     ],
     "avoid_for": [
       "a fraud or a scheme told as a story with you inside it that ends on a choice (Case File Story fits it)",
+      "a scam message or thread read line by line with its tells marked (Stick Explainer, with a Format Packs insert showing the message itself)",
       "how an attack or a protocol works, walked through with generic roles or systems (Stick Explainer acts it out, with System Flow inserts)",
       "a list of unrelated tips, habits or scams with no single threat (Bean Explainer fits it)",
+      "household safety, first aid or accidents with no one behind them, told as steps (a pan fire, a cut, a fall: Mid-century How-To fits them)",
       "warm, optimistic or nature topics",
       "dense technical explanation, numbers worked out, or history",
       "a real, named case, company or person"
