@@ -177,7 +177,7 @@ Each run happens in a fresh work folder on the tmpfs, owned by uid 65534, with a
 
 | Limit | Value |
 |---|---|
-| Wall clock | the request's `timeout_s`, up to 60 seconds, then the whole process group is killed |
+| Wall clock | the request's `timeout_s`, up to 60 seconds, shared by the transpile and the run of a TypeScript request, then the whole process group is killed |
 | CPU time | `timeout_s` plus 2 seconds |
 | Address space (Python) | 1.5 GB. Node is held by `--max-old-space-size=384` and the container's memory limit instead, because V8 reserves address space it does not use |
 | Processes | 128 for the uid |
@@ -187,7 +187,7 @@ Each run happens in a fresh work folder on the tmpfs, owned by uid 65534, with a
 
 After a run the daemon kills every process the uid still owns, reaps the orphans (it is PID 1, so
 nothing else would, and unreaped zombies would fill the process limit), deletes what the uid left in
-`/tmp` and removes the work folder. It runs one request at a time. MCP refuses a new request with
+`/tmp` and in `/dev/shm` (Docker mounts it writable under a read-only root) and removes the work folder. It runs one request at a time. MCP refuses a new request with
 `sandbox_busy` when two are already waiting.
 
 #### Threat model

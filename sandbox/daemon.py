@@ -51,6 +51,9 @@ class Config:
     # Counts every process of the uid, so it is only meaningful when the code
     # runs as a uid of its own (the container); tests as a normal user turn it off.
     nproc: int | None = LIMITS_NPROC
+    # Other world-writable folders the code could leave something in: Docker mounts /dev/shm
+    # writable even under a read-only root.
+    wipe_also: tuple[Path, ...] = (Path("/dev/shm"),)
     python: str = "python3"
     node: str = "node"
 
@@ -266,8 +269,13 @@ def execute(cfg: Config, req: dict, req_dir: Path, done_tmp: Path, beat=lambda: 
                               "node"))
             steps.append(([cfg.node, "main.js"], "node"))
         result = None
+        started = time.monotonic()
         for argv, lang in steps:
-            result = _run(cfg, argv, work, runner, timeout, lang, beat)
+            # One budget for the whole request: transpiling and running share timeout_s.
+            left = timeout - (time.monotonic() - started)
+            if result is not None and left <= 0:
+                break
+            result = _run(cfg, argv, work, runner, max(left, 0.5), lang, beat)
             if result["exit_code"] != 0:
                 break
         files = collect_outputs(work / "out", done_tmp / "out")
@@ -278,7 +286,9 @@ def execute(cfg: Config, req: dict, req_dir: Path, done_tmp: Path, beat=lambda: 
         shutil.rmtree(work, ignore_errors=True)
         shutil.rmtree(runner, ignore_errors=True)
         if cfg.run_as is not None:
-            wipe_owned(cfg.work_root, cfg.run_as[0])
+            for root in (cfg.work_root, *cfg.wipe_also):
+                if root.is_dir():
+                    wipe_owned(root, cfg.run_as[0])
 
 
 def _error_result(rid: str, message: str) -> dict:

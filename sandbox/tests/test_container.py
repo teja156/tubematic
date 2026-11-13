@@ -258,9 +258,12 @@ def test_it_cannot_overwrite_the_daemon_or_the_protocol_module(box):
 
 def test_a_run_leaves_nothing_behind_for_the_next_one(box):
     run("import os; os.makedirs('/tmp/stash', exist_ok=True); open('/tmp/stash/a', 'w').write('secret')\n"
-        "open('/tmp/loose.txt', 'w').write('x'); open('stray.txt', 'w').write('x')")
-    r = probe("import json, os; print(json.dumps({'tmp': sorted(os.listdir('/tmp')), 'cwd': sorted(os.listdir('.'))}))")
+        "open('/tmp/loose.txt', 'w').write('x'); open('stray.txt', 'w').write('x')\n"
+        "open('/dev/shm/smuggled', 'w').write('x')")
+    r = probe("import json, os; print(json.dumps({'tmp': sorted(os.listdir('/tmp')), 'cwd': sorted(os.listdir('.')),\n"
+              "                  'shm': sorted(os.listdir('/dev/shm'))}))")
     assert "stash" not in r["tmp"] and "loose.txt" not in r["tmp"] and "stray.txt" not in r["cwd"]
+    assert r["shm"] == []
 
 
 def test_a_symlink_or_directory_in_out_is_not_returned(box):

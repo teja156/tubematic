@@ -206,3 +206,27 @@ def test_wipe_owned_removes_only_what_the_uid_owns(tmp_path):
     assert D.wipe_owned(tmp_path, os.getuid()) == 2 and os.listdir(tmp_path) == []
     (tmp_path / "other").write_text("x")
     assert D.wipe_owned(tmp_path, os.getuid() + 1) == 0 and os.listdir(tmp_path) == ["other"]
+
+
+def test_the_second_step_of_a_typescript_run_shares_the_first_ones_budget(cfg, monkeypatch):
+    """esbuild and node together may take timeout_s, not twice it (TMDEV-242 review)."""
+    calls = []
+
+    def fake_run(cfg_, argv, work, runner, timeout, language, beat):
+        calls.append(timeout)
+        time.sleep(0.6)
+        return {"exit_code": 0, "signal": None, "timed_out": False, "output_truncated": False,
+                "stdout": "", "stderr": "", "duration_ms": 600}
+
+    monkeypatch.setattr(D, "_run", fake_run)
+    submit(cfg, "const a = 1", language="typescript", timeout_s=2)
+    assert len(calls) == 2 and calls[0] <= 2 and calls[1] < calls[0] - 0.5
+
+
+def test_wipe_also_covers_a_second_folder(cfg, tmp_path):
+    shm = tmp_path / "shm"
+    shm.mkdir()
+    (shm / "stash").write_text("x")
+    cfg.wipe_also = (shm,)
+    cfg.run_as = None  # wiping happens only when the code ran as another uid
+    assert D.wipe_owned(shm, os.getuid()) == 1 and os.listdir(shm) == []
