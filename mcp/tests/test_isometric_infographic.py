@@ -95,6 +95,7 @@ def test_the_example_passes():
     (lambda d: _b(d)["explodes"][0].update(prop="depot"), "is not a stack that separates"),
     (lambda d: d["readout"]["steps"][0].update(red=True), "turns red once"),
     (lambda d: d["readout"]["cubes"].update(per=1), "per is too small"),
+    (lambda d: d["readout"]["cubes"].update(per=0.5), "a number of 1 or more"),
     (lambda d: d["legend"]["items"].extend([{"color": "red", "label": "ANOTHER ONE"}] * 3), "legend"),
 ])
 def test_a_broken_config_is_refused(mutate, fragment):
@@ -125,6 +126,8 @@ def test_a_long_stretch_with_nothing_new_is_refused():
     ({"id": "kiosk", "solids": [{"s": "box", "x": 0, "y": 0, "w": 0.4, "d": 0.4, "h": 1, "c": "#123456"}], "main": "red", "height": 1}, "c must be"),
     ({"id": "house", "solids": [{"s": "box", "x": 0, "y": 0, "w": 0.4, "d": 0.4, "h": 1, "c": "main"}], "main": "red", "height": 1}, "not a library prop"),
     ({"id": "kiosk", "solids": [], "main": "red", "height": 1}, "solids must list"),
+    ({"id": "kiosk", "solids": [{"s": "box", "x": -0.8, "y": 0, "w": 1.6, "d": 0.4, "h": 1, "c": "main"}], "main": "red", "height": 1}, "own footprint"),
+    ({"id": "kiosk", "solids": [{"s": "cyl", "x": 0.5, "y": 0, "r": 0.5, "h": 1, "c": "gold"}], "main": "red", "height": 1}, "own footprint"),
 ])
 def test_a_bad_custom_prop_is_refused(part, fragment):
     problems = _check(_with(lambda d: d.update(customProps=[part])))
@@ -146,6 +149,27 @@ def test_nothing_happens_inside_an_insert():
     d = _data(EXAMPLE)
     lift = _b(d)["lifts"][0]["at"]
     assert any("inside an insert" in p for p in _check(quiet=[(lift - 5, lift + 40)]))
+
+
+def test_a_prop_may_fall_behind_an_insert_and_land_after_it():
+    d = _data(EXAMPLE)
+    lands = next(p["enter"] for p in _b(d)["props"] if "enter" in p)
+    assert not any("inside an insert" in p for p in _check(quiet=[(lands - 10, lands)]))
+    assert any("inside an insert" in p for p in _check(quiet=[(lands - 10, lands + 1)]))
+
+
+def test_the_last_change_on_a_board_and_the_last_readout_step_are_left_on_screen():
+    cfg = copy.deepcopy(EXAMPLE)
+    d = _data(cfg)
+    total = cfg["totalFrames"]
+    end = _b(d, 1)["start"] if len(d["boards"]) > 1 else total
+    _b(d)["pins"][0]["at"] = end - 5
+    problems = iso.check(cfg, 30, WORD_STARTS + [end - 5], EXTRA, "vid_example")
+    assert any("frames to see it" in p for p in problems), problems
+    cfg = copy.deepcopy(EXAMPLE)
+    _data(cfg)["legend"]["at"] = total - 3
+    problems = iso.check(cfg, 30, WORD_STARTS + [total - 3], EXTRA, "vid_example")
+    assert any("frames to read it" in p for p in problems), problems
 
 
 def test_the_scene_use_rule_and_the_audit_windows():

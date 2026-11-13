@@ -164,7 +164,9 @@ def test_a_long_stretch_with_nothing_new_is_refused():
     ({"shape": "circle", "cx": 0, "cy": -50, "r": 0, "tone": "ink"}, "a circle needs"),
     ({"shape": "circle", "cx": 0, "cy": 50, "r": 10, "tone": "ink"}, "a circle needs"),
     ({"shape": "rect", "x": -50, "y": -100, "w": 300, "h": 50, "tone": "ink"}, "a rect needs"),
+    ({"shape": "circle", "cx": 190, "cy": -50, "r": 30, "tone": "ink"}, "the whole circle"),
     ({"shape": "line", "points": [[0, 0]], "width": 10, "tone": "ink"}, "a line needs"),
+    ({"shape": "line", "points": [[195, -10], [195, -100]], "width": 20, "tone": "ink"}, "half its width"),
     ({"shape": "line", "points": [[0, 0], [0, -50]], "width": 90, "tone": "ink"}, "width from 2 to 60"),
     ({"shape": "poly", "points": [[0, 0], [10, -10]], "tone": "ink"}, "a poly needs"),
     ({"shape": "star", "tone": "ink"}, "shape must be one of"),
@@ -205,6 +207,10 @@ def test_nothing_starts_inside_an_insert_and_an_insert_is_not_a_still_stretch():
     # A window over a scene's start is refused.
     over_start = [(phone["start"] - 20, phone["start"] + 40)]
     assert any("starts at frame" in p and "inside an insert" in p for p in _check(quiet=over_start))
+    # A scene may start on a window's end (its tear's first frames ride the insert's way out) ...
+    assert _check(quiet=[(last + 12, phone["start"])]) == []
+    # ... but a tear may not run on into a window that starts right after the scene does.
+    assert any("its tear runs" in p for p in _check(quiet=[(phone["start"] + 1, phone["start"] + 30)]))
 
 
 def test_the_scene_use_rule():

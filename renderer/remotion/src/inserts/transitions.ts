@@ -112,12 +112,15 @@ function seeded(seed: number) {
  * of the whole insert layer. Null when no band shows.
  */
 export function glitchBands(progress: number, frame: number, width = 1080, height = 1920): { path: string | null; shiftX: number } {
+  // the bands and the order they show in are fixed, so a later frame shows every band an earlier one did;
+  // only the tears and the shift change with the frame
+  const layout = seeded(17);
   const r = seeded(Math.floor(frame) * 7919 + 17);
   const parts: string[] = [];
   let y = 0;
   while (y < height) {
-    const h = Math.round(24 + r() * 150);
-    const show = r() < progress;
+    const h = Math.round(24 + layout() * 150);
+    const show = layout() < progress;
     const tear = Math.round((r() - 0.5) * 70);
     if (show) {
       const y1 = Math.min(height, y + h);

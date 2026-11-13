@@ -375,8 +375,10 @@ def _shape_error(sh) -> str:
         return f"a {kind} takes {sorted(keys)}."
     box = f"inside the part's box (x from -{_HALF} to {_HALF}, y from -{LIMITS['partBox']} to 0, the ground)"
     if kind == "circle":
-        if not _in_box(sh.get("cx"), sh.get("cy")) or not _num(sh.get("r")) or not 0 < sh["r"] <= _HALF:
-            return f"a circle needs cx and cy {box} and r from 1 to {_HALF}."
+        cx, cy, r = sh.get("cx"), sh.get("cy"), sh.get("r")
+        if (not all(_num(v) for v in (cx, cy, r)) or not 0 < r <= _HALF
+                or not _in_box(cx - r, cy - r) or not _in_box(cx + r, cy + r)):
+            return f"a circle needs cx, cy and r (1 to {_HALF}) with the whole circle {box}."
     elif kind == "rect":
         x, y, w, h = sh.get("x"), sh.get("y"), sh.get("w"), sh.get("h")
         if (not all(_num(v) for v in (x, y, w, h)) or w <= 0 or h <= 0
@@ -390,8 +392,13 @@ def _shape_error(sh) -> str:
         if (not isinstance(pts, list) or not lo <= len(pts) <= hi
                 or not all(isinstance(p, list) and len(p) == 2 and _in_box(p[0], p[1]) for p in pts)):
             return f"a {kind} needs {lo} to {hi} points [x, y] {box}."
-        if kind == "line" and (not _num(sh.get("width")) or not 2 <= sh["width"] <= 60):
-            return "a line needs a width from 2 to 60."
+        if kind == "line":
+            wd = sh.get("width")
+            if not _num(wd) or not 2 <= wd <= 60:
+                return "a line needs a width from 2 to 60."
+            # the stroke's sides and top count; a cap may sink into the ground line it stands on
+            if not all(_in_box(p[0] - wd / 2, p[1] - wd / 2) and _in_box(p[0] + wd / 2, p[1]) for p in pts):
+                return f"a line's points, with half its width to each side and above, must stay {box}."
     return ""
 
 
@@ -576,10 +583,14 @@ def _check_quiet(scenes, starts, quiet, err) -> None:
     """Nothing of the style starts inside an insert, where the scene is hidden."""
     for i, s in enumerate(scenes):
         where = f"Scene {i + 1} ({s['kind']})"
-        w = window_at(starts[i], quiet) if starts[i] else None
+        # a glitch tear runs on tearAfter frames past its scene's start, so a scene that starts just before
+        # an insert would flash and tear under it; the frames before the start ride the insert's own way out
+        torn = i and (s.get("cut") or "glitch") == "glitch"
+        b = starts[i] + (TIMING["tearAfter"] if torn else 0)
+        w = next((x for x in (window_at(f, quiet) for f in range(starts[i], b + 1)) if x), None) if starts[i] else None
         if w:
-            err(f"{where} starts at frame {starts[i]}, inside an insert ({window_text(w)}), where the scene is "
-                f"hidden; start it at {w[1]} or before {w[0]}.")
+            err(f"{where} starts at frame {starts[i]}, and its tear runs to {b}, inside an insert ({window_text(w)}), "
+                f"where the scene is hidden; start it at {w[1]} or before {w[0] - (b - starts[i])}.")
             continue
         for f in event_frames(s)[1:]:
             w = window_at(f, quiet)

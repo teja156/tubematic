@@ -45,15 +45,16 @@
   },
   "routing": {
     "best_for": [
-      "one thing's physical journey through a system of places: a parcel from warehouse to door, a bag through an airport, water from reservoir to tap, power from plant to socket, a container through a port",
+      "one physical thing's journey through a system of places: a parcel from warehouse to door, a bag through an airport, water from reservoir to tap, power from plant to socket, a container through a port",
       "supply chains and logistics, told as stations along a route",
-      "infrastructure as places: data centres, cell towers, cables, a CDN drawn as servers in towns",
+      "infrastructure as the places themselves: data centres, cell towers, undersea cables, a CDN drawn as servers in towns, when the video is about where they stand and what they hold",
       "things accumulating or counted along the way (deliveries, hours, kilometres)"
     ],
     "avoid_for": [
       "a process acted out by people as roles (Stick Explainer fits it)",
       "how one device you can hold works inside (Under the Hood fits it)",
       "an abstract exchange between software components with no places (Stick Explainer acts it out, with System Flow inserts)",
+      "a call, message or request routed between systems or offices, even when they sit in different buildings (Stick Explainer acts it out, with System Flow inserts)",
       "real, named places, buildings or people the viewer came to see (Photo Explainer fits them)",
       "emotion, stories with characters, history or psychology",
       "a quantity worked out step by step on paper (Whiteboard fits it)"

@@ -8558,6 +8558,11 @@ def render_style_parts(video_id: str):
     custom = data.get(list_key) or [] if isinstance(data, dict) else []
     if not isinstance(custom, list) or not custom:
         return {"error": f"The scene-config lists no {list_key}, so there is nothing of yours to look at."}
+    if style == flat_vector_science.STYLE_ID:
+        # the prop files may have changed since write_scene_config checked them, and the sheet imports them as they are now
+        errs = _fv_custom_prop_errors(video_id, config)
+        if errs:
+            return {"error": " ".join(errs)}
     # the JSON styles send their parts as they are; Flat Vector Science names its prop files
     spec = {"style": style, "props": custom} if style == flat_vector_science.STYLE_ID else {"style": style, "parts": custom}
     if not _heavy_checks_lock.acquire(timeout=HEAVY_CHECK_WAIT_SECS):

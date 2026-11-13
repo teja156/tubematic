@@ -72,9 +72,13 @@ describe("insert transitions", () => {
     };
     // Deterministic: the same frame gives the same bands.
     expect(glitchBands(0.6, 123)).toEqual(glitchBands(0.6, 123));
-    // More of the insert shows as the tear goes on (averaged over frames).
-    const mean = (p: number) => [...Array(40).keys()].reduce((s, f) => s + area(p, f), 0) / 40;
-    expect(mean(0.2)).toBeLessThan(mean(0.8));
+    // More of the insert shows each frame: a later frame never shows fewer bands than an earlier one.
+    let prev = 0;
+    for (const [p, frame] of [[0.1, 10], [0.3, 11], [0.5, 12], [0.7, 13], [0.9, 14]] as const) {
+      expect(area(p, frame)).toBeGreaterThanOrEqual(prev);
+      prev = area(p, frame);
+    }
+    expect(area(0.9, 14)).toBeGreaterThan(area(0.1, 10));
     const look = insertLook("glitch", 0.6, 1080, 200);
     expect(look.covers).toBe(false);
     expect(look.mainShiftX).toBe(-look.insertShiftX);

@@ -73,7 +73,7 @@ photo), `bars` (2-4 redaction bars), an optional `stamp`: `{"text": 1-10 charact
 ## Custom parts
 
 `{"id": "a_name", "shapes": [...]}`, 1 to 40 shapes. The box: x from -200 to 200, y from -400 to 0
-(the ground). A shape:
+(the ground); a circle's radius and a line's half width stay inside it (a line's end may sit on the ground). A shape:
 
 | `shape` | Fields |
 |---|---|

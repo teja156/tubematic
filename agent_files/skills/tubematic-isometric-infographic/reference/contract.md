@@ -7,7 +7,7 @@ x down to the right, y down to the left, (0, 0) at the top corner.
 | Field | Holds |
 |---|---|
 | `title` | 1-22 characters, at the top |
-| `readout` | Optional `{"label": 1-12 characters, "unit": up to 4, "steps": [{"value": 0-999999, "at", "red"?}, ...], "cubes"?: {"per": number, "color"}}` |
+| `readout` | Optional `{"label": 1-12 characters, "unit": up to 4, "steps": [{"value": 0-999999, "at", "red"?}, ...], "cubes"?: {"per": 1 or more, "color"}}` |
 | `boards` | 1 to 3 boards |
 | `legend` | Optional `{"at", "items": [{"color", "label": 1-12 characters}, ...]}`, 1 to 5 items |
 | `customProps` | Optional, at most 6: `{"id", "main": colour, "height": tiles, "solids": [...]}` |

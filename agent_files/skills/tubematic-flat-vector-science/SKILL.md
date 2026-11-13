@@ -59,7 +59,8 @@ and which field:
 - A descent's layers go deeper each time.
 - At most one red thing in a shot (a pill part, a rung, a level, a layer, a stage or the counter).
 - A ladder, zoom, descent or stages shot keeps its last arrival on screen at least 20 frames before the
-  next shot.
+  next shot; in a subject shot, the last pill word or the rule has finished lighting (9 frames) before
+  the next shot.
 - Nothing may sit still for more than 4 seconds: a prop, a pill word, a rule, a counter, a rung, a
   level, a layer or a stage must arrive on a word within every 4-second stretch (the drift does not count).
 - A lens or push transition runs over the frames before its shot; it may not run inside an insert.
@@ -97,7 +98,8 @@ When a thing the narration names is not in the library, draw it: a still React c
 source `installed`, `flatVector/props`). Import only from `react` and `../../installed/flatVector/toon`
 (`Toon`, `GlowDot`, `Eye`, `circleD`, `ellipseD`, `rrectD`): flat two-tone shapes with a lighter rim and a
 darker shadow plane, no outlines, no text, no images, no filters or gradients of your own, no hooks and
-nothing that depends on the frame: the renderer draws it once and moves it. Centre it on (0, 0) inside
+nothing that depends on the frame: the renderer draws it once and moves it. The file default-exports
+the drawing as a function (`export default function Octopus() { ... }`). Centre it on (0, 0) inside
 its `box` [width, height] (every pixel inside), and list it in `customProps`:
 `{"id": "octopus", "src": "<video_id>/prop-octopus", "box": [360, 360]}` (add `"light": "#rrggbb"` for
 a halo). Then look at it: `render_style_parts(video_id)` (after `write_scene_config`) draws your props as

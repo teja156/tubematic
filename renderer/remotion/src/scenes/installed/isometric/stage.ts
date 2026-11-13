@@ -36,22 +36,24 @@ export type View = { x: number; y: number; zoom: number };
 /** The whole board's centre, in tiles. */
 export const WHOLE: View = { x: BOARD / 2, y: BOARD / 2, zoom: 1 };
 
-/** Where the camera looks at a frame: the last camera move's view, eased in over TIMING.glide frames. */
+const lerpView = (a: View, b: View, k: number): View => ({
+  x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, zoom: a.zoom + (b.zoom - a.zoom) * k,
+});
+
+/** Where the camera looks at a frame: each move eases over TIMING.glide frames from wherever the camera is when it starts. */
 export function viewAt(b: Board, frame: number): View {
   const moves = (b.camera ?? []).filter((c) => c.at <= frame);
   let from: View = WHOLE;
   let cur: View = WHOLE;
   let at = b.start;
   for (const m of moves) {
-    from = cur;
+    // a move that starts while the last one still glides starts from the view on screen, so the camera never jumps
+    from = lerpView(from, cur, easeInOut(ramp(m.at, at, TIMING.glide)));
     const p = m.focus ? b.props.find((q) => q.id === m.focus) : undefined;
     cur = p ? { x: p.at[0], y: p.at[1], zoom: m.zoom ?? 1.5 } : { ...WHOLE, zoom: m.zoom ?? 1 };
     at = m.at;
-    // a move that has already finished is the start of the next
-    if (frame >= m.at + TIMING.glide) from = cur;
   }
-  const k = easeInOut(ramp(frame, at, TIMING.glide));
-  return { x: from.x + (cur.x - from.x) * k, y: from.y + (cur.y - from.y) * k, zoom: from.zoom + (cur.zoom - from.zoom) * k };
+  return lerpView(from, cur, easeInOut(ramp(frame, at, TIMING.glide)));
 }
 
 /** The projection a view gives: tile size and the screen point of tile (0, 0). */

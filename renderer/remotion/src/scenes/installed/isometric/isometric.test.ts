@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { AREA_KINDS, COLOR_NAMES, GEOMETRY, LIMITS, PROP_NAMES, ROOMS, STACKS, TIMING, eventFrames, grouped, type IsometricData } from "./contract";
-import { PROPS, project, tones } from "./kit";
+import { PROPS, drawSolid, project, tones } from "./kit";
 import { dropAt, projAt, quietSpans, readoutAt, viewAt, WHOLE } from "./stage";
 
 const ROOT = path.resolve(__dirname, "../../../../../..");
@@ -32,6 +32,15 @@ describe("the shared contract", () => {
 });
 
 describe("the kit and the stage", () => {
+  it("starts a camera move from the view on screen, so a move during another never jumps", () => {
+    const b = { start: 0, props: [{ id: "a", what: "house", at: [2, 2] }, { id: "b", what: "house", at: [8, 8] }],
+      camera: [{ at: 10, focus: "a" }, { at: 20, focus: "b" }] } as unknown as IsometricData["boards"][number];
+    for (const f of [19, 20, 21]) {
+      const a = viewAt(b, f), c = viewAt(b, f + 1);
+      expect(Math.abs(a.x - c.x) + Math.abs(a.y - c.y)).toBeLessThan(0.6);
+    }
+  });
+
   it("projects true isometric and shades three tones from one colour", () => {
     const pr = { k: 60, cx: 540, cy: 650 };
     expect(project(pr, 0, 0)).toEqual([540, 650]);
@@ -41,6 +50,18 @@ describe("the kit and the stage", () => {
     const t = tones("#CF5140");
     expect(t.left).toBe("#CF5140");
     expect(t.top).not.toBe(t.right);
+  });
+
+  it("shades a custom solid coloured with a palette name", () => {
+    const fills: string[] = [];
+    const ctx = new Proxy({}, {
+      get: (_t, k) => (k === "fillStyle" ? "" : () => undefined),
+      set: (_t, k, v) => { if (k === "fillStyle") fills.push(String(v)); return true; },
+    }) as unknown as CanvasRenderingContext2D;
+    const look = { main: "#CF5140", accent: "#3E4A5C", fade: 0, spread: 0 };
+    drawSolid(ctx, { k: 60, cx: 540, cy: 650 }, { s: "box", x: 0, y: 0, w: 0.5, d: 0.5, h: 0.5, c: "gold" }, 1, 1, 0, 1, look);
+    expect(fills.length).toBeGreaterThan(0);
+    for (const f of fills) expect(f).toMatch(/^#[0-9a-f]{6}$/i);
   });
 
   it("keeps the whole board in view at zoom 1 and every prop's solids on its footprint", () => {

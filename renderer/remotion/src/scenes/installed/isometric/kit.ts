@@ -89,7 +89,8 @@ export interface Look {
 }
 
 function paint(c: Paint, look: Look): string {
-  const base = c === "main" ? look.main : c === "accent" ? look.accent : c;
+  // a custom prop names its colours from the palette; the library writes them as hex
+  const base = c === "main" ? look.main : c === "accent" ? look.accent : (PALETTE[c] ?? c);
   return look.fade > 0 ? mix(base, "#E6DDCC", look.fade) : base;
 }
 

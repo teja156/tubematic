@@ -269,8 +269,9 @@ def custom_prop_errors(custom, video_id: str, library_names, sources: dict | Non
             if bad:
                 errs.append(f"{where} ({cid}): it imports {', '.join(sorted(set(bad)))}; a prop imports only react "
                             "and ../../installed/flatVector/toon.")
-            if not re.search(r"export\s+default\b", body):
-                errs.append(f"{where} ({cid}): the file must default-export the drawing component.")
+            if not re.search(r"\bexport\s+default\s+function\b", body):
+                errs.append(f"{where} ({cid}): the file must default-export the drawing as a function "
+                            "(\"export default function Name() { ... }\").")
         boxes[cid] = tuple(box)
     return errs, boxes
 
@@ -472,7 +473,7 @@ def _check_shot(s, where, start, end, index, boxes, on_word, err) -> None:
             for k, x in enumerate(parts):
                 if _timed(x, "at", f"{w} part {k + 1}", start, end, on_word, err, "the frame its word lights", low=prev + 1):
                     prev = x["at"]
-                    last = max(last, x["at"])
+                    last = max(last, x["at"] + T["pillReveal"])
                 reds += bool(x.get("red"))
         r = s.get("rule")
         if r is not None:
@@ -482,7 +483,7 @@ def _check_shot(s, where, start, end, index, boxes, on_word, err) -> None:
                 if not _text(r.get("label"), L["valueChars"]):
                     err(f"{where}: the rule's label must be 1 to {L['valueChars']} characters (\"16 M\").")
                 if _timed(r, "at", f"{where} rule", start, end, on_word, err, "the frame it draws"):
-                    last = max(last, r["at"])
+                    last = max(last, r["at"] + T["pillReveal"])
     elif kind == "ladder":
         rungs = _check_list(s, "rungs", L["minRungs"], L["maxRungs"], {"what", "label", "value", "at", "red"},
                             where, start, end, boxes, on_word, err)
@@ -528,9 +529,12 @@ def _check_shot(s, where, start, end, index, boxes, on_word, err) -> None:
         last = max([last] + [st["at"] + T["rung"] for st in steps if _int(st.get("at"))])
     if reds > 1:
         err(f"{where}: {reds} things are red; red marks one number or word in a shot.")
-    if kind != "subject" and end - last < T["readFrames"]:
+    # a subject's pill words light as they are spoken, so they need only finish lighting before the cut;
+    # the scale shots' last arrival is the payoff and is held to be read
+    need = 0 if kind == "subject" else T["readFrames"]
+    if end - last < need or end < last:
         err(f"{where}: its last part settles at frame {last}, {end - last} frames before the shot ends; leave at "
-            f"least {T['readFrames']} frames to read it.")
+            f"least {max(need, 0)} frames after it settles.")
 
 
 def _check_quiet(shots, starts, quiet, err) -> None:

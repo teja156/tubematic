@@ -145,7 +145,7 @@ def test_a_rung_cut_before_it_lands_is_refused():
     late = nxt - 10
     ladder["rungs"][-1]["at"] = late
     problems = fv.check(cfg, 30, WORD_STARTS + [late], EXTRA, "vid_example")
-    assert any("frames to read it" in p for p in problems), problems
+    assert any("frames after it settles" in p for p in problems), problems
 
 
 def test_nothing_arrives_inside_an_insert_and_no_transition_runs_into_one():
@@ -307,3 +307,28 @@ def test_render_style_parts_sends_the_props_to_the_renderer(make_video, monkeypa
     assert json.loads(out[0])["parts"] == ["octopus"]
     assert seen["spec"]["style"] == "flat_vector_science" and seen["spec"]["props"][0]["id"] == "octopus"
     assert seen["script"] == server.bean_preview.STYLE_PARTS_SCRIPT
+
+
+def test_render_style_parts_rechecks_a_prop_redrawn_after_the_config(make_video, tmp_path, monkeypatch):
+    vid = make_video("vid_fv8", octopus=True)
+    assert "error" not in server.write_scene_config(vid, _for(vid))
+    (tmp_path / "generated" / vid / "prop-octopus.tsx").write_text(OCTOPUS.replace("<g>", "<g filter=\"url(#x)\">", 1))
+    monkeypatch.setattr(server.bean_preview, "render_preview",
+                        lambda *a, **k: pytest.fail("a refused prop must never reach the renderer"))
+    assert "SVG filter" in server.render_style_parts(vid)["error"]
+
+
+def test_a_prop_file_must_export_a_function():
+    body = OCTOPUS.replace("export default function Octopus() {", "function Octopus() {") + "\nexport default null;\n"
+    problems = _check(_with_octopus(), sources={"vid_example/prop-octopus": body})
+    assert any("default-export the drawing as a function" in p for p in problems), problems
+
+
+def test_a_subject_pill_still_lighting_at_the_cut_is_refused():
+    cfg = copy.deepcopy(EXAMPLE)
+    d = _data(cfg)
+    shot = next(s for s in d["shots"] if s["kind"] == "subject" and s.get("pills"))
+    end = d["shots"][d["shots"].index(shot) + 1]["start"]
+    shot["pills"][0]["parts"][-1]["at"] = end - 3
+    problems = fv.check(cfg, 30, WORD_STARTS + [end - 3], EXTRA, "vid_example")
+    assert any("frames after it settles" in p for p in problems), problems

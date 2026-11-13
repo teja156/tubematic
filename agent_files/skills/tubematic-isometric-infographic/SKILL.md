@@ -50,7 +50,10 @@ board and which field:
 - A camera move centres on a prop (`focus`) or the whole board, at a zoom from 1 to 2, in order.
 - A cutaway opens a building that has an inside (`house`, `office`, `factory`, `warehouse`, `data_centre`, `shop`, `bank`, `hospital`, `school`, `power_plant`), with 1 to 3 props shown inside; an
   explode separates a stack (`server_rack`, `container_stack`).
-- The readout has 1 to 8 steps in order, red at most once; its cubes count one per `per` units, at most 12.
+- The readout has 1 to 8 steps in order, red at most once; its cubes count one per `per` units (`per`
+  1 or more), at most 12.
+- A board's last change comes at least 20 frames before the board ends, and the readout and the legend
+  change no later than 20 frames before the video ends.
 - The legend has 1 to 5 entries of 1 to 12 characters and must fit the frame.
 - Nothing may sit still for more than 4 seconds: a prop, a route, a mover, a pin, a camera move, a lift,
   a cutaway, an explode, a readout step or the legend must arrive on a word within every 4-second
@@ -81,7 +84,7 @@ sends it home along the same line).
 
 When the library lacks a thing, build it from the kit's solids (`box`, `cyl`, `cone`, `pyr`, `gable`) in `customProps`:
 `{"id": "kiosk", "main": "teal", "height": 0.9, "solids": [...]}`, each solid in the prop's own footprint
-(x and y from -0.8 to 0.8, z up from 0), back to front, coloured `main`, `accent` or a palette name. A box
+(x and y from -0.8 to 0.8 including half its width and depth, or its radius; z up from 0), back to front, coloured `main`, `accent` or a palette name. A box
 takes `w`, `d`, `h` (and `layer` 0 to 4 if it is a stack's layer); a gable roof `w`, `d`, `h`; a cylinder,
 a cone and a pyramid `r`, `h`. Then look at it: `render_style_parts(video_id)` (after
 `write_scene_config`) draws your props on a patch of board beside a house.

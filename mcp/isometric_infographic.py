@@ -176,6 +176,9 @@ def _solid_error(sd, colors) -> str:
     sizes = ("w", "d") if sd["s"] in ("box", "gable") else ("r",)
     if not all(_num(sd.get(k)) and 0 < sd[k] <= 1.6 for k in sizes):
         return f"{' and '.join(sizes)} must be above 0 and at most 1.6."
+    half_x, half_y = (sd["w"] / 2, sd["d"] / 2) if sd["s"] in ("box", "gable") else (sd["r"], sd["r"])
+    if abs(sd["x"]) + half_x > 0.8 or abs(sd["y"]) + half_y > 0.8:
+        return "the solid must stay inside the prop's own footprint: x and y plus half its size (or its radius) from -0.8 to 0.8."
     c = sd.get("c")
     if c not in ("main", "accent") and c not in colors:
         return f"c must be \"main\", \"accent\" or one of {sorted(colors)}."
@@ -328,8 +331,8 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
             cubes = ro.get("cubes")
             if cubes is not None:
                 if (not isinstance(cubes, dict) or set(cubes) != {"per", "color"} or cubes.get("color") not in colors
-                        or not (_num(cubes.get("per")) and cubes["per"] > 0)):
-                    err(f"readout.cubes must be {{\"per\": a number above 0, \"color\": one of {sorted(colors)}}}.")
+                        or not (_num(cubes.get("per")) and cubes["per"] >= 1)):
+                    err(f"readout.cubes must be {{\"per\": a number of 1 or more, \"color\": one of {sorted(colors)}}}.")
                 elif isinstance(steps, list) and any(isinstance(s, dict) and _num(s.get("value"))
                                                      and s["value"] / cubes["per"] > LIMITS["maxCubes"] for s in steps):
                     err(f"readout.cubes.per is too small: a value would need more than {LIMITS['maxCubes']} cubes.")
@@ -350,11 +353,22 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
 
     for i, b in enumerate(boards):
         for f in event_frames(b)[1:] + ([b["start"]] if i else []):
+            # a prop may fall behind an insert and land after it: the landing frame is what is seen
             w = window_at(f, quiet)
             if w:
                 err(f"Board {i + 1}: something happens at frame {f}, inside an insert ({window_text(w)}), where the "
                     f"scene is hidden; time it to a word at {w[1]} or later, or before {w[0]}.")
                 break
+    for i, b in enumerate(boards):
+        last = max(event_frames(b))
+        if ends[i] - last < TIMING["readFrames"]:
+            err(f"Board {i + 1}: its last change is at frame {last}, {ends[i] - last} frames before the board ends; "
+                f"leave at least {TIMING['readFrames']} frames to see it.")
+    late = [s["at"] for s in (ro or {}).get("steps") or [] if isinstance(s, dict) and _int(s.get("at"))]
+    late += [leg["at"]] if isinstance(leg, dict) and _int(leg.get("at")) else []
+    if late and total - max(late) < TIMING["readFrames"]:
+        err(f"The readout or the legend changes at frame {max(late)}, {total - max(late)} frames before the video "
+            f"ends; leave at least {TIMING['readFrames']} frames to read it.")
     for f in [s.get("at") for s in (ro or {}).get("steps") or [] if isinstance(s, dict)] + ([leg.get("at")] if isinstance(leg, dict) else []):
         w = window_at(f, quiet) if _int(f) else None
         if w:

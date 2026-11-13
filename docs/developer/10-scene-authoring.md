@@ -1448,14 +1448,16 @@ System Flow's example.
   12 and up to 3 lines of 16, a rule's 2 lines of 12, a case label 10 and name 12, a stamp 10, a steps
   title 20 and steps of 24).
 - A card's last part appears less than 20 frames before the scene ends.
-- A custom part has more than 40 shapes, leaves its box, or the video has more than 6.
+- A custom part has more than 40 shapes, leaves its box (a circle's radius and a line's width count), or
+  the video has more than 6.
 - Nothing new arrives for more than 5 seconds. The small running loops (stars, a marching dotted line,
   the REC dot) do not count.
 
 `write_scene_config` fills the pack's `captions` into every `subtitles` key the config leaves out.
 The pack's `inserts.transition` is `glitch`, so the style tears into and out of an insert in torn bands
 over 4 frames. The pictograms are hidden while an insert plays, so no scene starts and nothing lands
-inside an insert's window (`quiet`); the next scene starts on the window's end. The text-layout audit
+inside an insert's window (`quiet`), nor in the frame before one, since a tear runs one frame past its
+scene's start; the next scene starts on the window's end. The text-layout audit
 samples each scene once its text has arrived. `mcp/tests/test_night_signal.py` pins `night_signal.py`
 to `contract.ts`, `stage.ts` and the pack through the shared cases in
 `fixtures/night_signal_contract.json`.
@@ -1488,7 +1490,8 @@ Any shot may also carry a rolling `counter`. A shot has a backdrop (`abyss`, `oc
 A prop the library lacks is a still React component in `generated/<video_id>/prop-<name>.tsx`, written
 with `write_scene_file`, modelled on the library, and listed in `customProps` as `{id, src, box,
 light?}` (at most 8). It imports only `react` and `flatVector/toon` (`Toon`, `GlowDot`, `Eye` and the
-path helpers), draws flat two-tone shapes centred on (0, 0) inside its box, and may not use hooks, the
+path helpers), default-exports a function, draws flat two-tone shapes centred on (0, 0) inside its box,
+and may not use hooks, the
 frame, text, images, filters or gradients of its own: the renderer draws it once and moves it. The
 source checks are Bean Explainer's `FORBIDDEN_SOURCE` plus hooks and the frame and SVG text
 (`flat_vector_science.py::FORBIDDEN_SOURCE`), and `validate_job` runs them again on the files as they
@@ -1524,7 +1527,8 @@ costs about 1.5 times System Flow's example.
 - A label, value, rule label or unit is over its limit (1 to 14, 1 to 12 and at most 4 characters), or
   a descent's layers do not get deeper.
 - A shot has more than one red part.
-- A ladder, zoom, descent or stages shot keeps its last arrival on screen under 20 frames.
+- A ladder, zoom, descent or stages shot keeps its last arrival on screen under 20 frames, or a subject
+  shot's last pill word or rule is still lighting when the shot ends.
 - A custom prop breaks the id, `src`, box or source rules above, or the video has more than 8.
 - A lens or push transition runs inside an insert's window.
 - Nothing new arrives for more than 4 seconds. The drift does not count.
@@ -1596,9 +1600,12 @@ Flow's example.
 - A camera move's zoom is outside 1 to 2 or its focus is not a prop of the board, a cutaway opens a
   building with no inside or shows other than 1 to 3 props, or an explode separates something that is
   not a stack.
-- The readout has more than 8 steps or turns red more than once, its cubes would need more than 12, or
-  the legend has more than 5 entries of 12 characters or does not fit the frame.
-- A custom prop breaks the solid, footprint or count rules.
+- The readout has more than 8 steps or turns red more than once, its cubes count fewer than 1 unit each
+  or would need more than 12, or the legend has more than 5 entries of 12 characters or does not fit the
+  frame.
+- A board's last change comes less than 20 frames before the board ends, or the readout or the legend
+  changes in the video's last 20 frames.
+- A custom prop breaks the solid, footprint (a solid's size counts, not only its centre) or count rules.
 - Nothing new arrives for more than 4 seconds. The drift, the clouds and things already moving do not
   count.
 

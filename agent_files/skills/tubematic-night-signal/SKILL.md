@@ -105,7 +105,8 @@ Look in `style.extra` first. When a thing the narration names is not there, draw
 are `circle` (`cx`, `cy`, `r`), `rect` (`x`, `y`, `w`, `h`, optional corner `r`), `line` (`points`,
 `width`, round ends) and `poly` (`points`), each with a `tone`: `ink` (the warm white), `core` (the
 brightest), `grey`, `dim`, `red` (only on the threat) or `hole` (the black field, to cut a window or a
-gap). The box: x from -200 to 200, y from -400 (top) to 0 (the ground the part stands on). A standing
+gap). The box: x from -200 to 200, y from -400 (top) to 0 (the ground the part stands on); a circle's
+radius and a line's half width must stay inside it too (a line's end may sit on the ground). A standing
 person is about 330 tall, a door 264. Keep a part simple and flat: 5 to 15 shapes, no outlines, a
 `hole` line under a limb or a handle where it must read as separate.
 
@@ -142,6 +143,7 @@ insert style's skill. This style goes into and out of an insert through a glitch
 are hidden while an insert plays, so inside each insert's window no scene starts and no item, step,
 connector, bubble, mark, stamp or slash lands. Start the next scene on the window's end (its last
 frame + 1), so the video comes back on a new picture, or let the scene from before the insert carry on.
+A scene never starts on the frame just before an insert: its tear runs one frame past its start.
 The "never still" rule does not count a window. With no marked segment, write no `inserts`.
 
 ## Step 6 — write, validate, submit
