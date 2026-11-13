@@ -806,8 +806,8 @@ opening, the way in and out of each insert, and the turn and payoff frames after
 `submit_render` never ask whether a preview was taken.
 
 `mcp/frame_preview.py` builds the props the render gets (`render_agent.py::render_props`): the three
-job-file paths, the watermark from the `watermark_enabled` setting, and, for a video with a mascot
-and a cue track, `mascotPath` pointing at the pinned mascot version's code, written to
+job-file paths, the watermark from the `watermark_enabled` setting, and, for a video with a mascot,
+`mascotPath` pointing at the pinned mascot version's code, written to
 `preview/mascot.js`. It then runs the `still` command line the Cartoon 3D tools use, which asks the
 [stills server](11-rendering-and-review.md#the-stills-server) for each frame and renders on the
 MCP container's CPU when none answers. A Cartoon 3D video is refused with a pointer to

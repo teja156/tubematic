@@ -11,8 +11,7 @@ looks at them and fixes what it sees.
 
 The props equal the render's (renderer/api/render_agent.py's render_props):
 the three job-file paths, the watermark from the settings table, and, for a
-video that has a mascot and a cue track, the pinned mascot code staged beside
-the previews. The pictures are written only under <video>/preview/, the one
+video that has a mascot, the pinned mascot code staged beside the previews. The pictures are written only under <video>/preview/, the one
 folder besides cartoon/ that the stills server accepts (out-path.mjs).
 
 Cartoon 3D keeps its own tools (cartoon_still), which know its source tree
@@ -57,17 +56,14 @@ def _check_frames(frames, total: int) -> list[int]:
     return list(frames)
 
 
-def _has_cues(config: dict) -> bool:
-    cues = config.get("mascot")
-    return isinstance(cues, list) and bool(cues)
-
-
 def _clear(folder: Path) -> None:
-    """The previous call's pictures and mascot file; nothing else in the folder."""
+    """The previous call's pictures and mascot file; nothing else in the folder.
+    A symlink under one of those names is removed itself (unlink never follows
+    it), so the mascot file is never written through a planted link."""
     if not folder.is_dir():
         return
     for p in folder.iterdir():
-        if p.is_file() and not p.is_symlink() and (p.name == MASCOT_FILE or _PNG_RE.match(p.name)):
+        if (p.is_file() or p.is_symlink()) and (p.name == MASCOT_FILE or _PNG_RE.match(p.name)):
             p.unlink()
 
 
@@ -79,7 +75,7 @@ def preview(jobs_dir, video_id: str, remotion_dir: Path, frames, *, watermark: b
     try:
         config_path, timeline_path, _audio = cartoon._job_files(jobs_dir, video_id)
         folder = cartoon._below(jobs_dir, video_id, PREVIEW_DIR)
-    except cartoon.CartoonError as e:
+    except (cartoon.CartoonError, tjobs.UnsafePath) as e:
         raise PreviewError(str(e))
     try:
         config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -97,7 +93,7 @@ def preview(jobs_dir, video_id: str, remotion_dir: Path, frames, *, watermark: b
         _clear(folder)
         props = cartoon._props(video_id)
         props["watermark"] = bool(watermark)
-        if mascot_code and _has_cues(config):
+        if mascot_code:
             folder.mkdir(parents=True, exist_ok=True)
             (folder / MASCOT_FILE).write_text(mascot_code, encoding="utf-8")
             props["mascotPath"] = f"/public/{video_id}/{PREVIEW_DIR}/{MASCOT_FILE}"

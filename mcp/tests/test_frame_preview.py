@@ -4,7 +4,7 @@ The frames are drawn by the renderer's `still` command line (the Cartoon 3D
 tools' CLI, which renders the real Composition with any props); what Python
 owns, and what these tests guard, is everything around it: which frames are
 accepted, that the props equal the render's (watermark from the settings,
-mascotPath only for a video with a mascot and cues, the mascot's pinned code
+mascotPath for a video with a mascot, the mascot's pinned code
 written beside the previews), that the pictures land only under
 <video>/preview/, that a Cartoon 3D video is sent to its own tools, and that
 a renderer too old to accept the folder is named as the cause. The command
@@ -158,14 +158,32 @@ def test_a_mascot_video_gets_its_pinned_code_staged_and_named(fake_node, jobs):
     assert (jobs / VID / "preview" / "mascot.js").read_text() == "export default {};"
 
 
-def test_no_mascot_path_without_a_mascot_or_without_cues(fake_node, jobs):
+def test_no_mascot_path_without_a_mascot(fake_node, jobs):
     _, remotion, log = fake_node
     _preview(jobs, remotion, [10], mascot_code=None)
     assert "mascotPath" not in json.loads(_calls(log)[0]["env"]["BEAT_PROPS"])
-    cfg = dict(PLAIN, mascot=[])
-    (jobs / VID / "scene-config.json").write_text(json.dumps(cfg))
+
+
+def test_a_mascot_file_is_never_written_through_a_planted_link(fake_node, jobs, tmp_path):
+    _, remotion, _ = fake_node
+    target = tmp_path / "victim.txt"
+    target.write_text("keep")
+    folder = jobs / VID / "preview"
+    folder.mkdir()
+    (folder / "mascot.js").symlink_to(target)
     _preview(jobs, remotion, [10], mascot_code="export default {};")
-    assert "mascotPath" not in json.loads(_calls(log)[1]["env"]["BEAT_PROPS"])
+    assert target.read_text() == "keep"
+    assert (folder / "mascot.js").read_text() == "export default {};" and not (folder / "mascot.js").is_symlink()
+
+
+def test_a_symlinked_job_file_is_a_refusal_not_a_crash(fake_node, jobs, tmp_path):
+    _, remotion, _ = fake_node
+    real = tmp_path / "real.json"
+    real.write_text(json.dumps(PLAIN))
+    (jobs / VID / "scene-config.json").unlink()
+    (jobs / VID / "scene-config.json").symlink_to(real)
+    with pytest.raises(fp.PreviewError, match="symlink"):
+        _preview(jobs, remotion, [10])
 
 
 def test_a_stale_mascot_file_does_not_outlive_the_mascot(fake_node, jobs):

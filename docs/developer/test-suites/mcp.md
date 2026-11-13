@@ -1656,10 +1656,11 @@ command line, so nothing is bundled or rendered.
 - Frames are accepted one to six at a time and only inside the video; the last frame is allowed.
   Nothing runs for a refused list.
 - The props equal the render's: the three job-file paths, the watermark from the setting, and
-  `mascotPath` only for a video with a mascot and a cue track, with the pinned code staged beside
-  the pictures. A mascot file left by an earlier call is removed when the video has no mascot.
+  `mascotPath` for a video with a mascot, with the pinned code staged beside the pictures. A mascot
+  file left by an earlier call is removed when the video has no mascot, and one that is a planted
+  symlink is replaced, never written through.
 - A call clears the previous call's pictures. A Cartoon 3D video is sent to `cartoon_still`. A missing
-  job file names the step that writes it. A symlinked `preview/` is refused before anything is written.
+  job file names the step that writes it. A symlinked `preview/` or job file is refused before anything is written.
 - A renderer that refuses the folder is named as older than the tool, so an upgrade that is half done
   does not look like a broken scene.
 
