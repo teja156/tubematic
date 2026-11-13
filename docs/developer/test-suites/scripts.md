@@ -715,6 +715,60 @@ Covers the `tubematic-case-file-story` skill ([Case File Story](../10-scene-auth
 Trap: an agent that skips the lead sheet, or leaves `reference` off a still, gets a different
 character in each painting, and nothing after the paid call can repair that.
 
+### `test_paper_diorama_skill.py`
+
+Covers the `tubematic-paper-diorama` skill ([Paper Diorama](../10-scene-authoring.md#paper-diorama)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes by `style.authoring_skill`.
+- The skill and `reference/contract.md` list every room, slot, event and expression, and the contract
+  also lists every level, scale, entrance, cut, accessory and colour. The limits and floors
+  the skill states are the ones `mcp/paper_diorama.py` enforces.
+- The skill tells the agent never to call `generate_image` or `generate_character`, to look at its own
+  props with `render_paper_props`, and to hand inserts to the `tubematic-inserts` skill.
+- The worked example is valid JSON with the one `PaperDiorama` scene and carries no `subtitles`.
+
+### `test_archive_engraving_skill.py`
+
+Covers the `tubematic-archive-engraving` skill ([Archive and Engraving](../10-scene-authoring.md#archive-and-engraving)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes by `style.authoring_skill`.
+- The skill and its contract list every card kind, event and emblem, and the limits it states are
+  the ones `mcp/archive_engraving.py` enforces.
+- Every still is engraved with `treat_image`, and the skill never pictures a named person.
+- The skill hands inserts to the `tubematic-inserts` skill, and its look step is marked for the
+  frame preview.
+- The worked example is valid JSON with the one `ArchiveEngraving` scene and carries no `subtitles`.
+
+### `test_editorial_collage_skill.py`
+
+Covers the `tubematic-editorial-collage` skill ([Editorial Collage](../10-scene-authoring.md#editorial-collage)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes by `style.authoring_skill`.
+- The skill and its contract list every headline kind, hero kind and event, and the limits it states
+  are the ones `mcp/editorial_collage.py` enforces.
+- Every still is baked with `treat_image`, and the skill never pictures a named person.
+- The skill hands inserts to the `tubematic-inserts` skill, its look step is marked for the frame
+  preview, and its text keeps the docs' writing rules.
+- The worked example is valid JSON with the one `EditorialCollage` scene and carries only its
+  `emphasis` in `subtitles`.
+
+### `test_storybook_reveal_skill.py`
+
+Covers the `tubematic-storybook-reveal` skill ([Storybook Reveal](../10-scene-authoring.md#storybook-reveal)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes by `style.authoring_skill`.
+- The skill and its contract list every page turn, and the limits it states are the ones
+  `mcp/storybook_reveal.py` enforces.
+- The hero sheet is made once and every page is painted from it, and the skill never pictures a
+  real or named person or a brand.
+- The skill hands inserts to the `tubematic-inserts` skill, its look step is marked for the frame
+  preview, and its text keeps the docs' writing rules.
+- The worked example is valid JSON with the one `StorybookReveal` scene and three pictures.
+
 ### `test_system_flow_skill.py`
 
 Covers the `tubematic-system-flow` skill ([System Flow](../10-scene-authoring.md#system-flow)).

@@ -5,9 +5,11 @@
  * Measured traps this avoids (software GL): a full-frame CSS radial gradient
  * costs over 2x a frame, and per-frame SVG noise (feTurbulence) 10 to 100x.
  * A canvas painted once is a plain bitmap to the compositor, so the finish
- * costs about nothing per frame. It sits over the scene with pointer events
- * off; its grain is drawn as faint dark and light specks at low alpha, so it
- * reads as paper over any colour without a blend mode.
+ * costs about nothing per frame as long as it sits UNDER the scene's content,
+ * on the paper. Laid over content that changes, it is blended again on every
+ * frame (measured: about two thirds of a System Flow frame on its own). Its
+ * grain is faint dark and light specks at low alpha, so it reads as paper on
+ * any colour without a blend mode.
  */
 import React, { useLayoutEffect, useRef } from "react";
 

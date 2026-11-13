@@ -1,0 +1,352 @@
+{
+ "totalFrames": 956,
+ "fps": 30,
+ "audioDurationSeconds": 31.87,
+ "words": [
+  {
+   "word": "Every",
+   "startFrame": 6,
+   "endFrame": 18
+  },
+  {
+   "word": "time",
+   "startFrame": 20,
+   "endFrame": 30
+  },
+  {
+   "word": "you",
+   "startFrame": 32,
+   "endFrame": 40
+  },
+  {
+   "word": "go",
+   "startFrame": 42,
+   "endFrame": 48
+  },
+  {
+   "word": "online,",
+   "startFrame": 50,
+   "endFrame": 63
+  },
+  {
+   "word": "your",
+   "startFrame": 65,
+   "endFrame": 75
+  },
+  {
+   "word": "laptop",
+   "startFrame": 77,
+   "endFrame": 90
+  },
+  {
+   "word": "sends",
+   "startFrame": 92,
+   "endFrame": 104
+  },
+  {
+   "word": "little",
+   "startFrame": 106,
+   "endFrame": 119
+  },
+  {
+   "word": "notes.",
+   "startFrame": 121,
+   "endFrame": 133
+  },
+  {
+   "word": "Your",
+   "startFrame": 144,
+   "endFrame": 154
+  },
+  {
+   "word": "logins,",
+   "startFrame": 156,
+   "endFrame": 169
+  },
+  {
+   "word": "your",
+   "startFrame": 171,
+   "endFrame": 181
+  },
+  {
+   "word": "messages,",
+   "startFrame": 183,
+   "endFrame": 200
+  },
+  {
+   "word": "your",
+   "startFrame": 202,
+   "endFrame": 212
+  },
+  {
+   "word": "bank",
+   "startFrame": 214,
+   "endFrame": 224
+  },
+  {
+   "word": "details.",
+   "startFrame": 226,
+   "endFrame": 241
+  },
+  {
+   "word": "On",
+   "startFrame": 252,
+   "endFrame": 258
+  },
+  {
+   "word": "free",
+   "startFrame": 260,
+   "endFrame": 270
+  },
+  {
+   "word": "cafe",
+   "startFrame": 272,
+   "endFrame": 282
+  },
+  {
+   "word": "Wi-Fi,",
+   "startFrame": 284,
+   "endFrame": 296
+  },
+  {
+   "word": "anyone",
+   "startFrame": 298,
+   "endFrame": 311
+  },
+  {
+   "word": "nearby",
+   "startFrame": 313,
+   "endFrame": 326
+  },
+  {
+   "word": "can",
+   "startFrame": 328,
+   "endFrame": 336
+  },
+  {
+   "word": "read",
+   "startFrame": 338,
+   "endFrame": 348
+  },
+  {
+   "word": "them.",
+   "startFrame": 350,
+   "endFrame": 360
+  },
+  {
+   "word": "Every",
+   "startFrame": 371,
+   "endFrame": 383
+  },
+  {
+   "word": "note,",
+   "startFrame": 385,
+   "endFrame": 395
+  },
+  {
+   "word": "in",
+   "startFrame": 397,
+   "endFrame": 403
+  },
+  {
+   "word": "plain",
+   "startFrame": 405,
+   "endFrame": 417
+  },
+  {
+   "word": "sight.",
+   "startFrame": 419,
+   "endFrame": 431
+  },
+  {
+   "word": "A",
+   "startFrame": 442,
+   "endFrame": 447
+  },
+  {
+   "word": "VPN",
+   "startFrame": 449,
+   "endFrame": 457
+  },
+  {
+   "word": "seals",
+   "startFrame": 459,
+   "endFrame": 471
+  },
+  {
+   "word": "each",
+   "startFrame": 473,
+   "endFrame": 483
+  },
+  {
+   "word": "note",
+   "startFrame": 485,
+   "endFrame": 495
+  },
+  {
+   "word": "before",
+   "startFrame": 497,
+   "endFrame": 510
+  },
+  {
+   "word": "it",
+   "startFrame": 512,
+   "endFrame": 518
+  },
+  {
+   "word": "leaves.",
+   "startFrame": 520,
+   "endFrame": 533
+  },
+  {
+   "word": "Then",
+   "startFrame": 544,
+   "endFrame": 554
+  },
+  {
+   "word": "it",
+   "startFrame": 556,
+   "endFrame": 562
+  },
+  {
+   "word": "sends",
+   "startFrame": 564,
+   "endFrame": 576
+  },
+  {
+   "word": "them",
+   "startFrame": 578,
+   "endFrame": 588
+  },
+  {
+   "word": "down",
+   "startFrame": 590,
+   "endFrame": 600
+  },
+  {
+   "word": "one",
+   "startFrame": 602,
+   "endFrame": 610
+  },
+  {
+   "word": "locked",
+   "startFrame": 612,
+   "endFrame": 625
+  },
+  {
+   "word": "tunnel.",
+   "startFrame": 627,
+   "endFrame": 640
+  },
+  {
+   "word": "They",
+   "startFrame": 651,
+   "endFrame": 661
+  },
+  {
+   "word": "only",
+   "startFrame": 663,
+   "endFrame": 673
+  },
+  {
+   "word": "open",
+   "startFrame": 675,
+   "endFrame": 685
+  },
+  {
+   "word": "at",
+   "startFrame": 687,
+   "endFrame": 693
+  },
+  {
+   "word": "the",
+   "startFrame": 695,
+   "endFrame": 703
+  },
+  {
+   "word": "VPN's",
+   "startFrame": 705,
+   "endFrame": 717
+  },
+  {
+   "word": "server,",
+   "startFrame": 719,
+   "endFrame": 732
+  },
+  {
+   "word": "far",
+   "startFrame": 734,
+   "endFrame": 742
+  },
+  {
+   "word": "away.",
+   "startFrame": 744,
+   "endFrame": 754
+  },
+  {
+   "word": "But",
+   "startFrame": 765,
+   "endFrame": 773
+  },
+  {
+   "word": "the",
+   "startFrame": 775,
+   "endFrame": 783
+  },
+  {
+   "word": "VPN",
+   "startFrame": 785,
+   "endFrame": 793
+  },
+  {
+   "word": "company",
+   "startFrame": 795,
+   "endFrame": 810
+  },
+  {
+   "word": "can",
+   "startFrame": 812,
+   "endFrame": 820
+  },
+  {
+   "word": "still",
+   "startFrame": 822,
+   "endFrame": 834
+  },
+  {
+   "word": "read",
+   "startFrame": 836,
+   "endFrame": 846
+  },
+  {
+   "word": "them.",
+   "startFrame": 848,
+   "endFrame": 858
+  },
+  {
+   "word": "So",
+   "startFrame": 869,
+   "endFrame": 875
+  },
+  {
+   "word": "pick",
+   "startFrame": 877,
+   "endFrame": 887
+  },
+  {
+   "word": "one",
+   "startFrame": 889,
+   "endFrame": 897
+  },
+  {
+   "word": "you",
+   "startFrame": 899,
+   "endFrame": 907
+  },
+  {
+   "word": "trust.",
+   "startFrame": 909,
+   "endFrame": 921
+  }
+ ]
+}

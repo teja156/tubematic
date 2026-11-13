@@ -56,6 +56,10 @@ import storybook_atlas  # chapter windows for the whole-video Storybook Atlas sc
 import terminal_doc  # beat windows for the whole-video Terminal Doc scene (TMDEV-199)
 import under_the_hood  # plate windows for the whole-video Under the Hood scene (TMDEV-201)
 import case_file_story  # beat windows for the whole-video Case File Story scene (TMDEV-202)
+import paper_diorama  # set windows for the whole-video Paper Diorama scene (TMDEV-228)
+import archive_engraving  # beat windows for the whole-video Archive and Engraving scene (TMDEV-230)
+import editorial_collage  # station windows for the whole-video Editorial Collage scene (TMDEV-229)
+import storybook_reveal  # page windows for the whole-video Storybook Reveal scene (TMDEV-231)
 import picture_checks  # which style drew a config, for the mixed-scenes first-frame pass (TMDEV-215)
 
 # ── Tunables ────────────────────────────────────────────────────────────────
@@ -302,7 +306,19 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
         # A Case File Story scene spans the whole video too; each beat is a cut,
         # sampled like a scene from the frame its last part has appeared.
         cfs_beats = (case_file_story.beat_windows(scene_config)
-                     if case_file_story.is_case_file_scene(scene) else [])
+                     if case_file_story.is_case_file_scene(scene)
+                     # A Paper Diorama set the same way, from its last entrance or event.
+                     else paper_diorama.beat_windows(scene_config) if paper_diorama.is_paper_scene(scene)
+                     # An Archive and Engraving beat the same way, once its events have played out.
+                     else archive_engraving.beat_windows(scene_config)
+                     if archive_engraving.is_archive_scene(scene)
+                     # An Editorial Collage station once the camera has stopped and its events have played out.
+                     else editorial_collage.beat_windows(scene_config)
+                     if editorial_collage.is_collage_scene(scene)
+                     # A Storybook Reveal page the same way, once its colour has landed.
+                     else storybook_reveal.page_windows(scene_config)
+                     if storybook_reveal.is_reveal_scene(scene)
+                     else [])
         if cfs_beats:
             for first, b_end in cfs_beats:
                 last = b_end - 1

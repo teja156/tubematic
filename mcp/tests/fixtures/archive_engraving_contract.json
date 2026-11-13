@@ -1,0 +1,345 @@
+{
+ "_about": "Shared cases for the Archive and Engraving contract (TMDEV-230): mcp/tests/test_archive_engraving.py and renderer/remotion/src/scenes/installed/archiveEngraving/archiveEngraving.test.ts both compute these and compare. Regenerate the expected values from mcp/archive_engraving.py only after changing both sides.",
+ "title_layout": [
+  {
+   "text": "The first computer bug.",
+   "size": 104,
+   "lines": [
+    "The first computer",
+    "bug."
+   ]
+  },
+  {
+   "text": "Not a metaphor",
+   "size": 104,
+   "lines": [
+    "Not a metaphor"
+   ]
+  },
+  {
+   "text": "A word older than computers",
+   "size": 104,
+   "lines": [
+    "A word older than",
+    "computers"
+   ]
+  },
+  {
+   "text": "Makers of the modern map",
+   "size": 104,
+   "lines": [
+    "Makers of the",
+    "modern map"
+   ]
+  },
+  {
+   "text": "Why the longitude problem took a century",
+   "size": 80,
+   "lines": [
+    "Why the longitude",
+    "problem took a century"
+   ]
+  },
+  {
+   "text": "Antidisestablishmentarianism everywhere",
+   "size": 70,
+   "lines": [
+    "Antidisestablishmentarianism",
+    "everywhere"
+   ]
+  },
+  {
+   "text": "A very long title that runs well over two lines at any size",
+   "size": 70,
+   "lines": [
+    "A very long title that runs",
+    "well over two lines at any",
+    "size"
+   ]
+  },
+  {
+   "text": "Gödel's proof",
+   "size": 104,
+   "lines": [
+    "Gödel's proof"
+   ]
+  }
+ ],
+ "push_scale": [
+  {
+   "frame": 0,
+   "start": 0,
+   "end": 100,
+   "scale": 1.0
+  },
+  {
+   "frame": 50,
+   "start": 0,
+   "end": 100,
+   "scale": 1.03
+  },
+  {
+   "frame": 100,
+   "start": 0,
+   "end": 100,
+   "scale": 1.06
+  },
+  {
+   "frame": 150,
+   "start": 0,
+   "end": 100,
+   "scale": 1.06
+  },
+  {
+   "frame": 130,
+   "start": 120,
+   "end": 240,
+   "scale": 1.005
+  }
+ ],
+ "plate_view": [
+  {
+   "scale": 1,
+   "focus": [
+    0.5,
+    0.5
+   ],
+   "view": [
+    0.0,
+    683.5714285714286,
+    1080.0,
+    552.8571428571429
+   ]
+  },
+  {
+   "scale": 1.06,
+   "focus": [
+    0.5,
+    0.5
+   ],
+   "view": [
+    30.56603773584908,
+    699.2183288409703,
+    1018.8679245283018,
+    521.5633423180593
+   ]
+  },
+  {
+   "scale": 1,
+   "focus": [
+    0.0,
+    0.0
+   ],
+   "view": [
+    0.0,
+    0.0,
+    1080.0,
+    552.8571428571429
+   ]
+  },
+  {
+   "scale": 1.03,
+   "focus": [
+    1.0,
+    1.0
+   ],
+   "view": [
+    31.45631067961176,
+    1383.245492371706,
+    1048.5436893203882,
+    536.7545076282939
+   ]
+  },
+  {
+   "scale": 1.06,
+   "focus": [
+    0.35,
+    0.62
+   ],
+   "view": [
+    0.0,
+    929.6183288409704,
+    1018.8679245283018,
+    521.5633423180593
+   ]
+  },
+  {
+   "scale": 2,
+   "focus": [
+    0.2,
+    0.3
+   ],
+   "view": [
+    0.0,
+    437.7857142857143,
+    540.0,
+    276.42857142857144
+   ]
+  }
+ ],
+ "to_window": [
+  {
+   "scale": 1,
+   "focus": [
+    0.5,
+    0.5
+   ],
+   "point": [
+    0.5,
+    0.5
+   ],
+   "xy": [
+    540.0,
+    941.0
+   ]
+  },
+  {
+   "scale": 1.06,
+   "focus": [
+    0.35,
+    0.5
+   ],
+   "point": [
+    0.16,
+    0.42
+   ],
+   "xy": [
+    262.46400000000006,
+    814.3653333333333
+   ]
+  },
+  {
+   "scale": 1,
+   "focus": [
+    0.5,
+    0.42
+   ],
+   "point": [
+    0.62,
+    0.33
+   ],
+   "xy": [
+    640.8,
+    806.6
+   ]
+  }
+ ],
+ "ruler_scale": [
+  {
+   "years": [
+    1947
+   ],
+   "scale": [
+    1946,
+    1948,
+    1
+   ]
+  },
+  {
+   "years": [
+    1944,
+    1947
+   ],
+   "scale": [
+    1943,
+    1948,
+    1
+   ]
+  },
+  {
+   "years": [
+    1878,
+    1947
+   ],
+   "scale": [
+    1840,
+    1980,
+    20
+   ]
+  },
+  {
+   "years": [
+    1500,
+    1569
+   ],
+   "scale": [
+    1480,
+    1600,
+    20
+   ]
+  },
+  {
+   "years": [
+    1450,
+    1950
+   ],
+   "scale": [
+    1200,
+    2200,
+    200
+   ]
+  },
+  {
+   "years": [
+    1200,
+    2000
+   ],
+   "scale": [
+    1000,
+    2200,
+    200
+   ]
+  },
+  {
+   "years": [
+    0,
+    2100
+   ],
+   "scale": [
+    -500,
+    3000,
+    500
+   ]
+  }
+ ],
+ "clean_word": [
+  {
+   "word": "bug.",
+   "clean": "bug"
+  },
+  {
+   "word": "VPN's",
+   "clean": "vpns"
+  },
+  {
+   "word": "Gödel's",
+   "clean": "gödels"
+  },
+  {
+   "word": "co-op,",
+   "clean": "co-op"
+  },
+  {
+   "word": "1947,",
+   "clean": "1947"
+  }
+ ],
+ "ruler_scale_ticks": [
+  {
+   "years": [
+    1450,
+    1950
+   ],
+   "max": 4,
+   "scale": null
+  },
+  {
+   "years": [
+    1944,
+    1947
+   ],
+   "max": 3,
+   "scale": null
+  }
+ ]
+}

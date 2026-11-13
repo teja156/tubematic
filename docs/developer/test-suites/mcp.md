@@ -823,6 +823,129 @@ call reserves no picture slot and reaches no paid endpoint.
 
 Trap: a reservation that lapses sooner than the slowest call gives that call's slot to a parallel
 one, and both are billed.
+### `test_paper_diorama.py`
+
+Covers `mcp/paper_diorama.py`, the checks `write_scene_config` runs on a Paper Diorama config, the
+text audit's per-set sampling, the picture checks, and `render_paper_props`
+([Paper Diorama](../10-scene-authoring.md#paper-diorama)).
+
+- The limits, timings, rooms, slots, levels, scales, entrances, cuts, faces, accessories and
+  colours equal the ones in the renderer's `contract.ts`, and the pack lists the same values and every
+  shipped prop at its size. Every shipped prop is also a valid custom prop. Both sides answer the
+  shared cases in `fixtures/paper_diorama_contract.json` (the pop, a prop's box in a slot, the stage
+  scale, the banner's font size and the critter's box).
+- The skill's worked example passes, and the pack's captions are the `tags` look the server accepts.
+- Each refusal names its set, item or event and cause: a bad room, banner, slot or colour; a set
+  off the words; an unknown prop; an item or event off a word; two things covering each other; a prop
+  running off the frame or reaching the banner; an event on an item that has not entered or has
+  left; a swap to a prop of another size; a face that is not in the list; a field the event does not
+  take, including a `camera` on a set. Too many snap zooms are refused, a stage still for over 3 seconds is refused and an
+  event fixes it, and a custom prop is checked piece by piece (size, count, box, colour and text).
+- With insert windows passed as `quiet`, nothing may start inside a window, and a window over a still
+  stretch does not count as still.
+- The text audit samples each set after its last entrance or event, and the picture checks read the
+  style: an empty first frame is warned about and each set start is a change frame.
+- `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
+  one and refuses `PaperDiorama` on another style and other scenes on a Paper Diorama video.
+- `render_paper_props` refuses a video with no config, with no `customProps` or of another style.
+  For a sound one it passes the video's own props and `PAPER_SCRIPT` to `bean_preview.render_preview`
+  and returns the picture after the JSON. A prop broken in the file after the write is refused before
+  any render. The preview script ships in the renderer.
+
+Trap: the tests read the TypeScript source for the contract, so a limit changed on one side only
+fails here before it reaches a render.
+
+### `test_archive_engraving.py`
+
+Covers `mcp/archive_engraving.py`, the checks `write_scene_config` runs on an Archive and Engraving
+config, the text audit's per-beat sampling, the picture checks, the cap on engravings and
+`treat_image`'s `engraving` look
+([Archive and Engraving](../10-scene-authoring.md#archive-and-engraving)).
+
+- The limits, timings, zones, card kinds, events, emblems and footnotes equal the ones in the
+  renderer's `contract.ts`, and the pack lists the same values. Both sides answer the shared cases in
+  `fixtures/archive_engraving_contract.json` (title layout, the plate's push and crop, a still's
+  point on the page, the ruler's scale and a cleaned title word).
+- The skill's worked example passes, and the pack's captions are the `fill` look on a `chip` that the
+  server accepts.
+- Each refusal names its beat, card or event and cause. A person given a picture or a face field is
+  refused, a name card with only its name fields passes, and no field hides a footnote. A chart
+  needs its route on the still and one route event. More than ten different engravings are refused,
+  and a page where nothing new happens for too long is refused.
+- With insert windows passed as `quiet`, nothing may start inside a window, and a window over a still
+  stretch does not count as still.
+- The text audit samples each beat after its last event, and the picture checks read the style.
+- `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
+  one and refuses `ArchiveEngraving` on another style.
+- An eleventh new engraving is refused by `_image_cap_error` before any paid call, and a call for it
+  never reaches OpenAI. Regenerating an existing name stays allowed. The image plan adds the
+  engraving prompt text and fixes the shape to 9:16, and refuses a reference.
+- `treat_image` bakes `engraving` into a path the validator accepts, refuses `print` for this style,
+  and a treated copy does not count against the cap.
+
+### `test_editorial_collage.py`
+
+Covers `mcp/editorial_collage.py`, the checks `write_scene_config` runs on an Editorial Collage
+config, the text audit's per-station sampling, the picture checks, the cap on stills and
+`treat_image`'s `print` and `sticker` looks
+([Editorial Collage](../10-scene-authoring.md#editorial-collage)).
+
+- The limits, timings, zones, headline and hero kinds, events and notes equal the ones in the
+  renderer's `contract.ts`, and the pack lists the same values. Both sides answer the shared cases in
+  `fixtures/editorial_collage_contract.json` (the stepped motion, the station layout, the camera, the
+  headline layout, the typed index line, a figure's text and a cleaned headline word).
+- The camera zig-zags down the desk, rests on each station and glides between them. The skill's
+  worked example passes and shows every headline kind and every hero kind but the stack, and the
+  pack's captions are the `highlight` look that the server accepts.
+- Each refusal names its station, headline, hero or event and cause. A face or portrait field is
+  refused with its reason, no field hides a note, a print always shows "Illustration" and a
+  recreation card "Recreation", a black card may stand alone and a mark needs a headline. An
+  untreated still or one baked with the wrong treatment is refused, a sticker needs the `sticker`
+  treatment and a stack takes either. More than ten different stills are refused, and a desk where
+  nothing new happens for too long is refused.
+- With insert windows passed as `quiet`, nothing starts and no glide runs inside a window.
+- The text audit samples each station once the camera has stopped, and the picture checks read the
+  style.
+- `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
+  one and refuses `EditorialCollage` on another style.
+- An eleventh new still is refused by `_image_cap_error` before any paid call and never reaches
+  OpenAI. The image plan adds the style's prompt text and keeps the shape the agent asks for.
+- `treat_image` bakes a `print` and a `sticker` into paths the validator accepts and refuses
+  `engraving` for this style.
+
+### `test_storybook_reveal.py`
+
+Covers `mcp/storybook_reveal.py`, the checks `write_scene_config` runs on a Storybook Reveal config,
+the text audit's per-page sampling, the picture checks, the hero sheet and page stills through
+`generate_image`, and `treat_image`'s `pencil` look
+([Storybook Reveal](../10-scene-authoring.md#storybook-reveal)).
+
+- The limits, timings, zones and turns equal the ones in the renderer's `contract.ts`, the pack lists
+  the same values, and its routing text names the styles that fit a story better. Both sides answer
+  the shared cases in `fixtures/storybook_reveal_contract.json` (the title size, the picture's fit
+  in the panel, the push and where the colour lands). Every title fits its line at the smallest size.
+- The pack's captions are the `fill` look with no plate that the server accepts, and the skill's
+  worked example passes.
+- Each refusal names its page and cause. The first page may open on its pencil or wipe it in on a
+  word, and a colour too close to its page's end is refused. Twelve different stills pass and a
+  thirteenth is refused (one still on every page is fine), more pages than the limit are refused, at
+  most two curls are allowed, and a page where nothing new happens for too long is refused without
+  counting the slow push. A long pencil stage is refused, and the hero sheet cannot be a page.
+- With insert windows passed as `quiet`, nothing starts inside a window and a window does not count
+  as still.
+- Each page is sampled once its colour has landed, the change frames are each page's start, pencil
+  and colour, and the text audit and picture checks read the style.
+- `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
+  one and refuses `StorybookReveal` on another style.
+- The hero sheet is made from the description alone, with no reference, and is wide. A page with the
+  hero is painted from the video's own sheet, and one without gets the page style and no reference.
+  A wrong reference is refused before the paid call, a reference on another style is refused, and a
+  thirteenth page still is refused while the hero keeps its own slot.
+- `treat_image` bakes a `pencil` plate into a path the validator accepts and refuses another look.
+
+Trap: the tests read the TypeScript source for the contract, so a limit changed on one side only
+fails here before it reaches a render.
+
 ### `test_choose_script_formula.py`
 
 Covers `choose_script_formula`, `get_video`'s `formula_routing`, the domain's default formula in

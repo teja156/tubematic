@@ -25,7 +25,8 @@ EXAMPLES = {
     "system_flow": "tubematic-system-flow", "whiteboard": "tubematic-whiteboard",
     "bean_explainer": "tubematic-bean-explainer", "terminal_doc": "tubematic-terminal-doc",
     "storybook_atlas": "tubematic-storybook-atlas", "under_the_hood": "tubematic-under-the-hood",
-    "case_file_story": "tubematic-case-file-story",
+    "case_file_story": "tubematic-case-file-story", "archive_engraving": "tubematic-archive-engraving",
+    "editorial_collage": "tubematic-editorial-collage", "storybook_reveal": "tubematic-storybook-reveal",
 }
 
 

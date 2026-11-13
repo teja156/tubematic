@@ -52,6 +52,33 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   [Where you choose](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#where-you-choose)
   has the details.
 
+- A new visual style, Paper Diorama (experimental): a playful explainer told in rooms of cut paper,
+  with a taped banner for each beat, paper props that pop into place on the narrator's words, a small
+  clay critter that reacts, stamps and red rings on the key words, and torn paper tags for captions.
+  It makes no images and needs no OpenAI key. Auto picks it for a tech, product or safety idea told
+  inside one familiar place.
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles)
+  has the details.
+- A new visual style, Editorial Collage (experimental): a real incident or company story laid out as
+  an evidence desk, with clippings carrying the video's own headlines, grey halftone prints, cut-out
+  stickers, typed index cards, big figures and a red string, as the camera glides across the desk.
+  Real people are named in text and never shown as faces, and every generated picture is marked
+  "Illustration". It needs an OpenAI key and makes up to 10 pictures per video.
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles)
+  has the details.
+- A new visual style, Storybook Reveal (experimental): a fable or a moral story told as a picture
+  book, each page a painted picture that appears as a pencil drawing and then floods with colour. The
+  hero looks the same on every page. It needs an OpenAI key and makes up to 12 pages per video, plus
+  one reference picture of the hero.
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles)
+  has the details.
+- A new visual style, Archive and Engraving (experimental): history told as a documentary page on
+  parchment, with engraved plates, a title with one red word, red strike-throughs, stamps, routes on
+  old charts and a timeline. People appear as name cards with their dates, never as faces, and every
+  generated picture is marked "Illustration". It needs an OpenAI key and makes up to 10 pictures per
+  video.
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles)
+  has the details.
 - Insert scenes: a video can carry a few short scenes, a few seconds each, in another look inside its
   style, where the narration reaches something that look shows best: a **System Flow** diagram for a
   request crossing a network, a **Terminal Doc** string for a password being hashed or a command

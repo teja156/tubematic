@@ -103,7 +103,11 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   an OpenAI key, counts 16 stills and a lead sheet, takes no mascot, uses the `fill` caption look,
   carries the four prompt texts `generate_image` adds, and its `script` text states the ending, the
   subject limits and the lengths the term, the stamp and the options may have, and its `review`
-  text says the meter row is hidden on the closing choice. A pack that takes no mascot must say why.
+  text says the meter row is hidden on the closing choice. Archive and Engraving is a main style on the light canvas that needs an OpenAI key and no GPU, caps its engravings at 10 with a 9:16 shape and the `engraving` treatment, takes no mascot, hosts inserts with a `dip`, uses the `fill` caption look on a `chip`, names Storybook Atlas, Photo Explainer and Paper Diorama in its `routing.avoid_for`, and its `script` text states the name cards, dates, red marks and the ban on brands. Editorial Collage is a main style on the light canvas that needs an OpenAI key and no GPU, caps its prints and cut-outs at 10 with the `print` and `sticker` treatments and no fixed shape, takes no mascot, hosts inserts with a `cut`, uses the `highlight` caption look, names Photo Explainer, Case File Story, Stick Explainer, Bean Explainer and Paper Diorama in its `routing.avoid_for`, and its `script` text states the stations, the dates and numbers to say aloud and the ban on faces and newspaper names. Storybook Reveal is a main style on the light canvas that needs an OpenAI key and no GPU, caps its pages at 12 square stills plus a hero sheet made from text alone in a slot of its own (`routing.images` 13) with the `pencil` treatment, takes no mascot, hosts inserts with a `wipe`, uses the `fill` caption look with no plate, names Storybook Atlas, Archive and Engraving, Illustrated, Stick Explainer and Bean Explainer in its `routing.avoid_for`, and its `script` text states the one protagonist, the moral and the ban on brands. Paper Diorama is a main style on the light
+  canvas that needs no key and no GPU, makes no pictures, takes no mascot (its own critter stands
+  there), hosts inserts with a `cut`, uses the `tags` caption look, names Bean Explainer and Stick
+  Explainer in its `routing.avoid_for`, and its `script` text states the rooms, the banner and
+  the stressed words. A pack that takes no mascot must say why.
 - Whiteboard fixes the light canvas, allows no figures, needs nothing, names its own skill, and its
   routing's `avoid_for` names System Flow, Stick and Photo Explainer, the styles Auto must tell it
   apart from.
@@ -249,7 +253,7 @@ the fixed topic set in `tests/fixtures/style_routing_cases.json`
 - Each candidate, `scenes` included, carries its routing block (`cannot_show` too) and its image
   count, and the list shares no state with the packs.
 - A candidate is unavailable for the same reasons that refuse the choice: no OpenAI key, a GPU that
-  is not working or not tested, a mascot on a style that takes none (a 3D world, Under the Hood, Case File Story).
+  is not working or not tested, a mascot on a style that takes none (a 3D world, Under the Hood, Case File Story, Paper Diorama, Archive and Engraving, Editorial Collage, Storybook Reveal).
   `scenes` is always available.
 - Every topic names only real outcomes, and every outcome is the first expectation of at least
   three topics. No topic expects an insert style as its main style; every insert style is expected

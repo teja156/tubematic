@@ -111,6 +111,10 @@ import storybook_atlas  # the Storybook Atlas checks (TMDEV-200), the same way
 import under_the_hood  # the Under the Hood checks (TMDEV-201), the same way
 import case_file_story  # the Case File Story checks (TMDEV-202), the same way
 import treatments  # the looks treat_image bakes into a still (TMDEV-229/230/231)
+import paper_diorama  # the Paper Diorama checks (TMDEV-228), the same way
+import archive_engraving  # the Archive and Engraving checks (TMDEV-230), the same way
+import editorial_collage  # the Editorial Collage checks (TMDEV-229), the same way
+import storybook_reveal  # the Storybook Reveal checks (TMDEV-231), the same way
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
@@ -2911,12 +2915,20 @@ def update_video(
     scene of close-up photographs with labels pinned to them, written as data;
     needs an OpenAI key), "case_file_story" (the whole video is one scene of
     painted stills with a meter row and number cards, written as data; needs
-    an OpenAI key) or "cartoon_3d" (one 3D world; needs a working GPU).
+    an OpenAI key), "paper_diorama" (the whole video is one scene of paper
+    rooms, props and a critter, written as data), "archive_engraving" (the
+    whole video is one scene of engraved plates and museum-label cards on
+    parchment, written as data; needs an OpenAI key), "editorial_collage" (the
+    whole video is one paper desk of clippings, halftone prints and cut-out
+    stickers the camera glides across, written as data; needs an OpenAI key),
+    "storybook_reveal" (the whole video is one picture-book scene whose painted
+    pages are revealed in pencil, then colour, written as data; needs an OpenAI
+    key) or "cartoon_3d" (one 3D world; needs a working GPU).
     get_pipeline_status's visual_styles lists every style and whether this
     install can make it. The scene styles are permissions, not looks. Like script_profile_id, a human
     picks it at the topic checkpoint and it is frozen afterwards; set it here
     only from a slash command that creates a video, before flipping it to
-    TOPIC_APPROVED. "illustrated", "under_the_hood" and "case_file_story" are refused while no
+    TOPIC_APPROVED. "illustrated", "under_the_hood", "case_file_story", "archive_engraving", "editorial_collage" and "storybook_reveal" are refused while no
     OpenAI key is stored (get_pipeline_status's illustrated_available is false) — offer the other
     styles instead. Under "auto", Auto picks the style itself at
     TOPIC_APPROVED with choose_visual_style, never with this field. A changed
@@ -2928,7 +2940,8 @@ def update_video(
     already uses. Writable only when the style does not already fix a canvas —
     that is "auto" and "illustrated"; "motion_graphics", "stick",
     "system_flow", "whiteboard", "bean_explainer", "storybook_atlas", "terminal_doc",
-    "under_the_hood", "case_file_story" and "cartoon_3d" fix theirs.
+    "under_the_hood", "case_file_story", "paper_diorama", "archive_engraving", "editorial_collage",
+    "storybook_reveal" and "cartoon_3d" fix theirs.
 
     resolved_renderer: under "auto", which renderer the video uses — "dom"
     (the scene components). Auto reaches Cartoon 3D by picking the cartoon_3d
@@ -4123,7 +4136,8 @@ def upsert_project(
         videos start in — "auto" or any style in get_pipeline_status's
         visual_styles ("motion_graphics", "stick", "illustrated", "system_flow",
         "bean_explainer", "storybook_atlas", "terminal_doc", "cartoon_3d",
-        "whiteboard", "under_the_hood", "case_file_story").
+        "whiteboard", "under_the_hood", "case_file_story", "paper_diorama",
+        "archive_engraving", "editorial_collage", "storybook_reveal").
         "" means the domain has no preference and every video starts at
         "auto". Videos filed here by trending, mining or manual are unaffected.
         Changing it to "illustrated" is refused while no OpenAI key is stored.
@@ -8539,6 +8553,72 @@ def render_storybook_props(video_id: str):
     return [json.dumps(meta, indent=2), MCPImage(data=buf.getvalue(), format="png")]
 
 
+@mcp.tool
+def render_paper_props(video_id: str):
+    """Look at the props you built for a Paper Diorama video before you submit it.
+
+    Paints the props in the video's scene-config `customProps` (so
+    write_scene_config first) exactly as the video paints them: paper pieces
+    with their rough edges, grain and shadow, each with its name and size
+    under it. Check that each one reads as what it stands for at phone size,
+    and that its text is legible. Change a prop in the config, write it again
+    and call this again. It renders on the CPU and waits its turn behind other
+    heavy checks, so it can take a minute.
+
+    Returns {video_id, props} followed by the picture, or {"error": ...}.
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    if (row["visual_style"] or "") != paper_diorama.STYLE_ID:
+        return {"error": "render_paper_props is for Paper Diorama videos; this video's visual_style is "
+                         f"{row['visual_style'] or 'auto'!r}."}
+    try:
+        config = json.loads(tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG).read_text(encoding="utf-8"))
+        data = config["scenes"][0]["props"][paper_diorama.PROPS_KEY]
+    except (tjobs.UnsafePath, OSError, ValueError, KeyError, IndexError, TypeError):
+        return {"error": "This video has no Paper Diorama scene-config yet: write it with write_scene_config "
+                         "(customProps holding your props) first."}
+    custom = data.get("customProps") or {}
+    if not isinstance(custom, dict) or not custom:
+        return {"error": "The scene-config has no customProps, so there is nothing of yours to preview."}
+    # write_scene_config checked them, but the file may have been edited since.
+    problems = [p for name, prop in custom.items() for p in paper_diorama.prop_errors(str(name), prop)]
+    if problems:
+        return {"error": "The customProps have problems: " + " ".join(problems[:paper_diorama.MAX_ERRORS])}
+    if not _heavy_checks_lock.acquire(timeout=HEAVY_CHECK_WAIT_SECS):
+        return {"error": f"Other checks kept the renderer busy for {HEAVY_CHECK_WAIT_SECS}s. Nothing is wrong "
+                         "with this video; call render_paper_props again."}
+    try:
+        with tempfile.TemporaryDirectory(prefix="tubematic-paper-props-") as tmp:
+            out_png = Path(tmp) / "props.png"
+            try:
+                bean_preview.render_preview(_MASCOT_REMOTION, {"props": custom}, out_png,
+                                            script=bean_preview.PAPER_SCRIPT)
+            except bean_preview.BeanPreviewError as e:
+                return {"error": str(e)}
+            from PIL import Image as PILImage
+            from fastmcp.utilities.types import Image as MCPImage
+            with PILImage.open(out_png) as src:
+                src.load()
+                img = src.convert("RGB")
+    finally:
+        _heavy_checks_lock.release()
+    longest = max(img.size)
+    if longest > _READ_IMAGE_MAX_EDGE:
+        ratio = _READ_IMAGE_MAX_EDGE / longest
+        img = img.resize((max(1, round(img.size[0] * ratio)), max(1, round(img.size[1] * ratio))), PILImage.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return [json.dumps({"video_id": video_id, "props": list(custom)}, indent=2),
+            MCPImage(data=buf.getvalue(), format="png")]
+
+
 def _td_custom_list(config) -> list:
     """A Terminal Doc config's customMoves, or [] for any other config."""
     try:
@@ -8886,6 +8966,72 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         given = config.get("subtitles")
         if given is None or isinstance(given, dict):
             config["subtitles"] = {**tvs.pack(case_file_story.STYLE_ID)["captions"], **(given or {})}
+    # ── Paper Diorama (TMDEV-228) ────────────────────────────────────────────
+    # One installed PaperDiorama scene whose props hold the sets, the props in
+    # their slots and the events as data, and any props of the agent's own as
+    # paper pieces (checked here too, so nothing is read from disk later).
+    pd_err = paper_diorama.check_scene_use(row["visual_style"], scenes)
+    if pd_err:
+        return {"error": pd_err}
+    if (row["visual_style"] or "") == paper_diorama.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = paper_diorama.check(config, fps, word_starts, tvs.pack(paper_diorama.STYLE_ID)["extra"],
+                                       quiet=quiet)
+        if problems:
+            return {"error": "The Paper Diorama video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(paper_diorama.STYLE_ID)["captions"], **(given or {})}
+    # ── Archive and Engraving (TMDEV-230) ────────────────────────────────────
+    # One installed ArchiveEngraving scene whose props hold the beats: a dated
+    # title and one museum card each (an engraved plate, a chart, name cards or
+    # a recreated document) and the events on it, as data.
+    ae_err = archive_engraving.check_scene_use(row["visual_style"], scenes)
+    if ae_err:
+        return {"error": ae_err}
+    if (row["visual_style"] or "") == archive_engraving.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = archive_engraving.check(config, fps, word_starts, tvs.pack(archive_engraving.STYLE_ID)["extra"],
+                                           video_id, quiet=quiet)
+        if problems:
+            return {"error": "The Archive and Engraving video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(archive_engraving.STYLE_ID)["captions"], **(given or {})}
+    # ── Editorial Collage (TMDEV-229) ────────────────────────────────────────
+    # One installed EditorialCollage scene whose props hold the stations: a
+    # headline and a hero each (halftone prints and cut-out stickers baked by
+    # treat_image, typed index cards, figures) and the events on them, as data.
+    # The code lays the stations out on the desk and moves the camera.
+    ec_err = editorial_collage.check_scene_use(row["visual_style"], scenes)
+    if ec_err:
+        return {"error": ec_err}
+    if (row["visual_style"] or "") == editorial_collage.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = editorial_collage.check(config, fps, word_starts, tvs.pack(editorial_collage.STYLE_ID)["extra"],
+                                           video_id, quiet=quiet)
+        if problems:
+            return {"error": "The Editorial Collage video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(editorial_collage.STYLE_ID)["captions"], **(given or {})}
+
+    # ── Storybook Reveal (TMDEV-231) ─────────────────────────────────────────
+    # One installed StorybookReveal scene whose props hold the pages: a title,
+    # one generated still and its pencil plate each, and the words the pencil
+    # wipes in and the colour floods in on, as data.
+    sr_err = storybook_reveal.check_scene_use(row["visual_style"], scenes)
+    if sr_err:
+        return {"error": sr_err}
+    if (row["visual_style"] or "") == storybook_reveal.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = storybook_reveal.check(config, fps, word_starts, tvs.pack(storybook_reveal.STYLE_ID)["extra"],
+                                          video_id, quiet=quiet)
+        if problems:
+            return {"error": "The Storybook Reveal video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(storybook_reveal.STYLE_ID)["captions"], **(given or {})}
 
     # ── subtitles (TMDEV-101) ────────────────────────────────────────────────
     # Absent means on with defaults, so nothing is filled in here: writing the

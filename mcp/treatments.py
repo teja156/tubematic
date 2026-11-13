@@ -193,9 +193,12 @@ def pencil(im: Image.Image) -> Image.Image:
     tone of the same picture, on cream paper. It lines up with the colour still
     pixel for pixel, so the colour can flood over it."""
     grey = _grey(im)
-    soft = grey.filter(ImageFilter.GaussianBlur(1.2))
-    lines = ImageOps.invert(soft.filter(ImageFilter.FIND_EDGES))
-    lines = ImageOps.autocontrast(lines, cutoff=2).point(lambda v: 255 if v > 236 else round(v * 0.82))
-    tone = grey.point(lambda v: 205 + round(v * 50 / 255))       # a light wash, 205-255
+    # a median filter takes the paper's grain out first, which would otherwise come back as speckle
+    soft = grey.filter(ImageFilter.MedianFilter(5)).filter(ImageFilter.GaussianBlur(1.2))
+    edges = soft.filter(ImageFilter.FIND_EDGES)
+    # a fixed curve, never a contrast stretch (that turns the paper's faint noise into speckle):
+    # an edge under 8 is paper, a stronger one a pencil line that darkens with it
+    lines = edges.point(lambda e: 255 if e < 8 else max(30, 255 - (e - 8) * 9))
+    tone = grey.point(lambda v: 255 if v > 225 else 196 + round(v * 59 / 255))   # a light wash on the shapes, clean paper
     plate = ImageChops.darker(lines, tone)
     return ImageOps.colorize(plate, black=PENCIL_GRAPHITE, white=PENCIL_PAPER)

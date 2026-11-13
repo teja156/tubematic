@@ -500,7 +500,8 @@
       ],
       "ok": [
         "scenes",
-        "illustrated"
+        "illustrated",
+        "archive_engraving"
       ],
       "future": "",
       "note": "",
@@ -514,7 +515,8 @@
       ],
       "ok": [
         "scenes",
-        "motion_graphics"
+        "motion_graphics",
+        "archive_engraving"
       ],
       "future": "",
       "note": "",
@@ -557,7 +559,8 @@
       ],
       "ok": [
         "scenes",
-        "whiteboard"
+        "whiteboard",
+        "editorial_collage"
       ],
       "future": "",
       "note": "Fast news with a real company, a real post and a price chart: pictures and a chart carry it."
@@ -647,7 +650,8 @@
       ],
       "ok": [
         "whiteboard",
-        "scenes"
+        "scenes",
+        "paper_diorama"
       ],
       "future": "",
       "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Negative control for Terminal Doc: encryption is mentioned, but the subject is the path packets travel between components.",
@@ -668,7 +672,8 @@
         "scenes",
         "storybook_atlas",
         "illustrated",
-        "stick"
+        "stick",
+        "archive_engraving"
       ],
       "future": "",
       "note": "A real ship, real people and a mechanism, all carried by photographs and vector diagrams: Photo Explainer. No beat needs someone acting a step out."
@@ -824,7 +829,8 @@
       "ok": [
         "scenes",
         "storybook_atlas",
-        "illustrated"
+        "illustrated",
+        "editorial_collage"
       ],
       "future": "",
       "note": "A near miss for Case File Story: a fraud, but a real, named case with real people, told through their pictures. That style's people are invented."
@@ -1427,7 +1433,8 @@
       ],
       "ok": [
         "scenes",
-        "storybook_atlas"
+        "storybook_atlas",
+        "editorial_collage"
       ],
       "future": "",
       "note": "Real-event probe: a real, recent outage with real places and screens to show."
@@ -1465,6 +1472,349 @@
       "inserts_ok": [
         "terminal_doc"
       ]
+    },
+    {
+      "title": "Why free cafe Wi-Fi can read your messages",
+      "brief": "A light, playful explainer: on an open cafe network anyone nearby can see what your laptop sends, a VPN or HTTPS seals it, and a few habits keep you safe. Beats: you at the cafe, the open network, the stranger reading along, the sealed tunnel, what to do next time.",
+      "expect": [
+        "paper_diorama"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Paper Diorama: a privacy idea told as one familiar place with stand-in props (a note, a padlock) and a light narrator. Pair probe Paper Diorama vs Stick: no step-by-step mechanism with generic roles, so the room wins."
+    },
+    {
+      "title": "What a password manager actually does",
+      "brief": "Your passwords as notes locked in one vault: one strong master key opens it, the vault fills in each login for you, and a stolen note from one site no longer opens the others. Told warmly, with a small joke about sticky notes on the monitor.",
+      "expect": [
+        "paper_diorama"
+      ],
+      "ok": [
+        "stick",
+        "bean_explainer",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Paper Diorama: a security idea told as a heist-proof vault with a before (sticky notes) and an after (the vault)."
+    },
+    {
+      "title": "How websites remember you with cookies",
+      "brief": "A playful explainer: a cookie is a little note the website hands your browser, which hands it back on every visit, like a diner that remembers your usual order. Beats: the first visit, the note, the next visit, the third-party note that follows you, clearing them.",
+      "expect": [
+        "paper_diorama"
+      ],
+      "ok": [
+        "stick",
+        "whiteboard",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Paper Diorama: a web idea with an obvious familiar-place metaphor (a diner and an order slip) and a light register."
+    },
+    {
+      "title": "Why two-factor login stops most account takeovers",
+      "brief": "A light explainer told as a vault with two locks: your password is one key, the code on your phone is the second, and a thief with only the first is left standing at the door. Beats: the stolen password, the second lock, the code arriving, the thief turned away, how to switch it on.",
+      "expect": [
+        "paper_diorama"
+      ],
+      "ok": [
+        "stick",
+        "bean_explainer",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Paper Diorama: a security fix told as a before and after in one familiar place (a vault), playful, with stand-in props."
+    },
+    {
+      "title": "How a load balancer shares traffic between servers",
+      "brief": "Step by step: requests arrive at one front door, the balancer checks which servers are healthy, sends each request to the least busy one, and stops sending to a server that fails its health check.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "paper_diorama",
+        "whiteboard",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe Paper Diorama vs Stick: a process acted out step by step by generic roles stays with Stick Explainer, with a System Flow insert for the path.",
+      "inserts_expect": [
+        "system_flow"
+      ]
+    },
+    {
+      "title": "5 phone settings to change for privacy today",
+      "brief": "A list of five separate settings, one each: location history, ad tracking, app permissions, lock-screen previews, Bluetooth scanning, and why each matters.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe Paper Diorama vs Bean Explainer: a list of separate tips, one idea each, stays with Bean Explainer even when the subject is privacy."
+    },
+    {
+      "title": "How the Sun took the Earth's place at the centre of everything",
+      "brief": "How an old belief was overturned: the Earth-centred heavens of Ptolemy, Copernicus's quiet book in 1543, Galileo's telescope and his trial in 1633, and how the new picture finally won. Told gravely, as a history of an idea passed from one thinker to the next.",
+      "expect": [
+        "archive_engraving"
+      ],
+      "ok": [
+        "storybook_atlas",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Archive and Engraving: an old belief overturned by a new one, with dated thinkers as name cards and engraved plates. Pair probe Archive vs Storybook Atlas: a grave history of an idea, not a playful origin story."
+    },
+    {
+      "title": "Why sailors could not find their longitude for two hundred years",
+      "brief": "The longitude problem: ships lost because no one could tell how far east or west they were, the 1714 prize, the clockmakers and astronomers who competed for it, and the sea clock that finally solved it. Old charts, routes and machines.",
+      "expect": [
+        "archive_engraving"
+      ],
+      "ok": [
+        "storybook_atlas",
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Archive and Engraving: voyages and routes on old charts, a dated rivalry, engraved machines."
+    },
+    {
+      "title": "How tulips caused history's first famous market bubble",
+      "brief": "Amsterdam in the 1630s: tulip bulbs traded on paper contracts, prices climbing past the cost of a house, and the crash of February 1637. What the records say happened, and what later tellings exaggerated.",
+      "expect": [
+        "archive_engraving"
+      ],
+      "ok": [
+        "motion_graphics",
+        "bean_explainer",
+        "scenes",
+        "editorial_collage"
+      ],
+      "future": "",
+      "note": "Archive and Engraving: economic history told through dates, documents and engraved scenes, in a documentary register."
+    },
+    {
+      "title": "The doctor who told other doctors to wash their hands",
+      "brief": "Vienna, 1847: Ignaz Semmelweis noticed that mothers died far more often in the ward run by doctors than in the one run by midwives, ordered hand-washing in chlorine, and was ignored and mocked. How an idea that saves lives was refused for decades.",
+      "expect": [
+        "archive_engraving"
+      ],
+      "ok": [
+        "storybook_atlas",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Archive and Engraving: an overturned belief, a dated biography told through work and places, a grave subject. The person is a name card, never a portrait."
+    },
+    {
+      "title": "Where the word robot came from",
+      "brief": "A playful origin story: a 1920 Czech play, the playwright's brother who suggested the word, what it first meant, and how it spread into science fiction and factories.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "archive_engraving",
+        "bean_explainer",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe Archive vs Storybook Atlas: the light origin story of an everyday word stays with Storybook Atlas."
+    },
+    {
+      "title": "What Pompeii looked like the day Vesuvius erupted",
+      "brief": "The town, its streets and houses as they were in AD 79, the eruption hour by hour, and what the excavations found under the ash.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "archive_engraving",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe Archive vs Photo Explainer: a real place the viewer came to see in full-frame pictures stays with Photo Explainer, however old the event."
+    },
+    {
+      "title": "The spreadsheet error behind a decade of austerity",
+      "brief": "In 2010 an economics paper said debt above 90% of GDP slows growth; governments quoted it to justify cuts. In 2013 a student found a spreadsheet error that left out countries. Told as an investigation: the paper, who cited it, the student's check, the corrected numbers, what changed.",
+      "expect": [
+        "editorial_collage"
+      ],
+      "ok": [
+        "whiteboard",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Editorial Collage: a real story told through documents, dates, quotes and numbers, with nothing physical to photograph. Pair probe Editorial Collage vs Photo Explainer: no real object to show, so the evidence desk wins."
+    },
+    {
+      "title": "How the Equifax breach unfolded, day by day",
+      "brief": "2017: an unpatched web server, attackers inside for 76 days, 147 million people's records taken, a delayed announcement, executives' share sales, the fines. Traced as a timeline of dates, memos and numbers across the company, the regulators and the public.",
+      "expect": [
+        "editorial_collage"
+      ],
+      "ok": [
+        "motion_graphics",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Editorial Collage: a named breach told as a timeline of documents and numbers spreading across firms and people. Photo Explainer is acceptable for the real company."
+    },
+    {
+      "title": "Why the 2010 Flash Crash wiped a trillion dollars in 36 minutes",
+      "brief": "6 May 2010: one large sell order, high-speed traders passing contracts back and forth, prices of some shares falling to a cent, a market that recovered within the hour, and the five-year hunt that ended at a trader in his parents' house. Dates, figures and the investigation.",
+      "expect": [
+        "editorial_collage"
+      ],
+      "ok": [
+        "motion_graphics",
+        "whiteboard",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Editorial Collage: a market event told through figures, timestamps and an investigation's findings."
+    },
+    {
+      "title": "How one leaked password shut down America's largest fuel pipeline",
+      "brief": "May 2021, Colonial Pipeline: an old VPN account with no second factor, a ransomware gang, a pipeline shut for six days, queues at petrol stations, a ransom paid and partly recovered. Told cause by cause through the dates, the notes and the numbers.",
+      "expect": [
+        "editorial_collage"
+      ],
+      "ok": [
+        "motion_graphics",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Editorial Collage: a named incident traced cause by cause across a company, its customers and the government, told as an evidence board."
+    },
+    {
+      "title": "What the Chernobyl reactor looked like after the explosion",
+      "brief": "The reactor building, the control room and the town of Pripyat as they looked after 26 April 1986, and what the pictures show about what went wrong.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "editorial_collage",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe Editorial Collage vs Photo Explainer: real places the viewer came to see as full-frame pictures stay with Photo Explainer."
+    },
+    {
+      "title": "How a fake invoice tricks a company into paying a stranger",
+      "brief": "Told as a story the viewer steps into: you run accounts payable, an email from a known supplier says their bank details changed, the invoice looks right, you pay, the real supplier calls. What the scam is called and how it is caught.",
+      "expect": [
+        "case_file_story"
+      ],
+      "ok": [
+        "editorial_collage",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe Editorial Collage vs Case File Story: an invented second-person scheme ending on a choice stays with Case File Story."
+    },
+    {
+      "title": "The boy who cried wolf, and what it teaches about trust",
+      "brief": "Retell the fable of the shepherd boy who raised false alarms until nobody came when the wolf was real, as a calm story, and end on the lesson for today: trust is spent each time we cry wolf.",
+      "expect": [
+        "storybook_reveal"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Storybook Reveal: a fable with one protagonist retold as a lesson.",
+      "inserts_expect": []
+    },
+    {
+      "title": "The tortoise and the hare, and why slow and steady still wins",
+      "brief": "The old race between a boastful hare and a patient tortoise, told page by page as a bedtime story, ending on what it means for anyone tempted to rush.",
+      "expect": [
+        "storybook_reveal"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Storybook Reveal: a moral tale, warm and calm.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How one page a day turned a girl into a reader",
+      "brief": "A small story about an invented girl who reads one page every night before bed, and how the habit quietly grows until she has read a whole shelf. Told as a gentle tale about how small habits compound.",
+      "expect": [
+        "storybook_reveal"
+      ],
+      "ok": [
+        "illustrated",
+        "bean_explainer",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Storybook Reveal: a habit told through one character's small story. Pair probe vs Bean Explainer: one story, not a list of tips.",
+      "inserts_expect": []
+    },
+    {
+      "title": "The fisherman who already had enough",
+      "brief": "The parable of a rich visitor who tells a happy village fisherman to work harder, buy boats and retire one day to fish in peace, which is what the fisherman already does. A calm tale about contentment.",
+      "expect": [
+        "storybook_reveal"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Storybook Reveal: a parable with a lesson, one protagonist, no facts or figures.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How the teddy bear got its name",
+      "brief": "A light origin story: a 1902 hunting trip, a president who refused to shoot a tied bear, a newspaper cartoon, and the toymakers who named a stuffed bear after him.",
+      "expect": [
+        "storybook_atlas"
+      ],
+      "ok": [
+        "archive_engraving",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe Storybook Reveal vs Storybook Atlas: real history with a named person stays with Storybook Atlas; a told tale cannot show a real person."
+    },
+    {
+      "title": "A week in the life of a remote worker who never takes a break",
+      "brief": "Follow Sam, a remote worker, from Monday to Friday: the laptop at breakfast, the skipped lunch, the late calls, the colleague who notices, and the small changes Sam makes. Everyday scenes with recurring characters.",
+      "expect": [
+        "illustrated"
+      ],
+      "ok": [
+        "storybook_reveal",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe Storybook Reveal vs Illustrated: recurring characters in an everyday modern story told in scenes stay with Illustrated."
+    },
+    {
+      "title": "Five ways to stop putting things off",
+      "brief": "A quick list of tricks against procrastination: the two-minute rule, breaking a task into tiny steps, a timer, removing the phone, and a reward at the end. One tip each.",
+      "expect": [
+        "bean_explainer"
+      ],
+      "ok": [
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe Storybook Reveal vs Bean Explainer: a list of tips, one idea each, stays with Bean Explainer even when the subject is a habit."
     }
   ]
 }

@@ -1,0 +1,109 @@
+{
+  "id": "storybook_reveal",
+  "label": "Storybook Reveal",
+  "order": 140,
+  "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "wipe"
+  },
+  "dimension": "2d",
+  "preview": "storybook_reveal",
+  "tagline": "A warm tale told page by page: each picture drawn in pencil first, then flooded with colour.",
+  "renderer": "dom",
+  "canvas": "light",
+  "authoring_skill": "tubematic-storybook-reveal",
+  "allows": {
+    "figures": true,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": true,
+    "gpu": false
+  },
+  "mascot": false,
+  "messages": {
+    "openai_key": "OpenAI API key not set. The Storybook Reveal visual style is built on generated picture-book pages, and only OpenAI makes them. Add an OpenAI key on the dashboard Settings page, or choose another visual style.",
+    "mascot": "Mascots are not available in the Storybook Reveal style: every page is one painted picture of the story's own hero, and a cartoon character on top would break the book. Choose another visual style, or no mascot."
+  },
+  "review": "- This video is a Storybook Reveal tale, and the following are its intended, approved look: a cream picture-book page with faint paper grain; a short hand-lettered title in capitals near the top with a small brown pencil swash under it, wiping in from left to right; one large rounded, softly vignetted panel in the middle holding a square children's-book illustration (coloured pencil and watercolour on cream paper) whose edges fade into the panel's paper; on each page the illustration first appears as a grey pencil drawing wiping in from left to right, then, within about a second, its colour floods over the drawing from left to right with a soft, ragged watercolour edge, and the picture then pushes in very slowly; the same hero, in the same clothes, on every page; a page turning from its bottom-right corner with a pale folded flap on a few pages, a hard cut on the others; captions in a plain serif low on the page with no plate, the whole phrase shown at once and the words still to come in grey; a small page number like '~ 2 ~' near the bottom. The pencil stage, the plain paper around the scene, the slow push and the empty paper around the scene are the style. Do NOT report the pencil drawing as an unfinished picture, the plain paper around the scene as empty space, the title as redundant text, or the soft edge of the colour as a rendering fault, and do not suggest photographs, diagrams, more on-screen text or faster motion: their absence is the style.\n- Do report: a page whose picture does not show what the narration tells at that moment, the hero looking like a different character from one page to another (another face, hair or clothes), a picture of a real or recognisable person, a brand, a logo or lettering inside a picture, garbled lettering in a title, a title that contradicts the narration, a page whose colour never arrives, a picture cut off hard at the panel's edge, captions over the picture or the title, text too small to read on a phone, and a stretch of more than about six seconds where nothing on the page changes apart from the slow push.\n",
+  "captions": {
+    "look": "fill",
+    "background": "none",
+    "position": 0.72,
+    "color": "#38382F",
+    "fontFamily": "'Storybook Lora', Lora, Georgia, serif",
+    "fontSize": 58,
+    "maxWords": 5
+  },
+  "script": "Every beat's `visual` is a **page** brief: the page's short title and the one picture of it (the hero, where they are and what they do), plus the word the colour should arrive on (\"title ONE STORMY NIGHT; the keeper's beam reaching a small boat in the waves; colour on 'beam'\"). The video is a told tale: one protagonist, an invented hero with no name or a plain made-up first name, in a small story that ends on a moral or a lesson for today. Tell it calmly and warmly, like a bedtime story read aloud, in the past tense, with short sentences. Give each page one moment of the story, about three to eight seconds, and a title of one to three words. Describe the hero once in the sheet (who they are, their age, hair and clothes) and never change their clothes between pages. Say the lesson plainly at the end, on the last page. Never a real or named person, never a brand or a logo, and no numbers, charts or step-by-step instructions.",
+  "picture": {
+    "opening": "Page 1 is the hero's first picture: its title and pencil drawing are on screen from frame 0, and the colour floods in on a word within the first second.",
+    "turn": "A new page (a new title and picture, often turning with a curl) on the first word of a turn or a re-opening, or the colour flooding in on that word.",
+    "payoff": "The page of the lesson: its title names the lesson and its colour floods in on the payoff word.",
+    "ending": "Hold on the lesson's page to the last frame. No closing card, logo, recap or sign-off after it."
+  },
+  "routing": {
+    "best_for": [
+      "a fable, myth or folk tale retold as a lesson for today",
+      "a moral story with one protagonist",
+      "a habit or a piece of psychology told through one character's small story",
+      "a calm, warm bedtime-style story"
+    ],
+    "avoid_for": [
+      "real history, inventions and named people (Storybook Atlas or Archive and Engraving fits it)",
+      "an invented hero's everyday adventure with no lesson at its end, or recurring characters in a modern story told in scenes (Illustrated fits it)",
+      "a mechanism, data or a step-by-step process (Stick Explainer or Whiteboard fits it)",
+      "a list of tips, one idea each (Bean Explainer fits it)",
+      "a punchy tech hook"
+    ],
+    "cannot_show": "real people, diagrams or numbers: each page is one painted storybook picture",
+    "signals": [
+      "the topic is a tale with one protagonist and a lesson",
+      "the story can be told in a few calm pages, one moment each",
+      "an invented hero carries the idea better than facts or figures",
+      "a warm, gentle narrator suits it"
+    ],
+    "moods": [
+      "warm",
+      "calm",
+      "gentle",
+      "nostalgic"
+    ],
+    "images_per_video": "up to 12 painted pages and one hero sheet",
+    "images": 13
+  },
+  "pictures": {
+    "cap_message": "This Storybook Reveal video already has {count} page pictures, counting any being made now, the most a video may use ({cap}). Show one of them again on another page, or regenerate one under its own name to replace it.",
+    "apart": [
+      "hero"
+    ],
+    "still_aspect": "1:1",
+    "still_style": "Children's picture-book illustration in coloured pencil with soft watercolour washes on cream paper, gentle warm light, simple rounded shapes, uneven hand-drawn outlines, the scene in the middle of the page with plenty of plain paper around it. No text, no letters, no numbers, no logos, no frame, no border.",
+    "still_lead": "The character from the reference picture, the same face, hair and clothes exactly,",
+    "sheet": {
+      "name": "hero",
+      "lead": "A character sheet for a children's picture book: the story's hero,",
+      "style": "Show the hero full body three times side by side: front view, three-quarter view and back view, in the same clothes in all three, in a neutral standing pose. Coloured pencil and soft watercolour on plain cream paper, uneven hand-drawn outlines. No text, no labels, no letters, no background scenery."
+    },
+    "treatments": [
+      "pencil"
+    ]
+  },
+  "extra": {
+    "turns": [
+      "cut",
+      "curl"
+    ],
+    "treatment": "pencil",
+    "sheet": "hero",
+    "reveal": [
+      "title",
+      "pencil",
+      "colour",
+      "push"
+    ]
+  }
+}

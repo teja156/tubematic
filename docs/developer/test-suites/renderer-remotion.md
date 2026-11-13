@@ -6,8 +6,12 @@ The suite covers the pure TypeScript helpers of the Remotion project's
 [`BeanExplainer`](../09-remotion-project.md#beanexplainer),
 [`Whiteboard`](../09-remotion-project.md#whiteboard),
 [`TerminalDoc`](../09-remotion-project.md#terminaldoc),
-[`UnderTheHood`](../09-remotion-project.md#underthehood) and
-[`CaseFileStory`](../09-remotion-project.md#casefilestory) scenes. Each test file sits beside the code
+[`UnderTheHood`](../09-remotion-project.md#underthehood),
+[`CaseFileStory`](../09-remotion-project.md#casefilestory),
+[`PaperDiorama`](../09-remotion-project.md#paperdiorama),
+[`ArchiveEngraving`](../09-remotion-project.md#archiveengraving),
+[`EditorialCollage`](../09-remotion-project.md#editorialcollage) and
+[`StorybookReveal`](../09-remotion-project.md#storybookreveal) scenes. Each test file sits beside the code
 it covers as `*.test.ts`. The tests run under Node 22 with no browser, canvas or render, because the
 math and geometry classes of `three` work in Node without a DOM.
 
@@ -150,6 +154,71 @@ Covers `contract.ts`, `stage.ts` and the icon tables
   stretch over the stillness limit.
 - Under the `fill` caption look a word is grey until it is spoken, then the text colour, and a
   text colour the blend cannot parse switches on the word's frame without throwing.
+
+## Paper Diorama
+
+### `src/scenes/installed/paperDiorama/paperDiorama.test.ts`
+
+Covers `contract.ts`, `stage.ts`, `paint.ts`, `critter.ts` and the shipped props
+([Paper Diorama](../10-scene-authoring.md#paper-diorama)).
+
+- The pop, a prop's box in a slot, the stage scale, the banner's font size and the critter's box are
+  computed as in the shared cases `mcp/tests/test_paper_diorama.py` runs.
+- An item is hidden before its frame, pops in, moves to another slot, swaps its prop and leaves on
+  its events, and the critter changes its face on its event.
+- A torn reveal grows over its frames, and a ring is drawn partway when it is partly through.
+- A rounded rectangle's outline stays inside its box with a rough edge of about a pixel.
+- Every shipped prop uses the palette and keeps its pieces inside its box, the critter is drawn
+  inside its own box in every expression, and every room has its picture.
+
+## Archive and Engraving
+
+### `src/scenes/installed/archiveEngraving/archiveEngraving.test.ts`
+
+Covers `contract.ts`, `stage.ts` and `emblems.ts` ([Archive and Engraving](../10-scene-authoring.md#archive-and-engraving)).
+
+- Title layout, the plate's push and crop, a still's point on the page, the ruler's scale and a
+  cleaned title word are computed as in the shared cases `mcp/tests/test_archive_engraving.py` runs.
+- The renderer draws the "Illustration" and "Recreation" footnotes itself, and a person has no
+  picture, face or portrait field in the contract.
+- The ruler's marker slides from one year to the next, a document line writes on and a route is drawn
+  dot by dot, and the magnifier goes to the side away from its point.
+- Plates are numbered in Roman numerals.
+- Every emblem is drawn inside the roundel's field and the ring stays inside its box.
+
+## Editorial Collage
+
+### `src/scenes/installed/editorialCollage/editorialCollage.test.ts`
+
+Covers `contract.ts`, `stage.ts` and `paint.ts` ([Editorial Collage](../10-scene-authoring.md#editorial-collage)).
+
+- The stepped motion, the station layout, the camera, the headline layout, a typed index line, a
+  figure's text and a cleaned headline word are computed as in the shared cases
+  `mcp/tests/test_editorial_collage.py` runs.
+- Stations zig-zag down the desk, a column each side. The camera rests, then glides for
+  `TIMING.glide` frames from a station's start, and never scales.
+- Pieces move on twelve steps a second, the string sags below the straight line between its pins, the
+  pen ellipse is an unclosed stroke, and a figure counts up from zero over `TIMING.count` frames.
+- Every hero kind, at every picture aspect, stays inside the station's zones.
+- The renderer paints the "Illustration" and "Recreation" notes itself, which no data can switch
+  off, and the contract has no field for a person's face.
+
+## Storybook Reveal
+
+### `src/scenes/installed/storybookReveal/storybookReveal.test.ts`
+
+Covers `contract.ts` and `stage.ts` ([Storybook Reveal](../10-scene-authoring.md#storybook-reveal)).
+
+- The title size, the picture's fit in the panel, the push and where the colour lands are computed as
+  in the shared cases `mcp/tests/test_storybook_reveal.py` runs.
+- The title wipes in (whole at once on the first page), the pencil wipes in (whole at frame 0 on a
+  first page that opens on it), and the push holds until the colour has landed and never goes past it.
+- A square still fills the panel's height, whole and centred, a tall one stays whole inside the panel,
+  and the push keeps its focus point.
+- The colour flood starts left of the panel and ends right of it even at its softest edge, runs from
+  top to bottom with a ragged edge, and the page curl turns the old page away over `TIMING.curl`
+  frames from the bottom-right corner.
+- The scene's source holds no SVG filter, gradient or blur, which keeps its render cost low.
 
 ## System Flow
 
