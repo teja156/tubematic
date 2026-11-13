@@ -920,6 +920,9 @@ It checks:
   narration, the video's own moves and their files, no still stretch over 3 seconds). No other style
   may use `TerminalDoc`. The style pack's caption settings, in the skin's colours, fill every
   `subtitles` key the config leaves out. The rules are in [Terminal Doc](10-scene-authoring.md#terminal-doc).
+- `inserts`, when the config has them or the script marks a segment, pass `mcp/inserts.py::check`
+  and each insert style's own `check_insert`; `CodeScenes` and `FormatPacks` are never one of the
+  `scenes`. The rules are in [Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts).
 - An `under_the_hood` video holds the one installed `UnderTheHood` scene, and its plates and events
   pass `mcp/under_the_hood.py` (plates and poses on word starts, at most 12 different photographs,
   each covering the plate band, pinned points that stay visible through the push, chips inside the

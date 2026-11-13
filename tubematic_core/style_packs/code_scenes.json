@@ -1,0 +1,77 @@
+{
+  "id": "code_scenes",
+  "label": "Code Scenes",
+  "order": 220,
+  "experimental": false,
+  "role": "insert",
+  "insert": {
+    "max_seconds": 9,
+    "palettes": [
+      "dark",
+      "light"
+    ],
+    "props_key": "codeScenes",
+    "component": "CodeScenes",
+    "block": [200, 1340],
+    "review": "- Between these times the video cuts to a short Code Scenes insert, on purpose: a code editor card with line numbers, a step label and progress segments above it, the code changing in place (pieces of code gliding to new places while unchanged code holds still), a highlight bar on the lines being discussed with the other lines dimmed, sometimes a red squiggle under part of a line with a red-ruled message below it, and sometimes a small OUTPUT pane under the card. On a light video the card is white; on a dark video it is dark purple-grey. The change of look into it and out of it, and the video's own captions staying on screen over it, are intended. Do NOT report the switch of style, the code itself, the dimmed lines or the absence of pictures inside it as defects.\n- Do report inside it: code or text cut off at the frame edge or running into the captions, text too small to read on a phone, a highlight on lines the narration is not talking about at that moment, code that does not do what the narration says it does, and an OUTPUT pane whose lines are not what the code on screen would print (wrong values, wrong error message, output from code that is not shown).\n"
+  },
+  "dimension": "2d",
+  "preview": "code_scenes",
+  "tagline": "A code editor card whose code changes step by step as the narration explains it.",
+  "renderer": "dom",
+  "canvas": "dark",
+  "authoring_skill": "tubematic-code-scenes",
+  "allows": {
+    "figures": false,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "review": "- This video shows short Code Scenes inserts: a code editor card that changes step by step, a highlight on the lines being discussed, an error callout and a small output pane. Do NOT report the code, the dimmed lines or the absence of pictures as defects.\n- Do report: code or text cut off at the frame edge, text too small to read on a phone, a highlight on lines the narration is not talking about, and output that is not what the code on screen prints.\n",
+  "captions": {
+    "background": "outline",
+    "position": 0.76,
+    "color": "#ffffff",
+    "fontFamily": "Barlow, system-ui, sans-serif",
+    "fontSize": 64,
+    "maxWords": 3
+  },
+  "script": "A segment marked as a Code Scenes insert reads code to the viewer: name the line or the piece of code the viewer should look at (\"the f-string on line three\", \"the loop's last index\"), one change per sentence, in the order the code changes (the bug, what it does, the fix). Say what the code prints only when it is certain from the code itself, because it becomes the output pane. Keep it to code a viewer can read in a few seconds: about fifteen short lines at most. A command typed at a shell and what it prints is a Terminal Doc insert, not this one.",
+  "picture": {
+    "opening": "Not an opening style: an insert never opens a video. Its first frame already shows the card with its code (or the first characters being typed), never an empty board.",
+    "turn": "A new step on the word that names what changes: the highlight moves, the error callout opens, or the code morphs into its next version.",
+    "payoff": "Not a payoff style: the payoff belongs to the main style.",
+    "ending": "Not an ending style: the main style takes the last segment."
+  },
+  "routing": {
+    "best_for": [
+      "a few lines of source code read on screen: what a line does, a bug in it, or its fix",
+      "two versions of the same code compared: before and after a change",
+      "a vulnerable snippet and the change that makes it safe (an injection, an off-by-one, a missing check)",
+      "what a short snippet prints or the error it raises, when the narration walks through the code"
+    ],
+    "avoid_for": [
+      "a command typed at a shell and what it prints (Terminal Doc shows it)",
+      "one string, password or hash transformed step by step (Terminal Doc shows it)",
+      "components passing requests or messages between each other (System Flow shows them)",
+      "a topic where no line of code is read: an idea, a story or a real thing the viewer must see",
+      "the opening or the payoff of the video, which belong to the main style"
+    ],
+    "cannot_show": "any picture of a real thing, a person, a place or a diagram: only source code, a highlight, an error message and a few lines of output",
+    "signals": [
+      "the sentence quotes or describes a specific line or piece of code",
+      "a snippet is followed by its fix, or two versions of code are compared",
+      "the narration says what a snippet prints or the error it raises"
+    ],
+    "moods": [
+      "practical",
+      "precise",
+      "focused"
+    ],
+    "images_per_video": "0",
+    "images": 0
+  }
+}

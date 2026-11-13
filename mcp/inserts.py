@@ -18,17 +18,17 @@ from tubematic_core import inserts as tinserts
 from tubematic_core import visual_styles as tvs
 
 H = 1920
-# Where each insert style draws on the frame, top to bottom, at shift 0: the
-# headline and diagram band of SystemFlow (systemFlow/camera.ts BAND, the
-# header 0.115 of the height above it) and the stage slots of TerminalDoc
-# (terminalDoc/contract.ts SLOTS, context top to note bottom). The shift moves
-# this block clear of the main style's captions.
-BLOCKS = {"system_flow": (221, 1325), "terminal_doc": (230, 1344)}
+# Where each insert style draws on the frame, top to bottom, at shift 0, from
+# its pack's insert.block: for SystemFlow the headline and diagram band
+# (systemFlow/camera.ts BAND, the header 0.115 of the height above it), for
+# TerminalDoc the stage slots (terminalDoc/contract.ts SLOTS, context top to
+# note bottom). The shift moves this block clear of the main style's captions.
+BLOCKS = {sid: tuple(p["insert"]["block"]) for sid, p in tvs.INSERT_PACKS.items()}
 # Room kept between the captions and an insert, and at the frame's edges.
 CAPTION_GAP = 24
 EDGE = 60
 MAX_ERRORS = 12
-ENTRY_KEYS = {"style", "startFrame", "durationInFrames", "props", "src", "palette", "shift"}
+ENTRY_KEYS = {"style", "startFrame", "durationInFrames", "props", "src", "palette", "shift", "firstFrames"}
 
 
 def _int(v) -> bool:
@@ -256,9 +256,14 @@ def cue_errors(cues, spans: list[tuple[int, int]]) -> list[str]:
     return out
 
 
-def fill(config: dict, *, canvas: str, transition: str) -> dict:
-    """The config with each insert's src, palette and shift, and the main
-    style's transition, filled in. The agent writes none of these."""
+def fill(config: dict, *, canvas: str, transition: str, first_frames: dict | None = None) -> dict:
+    """The config with each insert's src, palette, shift and firstFrames, and
+    the main style's transition, filled in. The agent writes none of these.
+
+    first_frames: insert style id -> a function(entry) giving the frames its
+    first element takes to settle. The renderer holds that frame through the
+    insert's way in and its first frames, so an insert never opens on an empty
+    board (CompositionBuilder's Freeze)."""
     entries = config.get("inserts") or []
     if not entries:
         config.pop("inserts", None)
@@ -269,8 +274,11 @@ def fill(config: dict, *, canvas: str, transition: str) -> dict:
         style = e["style"]
         block = tvs.PACKS[style]["insert"]
         palette = canvas if canvas in block["palettes"] else block["palettes"][0]
+        settle = (first_frames or {}).get(style)
+        held = settle(e) if settle else 0
         out.append({**e, "src": block["component"], "palette": palette,
-                    "shift": shift_for(style, config.get("subtitles"))})
+                    "shift": shift_for(style, config.get("subtitles")),
+                    "firstFrames": max(0, min(int(held), tinserts.FIRST_FRAMES_MAX, e["durationInFrames"] - 1))})
     config["inserts"] = out
     config["insertTransition"] = transition
     return config

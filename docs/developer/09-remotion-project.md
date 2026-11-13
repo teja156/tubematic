@@ -127,8 +127,8 @@ do not move, so audio sync is unaffected.
 
 ### Insert scenes
 
-An insert is a short scene in an insert style (System Flow, Terminal Doc) drawn over the main
-style for a window of frames. The rules for when a video has inserts and where they go are in
+An insert is a short scene in an insert style (System Flow, Terminal Doc, Code Scenes, Format Packs)
+drawn over the main style for a window of frames. The rules for when a video has inserts and where they go are in
 [Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts).
 
 `CompositionBuilder` wraps each entry of the config's `inserts` list in a `<Sequence>` at its
@@ -146,8 +146,21 @@ The main style names one transition into and out of its inserts (`insertTransiti
 transition runs just outside the insert's window: the way in over the frames before it and the way
 out over the frames after it, so the whole window is on screen and the main style is already on its
 next picture as the insert leaves. The insert's `Sequence` covers those frames too, and the component
-holds its first frame through the way in and its last through the way out (`InsertPlacement.lead`). `inserts/transitions.ts` holds the transitions as pure functions of the frame
-(`insertProgress`, `activeInsert`, `insertLook`), and `TRANSITION_FRAMES` gives their lengths.
+holds its first frame through the way in and its last through the way out (`InsertPlacement.lead`).
+`inserts/transitions.ts` holds the transitions as pure functions of the frame (`insertProgress`,
+`activeInsert`, `insertLook`), and `TRANSITION_FRAMES` gives their lengths.
+
+An insert never opens on an empty board. Each entry carries `firstFrames`, the frames its first
+element takes to settle (System Flow's first node and its label, Terminal Doc's first word; Code
+Scenes and Format Packs draw theirs settled on their first frame, so 0). `write_scene_config` fills
+it from the insert style's module (`server.py::_INSERT_FIRST_FRAMES`), capped at
+`tubematic_core/inserts.py::FIRST_FRAMES_MAX`. `CompositionBuilder` wraps every insert's scene in a
+Remotion `<Freeze>` at `transitions.ts::heldFrame`: until the Sequence reaches that frame, the scene
+shows the frame on which its first element has settled. The transition therefore reveals content,
+and later elements animate in as written. The hold never reaches the insert's next event, so nothing
+timed after the first element shows early; a push, a glow or a stream of guesses on the first frame
+runs on as the insert plays and does not lengthen the hold. The text-layout audit checks the frame before the window and its first frame for
+text of the insert's own (`text_audit.insert_open_passes`).
 
 | Transition | Frames | What it looks like |
 |---|---|---|
@@ -392,7 +405,8 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
   File Story checks; no other video uses `CaseFileStory`
   ([Scene Authoring](10-scene-authoring.md#case-file-story)).
 - `inserts`, if present or if the script marks a segment `insert`, passes `mcp/inserts.py::check`:
-  the window rules, the style's own checks (`system_flow.check_insert`, `terminal_doc.check_insert`),
+  the window rules, the style's own checks (`system_flow.check_insert`, `terminal_doc.check_insert`,
+  `code_scenes.check_insert`, `format_packs.check_insert`),
   and no main scene starting inside a window. Each main style's checks treat the windows as quiet
   spans, and no mascot cue may fall inside one
   ([Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts)).
@@ -460,7 +474,8 @@ rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 `BeanExplainer`, `Whiteboard`, `UnderTheHood` and `CaseFileStory` are referenced the same way, by
 videos of their own style only. `SystemFlow` and `TerminalDoc` are drawn as
 [insert scenes](#insert-scenes) from the `inserts` list, and as a video's one scene only for a video
-that holds their style from an earlier version. The other
+that holds their style from an earlier version. `CodeScenes` and `FormatPacks` are insert scenes
+only, and `write_scene_config` refuses them in `scenes`. The other
 files are wrappers and helpers that a scene imports. The directory's `README.md` is the catalogue the
 agent reads.
 
@@ -601,6 +616,27 @@ scene imports them under a `delayRender` handle, and one that fails to load fail
 `TerminalMovePreview` composition, from a bundle entry it writes per call into `terminal-tools/.tmp/`
 (ignored by git) that imports only that video's move files. The contract and the reason the wall is
 a canvas are in [Terminal Doc](10-scene-authoring.md#terminal-doc).
+
+### `CodeScenes`
+
+`CodeScenes` draws a Code Scenes insert from `props.codeScenes`: an editor card whose code morphs
+from step to step, a focus bar, an error squiggle and callout, and an output pane; its helpers are
+in `codeScenes/`. It colours the code with Shiki (the `shiki`, `@shikijs/langs` and
+`@shikijs/themes` dependencies) synchronously during the render, from grammars bundled with the
+scene. Given an `insert` prop it times its steps from `origin`, takes its white card when `palette`
+is `light`, and moves its layout by `shift` with a positioned offset. It loads JetBrains Mono and
+Barlow from `public/fonts/` before the first frame. The contract is in
+[Code Scenes](10-scene-authoring.md#code-scenes).
+
+### `FormatPacks`
+
+`FormatPacks` draws a Format Packs insert from `props.formatPacks`: one format (a chat thread, a
+numbered list, a quiz board or a news strap) per insert; its helpers are in `formatPacks/`. It draws
+generic chrome only, and an EXAMPLE tag on every chat and on a strap with no `source`. Given an
+`insert` prop it times its arrivals from `origin`, takes its paper look when `palette` is `light`,
+and moves its layout by `shift` with a positioned offset. It loads Barlow and IBM Plex Mono from
+`public/fonts/` before the first frame. The contract is in
+[Format Packs](10-scene-authoring.md#format-packs).
 
 ### `UnderTheHood`
 
@@ -782,6 +818,12 @@ beside it (`OFL-Kalam.txt`). Its shipped doodles (`whiteboard/doodles.json`) are
 
 `TerminalDoc`'s fonts in `public/fonts/` are IBM Plex Mono and VT323, each under the SIL Open Font
 License 1.1, with the license beside them.
+
+`CodeScenes` uses the JetBrains Mono and Barlow files in `public/fonts/` (SIL Open Font License 1.1).
+Its syntax colouring comes from Shiki and its grammars and themes, under the MIT License.
+
+`FormatPacks` uses the Barlow and IBM Plex Mono files in `public/fonts/` (SIL Open Font License
+1.1). Its phone, bubbles, cards and marks are original drawings.
 
 `UnderTheHood`'s presenter is an original drawing. Its fonts are the Space Grotesk and JetBrains Mono
 files in `public/fonts/` (SIL Open Font License 1.1). Its photographs are generated for each video.

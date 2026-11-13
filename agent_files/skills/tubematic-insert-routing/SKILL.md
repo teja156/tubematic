@@ -64,6 +64,13 @@ when all of these hold:
    the main style shows it and the beat is not an insert beat.
 4. The beat can be said in one segment of at most about 8 seconds of narration (about 20 words).
 
+**Two candidates for one beat.** Several insert styles put text on a screen, so a beat can look like
+a fit for two of them. Their `avoid_for` entries name the beats that belong to another candidate
+("a command typed at a shell and what it prints (Terminal Doc shows it)"). When a beat matches one
+candidate's `best_for` and another candidate's `avoid_for` sends it elsewhere, it is an insert beat
+only for the candidate the `avoid_for` names. Decide by what the narration is about: source code
+being read or fixed, a command at a shell, one string being transformed, messages between people.
+
 ## Step 3: decide
 
 - Choose the candidates that have at least one insert beat, at most `max_styles`.

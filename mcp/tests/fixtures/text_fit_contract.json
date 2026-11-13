@@ -1,0 +1,101 @@
+{
+  "_about": "Shared cases for the one-line width estimate and the line count in mcp/text_fit.py and renderer/remotion/src/scenes/installed/fitText.ts. mcp/tests/test_text_fit.py and fitText.test.ts run them on both sides.",
+  "widths": [
+    {
+      "text": "Oh no! You ok?",
+      "size": 44,
+      "spacing": 0,
+      "width": 305.8
+    },
+    {
+      "text": "WWWW",
+      "size": 40,
+      "spacing": 0,
+      "width": 147.2
+    },
+    {
+      "text": "iiii",
+      "size": 40,
+      "spacing": 0,
+      "width": 48.0
+    },
+    {
+      "text": "SQL INJECTION",
+      "size": 40,
+      "spacing": 2,
+      "width": 324.4
+    },
+    {
+      "text": "send 😀",
+      "size": 44,
+      "spacing": 0,
+      "width": 163.24
+    }
+  ],
+  "fits": [
+    {
+      "text": "Oh no",
+      "max": 600,
+      "base": 44,
+      "min": 30,
+      "spacing": 0,
+      "size": 44
+    },
+    {
+      "text": "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+      "max": 800,
+      "base": 34,
+      "min": 12,
+      "spacing": 0,
+      "size": 18
+    },
+    {
+      "text": "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+      "max": 300,
+      "base": 44,
+      "min": 30,
+      "spacing": 0,
+      "size": 30
+    },
+    {
+      "text": "THE 'HI MUM' SCAM",
+      "max": 620,
+      "base": 56,
+      "min": 36,
+      "spacing": 1,
+      "size": 56
+    }
+  ],
+  "wraps": [
+    {
+      "text": "Hi Mum, I dropped my phone, this is my new number",
+      "size": 44,
+      "max": 580,
+      "lines": 3
+    },
+    {
+      "text": "WWWWWWWWWWWWWWWWWWWWWW",
+      "size": 44,
+      "max": 580,
+      "lines": 2
+    },
+    {
+      "text": "short",
+      "size": 44,
+      "max": 580,
+      "lines": 1
+    },
+    {
+      "text": "I need to pay a bill today, can you send £800?",
+      "size": 44,
+      "max": 580,
+      "lines": 2
+    },
+    {
+      "text": "Someone you know, texting from a number you don't",
+      "size": 36,
+      "max": 686,
+      "lines": 2
+    }
+  ]
+}

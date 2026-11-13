@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { cartoon3dAvailable, illustratedAvailable, previewableRows, previewUrls, routeLabel, styleGroups, styleLabel, videoStyleId, videoStyleLabel } from "@/lib/visualStyles";
-import { PACK_STYLES } from "./packStyles";
+import { INSERT_IDS, PACK_STYLES } from "./packStyles";
 
 describe("illustratedAvailable", () => {
   it("is false when the masked key is empty or missing", () => {
@@ -55,12 +55,13 @@ describe("styleGroups", () => {
   });
 
   it("lists insert styles in their own group, last, and never lets them be picked", () => {
-    const styles = PACK_STYLES.map((s) => (s.id === "system_flow" || s.id === "terminal_doc" ? { ...s, role: "insert" as const } : s));
+    const styles = PACK_STYLES.map((s) => (INSERT_IDS.includes(s.id) ? { ...s, role: "insert" as const } : s));
     const gs = styleGroups(styles, true, { status: "working" });
     expect(gs.map((g) => g.key)).toEqual(["top", "2d", "3d", "insert"]);
-    expect(gs[3].rows.map((r) => r.value).sort()).toEqual(["system_flow", "terminal_doc"]);
+    expect(INSERT_IDS).toEqual(expect.arrayContaining(["system_flow", "terminal_doc", "code_scenes", "format_packs"]));
+    expect(gs[3].rows.map((r) => r.value).sort()).toEqual([...INSERT_IDS].sort());
     expect(gs[1].rows.map((r) => r.value)).not.toContain("system_flow");
-    expect(unchoosable(gs).sort()).toEqual(["system_flow", "terminal_doc"]);
+    expect(unchoosable(gs).sort()).toEqual([...INSERT_IDS].sort());
     expect(row(gs, "system_flow").preview).toBe("system_flow");
   });
 

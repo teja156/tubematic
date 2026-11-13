@@ -359,7 +359,8 @@ Files a topic at `TOPIC_PROPOSED`. Required: `topic`, `strategy`, `producibility
   id names the video's job directory.
 - `project_id` names no domain, `title` is not a string, or `voice_id` is not on the roster.
 - `visual_style` is not `auto` or a main [style pack](10-scene-authoring.md#style-packs) id. An
-  insert style (`system_flow`, `terminal_doc`) is refused with `visual_styles.py::insert_style_error`
+  insert style (`system_flow`, `terminal_doc`, `code_scenes`, `format_packs`) is refused with
+  `visual_styles.py::insert_style_error`
   ([Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts)).
 - `visual_style` is `illustrated`, `under_the_hood` or `case_file_story` and no OpenAI key is stored (the settings row
   or `OPENAI_API_KEY`).
@@ -506,7 +507,8 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 - `script_profile_id` must be a `READY` profile that is not archived, or `""` for none.
 - `visual_style` must be `auto` or a [style pack](10-scene-authoring.md#style-packs) id.
   `illustrated`, `under_the_hood` and `case_file_story` need a stored OpenAI key and `cartoon_3d`
-  needs a working GPU. A change to an insert style (`system_flow`, `terminal_doc`) is `400`. The
+  needs a working GPU. A change to an insert style (`system_flow`, `terminal_doc`, `code_scenes`,
+  `format_packs`) is `400`. The
   stored value sent again passes, because the approving `PATCH` re-sends it.
 - `insert_mode` must be `auto` or `none` (the video's Inserts setting). `null` is refused.
 - `mascot_id` must be a string. A changed value must be a pickable mascot, needs a GPU `status` of

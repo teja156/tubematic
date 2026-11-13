@@ -46,7 +46,7 @@ def test_the_operator_routes_inserts_between_the_style_and_the_formula():
     assert "`insert_routing.decided` is `false`" in row
 
 
-def test_the_operator_treats_system_flow_and_terminal_doc_as_insert_styles():
+def test_the_operator_treats_every_insert_style_as_an_insert_style():
     text = _skill("tubematic-operator")
     row = _row(text, "| `VOICE_READY` | **Invoke")
     assert "tubematic-inserts" in row
@@ -54,7 +54,9 @@ def test_the_operator_treats_system_flow_and_terminal_doc_as_insert_styles():
     assert "legacy" in row.lower()
     flat = " ".join(text.split())
     assert "`system_flow` replaces" not in flat and "`terminal_doc` replaces" not in flat
-    assert "`system_flow` and `terminal_doc` are **insert styles**" in flat
+    sentence = flat[:flat.index("are **insert styles**")].rsplit(".", 1)[-1]
+    for sid in tvs.INSERT_STYLES:
+        assert f"`{sid}`" in sentence, sid
 
 
 # --- the script writer ------------------------------------------------------
@@ -121,6 +123,10 @@ def test_cartoon_3d_takes_no_inserts():
 
 # --- the insert styles' own skills ------------------------------------------
 
+# Insert styles that were whole-video styles before they became inserts.
+LEGACY_WHOLE_VIDEO_STYLES = {"system_flow", "terminal_doc"}
+
+
 def test_the_insert_styles_skills_open_with_an_as_an_insert_section():
     for sid in tvs.INSERT_STYLES:
         name = tvs.PACKS[sid]["authoring_skill"]
@@ -130,8 +136,11 @@ def test_the_insert_styles_skills_open_with_an_as_an_insert_section():
         for phrase in ("tubematic-inserts", "one entry of the config's `inserts`, not a scene",
                        "insert's `startFrame`", "Leave `subtitles` alone", "No mascot cue"):
             assert phrase in section, (name, phrase)
-        # the legacy whole video still takes the whole skill
-        assert "legacy whole video" in text, name
+        # A style that once made whole videos still finishes the ones voiced
+        # before it became an insert; a style that was only ever an insert has
+        # no such videos.
+        if sid in LEGACY_WHOLE_VIDEO_STYLES:
+            assert "legacy whole video" in text, name
 
 
 def test_the_as_an_insert_sections_state_the_validators_limits():

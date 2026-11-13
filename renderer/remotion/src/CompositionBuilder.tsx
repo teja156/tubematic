@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   AbsoluteFill,
   Audio,
+  Freeze,
   Sequence,
   continueRender,
   delayRender,
@@ -13,7 +14,7 @@ import { TextRevealScene, TimelineWord } from "./scenes/TextRevealScene";
 import Subtitles, { SubtitleConfig } from "./scenes/installed/Subtitles";
 import Watermark from "./Watermark";
 import { MascotCue, MascotLayer } from "./mascot/MascotLayer";
-import { TRANSITION_FRAMES, activeInsert, insertLook, transitionOf, type InsertWindow } from "./inserts/transitions";
+import { TRANSITION_FRAMES, activeInsert, heldFrame, insertLook, transitionOf, type InsertWindow } from "./inserts/transitions";
 
 // ── Types (the shape of scene-config.json; docs/developer/09-remotion-project.md) ───
 
@@ -84,6 +85,10 @@ interface InsertConfig {
   props?: Record<string, unknown>;
   palette?: Canvas;
   shift?: number;
+  /** Frames the insert's first element takes to settle (filled by
+   *  write_scene_config from the insert style's module). The scene holds that
+   *  frame through its way in and its first frames: no insert opens empty. */
+  firstFrames?: number;
 }
 
 /** What an insert scene is given beside its own data. */
@@ -486,13 +491,19 @@ export const CompositionBuilder: React.FC<CompositionBuilderProps> = ({
           <Sequence key={`insert-${i}`} from={ins.startFrame - lead} durationInFrames={ins.durationInFrames + 2 * lead}>
             <InsertFrame durationInFrames={ins.durationInFrames} startFrame={ins.startFrame} lead={lead}
                          transition={transition}>
-              <GeneratedScene
-                src={ins.src}
-                source="installed"
-                durationInFrames={ins.durationInFrames}
-                props={{ ...(ins.props ?? {}), insert: placement }}
-                words={timeline.words}
-              />
+              {/* No insert opens on an empty board: until its first element has
+                  settled, the scene shows the frame on which it has, through the
+                  way in and its first frames. One place for every insert style. */}
+              <Freeze frame={heldFrame(lead, ins.firstFrames, ins.durationInFrames)}
+                      active={(f) => f < heldFrame(lead, ins.firstFrames, ins.durationInFrames)}>
+                <GeneratedScene
+                  src={ins.src}
+                  source="installed"
+                  durationInFrames={ins.durationInFrames}
+                  props={{ ...(ins.props ?? {}), insert: placement }}
+                  words={timeline.words}
+                />
+              </Freeze>
             </InsertFrame>
           </Sequence>
         );
