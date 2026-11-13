@@ -50,6 +50,10 @@ def box(tmp_path, monkeypatch):
 
     t = threading.Thread(target=loop, daemon=True)
     t.start()
+    # Not before the first heartbeat: run_code answers sandbox_unavailable until the daemon has beaten.
+    deadline = time.time() + 5
+    while P.heartbeat_age(spool) is None and time.time() < deadline:
+        time.sleep(0.01)
     yield tmp_path
     stop.set()
     t.join(timeout=5)
@@ -255,3 +259,25 @@ def test_a_wrong_output_pane_is_refused_end_to_end(box):
     assert len(out) == 1 and "['42']" in out[0]
     entry["props"]["codeScenes"]["steps"][0]["output"]["lines"] = ["42"]
     assert cs.output_check(entry, server._snippet_runner) == []
+
+
+def test_concurrent_calls_cannot_all_pass_the_queue_check(tmp_path, monkeypatch):
+    """Without the admission lock every thread sees room and queues (TMDEV-242 review)."""
+    spool = tmp_path
+    (spool / "req").mkdir()
+    P.write_heartbeat(spool)
+    outcomes = []
+
+    def go():
+        try:
+            sc._admit(spool, "python", "print(1)", 5, [])
+            outcomes.append("queued")
+        except sc.SandboxError as e:
+            outcomes.append(e.code)
+
+    real = sc.queue_length
+    monkeypatch.setattr(sc, "queue_length", lambda s: (time.sleep(0.05), real(s))[1])
+    threads = [threading.Thread(target=go) for _ in range(8)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert outcomes.count("queued") == P.MAX_QUEUED and outcomes.count("sandbox_busy") == 8 - P.MAX_QUEUED

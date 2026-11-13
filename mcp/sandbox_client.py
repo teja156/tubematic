@@ -23,6 +23,7 @@ import os
 import secrets
 import shutil
 import stat
+import threading
 import time
 from pathlib import Path
 
@@ -30,6 +31,8 @@ from tubematic_core import jobfiles as tjobs
 from tubematic_core import sandbox_protocol as P
 
 POLL_S = 0.1
+# Makes 'is there room' and 'take the place' one step, so concurrent calls cannot all see room.
+_admit_lock = threading.Lock()
 # Run directories kept per video; the oldest are removed past this.
 MAX_RUNS_KEPT = 20
 RESULT_GRACE_S = 10
@@ -246,6 +249,15 @@ def prune_runs(jobs_dir, video_id: str, keep: int = MAX_RUNS_KEPT) -> None:
         shutil.rmtree(old, ignore_errors=True)
 
 
+def _admit(spool, language: str, code: str, timeout_s: float, inputs) -> tuple[int, str]:
+    """Check there is room and take a place in the queue as one step.
+    Returns (requests ahead, request id)."""
+    with _admit_lock:
+        check_available(spool)
+        ahead = queue_length(spool)
+        return ahead, submit(spool, language, code, timeout_s, inputs)
+
+
 def run(spool, jobs_dir, video_id: str, language: str, code: str, timeout_s: float, input_names) -> dict:
     """One whole run: check, copy in, wait, store out. Raises SandboxError."""
     if language not in P.LANGUAGES:
@@ -257,9 +269,7 @@ def run(spool, jobs_dir, video_id: str, language: str, code: str, timeout_s: flo
     if isinstance(timeout_s, bool) or not isinstance(timeout_s, (int, float)) or not 0 < timeout_s <= P.MAX_TIMEOUT_S:
         raise SandboxError("bad_timeout", f"timeout_s must be between 0 and {P.MAX_TIMEOUT_S}")
     inputs = resolve_inputs(jobs_dir, video_id, input_names)
-    check_available(spool)
-    ahead = queue_length(spool)
-    rid = submit(spool, language, code, timeout_s, inputs)
+    ahead, rid = _admit(spool, language, code, timeout_s, inputs)
     result = wait_for_result(spool, rid, timeout_s, ahead)
     out = clean_result(result)
     if out["error"]:
@@ -277,9 +287,7 @@ def run_snippet(spool, language: str, code: str, timeout_s: float = 5) -> dict |
     try:
         if language not in P.LANGUAGES or len(code.encode("utf-8")) > P.MAX_CODE_BYTES:
             return None
-        check_available(spool)
-        ahead = queue_length(spool)
-        rid = submit(spool, language, code, timeout_s, [])
+        ahead, rid = _admit(spool, language, code, timeout_s, [])
         try:
             return clean_result(wait_for_result(spool, rid, timeout_s, ahead))
         finally:

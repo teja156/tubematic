@@ -332,8 +332,9 @@ def pending(cfg: Config) -> list[Path]:
 
 
 def sweep(cfg: Config, now: float | None = None) -> None:
-    """Remove requests nobody ran and results nobody fetched after STALE_AFTER_S,
-    and any half-written temporary left by a crash."""
+    """Remove requests nobody ran, results nobody fetched and half-written
+    temporaries a crash left, once they are older than STALE_AFTER_S. A
+    temporary is not removed sooner: MCP may still be copying into it."""
     now = time.time() if now is None else now
     for sub in ("req", "done"):
         d = cfg.spool / sub
@@ -344,7 +345,7 @@ def sweep(cfg: Config, now: float | None = None) -> None:
         for n in names:
             p = d / n
             try:
-                if n.startswith(".") or now - p.stat().st_mtime > P.STALE_AFTER_S:
+                if now - p.stat().st_mtime > P.STALE_AFTER_S:
                     shutil.rmtree(p, ignore_errors=True)
             except OSError:
                 pass

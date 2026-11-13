@@ -35,7 +35,7 @@ questions. A step that already finished is skipped, so running it again is safe.
 | 7 | `pipeline_settings` | Stores the rest of the settings | The image model |
 | 8 | `cron` | Writes one entry to your crontab | The poll interval |
 | 9 | `gpu` | Hands an NVIDIA GPU to the renderer, or none | Which GPU, when one is usable |
-| 10 | `renderer` | Pulls or builds the backend image and starts four containers | Nothing |
+| 10 | `renderer` | Pulls or builds the backend image and starts five containers | Nothing |
 | 11 | `dashboard` | Pulls or builds the dashboard image and starts it | Nothing |
 
 One more step, `renderers`, is not part of an install. Run it by name to let other machines render

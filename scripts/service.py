@@ -25,7 +25,7 @@ Options:
   --help, -h    Show this and exit
 
 Services: tubematic-api, tubematic-mcp, tubematic-worker, tubematic-renderer,
-tubematic-dashboard.
+tubematic-sandbox, tubematic-dashboard.
 To upgrade, use upgrade.py instead — it owns the full sequence.
 """
 import os

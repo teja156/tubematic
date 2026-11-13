@@ -166,7 +166,10 @@ def test_sweep_removes_old_results_and_half_written_temporaries(cfg):
     past = time.time() - P.STALE_AFTER_S - 5
     os.utime(old, (past, past))
     D.sweep(cfg)
-    assert not old.exists() and not tmp.exists() and new.exists()
+    assert not old.exists() and tmp.exists() and new.exists()  # a fresh temporary may still be written
+    os.utime(tmp, (past, past))
+    D.sweep(cfg)
+    assert not tmp.exists()
 
 
 def test_the_heartbeat_is_fresh_after_a_beat(cfg):
