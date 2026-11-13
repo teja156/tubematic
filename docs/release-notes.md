@@ -64,6 +64,14 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   for approval, New Video, and a domain's defaults, which every new video in the domain starts with.
   The video's window shows the agent's decision and its reason in an **Inserts** row, and the Script
   tab marks the parts of the script an insert shows.
+- Two more insert styles. **Code Scenes** puts a few lines of real code on an editor card: the lines
+  being read light up, a bug gets a red squiggle and a message, the code changes into its fix, and
+  a small pane shows what it prints. **Format Packs** shows a made-up message thread with a scam's
+  tells circled, a short numbered list, a quiz with a locked answer, or a news strap with a changing
+  number. Format Packs draws no real app or brand: a plain phone frame, phone numbers from the ranges
+  set aside for fiction, and an EXAMPLE tag on every made-up thread or headline.
+  [Insert scenes](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#insert-scenes) has
+  the details.
 
 ### Changed
 

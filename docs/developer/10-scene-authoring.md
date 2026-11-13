@@ -280,11 +280,13 @@ If `generate_character` refuses, the agent comments on the video and ends the se
 Every video has one main style. It carries the opening, the payoff and the ending, and almost every
 second of the video. A video may also carry a few short insert scenes from an insert style, shown
 where the narration reaches what that style shows best: a request travelling between components (a
-System Flow diagram), a password being hashed or a command being typed (a Terminal Doc string). A
-whole video in an insert style is plain, so an insert style is never a video's style.
+System Flow diagram), a password being hashed or a command being typed (a Terminal Doc string), a
+few lines of code being read or fixed (a Code Scenes code card), or a scam text, a short list, a
+quiz or a dated headline (a Format Packs format). A whole video in an insert style is plain, so an
+insert style is never a video's style.
 
-Each pack's `role` says which it is. `system_flow` and `terminal_doc` are insert styles; every other
-pack is a main style, and so is the mixed scene system (`scenes`).
+Each pack's `role` says which it is. `system_flow`, `terminal_doc`, `code_scenes` and `format_packs`
+are insert styles; every other pack is a main style, and so is the mixed scene system (`scenes`).
 
 ### The limits
 
@@ -341,7 +343,7 @@ still cover every frame ([scene-config.json](09-remotion-project.md#scene-config
 |---|---|---|
 | `style` | The agent | The insert style's id |
 | `startFrame`, `durationInFrames` | The agent | The window, on the video's own frames |
-| `props` | The agent | The insert style's data under its props key (`systemFlow`, `terminalDoc`), timed on the video's frames |
+| `props` | The agent | The insert style's data under its props key (`systemFlow`, `terminalDoc`, `codeScenes`, `formatPacks`), timed on the video's frames |
 | `src` | `write_scene_config` | The installed scene that draws the style, from the pack's `insert.component` |
 | `palette` | `write_scene_config` | The video's canvas, which the insert follows |
 | `shift` | `write_scene_config` | Pixels the insert's layout moves down (up when negative) to stay clear of the main style's captions |
@@ -351,8 +353,8 @@ still cover every frame ([scene-config.json](09-remotion-project.md#scene-config
 main style did not choose.
 
 The shift comes from `mcp/inserts.py::shift_for`: the band the captions take (`caption_box`, from
-the `subtitles` position and size) against the band the insert style draws in (`BLOCKS`, read from
-`systemFlow/camera.ts` and `terminalDoc/contract.ts`). Captions in the upper half (Under the Hood's)
+the `subtitles` position and size) against the band the insert style draws in, its pack's
+`insert.block` (`[top, bottom]` in pixels; `inserts.BLOCKS` reads it from every insert pack). Captions in the upper half (Under the Hood's)
 push the insert down; captions in the lower half that reach into it lift it a little. The captions
 never move.
 
@@ -384,8 +386,10 @@ re-composites every frame.
 
 - `mcp/inserts.py::check` runs each window against the marks, the timeline and the limits, then the
   insert style's own check over the window: `system_flow.check_insert` (at most 3 boards, the first on
-  the insert's first frame, the last board's events read before its final 6 frames) and `terminal_doc.check_insert` (at most 3 beats, no custom moves, no
-  skin). `server.py::_INSERT_CHECKS` maps each insert style to its check.
+  the insert's first frame, the last board's events read before its final 6 frames),
+  `terminal_doc.check_insert` (at most 3 beats, no custom moves, no skin), `code_scenes.check_insert`
+  ([Code Scenes](#code-scenes)) and `format_packs.check_insert` ([Format Packs](#format-packs)).
+  `server.py::_INSERT_CHECKS` maps each insert style to its check.
 - The main style's validator gets the windows as `quiet` spans (`mcp/quiet_windows.py`): nothing of
   the main style starts inside one (no cut, no event), and its stillness rule skips them. Case File
   Story also refuses a window over a card, after the term card or over the choice. A scene system
@@ -414,14 +418,21 @@ yet voiced, and leaves them alone from voicing on.
 ### Adding an insert style
 
 - The pack has `"role": "insert"` and an `insert` block: `max_seconds`, the `palettes` it can follow,
-  its `props_key`, the installed `component` that draws it, and the `review` text for the AI review.
+  its `props_key`, the installed `component` that draws it, the `block` it draws in (`[top, bottom]`
+  in pixels before the shift; keep its bottom near 1340 so captions at the usual 0.76 position clear
+  it), and the `review` text for the AI review.
   Its `routing` describes beats, since insert routing scores beats; its `script` says how a marked
   segment is narrated.
 - The scene takes the `insert` prop as above and has a look for every palette it lists.
 - Its module has a `check_insert(entry, …)` over the window and an `insert_*_windows(entry)` for the
-  text audit; register them in `server.py::_INSERT_CHECKS`, in `text_audit.plan_passes`, and its
-  drawing band in `inserts.BLOCKS`.
-- Its authoring skill has an **As an insert** section.
+  text audit; register them in `server.py::_INSERT_CHECKS` and in `text_audit.plan_passes`. A style
+  that was never a whole video also refuses its component in `scenes` (`check_scene_use`, called
+  beside `code_scenes.check_scene_use` in `write_scene_config`).
+- Its authoring skill opens with an **As an insert** section and ends with one **Check and submit**
+  step that hands the entry back to `tubematic-inserts`.
+- Its `routing.avoid_for` names the beats that belong to the other insert styles that also put text
+  or pictures on a screen ("a command typed at a shell (Terminal Doc shows it)"): insert routing
+  settles a beat that fits two candidates by those entries.
 
 ---
 
@@ -804,6 +815,102 @@ The limits make a full board readable: at the pull-back to a whole board of thre
 labels stay at 40 px or more. `mcp/tests/test_system_flow.py` pins `system_flow.py` to `contract.ts`.
 When the config has no `subtitles`, the pack's `captions` fill it. The text-layout audit samples
 each board as if it were a scene.
+
+## Code Scenes
+
+Code Scenes is an insert style only: it has never been a video's style. A `CodeScenes` insert draws
+an editor card with a few lines of real code over the main style for a few seconds
+([Main styles and inserts](#main-styles-and-inserts)). The agent writes no code for the scene; its
+props carry `codeScenes: {lang, file, tag, steps}`, written with the `tubematic-code-scenes` skill.
+A step starts on a word of the narration and does one or more of these:
+
+| Step key | What the scene draws |
+|---|---|
+| `code` | The card morphs into the new code: pieces present in both glide to their new place, removed pieces fade, new pieces fade in, unchanged code holds still |
+| `focus` | A highlight bar on the listed lines; the other lines dim to 0.3 |
+| `error` | A red squiggle under the matched characters and a red-ruled callout under the line, pushing the lines below down |
+| `output` | A small OUTPUT pane under the card with up to 3 lines and a label; it clears when the code changes |
+| `reveal: "type"` | Step 1 only: the code types in, one character a frame |
+
+The renderer's side is `src/scenes/installed/CodeScenes.tsx` with `codeScenes/`:
+
+- `contract.ts` holds the limits, the timings, the layout and the font-size rule: the code is drawn
+  at the largest size, up to 40 px, at which the longest line and the line count fit; the limits
+  (14 lines, 40 characters) keep it at 32 px or more.
+- `tokens.ts` colours the code with Shiki's synchronous core and its JavaScript regex engine, so
+  tokenising runs inside a frame's render with nothing async and no WASM. Each Shiki token is split
+  again into words, numbers and punctuation, because Shiki merges same-coloured neighbours and the
+  morph needs the pieces. `shiki.d.ts` types the four entry points it imports, because this
+  project's TypeScript resolution does not read package `exports`.
+- `morph.ts` pairs the pieces of two versions by a longest common subsequence over their text, so
+  the morph is a pure function of the frame.
+
+The validator never tokenises: the code font is monospace, so every fit check is characters times
+the font's advance. `mcp/code_scenes.py::check_insert` refuses an insert when:
+
+- The language is not one of the twelve in `LANGS`, there are more than 4 steps, or step 1 holds no
+  code or does not start on the insert's first frame.
+- A later step is under 45 frames after the one before, starts within 30 frames of the end, or does
+  not start within 2 frames of a word.
+- The code has more than 14 lines, a line over 40 characters, or a tab; or a step repeats the code
+  before it (a step that only moves the focus leaves `code` out).
+- `focus` or `error.line` names a line the code does not have, or `error.match` is not on its line.
+- An output pane has more than 3 lines of 40 characters, starts a line with a shell prompt, or has
+  no lines and no label.
+- A typed first step holds more than 120 characters or is still typing when step 2 starts.
+- Nothing changes for more than 3 seconds.
+
+No code runs anywhere: the pipeline agent has no shell, and nothing runs code inside the MCP
+container, which holds the credential database. So an output pane must be what the code on screen
+prints, which the skill keeps to output that is certain from the code, and the pack's
+`insert.review` tells the AI review to report a pane that does not match the code.
+`code_scenes.output_check` is the one place a check against a real run would go.
+`mcp/tests/fixtures/code_scenes_contract.json` holds the limits, the timings, the band, font-size
+cases and which output pane each step shows; `mcp/tests/test_code_scenes.py` runs it against
+`code_scenes.py` and `codeScenes/codeScenes.test.ts` against `contract.ts`. The text-layout audit
+samples each step as if it were a scene.
+
+## Format Packs
+
+Format Packs is an insert style only. A `FormatPacks` insert draws one phone-native format over the
+main style for a few seconds ([Main styles and inserts](#main-styles-and-inserts)). The agent writes
+no code for it; its props carry `formatPacks: {format, ...}`, written with the
+`tubematic-format-packs` skill.
+
+| `format` | What the scene draws |
+|---|---|
+| `chat` | A plain phone with a generic contact; bubbles arrive one by one, theirs after typing dots, and red underlines or rings draw on around the words that give the scam away, each with a short label |
+| `list` | A title and two to four numbered rows, each arriving as it is read |
+| `quiz` | A question, two to four options popping in as they are read, and the answer locking in amber |
+| `strap` | A news strap with a kicker and the date, highlights on the headline's words, and an optional split-flap board flipping from one value to another |
+
+The style must never pass for a real app or a real screenshot. The component draws a phone with no
+notch, island or status bar, and an EXAMPLE tag on every chat and on every strap with no `source`,
+which the data cannot remove. `mcp/format_packs.py::check_insert` refuses what data could add on
+top: a phone-number-like run outside the ranges kept for fiction (UK `07700 900000` to `900999`, US
+`555-0100` to `555-0199`), a tick or verified mark anywhere, and the name of a messaging or social
+app in a contact, title or kicker. A brand named inside a message cannot be caught by a list, so the
+skill forbids it and the pack's `insert.review` tells the AI review to report it.
+
+It also refuses an insert when:
+
+- The first message, row or headline is not on the insert's first frame, or a later arrival, mark or
+  lock is off a word, under 18 frames after the one before, or within 30 frames of the end.
+- The messages do not fit the phone together, the list does not fit the frame, or a text runs past
+  its line limit (lines are counted with a characters-per-line rule both sides share).
+- A mark names words its message does not have, lands before its message, or a message carries two
+  labels; the quiz locks before its last option is read.
+- Nothing changes for more than 3 seconds.
+
+The renderer's side is `src/scenes/installed/FormatPacks.tsx` with `formatPacks/`: `contract.ts`
+(limits, timings, the band and the line rule), a file per format, and `draw.ts`, whose rings and
+underlines are one short path each, drawn on by growing a clip (no stroke dash array). The phone
+screen has no rounded clip over its area: it cost about an eighth of a frame's render time in
+software GL, so the header rounds its own corners. `mcp/tests/fixtures/format_packs_contract.json`
+holds the limits, the band, the line cases, fiction and real-looking numbers and app names;
+`mcp/tests/test_format_packs.py` runs it against `format_packs.py` and
+`formatPacks/formatPacks.test.ts` against `contract.ts`. The text-layout audit samples the stretch
+between every two changes as if it were a scene.
 
 ## Bean Explainer
 

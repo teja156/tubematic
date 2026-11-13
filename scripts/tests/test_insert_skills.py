@@ -46,7 +46,7 @@ def test_the_operator_routes_inserts_between_the_style_and_the_formula():
     assert "`insert_routing.decided` is `false`" in row
 
 
-def test_the_operator_treats_system_flow_and_terminal_doc_as_insert_styles():
+def test_the_operator_treats_every_insert_style_as_an_insert_style():
     text = _skill("tubematic-operator")
     row = _row(text, "| `VOICE_READY` | **Invoke")
     assert "tubematic-inserts" in row
@@ -54,7 +54,9 @@ def test_the_operator_treats_system_flow_and_terminal_doc_as_insert_styles():
     assert "legacy" in row.lower()
     flat = " ".join(text.split())
     assert "`system_flow` replaces" not in flat and "`terminal_doc` replaces" not in flat
-    assert "`system_flow` and `terminal_doc` are **insert styles**" in flat
+    sentence = flat[:flat.index("are **insert styles**")].rsplit(".", 1)[-1]
+    for sid in tvs.INSERT_STYLES:
+        assert f"`{sid}`" in sentence, sid
 
 
 # --- the script writer ------------------------------------------------------

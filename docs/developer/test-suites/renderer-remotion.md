@@ -39,6 +39,32 @@ Covers `src/inserts/transitions.ts`, how an insert scene goes in and out over it
   out as the insert comes in; a wipe uncovers the insert from the right.
 - `activeInsert` finds the window a frame falls in.
 
+### `src/scenes/installed/codeScenes/codeScenes.test.ts`
+
+Covers `codeScenes/contract.ts`, `tokens.ts` and `morph.ts`
+([Code Scenes](../10-scene-authoring.md#code-scenes)).
+
+- The languages, limits, timings and band equal `mcp/tests/fixtures/code_scenes_contract.json`, and
+  the fixture's font sizes, typing frames and output panes come out the same as in
+  `mcp/code_scenes.py`.
+- The largest code the limits allow, a callout and a full output pane fit inside the band at 32 px
+  or more.
+- Every language colours without throwing, pieces keep their columns, and keywords take a colour of
+  their own.
+- The morph keeps unchanged pieces still, moves the pieces a new line pushes down, fades new pieces
+  in and removed ones out.
+
+### `src/scenes/installed/formatPacks/formatPacks.test.ts`
+
+Covers `formatPacks/contract.ts` and `draw.ts` ([Format Packs](../10-scene-authoring.md#format-packs)).
+
+- The formats, limits, timings, band and lists equal `mcp/tests/fixtures/format_packs_contract.json`;
+  wrapping and thread heights come out as in `mcp/format_packs.py`, and the largest thread and the
+  phone stay inside the band.
+- Fiction-range phone numbers are told from real-looking ones the same way as the validator.
+- Every change is listed in order with the insert's first frame first; rows ease on the card's
+  curve, and marks are drawn as single paths.
+
 ## Storybook Atlas
 
 ### `src/scenes/installed/storybookAtlas/storybookAtlas.test.ts`

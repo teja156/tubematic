@@ -66,7 +66,8 @@
         "system_flow"
       ],
       "inserts_ok": [
-        "terminal_doc"
+        "terminal_doc",
+        "code_scenes"
       ]
     },
     {
@@ -1463,8 +1464,229 @@
         "system_flow"
       ],
       "inserts_ok": [
+        "terminal_doc",
+        "code_scenes"
+      ]
+    },
+    {
+      "title": "Why Python's mutable default argument bites you",
+      "brief": "def add(item, items=[]): the empty list is made once, when the function is defined, so every call that leaves items out shares the same list. Show the code, the surprising output after two calls, and the fix with None.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "Insert probe (TMDEV-239/240): code being read, its output and its fix: Code Scenes.",
+      "inserts_expect": [
+        "code_scenes"
+      ]
+    },
+    {
+      "title": "How an off-by-one error crashes a loop",
+      "brief": "A loop that runs one step too far reads past the end of a list: range(len(items) + 1), the IndexError it raises, and the one-character fix. Why the last index is one less than the length.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "Insert probe (TMDEV-239/240): a bug in a line of code and its fix: Code Scenes.",
+      "inserts_expect": [
+        "code_scenes"
+      ]
+    },
+    {
+      "title": "How a missing bounds check becomes a buffer overflow",
+      "brief": "In C, strcpy copies a long name into a 16-byte buffer with no length check and writes over the memory next to it, including the return address. Show the code, what spills over and the bounded copy that fixes it.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "whiteboard"
+      ],
+      "future": "",
+      "note": "Insert probe (TMDEV-239/240): vulnerable code and its fix: Code Scenes; the memory layout may be a diagram.",
+      "inserts_expect": [
+        "code_scenes"
+      ],
+      "inserts_ok": [
+        "system_flow"
+      ]
+    },
+    {
+      "title": "Why == is not is in Python",
+      "brief": "Two lists with the same items are equal (==) but not the same object (is). Show the two lines of code, what each comparison prints, and why small numbers seem to break the rule.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "Insert probe (TMDEV-239/240): pair with Terminal Doc: code being read and what it prints is Code Scenes, not a typed command.",
+      "inserts_expect": [
+        "code_scenes"
+      ]
+    },
+    {
+      "title": "Why 0.1 + 0.2 is not 0.3 in your code",
+      "brief": "print(0.1 + 0.2) shows 0.30000000000000004: binary fractions cannot hold one tenth exactly. Show the line of code and its output, why the error appears, and how to compare money safely.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "Insert probe (TMDEV-239/240): a line of code and its output: Code Scenes; the long number alone could be Terminal Doc.",
+      "inserts_expect": [
+        "code_scenes"
+      ],
+      "inserts_ok": [
         "terminal_doc"
       ]
+    },
+    {
+      "title": "What chmod 777 really does to a file",
+      "brief": "Typing chmod 777 on a file at the shell and running ls -l shows rwxrwxrwx: every user on the machine can read, change and run it. What each digit means and the safer 644.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "Insert probe (TMDEV-239/240): pair with Code Scenes: a command typed at a shell and its output is Terminal Doc.",
+      "inserts_expect": [
+        "terminal_doc"
+      ]
+    },
+    {
+      "title": "What curl -v shows about a web request",
+      "brief": "Run curl -v on a website and read what it prints: the address it connects to, the request lines it sends, the status code and headers that come back.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "whiteboard"
+      ],
+      "future": "",
+      "note": "Insert probe (TMDEV-239/240): pair with Code Scenes: a command at a shell and what it prints is Terminal Doc.",
+      "inserts_expect": [
+        "terminal_doc"
+      ],
+      "inserts_ok": [
+        "system_flow"
+      ]
+    },
+    {
+      "title": "The 'Hi Mum' text scam",
+      "brief": "A text from an unknown number says it is your child with a new phone, then asks you to pay a bill for them today. Read the messages one by one, mark the tells (the new number, the hurry, the money) and say what to do instead.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "case_file_story"
+      ],
+      "future": "",
+      "note": "Insert probe (TMDEV-239/240): messages exchanged in a scam: Format Packs.",
+      "inserts_expect": [
+        "format_packs"
+      ]
+    },
+    {
+      "title": "How a fake parcel-delivery text steals your card",
+      "brief": "A text says a parcel is held until you pay a small fee and links to a page that looks like a courier's. Read the message, point out the tells, and show what the fake page asks for.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "case_file_story"
+      ],
+      "future": "",
+      "note": "Insert probe (TMDEV-239/240): a scam text read message by message: Format Packs.",
+      "inserts_expect": [
+        "format_packs"
+      ]
+    },
+    {
+      "title": "The wrong-number text that turns into an investment scam",
+      "brief": "It starts with a polite text sent to the wrong number, becomes a friendly chat over weeks, and ends with a 'sure' crypto investment. Read the turning-point messages and the tells.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "case_file_story"
+      ],
+      "future": "",
+      "note": "Insert probe (TMDEV-239/240): a chat thread between people: Format Packs.",
+      "inserts_expect": [
+        "format_packs"
+      ]
+    },
+    {
+      "title": "Which of these passwords would you pick?",
+      "brief": "Put four passwords on the screen as a quiz (a long passphrase, a word with numbers, a short random string, a pet's name with a year) and ask which is strongest, then reveal why length wins.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "stick"
+      ],
+      "future": "",
+      "note": "Insert probe (TMDEV-239/240): a which-is-true question with options: Format Packs quiz.",
+      "inserts_expect": [
+        "format_packs"
+      ],
+      "inserts_ok": [
+        "terminal_doc"
+      ]
+    },
+    {
+      "title": "Three signs a text from your bank is fake",
+      "brief": "Three tells, read in one breath: it asks you to tap a link, it says your account is locked, it wants a code sent to your phone. Then what your real bank never does.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "whiteboard"
+      ],
+      "future": "",
+      "note": "Insert probe (TMDEV-239/240): two to four numbered points: Format Packs list, or the scam text itself.",
+      "inserts_expect": [
+        "format_packs"
+      ]
+    },
+    {
+      "title": "How the Great Fire of London spread",
+      "brief": "September 1666: a bakery fire on Pudding Lane, dry timber houses, an east wind, and four days that burned most of the city. Why it spread so fast and what changed after.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "storybook_atlas",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Insert probe (TMDEV-239/240): negative control: no code, no messages.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Why cats knock things off tables",
+      "brief": "Hunting instinct, attention and testing how things move: what researchers think is going on when a cat pushes a glass to the edge.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "illustrated",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Insert probe (TMDEV-239/240): negative control: no code, no messages.",
+      "inserts_expect": []
     }
   ]
 }

@@ -769,14 +769,38 @@ Covers the `tubematic-formula-routing` skill
 Trap: a skill that named formulas would prefer the ones it knew about, and a new formula would need
 an edit to be picked. The candidates are data for that reason.
 
+### `test_code_scenes_skill.py`
+
+Covers the `tubematic-code-scenes` skill ([Code Scenes](../10-scene-authoring.md#code-scenes)).
+
+- Its name matches the pack's `authoring_skill`, and it loads without being explicit-only.
+- It states the limits `mcp/code_scenes.py` enforces and lists the languages it accepts and no
+  others. Its worked example
+  (`agent_files/skills/tubematic-code-scenes/reference/example-insert.json`) passes the validator
+  at the frames the skill names.
+- It keeps the boundary with Terminal Doc (a command typed at a shell goes there) and the rule that
+  output is shown only when certain, because nothing runs the code; it has one **Check and submit**
+  step; `uninstall.py` removes it.
+
+### `test_format_packs_skill.py`
+
+Covers the `tubematic-format-packs` skill ([Format Packs](../10-scene-authoring.md#format-packs)).
+
+- Its name matches the pack's `authoring_skill`, it names every format, and it states the limits
+  `mcp/format_packs.py` enforces. Its worked example
+  (`agent_files/skills/tubematic-format-packs/reference/example-insert.json`) passes the validator.
+- It keeps the impersonation line: every thread made up, phone numbers from the fiction ranges, no
+  tick, the EXAMPLE tag, and no invented source for a headline. It has one **Check and submit** step,
+  and `uninstall.py` removes it.
+
 ### `test_insert_skills.py`
 
 Covers the skills that make a video with insert scenes
 ([Main styles and inserts](../10-scene-authoring.md#main-styles-and-inserts)).
 
 - The operator runs `tubematic-insert-routing` after style routing and before formula routing at
-  `TOPIC_APPROVED`, and treats System Flow and Terminal Doc as insert styles, with a whole video in
-  one of them only as a legacy case.
+  `TOPIC_APPROVED`, and names every insert pack as an insert style, with a whole System Flow or
+  Terminal Doc video only as a legacy case.
 - The script-writing skill's insert marks keep to the rules `update_video` enforces (never the first
   or last segment, never two in a row, never the payoff, only the video's chosen insert styles), name
   the target length from `tubematic_core/inserts.py` and the `insert_long` warning the server
@@ -786,7 +810,9 @@ Covers the skills that make a video with insert scenes
   cards and its ending. The scene system draws a marked diagram beat as the insert, and under Photo
   Explainer draws no diagram scene of its own (an insert, or a labelled photograph). Cartoon 3D,
   whose pack takes none, says so.
-- The insert styles' skills open with an **As an insert** section that states the limits
+- The insert styles' skills open with an **As an insert** section; System Flow's and Terminal Doc's
+  still name the legacy whole video, which a style that was only ever an insert has none of. The
+  first two state the limits
   `mcp/system_flow.py` and `mcp/terminal_doc.py` enforce on an insert (the board or beat count, no
   moves of the agent's own and no skin in Terminal Doc), and keep the legacy whole-video path.
 - The skills README lists both insert skills, and none of these skills carries a ticket id.
