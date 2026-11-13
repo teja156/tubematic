@@ -1,0 +1,80 @@
+{
+  "id": "format_packs",
+  "label": "Format Packs",
+  "order": 230,
+  "experimental": false,
+  "role": "insert",
+  "insert": {
+    "max_seconds": 9,
+    "palettes": [
+      "dark",
+      "light"
+    ],
+    "props_key": "formatPacks",
+    "component": "FormatPacks",
+    "block": [200, 1330],
+    "review": "- Between these times the video cuts to a short Format Packs insert, on purpose: one phone-style format made of text. It is a message thread on a plain rounded phone (a generic contact, grey and blue bubbles arriving one by one after typing dots, red rings and underlines drawn around words with small red labels, an EXAMPLE tag in the corner), or a numbered list on paper cards under a yellow title, or a quiz card with lettered options where the right one turns amber, or a news strap (a date, a yellow kicker, a headline on a paper strap, sometimes a split-flap board of tiles flipping to a new value). On a light video it sits on cream paper; on a dark video on near-black. The change of look into it and out of it, the made-up messages, and the video's own captions staying on screen over it, are intended. Do NOT report the switch of style, the absence of pictures inside it or the EXAMPLE tag as defects.\n- Do report inside it: a real app's or brand's name, logo or look (a notch, a status bar, a verified tick or badge, an app name in a header), a phone number that looks real, a message thread or a headline with no source that has no EXAMPLE tag, text cut off at the frame edge or running under the captions, text too small to read on a phone, and a bubble, row or option on screen that the narration is not reading.\n"
+  },
+  "dimension": "2d",
+  "preview": "format_packs",
+  "tagline": "Scam texts, short lists, quiz boards and headlines laid out as phone screens.",
+  "renderer": "dom",
+  "canvas": "dark",
+  "authoring_skill": "tubematic-format-packs",
+  "allows": {
+    "figures": false,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "review": "- This video shows short Format Packs inserts: a made-up message thread on a plain phone with an EXAMPLE tag, a numbered list, a quiz board or a news strap. Do NOT report the made-up messages, the EXAMPLE tag or the absence of pictures as defects.\n- Do report: a real app's or brand's name, logo or verified mark, a phone number that looks real, text cut off at the frame edge, text too small to read on a phone, and a bubble or row the narration is not reading.\n",
+  "captions": {
+    "background": "outline",
+    "position": 0.76,
+    "color": "#ffffff",
+    "fontFamily": "Barlow, system-ui, sans-serif",
+    "fontSize": 64,
+    "maxWords": 3
+  },
+  "script": "A segment marked as a Format Packs insert reads its format aloud. For a message thread, read each message as it arrives, in order (\"Hi Mum, I dropped my phone\" ... \"can you send eight hundred pounds today?\"), and name each tell as it is marked (\"the new number\", \"the rush\"). Every thread is made up: never name a real bank, courier, shop or app; say \"your bank\", \"a parcel company\". For a list, read two to four short points in one breath. For a quiz, ask the question, read the options, then give the answer. For a headline, read it with its date, and its source when it is a real one. Keep the segment to about eight seconds.",
+  "picture": {
+    "opening": "Not an opening style: an insert never opens a video. Its first frame already shows the phone with its first message, the list title with its first row, the question, or the headline.",
+    "turn": "A new bubble, row or option on the word that reads it, or a mark drawn on around the words that give the scam away.",
+    "payoff": "Not a payoff style: the payoff belongs to the main style.",
+    "ending": "Not an ending style: the main style takes the last segment."
+  },
+  "routing": {
+    "best_for": [
+      "a scam, phishing or pretexting message (a text, a DM, a chat) read message by message with its tells marked",
+      "two to four short numbered points read in one breath: the signs, the steps, the rules",
+      "a question put to the viewer with two to four options, then the answer",
+      "a dated headline, or a price or count changing from one value to another"
+    ],
+    "avoid_for": [
+      "a command typed at a shell and what it prints (Terminal Doc shows it)",
+      "source code being read or changed (Code Scenes shows it)",
+      "components passing requests or messages between each other (System Flow shows them)",
+      "a real object, place, person or event the viewer must see",
+      "a long story told through many messages, or a list longer than four points",
+      "the opening or the payoff of the video, which belong to the main style"
+    ],
+    "cannot_show": "any picture of a real thing, a person, a place or a mechanism, and any real app, brand or account: only made-up text on a plain phone, a list, a quiz card or a headline strap",
+    "signals": [
+      "the narration quotes messages sent between people, or a scam text word for word",
+      "the narration counts its points: first, second, third",
+      "the narration asks the viewer a question with options",
+      "the narration reads a dated headline or a value that changed"
+    ],
+    "moods": [
+      "urgent",
+      "conversational",
+      "punchy",
+      "playful"
+    ],
+    "images_per_video": "0",
+    "images": 0
+  }
+}

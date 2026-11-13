@@ -115,6 +115,7 @@ import bean_preview  # renders a Bean Explainer video's own props for the agent 
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
 import terminal_preview  # renders a Terminal Doc video's own moves for the agent to look at
 import code_scenes  # the Code Scenes insert checks (TMDEV-239), the same way
+import format_packs  # the Format Packs insert checks (TMDEV-240), the same way
 import inserts as inserts_mod  # the insert-scene checks (TMDEV-224)
 import picture_checks  # the first-frame and beat-change warnings (TMDEV-215), pure like text_audit
 
@@ -8576,6 +8577,7 @@ _INSERT_CHECKS = {
         e, fps, starts, tvs.pack(system_flow.STYLE_ID)["extra"]["icons"]),
     terminal_doc.STYLE_ID: lambda fps, starts, words, e: terminal_doc.check_insert(e, fps, starts, words),
     code_scenes.STYLE_ID: lambda fps, starts, words, e: code_scenes.check_insert(e, fps, starts, words),
+    format_packs.STYLE_ID: lambda fps, starts, words, e: format_packs.check_insert(e, fps, starts, words),
 }
 
 
@@ -8677,7 +8679,7 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     # ── Insert-only styles (TMDEV-239) ───────────────────────────────────────
     # Styles that were never a whole video: their scene is never one of a
     # video's scenes.
-    only_insert_err = code_scenes.check_scene_use(scenes)
+    only_insert_err = code_scenes.check_scene_use(scenes) or format_packs.check_scene_use(scenes)
     if only_insert_err:
         return {"error": only_insert_err}
 

@@ -57,6 +57,7 @@ import terminal_doc  # beat windows for the whole-video Terminal Doc scene (TMDE
 import under_the_hood  # plate windows for the whole-video Under the Hood scene (TMDEV-201)
 import case_file_story  # beat windows for the whole-video Case File Story scene (TMDEV-202)
 import code_scenes  # step windows for a Code Scenes insert (TMDEV-239)
+import format_packs  # change windows for a Format Packs insert (TMDEV-240)
 import picture_checks  # which style drew a config, for the mixed-scenes first-frame pass (TMDEV-215)
 
 # ── Tunables ────────────────────────────────────────────────────────────────
@@ -370,6 +371,8 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
             units, tail = terminal_doc.insert_beat_windows(entry), terminal_doc.TIMING["readMargin"]
         elif style == code_scenes.STYLE_ID:
             units, tail = code_scenes.insert_step_windows(entry), 0
+        elif style == format_packs.STYLE_ID:
+            units, tail = format_packs.insert_unit_windows(entry), 0
         else:
             units, tail = [], 0
         for u_start, u_end in units:
