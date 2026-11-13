@@ -179,5 +179,10 @@
         null
       ]
     }
-  ]
+  ],
+  "keep_out_x": 900,
+  "watermark": {
+    "left": 918,
+    "bottom": 203
+  }
 }

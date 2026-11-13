@@ -4,7 +4,7 @@
  * ones before it ease back.
  */
 import React from "react";
-import { LAYOUT, TIMING, type ListData } from "./contract";
+import { LAYOUT, TIMING, WRAP, type ListData } from "./contract";
 import { SANS } from "./fonts";
 import { arrival, clamp01, expoOut, type Look } from "./draw";
 
@@ -19,7 +19,7 @@ export const List: React.FC<{ data: ListData; frame: number; origin: number; P: 
       flexDirection: "column", gap: LAYOUT.rowGap }}>
       <div style={{ alignSelf: "flex-start", background: P.highlight, color: P.cardInk, fontFamily: SANS,
         fontWeight: 700, fontSize: 56, lineHeight: `${LAYOUT.titleLine}px`, textTransform: "uppercase",
-        padding: "8px 22px", borderRadius: 8, marginBottom: 20 }}>
+        padding: "8px 22px", borderRadius: 8, marginBottom: 20, maxWidth: WRAP.title[1] + 44 }}>
         {data.title}
       </div>
       {shown.map((it, i) => {

@@ -410,3 +410,12 @@ def test_a_wide_list_lead_is_refused():
     e = _list()
     e["props"]["formatPacks"]["items"][0]["lead"] = "W" * 23
     assert any("lead does not fit one line" in m for m in _check(e))
+
+
+# ── the watermark (Kasm Test 2 finding) ─────────────────────────────────────
+
+def test_every_top_row_text_ends_left_of_the_watermark():
+    # A lifted insert (inserts.shift_for) puts its top row beside the mark.
+    assert fp.KEEP_OUT_X == FIXTURE["keep_out_x"] == FIXTURE["watermark"]["left"] - 18
+    assert fp.TOP_TEXT_RIGHT == FIXTURE["top_text_right"]
+    assert all(x <= fp.KEEP_OUT_X for x in fp.TOP_TEXT_RIGHT.values())

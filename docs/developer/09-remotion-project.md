@@ -309,6 +309,13 @@ keep it fixed:
 - The artwork carries its own translucent plate, which keeps the white text readable on any frame.
   The mark needs no colour derived from the canvas.
 
+`src/watermarkBox.ts` holds the mark's position (`WATERMARK_*`) and `KEEP_OUT_X`, the line 18 px left
+of it. An insert moves up by as much as 120 px to clear the captions, which puts its top row beside
+the mark, so Code Scenes keeps its header row (tag, step counter and label) and Format Packs its
+EXAMPLE tag, list title, quiz question and strap headline at or left of that line. The validators
+check the Code Scenes header against it, the Format Packs wrap boxes are narrowed to it, and each
+style's contract test pins the numbers to the shared fixtures.
+
 The image is `public/watermark.png`, baked into the renderer image and loaded with `staticFile()`, so
 no render fetches it over the network. It sits beside the per-video `public/<video_id>/` directories,
 so staging does not touch it. The source artwork is in `logos/` at the repository root.

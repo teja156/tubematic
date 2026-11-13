@@ -206,7 +206,7 @@
     ],
     "title": [
       56,
-      796,
+      736,
       true
     ],
     "item": [
@@ -216,12 +216,12 @@
     ],
     "question": [
       52,
-      768,
+      744,
       false
     ],
     "headline": [
       60,
-      756,
+      728,
       false
     ]
   },
@@ -238,5 +238,16 @@
       0,
       false
     ]
+  },
+  "keep_out_x": 900,
+  "top_text_right": {
+    "exampleTag": 900,
+    "listTitle": 900,
+    "question": 900,
+    "headline": 898
+  },
+  "watermark": {
+    "left": 918,
+    "bottom": 203
   }
 }

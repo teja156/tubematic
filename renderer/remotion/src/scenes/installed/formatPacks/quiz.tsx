@@ -4,7 +4,7 @@
  * others fall back.
  */
 import React from "react";
-import { LAYOUT, ONE_LINE, TIMING, type QuizData } from "./contract";
+import { LAYOUT, ONE_LINE, TIMING, WRAP, type QuizData } from "./contract";
 import { MONO, SANS } from "./fonts";
 import { arrival, backOut, clamp01, easeOut, type Look } from "./draw";
 import { fitFontSize } from "../fitText";
@@ -23,7 +23,7 @@ export const Quiz: React.FC<{ data: QuizData; frame: number; origin: number; P: 
           QUESTION
         </div>
         <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 52, lineHeight: "62px", color: P.cardInk }}>
-          {data.question}
+          <div style={{ maxWidth: WRAP.question[1] }}>{data.question}</div>
         </div>
       </div>
       {data.options.map((o, i) => {

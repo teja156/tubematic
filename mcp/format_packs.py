@@ -47,8 +47,14 @@ TIMING = {"bubbleIn": 7, "dots": 14, "rowIn": 14, "optionIn": 10, "lock": 10, "m
 # capitals, as the components draw it: a bubble 44 px in 640 less its padding,
 # a list title 56 px capitals, an item 36 px beside its number, the question
 # 52 px in the quiz card, the headline 60 px beside the strap's bar.
-WRAP = {"bubble": (44, 580, False), "title": (56, 796, True), "item": (36, 686, False),
-        "question": (52, 768, False), "headline": (60, 756, False)}
+WRAP = {"bubble": (44, 580, False), "title": (56, 736, True), "item": (36, 686, False),
+        "question": (52, 744, False), "headline": (60, 728, False)}
+# The watermark's keep-out line (renderer/remotion/src/watermarkBox.ts): the
+# right edge of every text in a top row, which a lifted insert puts beside the
+# mark. TOP_TEXT_RIGHT adds each box to where its text starts.
+KEEP_OUT_X = 900
+TOP_TEXT_RIGHT = {"exampleTag": KEEP_OUT_X, "listTitle": 120 + 22 + 736 + 22, "question": 120 + 2 + 34 + 744,
+                  "headline": 120 + 14 + 2 + 34 + 728}
 # One-line texts that shrink to fit their box (fitText.ts), down to a smallest
 # size the validator holds them to: the chat title (capitals, spacing 1) and a
 # quiz option.
