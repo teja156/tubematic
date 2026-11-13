@@ -1295,6 +1295,8 @@ text audit's per-step sampling ([Code Scenes](../10-scene-authoring.md#code-scen
   callout, and a tag and label too wide for the header row.
 - `write_scene_config` writes a Code Scenes insert with its scene, palette and shift filled, names a
   Code Scenes problem in its refusal, and refuses `CodeScenes` as one of the scenes.
+- The header row ends at the watermark's keep-out line (the fixture's `keep_out_x`, 18 px left of the
+  mark), and a tag and step label that would reach it are refused.
 - The output check stays empty: no code runs, so the AI review checks an output pane, and a sandboxed
   run would take over in `output_check`.
 
@@ -1333,6 +1335,8 @@ text audit's sampling between changes ([Format Packs](../10-scene-authoring.md#f
   stretch.
 - `write_scene_config` writes a Format Packs insert with its scene, palette and shift filled, names
   a Format Packs problem in its refusal, and refuses `FormatPacks` as one of the scenes.
+- Every top-row text (the EXAMPLE tag, list title, question, headline) ends at or left of the
+  watermark's keep-out line, as the fixture's `top_text_right` says.
 
 ### `test_system_flow.py`
 
@@ -1479,7 +1483,8 @@ audit's per-scene sampling and the `letterSpacing` caption key
 - A custom part is refused for a bad shape, a tone, a box overflow (a circle's radius and a line's width
   count) or too many shapes, and can stand in a scene while it cannot reuse a library name.
 - With insert windows passed as `quiet`, nothing starts or lands inside a window, a scene may start on a
-  window's end but its tear may not run on into a window, and a window over a stretch that would
+  window's end but its tear may not run on into a window, a 140-frame window planned into a scene's
+  quiet tail passes (the same gap with no window is the stillness refusal), and a window over a stretch that would
   otherwise sit still is not counted as still.
 - The text audit samples every scene once its text has settled.
 - `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken

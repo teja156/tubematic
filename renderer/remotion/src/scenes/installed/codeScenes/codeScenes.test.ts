@@ -2,10 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  BAND, LANGS, LIMITS, LAYOUT, TIMING, codeLines, fontSizeFor, lineHeightFor, outputAt, typeFrames,
+  BAND, HEADER_RIGHT, LANGS, LIMITS, LAYOUT, TIMING, codeLines, fontSizeFor, lineHeightFor, outputAt, typeFrames,
   type CodeScenesData,
 } from "./contract";
 import { matchPieces, morphAt } from "./morph";
+import { WATERMARK_BOTTOM, WATERMARK_LEFT } from "../../../watermarkBox";
 import { tokenize } from "./tokens";
 
 const ROOT = path.resolve(__dirname, "../../../../../..");
@@ -82,5 +83,14 @@ describe("tokens and the morph", () => {
     const added = morphAt(pairs, 0).filter((d) => d.key.startsWith("a"));
     expect(added.every((d) => d.opacity === 0)).toBe(true);
     expect(morphAt(pairs, 1).every((d) => d.key.startsWith("r") ? d.opacity === 0 : d.opacity === 1)).toBe(true);
+  });
+});
+
+describe("the watermark", () => {
+  it("sits where the fixture says, and the header row ends left of it", () => {
+    expect(WATERMARK_LEFT).toBe(CASES.watermark.left);
+    expect(WATERMARK_BOTTOM).toBe(CASES.watermark.bottom);
+    expect(HEADER_RIGHT).toBe(CASES.keep_out_x);
+    expect(HEADER_RIGHT).toBeLessThanOrEqual(WATERMARK_LEFT);
   });
 });

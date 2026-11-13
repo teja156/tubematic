@@ -316,3 +316,42 @@ def test_a_wrong_typed_value_is_reported_not_raised():
 
 def test_a_clock_with_a_trailing_newline_is_refused():
     assert not ns._CLOCK.match("12:30\n") and ns._CLOCK.match("12:30")
+
+
+def _shifted(n):
+    """The example with every scene after the first pushed `n` frames later: scene 1 now has a long quiet
+    tail, the way a script that marks a segment for an insert leaves one."""
+    keys = {"start", "at", "crossAt", "redAt", "slashAt"}
+
+    def shift(o):
+        if isinstance(o, dict):
+            for k, v in o.items():
+                if k in keys and isinstance(v, int) and not isinstance(v, bool):
+                    o[k] = v + n
+                else:
+                    shift(v)
+        elif isinstance(o, list):
+            for v in o:
+                shift(v)
+    cfg = copy.deepcopy(EXAMPLE)
+    first_end = _data(cfg)["scenes"][1]["start"]
+    for s in _data(cfg)["scenes"][1:]:
+        shift(s)
+    cfg["totalFrames"] += n
+    cfg["scenes"][0]["durationInFrames"] = cfg["totalFrames"]
+    words = [w for w in WORD_STARTS if w < first_end] + [w + n for w in WORD_STARTS if w >= first_end]
+    return cfg, words
+
+
+def test_a_planned_insert_fits_in_a_scene_that_leaves_the_gap():
+    # A 140-frame window (an insert of about 4.7 s) is hosted when the agent plans the gap: the window sits in the
+    # quiet tail of a scene, the next scene starts on its end, and the style's 5 s stillness limit does not count it.
+    cfg, words = _shifted(160)
+    last = ns.event_frames(_data(cfg)["scenes"][0])[-1]
+    window = (last + 7, last + 7 + 140)
+    assert ns.check(cfg, 30, words, EXTRA, "vid_example", quiet=[window]) == []
+    # the same gap with no insert is the 'nothing new happens' refusal the window exists to excuse
+    assert any("nothing new happens" in p for p in ns.check(cfg, 30, words, EXTRA, "vid_example"))
+    # and a window dropped on a scene full of events (the unplanned case) is refused with its cause
+    plain = ns.check(EXAMPLE, 30, WORD_STARTS, EXTRA, "vid_example", quiet=[(300, 440)])
+    assert any("inside an insert" in p for p in plain), plain

@@ -166,6 +166,9 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ### Fixed
 
+- In an Isometric Infographic video, the labels of two buildings that stand close together could be
+  drawn on top of each other. The labels now sit on opposite sides or one above the other, and stay in
+  place while the camera moves.
 - Auto picked a text or diagram style, such as Terminal Doc or Whiteboard, for a real failure with
   a technical cause, such as a rocket destroyed by a software bug or a trading firm ruined by one
   server. The video showed numbers and boxes and never the rocket or the firm. Auto now picks a
@@ -181,6 +184,9 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 - Storybook Reveal pages showed an empty paper card, with only the title, for several seconds before
   the pencil drawing began. A page's pencil drawing now starts within a second of the page (a silent
   pause does not count against that second), and the example in the style's skill shows it.
+- In a Code Scenes insert, the step label at the top right (such as "1/3 · the default") could be
+  cut off under the watermark, and the same could happen to the EXAMPLE tag and the first line of
+  a Format Packs insert. Their top rows now end to the left of the watermark.
 
 ## v2.2.0
 

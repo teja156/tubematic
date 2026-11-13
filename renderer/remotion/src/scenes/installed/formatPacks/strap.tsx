@@ -6,7 +6,7 @@
  * flips from one figure to another.
  */
 import React from "react";
-import { LAYOUT, TIMING, type StrapData } from "./contract";
+import { LAYOUT, TIMING, WRAP, TOP_TEXT_RIGHT, type StrapData } from "./contract";
 import { MONO, SANS } from "./fonts";
 import { arrival, clamp01, easeOut, type Look } from "./draw";
 import { ExampleTag, MarkedText } from "./parts";
@@ -23,7 +23,8 @@ export const Strap: React.FC<{ data: StrapData; frame: number; origin: number; P
   }));
   return (
     <div style={{ position: "absolute", left: LAYOUT.left, top: LAYOUT.titleY + 24, width }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 44 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 44,
+        width: TOP_TEXT_RIGHT.exampleTag - LAYOUT.left }}>
         <div style={{ fontFamily: MONO, fontWeight: 400, fontSize: 28, letterSpacing: 2, color: P.muted,
           textTransform: "uppercase" }}>
           {data.date}
@@ -40,7 +41,10 @@ export const Strap: React.FC<{ data: StrapData; frame: number; origin: number; P
         <div style={{ flex: 1, background: P.card, color: P.cardInk, border: `2px solid ${P.optionBorder}`,
           borderLeft: "none", borderRadius: "0 18px 18px 0", padding: "26px 34px", fontFamily: SANS, fontWeight: 700,
           fontSize: 60, lineHeight: "70px" }}>
-          <MarkedText text={data.headline} marks={marks} color={P.cardInk} P={P} />
+          {/* The headline wraps in WRAP.headline so it ends left of the watermark's keep-out line. */}
+          <div style={{ maxWidth: WRAP.headline[1] }}>
+            <MarkedText text={data.headline} marks={marks} color={P.cardInk} P={P} />
+          </div>
         </div>
       </div>
       {data.source ? (
