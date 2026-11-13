@@ -1,0 +1,352 @@
+{
+ "totalFrames": 1376,
+ "canvas": "light",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "IsometricInfographic",
+   "startFrame": 0,
+   "durationInFrames": 1376,
+   "props": {
+    "isometric": {
+     "title": "A parcel's trip",
+     "readout": {
+      "label": "Hours",
+      "unit": "h",
+      "cubes": {
+       "per": 3,
+       "color": "red"
+      },
+      "steps": [
+       {
+        "value": 0,
+        "at": 149
+       },
+       {
+        "value": 24,
+        "at": 478
+       },
+       {
+        "value": 25,
+        "at": 563
+       },
+       {
+        "value": 26,
+        "at": 673
+       },
+       {
+        "value": 36,
+        "at": 1191,
+        "red": true
+       }
+      ]
+     },
+     "boards": [
+      {
+       "start": 0,
+       "areas": [
+        {
+         "kind": "forest",
+         "rect": [
+          0,
+          0,
+          10,
+          3.6
+         ]
+        },
+        {
+         "kind": "water",
+         "rect": [
+          0,
+          3.6,
+          10,
+          5.4
+         ]
+        },
+        {
+         "kind": "city",
+         "rect": [
+          0,
+          5.4,
+          10,
+          10
+         ]
+        },
+        {
+         "kind": "road",
+         "rect": [
+          0,
+          4.25,
+          10,
+          4.75
+         ]
+        }
+       ],
+       "props": [
+        {
+         "id": "warehouse",
+         "what": "warehouse",
+         "at": [
+          1.6,
+          1.4
+         ],
+         "color": "slate"
+        },
+        {
+         "id": "depot",
+         "what": "factory",
+         "at": [
+          6.8,
+          7.4
+         ],
+         "color": "gold",
+         "enter": 397
+        },
+        {
+         "id": "home",
+         "what": "house",
+         "at": [
+          8.6,
+          9.0
+         ]
+        },
+        {
+         "id": "db",
+         "what": "server_rack",
+         "at": [
+          8.6,
+          6.2
+         ],
+         "color": "slate",
+         "enter": 928
+        }
+       ],
+       "routes": [
+        {
+         "id": "leg1",
+         "points": [
+          [
+           1.6,
+           2.2
+          ],
+          [
+           1.6,
+           4.5
+          ],
+          [
+           5.5,
+           4.5
+          ],
+          [
+           5.5,
+           7.2
+          ],
+          [
+           6.8,
+           7.2
+          ]
+         ],
+         "color": "red",
+         "at": 284
+        }
+       ],
+       "movers": [
+        {
+         "route": "leg1",
+         "what": "truck",
+         "color": "red",
+         "at": 298
+        }
+       ],
+       "pins": [
+        {
+         "on": "warehouse",
+         "label": "Warehouse",
+         "at": 79
+        },
+        {
+         "on": "depot",
+         "label": "Depot",
+         "value": "1",
+         "unit": "day",
+         "at": 478
+        }
+       ],
+       "camera": [
+        {
+         "at": 179,
+         "focus": "warehouse",
+         "zoom": 1.4
+        },
+        {
+         "at": 284,
+         "zoom": 1
+        },
+        {
+         "at": 498,
+         "focus": "depot",
+         "zoom": 1.6
+        },
+        {
+         "at": 767,
+         "zoom": 1
+        },
+        {
+         "at": 802,
+         "focus": "db",
+         "zoom": 1.5
+        }
+       ],
+       "cutaways": [
+        {
+         "prop": "depot",
+         "at": 537,
+         "inside": [
+          "conveyor",
+          "parcel",
+          "parcel"
+         ]
+        }
+       ],
+       "lifts": [
+        {
+         "prop": "depot",
+         "at": 673
+        }
+       ],
+       "explodes": [
+        {
+         "prop": "db",
+         "at": 899
+        }
+       ]
+      },
+      {
+       "start": 957,
+       "areas": [
+        {
+         "kind": "city",
+         "rect": [
+          0,
+          0,
+          10,
+          10
+         ]
+        },
+        {
+         "kind": "road",
+         "rect": [
+          0,
+          4.75,
+          10,
+          5.25
+         ]
+        },
+        {
+         "kind": "road",
+         "rect": [
+          8.25,
+          5,
+          8.75,
+          10
+         ]
+        }
+       ],
+       "props": [
+        {
+         "id": "van",
+         "what": "van",
+         "at": [
+          1.0,
+          5.0
+         ],
+         "color": "red"
+        },
+        {
+         "id": "home",
+         "what": "house",
+         "at": [
+          8.0,
+          8.6
+         ],
+         "color": "cream"
+        },
+        {
+         "id": "you",
+         "what": "person",
+         "at": [
+          9.2,
+          8.8
+         ],
+         "color": "teal"
+        }
+       ],
+       "routes": [
+        {
+         "id": "last",
+         "points": [
+          [
+           1.0,
+           5.0
+          ],
+          [
+           8.5,
+           5.0
+          ],
+          [
+           8.5,
+           8.0
+          ]
+         ],
+         "color": "red",
+         "at": 991
+        }
+       ],
+       "movers": [
+        {
+         "route": "last",
+         "what": "parcel",
+         "color": "red",
+         "at": 1102
+        }
+       ],
+       "pins": [
+        {
+         "on": "home",
+         "label": "You",
+         "value": "36",
+         "unit": "h",
+         "at": 1324
+        }
+       ],
+       "camera": [
+        {
+         "at": 1216,
+         "zoom": 1
+        }
+       ]
+      }
+     ],
+     "legend": {
+      "at": 1274,
+      "items": [
+       {
+        "color": "red",
+        "label": "Your parcel"
+       },
+       {
+        "color": "slate",
+        "label": "Warehouse"
+       },
+       {
+        "color": "gold",
+        "label": "Depot"
+       }
+      ]
+     }
+    }
+   }
+  }
+ ]
+}

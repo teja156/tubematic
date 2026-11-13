@@ -1,0 +1,180 @@
+{
+  "id": "isometric_infographic",
+  "label": "Isometric Infographic",
+  "order": 200,
+  "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "push"
+  },
+  "dimension": "2d",
+  "preview": "isometric_infographic",
+  "tagline": "One thing's journey across a little isometric town, with pins, routes and a running count.",
+  "renderer": "dom",
+  "canvas": "light",
+  "authoring_skill": "tubematic-isometric-infographic",
+  "allows": {
+    "figures": false,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "mascot": false,
+  "messages": {
+    "mascot": "Mascots are not available in the Isometric Infographic style: its board is a tiny world drawn to scale, and a mascot would stand over it at the wrong size. Choose another visual style, or no mascot."
+  },
+  "review": "- This video is an Isometric Infographic, and the following are its intended, approved look: one floating board seen in true isometric on cream paper with a faint dot lattice, its cut edges showing layers of earth; flat outline-free blocks in three tones (forest, a river, a city of small blocks, buildings, vehicles, faceless billboard people); trees and city blocks filling the free ground; a dashed coloured route that draws itself ahead of a small moving thing; buildings that drop in with a little squash; a building lifting while everything else fades back; a wall fading away to show small things inside; label pins (a dot, a thin vertical leader, a rule and caps text with a big number); a title and a large readout number near the top with a row of small cubes counting it; the camera gliding in on one part of the board and back out; slowly drifting clouds; a legend of coloured diamonds at the foot; captions in a warm white card with a small cube chip. Do NOT report any of these as defects, and do not suggest photographs, real places, faces or perspective: their absence is the style.\n- Do report: a pin's text overlapping another pin, the title or the readout, text cut off at the frame edge, text too small to read on a phone, a number on screen that differs from the narration, a route that runs through a building, a moving thing going somewhere the narration does not say, a prop floating off the board, and a stretch of more than about four seconds where nothing new happens.\n",
+  "captions": {
+    "background": "card",
+    "position": 0.73,
+    "color": "#231A2C",
+    "fontFamily": "Jost, system-ui, sans-serif",
+    "fontSize": 54,
+    "maxWords": 5
+  },
+  "script": "Every beat's `visual` is a **board** brief: which place on the board the narration is at (a warehouse, a depot, a data centre, a house), what moves between places along a route, and the one number shown on a pin or the readout (hours, kilometres, milliseconds, a count). The video is one small world, so a role is a building or a billboard person, never a character.\n\nThe narration follows ONE thing on its journey through a system of places: name where it starts, each station it passes in order, what happens at each, and where it ends. Give each leg one sentence, and say the running number aloud as it grows (\"a day\", \"thirty six hours\"), since the readout counts it. Inside a building, say what happens there in one sentence (the wall cuts away to show it). End on the arrival and the total. Never write a beat that needs a photograph, a real named place or a person's face: this style has none.",
+  "picture": {
+    "opening": "Board 1 is on screen from frame 0, whole, with the first sentence's place standing on it (a prop with no `enter`), and its pin or the route starting on the first words. Never an empty board.",
+    "turn": "A camera glide to the place a turn names, a building dropping in, a cutaway or a route drawing ahead, on the turn's first word.",
+    "payoff": "The stage the answer lives in lifted, with its pin and the readout's number, red if it is the total.",
+    "ending": "The camera back on the whole board, the legend rising in at the foot: that is this style's ending. Nothing after it."
+  },
+  "routing": {
+    "best_for": [
+      "one thing's physical journey through a system of places: a parcel from warehouse to door, a bag through an airport, water from reservoir to tap, power from plant to socket, a container through a port",
+      "supply chains and logistics, told as stations along a route",
+      "infrastructure as places: data centres, cell towers, cables, a CDN drawn as servers in towns",
+      "things accumulating or counted along the way (deliveries, hours, kilometres)"
+    ],
+    "avoid_for": [
+      "a process acted out by people as roles (Stick Explainer fits it)",
+      "how one device you can hold works inside (Under the Hood fits it)",
+      "an abstract exchange between software components with no places (Stick Explainer acts it out, with System Flow inserts)",
+      "real, named places, buildings or people the viewer came to see (Photo Explainer fits them)",
+      "emotion, stories with characters, history or psychology",
+      "a quantity worked out step by step on paper (Whiteboard fits it)"
+    ],
+    "cannot_show": "real places, faces or photographs: the world is a toy board of blocks and billboard people",
+    "signals": [
+      "the subject is a path a thing travels through a system of places",
+      "the script follows one item from its start to its end",
+      "the script names several stations, buildings or machines in order",
+      "the explanation is the order in which places hand the thing on",
+      "the script counts hours, distances or items piling up along the way"
+    ],
+    "moods": [
+      "calm",
+      "orderly",
+      "satisfying",
+      "clear"
+    ],
+    "images_per_video": "0",
+    "images": 0
+  },
+  "extra": {
+    "props": [
+      "house",
+      "office",
+      "tower_block",
+      "factory",
+      "warehouse",
+      "data_centre",
+      "server_rack",
+      "cell_tower",
+      "dish",
+      "router",
+      "phone",
+      "laptop",
+      "shop",
+      "bank",
+      "hospital",
+      "school",
+      "power_plant",
+      "wind_turbine",
+      "solar_panel",
+      "water_tower",
+      "tank",
+      "pipe",
+      "truck",
+      "van",
+      "car",
+      "bus",
+      "train",
+      "ship",
+      "plane",
+      "crane",
+      "container_stack",
+      "conveyor",
+      "tree",
+      "cloud",
+      "person",
+      "crowd",
+      "parcel",
+      "cube",
+      "coin",
+      "dam",
+      "silo"
+    ],
+    "colors": [
+      "red",
+      "gold",
+      "slate",
+      "teal",
+      "green",
+      "blue",
+      "cream",
+      "grey",
+      "plum"
+    ],
+    "areas": [
+      "land",
+      "forest",
+      "city",
+      "sand",
+      "water",
+      "road",
+      "plaza",
+      "field"
+    ],
+    "rooms": [
+      "house",
+      "office",
+      "factory",
+      "warehouse",
+      "data_centre",
+      "shop",
+      "bank",
+      "hospital",
+      "school",
+      "power_plant"
+    ],
+    "stacks": [
+      "server_rack",
+      "container_stack"
+    ],
+    "movers": [
+      "cube",
+      "parcel",
+      "truck",
+      "van",
+      "car",
+      "bus",
+      "ship",
+      "plane",
+      "train",
+      "person",
+      "coin"
+    ],
+    "solids": [
+      "box",
+      "cyl",
+      "cone",
+      "pyr",
+      "gable"
+    ]
+  }
+}
