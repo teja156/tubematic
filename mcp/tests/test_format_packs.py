@@ -79,7 +79,8 @@ def test_the_constants_match_the_fixture():
     assert list(fp.FORMATS) == FIXTURE["formats"]
     assert fp.LIMITS == FIXTURE["limits"]
     assert fp.TIMING == FIXTURE["timing"]
-    assert fp.CPL == FIXTURE["cpl"]
+    assert {k: list(v) for k, v in fp.WRAP.items()} == FIXTURE["wrap_boxes"]
+    assert {k: list(v) for k, v in fp.ONE_LINE.items()} == FIXTURE["one_line"]
     assert list(fp.BAND) == FIXTURE["band"]
     assert fp.LAYOUT == FIXTURE["layout"]
     assert list(fp.TICKS) == FIXTURE["ticks"]
@@ -94,7 +95,7 @@ def test_the_pack_draws_in_the_contract_band():
 
 @pytest.mark.parametrize("case", FIXTURE["wrap"])
 def test_wrapping_matches_the_fixture(case):
-    assert fp.wrap_lines(case["text"], case["cpl"]) == case["lines"]
+    assert fp.wrap_lines(case["text"], case["kind"]) == case["lines"]
 
 
 @pytest.mark.parametrize("case", FIXTURE["thread_height"])
@@ -176,7 +177,7 @@ def test_an_app_name_in_a_list_title_or_strap_kicker_is_refused():
     (_chat, lambda d: d["marks"][0].update(message=7), "index (from 0)"),
     (_chat, lambda d: d["marks"][0].update(label="A label far too long"), "1 to 16"),
     (_list, lambda d: d.update(items=d["items"] + [dict(d["items"][0], at=790)] * 2), "2 to 4"),
-    (_list, lambda d: d["items"][0].update(text="x " + "y" * 33 + " " + "z" * 20), "more than 2 lines"),
+    (_list, lambda d: d["items"][0].update(text="W" * 24 + " " + "W" * 24), "more than 2 lines"),
     (_list, lambda d: d.update(title="A title so long that it needs three lines to fit on the card"), "1 to 40"),
     (_quiz, lambda d: d.update(answer=5), "index (from 0) of the right option"),
     (_quiz, lambda d: d.update(lockAt=710), "before every option has been read"),
@@ -297,7 +298,7 @@ def test_a_phone_number_on_the_flap_is_refused():
 
 def test_a_chat_title_that_wraps_above_the_phone_is_refused():
     errors = _check(_chat(title="What a fake parcel text looks like"))
-    assert any("more than one line above the phone" in m for m in errors), errors
+    assert any("does not fit one line above the phone" in m for m in errors), errors
 
 
 def test_overlapping_marks_on_one_message_are_refused():
@@ -319,3 +320,51 @@ def test_a_flap_still_flipping_at_the_end_is_refused():
     e["props"]["formatPacks"]["flap"].update({"from": "$1,000,000", "to": "$2,500,000", "at": 800})
     errors = _check(e)
     assert any("would still be flipping" in m for m in errors), errors
+
+
+def test_wide_letters_wrap_a_bubble_to_more_lines_than_their_count():
+    # A count of characters cannot tell narrow letters from wide ones; the
+    # width estimate can, so a thread of wide bubbles no longer slips past.
+    assert fp.wrap_lines("W" * 22, "bubble") > fp.wrap_lines("i" * 22, "bubble")
+    e = _chat()
+    for m in e["props"]["formatPacks"]["messages"]:
+        m["text"] = "W" * 22 + " " + "W" * 22
+    e["props"]["formatPacks"]["messages"] += [{"at": 790, "from": "them", "text": "W" * 22 + " " + "W" * 22}]
+    e["props"]["formatPacks"]["marks"] = []
+    assert any("do not fit on the phone" in m for m in _check(e))
+
+
+def test_a_quiz_option_too_wide_for_its_row_is_refused():
+    e = _quiz()
+    e["props"]["formatPacks"]["options"][1]["text"] = "W" * 30
+    assert any("does not fit its row" in m for m in _check(e))
+
+
+def test_a_flap_with_only_its_first_tile_changing_may_start_late():
+    # Unchanged tiles are already in place, so only the changing ones take time.
+    assert fp.flap_frames("AAAAAAAAAA", "BAAAAAAAAA") == fp.TIMING["flip"]
+    assert fp.flap_frames("$9.99", "$12.99") == 2 * fp.TIMING["flipPerTile"] + fp.TIMING["flip"]
+    e = _strap()
+    e["props"]["formatPacks"]["flap"].update({"from": "AAAAAAAAAA", "to": "BAAAAAAAAA", "at": 800})
+    assert not any("still be flipping" in m for m in _check(e))
+
+
+def test_an_emoji_on_the_flap_is_refused():
+    e = _strap()
+    e["props"]["formatPacks"]["flap"].update({"to": "\U0001F4C8 up"})
+    assert any("tile cannot show" in m for m in _check(e))
+
+
+@pytest.mark.parametrize("number", ["867.5309", "867/5309"])
+def test_a_local_number_written_with_dots_or_slashes_is_refused(number):
+    e = _chat()
+    e["props"]["formatPacks"]["messages"][0]["text"] = f"Text me on {number}"
+    assert any("looks like a real phone number" in m for m in _check(e))
+
+
+def test_a_phone_shaped_flap_value_is_refused_and_a_bare_count_is_not():
+    e = _strap()
+    e["props"]["formatPacks"]["flap"].update({"from": "867-5309", "to": "867-5310", "at": 730})
+    assert any("looks like a real phone number" in m for m in _check(e))
+    e["props"]["formatPacks"]["flap"].update({"from": "1500000", "to": "2500000"})
+    assert not any("phone number" in m for m in _check(e))

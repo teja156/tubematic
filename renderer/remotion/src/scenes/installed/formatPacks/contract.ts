@@ -15,9 +15,10 @@
  * mcp/tests/fixtures/format_packs_contract.json, which also pins the constants.
  *
  * Text is laid out by the browser (CSS wraps it); the validator only needs to
- * know that it fits, so it counts lines with `wrapLines` at a conservative
- * number of characters per line.
+ * know that it fits, so it counts lines with `wrapLines`, which estimates each
+ * text's width in its box (../fitText.ts) on the wide side of the real font.
  */
+import { wrapCount } from "../fitText";
 
 export const W = 1080;
 export const H = 1920;
@@ -75,7 +76,23 @@ export const TIMING = {
 } as const;
 
 /** Characters per line the validator assumes for each kind of text. */
-export const CPL = { bubble: 22, title: 22, item: 34, question: 26, headline: 22 } as const;
+/** Each wrapped text's font size, box width and whether it is in capitals, as
+ *  the components draw it. */
+export const WRAP = {
+  bubble: [44, 580, false],
+  title: [56, 796, true],
+  item: [36, 686, false],
+  question: [52, 768, false],
+  headline: [60, 756, false],
+} as const;
+export type WrapKind = keyof typeof WRAP;
+
+/** One-line texts that shrink to fit their box: smallest size, box width,
+ *  letter spacing, capitals. */
+export const ONE_LINE = {
+  chatTitle: [36, 620, 1, true],
+  option: [30, 680, 0, false],
+} as const;
 
 /** The layout, in frame pixels, before the insert moves clear of the captions.
  *  The pack's insert.block is [BAND.top, BAND.bottom]. */
@@ -102,38 +119,14 @@ export const LAYOUT = {
   rowGap: 20,
 } as const;
 
-/** How many lines `text` takes when wrapped greedily at `cpl` characters per
- *  line; a word longer than a line is broken. */
-export function wrapLines(text: string, cpl: number): number {
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return 1;
-  let lines = 1;
-  let used = 0;
-  for (const w of words) {
-    let word = w.length;
-    if (used === 0) {
-      while (word > cpl) {
-        lines += 1;
-        word -= cpl;
-      }
-      used = word;
-    } else if (used + 1 + word <= cpl) {
-      used += 1 + word;
-    } else {
-      lines += 1;
-      used = 0;
-      while (word > cpl) {
-        lines += 1;
-        word -= cpl;
-      }
-      used = word;
-    }
-  }
-  return lines;
+/** How many lines `text` takes in the box of a WRAP kind (mcp/format_packs.py wrap_lines). */
+export function wrapLines(text: string, kind: WrapKind): number {
+  const [size, box, upper] = WRAP[kind];
+  return wrapCount(upper ? text.toUpperCase() : text, size, box);
 }
 
 export function bubbleHeight(text: string): number {
-  return wrapLines(text, CPL.bubble) * LAYOUT.bubbleLine + 2 * LAYOUT.bubblePadY;
+  return wrapLines(text, "bubble") * LAYOUT.bubbleLine + 2 * LAYOUT.bubblePadY;
 }
 
 /** The thread's height with every message on screen. */
@@ -143,8 +136,8 @@ export function threadHeight(texts: string[]): number {
 
 /** The list's height: its title and every row. */
 export function listHeight(title: string, items: { lead: string; text: string }[]): number {
-  const t = (title ? wrapLines(title, CPL.title) : 0) * LAYOUT.titleLine + 40;
-  return t + items.reduce((h, it) => h + LAYOUT.rowBase + wrapLines(it.text, CPL.item) * LAYOUT.itemLine, 0)
+  const t = (title ? wrapLines(title, "title") : 0) * LAYOUT.titleLine + 40;
+  return t + items.reduce((h, it) => h + LAYOUT.rowBase + wrapLines(it.text, "item") * LAYOUT.itemLine, 0)
     + Math.max(0, items.length - 1) * LAYOUT.rowGap;
 }
 

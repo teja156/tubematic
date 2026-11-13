@@ -67,10 +67,11 @@ Covers `formatPacks/contract.ts` and `draw.ts` ([Format Packs](../10-scene-autho
 
 ### `src/scenes/installed/fitText.test.ts`
 
-Covers `fitText.ts`, which sizes a one-line text down to fit its box
-([Format Packs](../10-scene-authoring.md#format-packs)): wide letters count wider than narrow ones,
-the base size is kept when the text fits, a long wide line shrinks until its estimate fits, and the
-size never goes under the minimum.
+Covers `fitText.ts`, the width estimate that sizes a one-line text down to fit its box and counts a
+wrapped text's lines ([Format Packs](../10-scene-authoring.md#format-packs)). Its widths, fitted
+sizes and line counts equal `mcp/tests/fixtures/text_fit_contract.json`, which `mcp/text_fit.py`
+runs too; wide letters count wider than narrow ones, the base size is kept when the text fits, a
+long wide line shrinks until its estimate fits, and the size never goes under the minimum.
 
 ## Storybook Atlas
 

@@ -25,6 +25,8 @@ from __future__ import annotations
 import math
 import unicodedata
 
+import text_fit
+
 SCENE_SRC = "CodeScenes"
 PROPS_KEY = "codeScenes"
 STYLE_ID = "code_scenes"
@@ -40,6 +42,8 @@ TIMING = {"morph": 15, "focus": 8, "callout": 10, "squiggle": 10, "outputStagger
           "typePerChar": 1}
 BAND = (200, 1340)
 LAYOUT = {"textWidth": 768, "codeBudget": 650, "maxFont": 40, "lineHeight": 1.4}
+# The smallest size the one-line error callout shrinks to (CodeScenes.tsx).
+CALLOUT_MIN_FONT = 22
 # A step's `at` may sit this many frames from a word's start.
 WORD_SNAP_FRAMES = 2
 MAX_ERRORS = 12
@@ -53,11 +57,13 @@ def _int(v) -> bool:
 
 
 def wide_chars(text: str) -> list[str]:
-    """Characters that do not take one monospace cell: wide East Asian letters
-    and anything outside the Basic Multilingual Plane (emoji). The card places
-    every character on a column grid and the renderer counts UTF-16 units, so
-    one of these would land in the wrong place or shrink the font."""
-    return [c for c in text if ord(c) > 0xFFFF or unicodedata.east_asian_width(c) in ("W", "F")]
+    """Characters that do not take exactly one monospace cell: wide East Asian
+    letters, anything outside the Basic Multilingual Plane (emoji), combining
+    marks and invisible format characters. The card places every character on
+    a column grid and the renderer counts UTF-16 units, so one of these would
+    land in the wrong place or shrink the font."""
+    return [c for c in text if ord(c) > 0xFFFF or unicodedata.east_asian_width(c) in ("W", "F")
+            or unicodedata.combining(c) or unicodedata.category(c) in ("Mn", "Me", "Cf")]
 
 
 def code_lines(code: str) -> list[str]:
@@ -184,8 +190,8 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
             elif "\t" in code:
                 err(f"{where}: the code holds a tab; indent with spaces.")
             elif wide_chars(code):
-                err(f"{where}: the code holds {wide_chars(code)[0]!r}, which does not fit one column of the card "
-                    "(an emoji or a wide letter); use plain characters.")
+                err(f"{where}: the code holds {wide_chars(code)[0]!r}, which does not take one column of the card "
+                    "(an emoji, a wide letter, a combining mark or an invisible character); use plain characters.")
             elif code == prev_code:
                 err(f"{where}: the code is the same as before; leave code out of a step that only moves the "
                     "highlight, the error or the output.")
@@ -248,6 +254,25 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
             "insert sooner.")
     if width and height and font_size_for(height, width) < 32:
         err("The code is too large for the card; show fewer lines or shorter ones.")
+    elif width and height:
+        # The callout is one line beside the gutter; it shrinks to fit, down to
+        # CALLOUT_MIN_FONT (CodeScenes.tsx). The header holds the tag and the
+        # step counter with its label on one row.
+        fs = font_size_for(height, width)
+        text_left = 50 + 24 + round(fs * ADVANCE * 2.6 + 16)
+        box = 50 + 980 - text_left - 10 - 40
+        for i, s in enumerate(steps):
+            e = s.get("error") if isinstance(s, dict) else None
+            if isinstance(e, dict) and isinstance(e.get("text"), str) \
+                    and not text_fit.fits_at(e["text"], box, CALLOUT_MIN_FONT):
+                err(f"Step {i + 1}: error.text does not fit the callout; shorten it (wide letters take more room).")
+        tag = data.get("tag") if isinstance(data.get("tag"), str) else ""
+        for i, s in enumerate(steps):
+            label = s.get("label") if isinstance(s, dict) and isinstance(s.get("label"), str) else ""
+            right = (f"{i + 1}/{len(steps)}" + (f" · {label}" if label else "")) if len(steps) > 1 else label
+            if text_fit.width(tag.upper(), 40, 2) + text_fit.width(right, 36) + 40 > 980:
+                err(f"Step {i + 1}: the tag and the step label do not fit one row above the card; shorten them.")
+                break
     for problem in output_check(entry):
         err(problem)
     return errors

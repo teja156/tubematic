@@ -7,7 +7,7 @@
  */
 import React from "react";
 import { fitFontSize } from "../fitText";
-import { LAYOUT, TIMING, type ChatData } from "./contract";
+import { LAYOUT, ONE_LINE, TIMING, type ChatData } from "./contract";
 import { MONO, SANS } from "./fonts";
 import { arrival, backOut, clamp01, easeOut, type Look } from "./draw";
 import { ExampleTag, MarkedText, type TextMark } from "./parts";
@@ -31,7 +31,7 @@ export const Chat: React.FC<{ data: ChatData; frame: number; origin: number; P: 
           fontFamily: SANS, fontWeight: 700, lineHeight: `${LAYOUT.titleLine}px`, color: P.title,
           textTransform: "uppercase", letterSpacing: 1, whiteSpace: "nowrap",
           // One line above the phone: the size comes down for a wide title.
-          fontSize: fitFontSize(data.title.toUpperCase(), phoneW - 220, 56, 36, 1) }}>
+          fontSize: fitFontSize(data.title.toUpperCase(), ONE_LINE.chatTitle[1], 56, ONE_LINE.chatTitle[0], ONE_LINE.chatTitle[2]) }}>
           {data.title}
         </div>
       ) : null}

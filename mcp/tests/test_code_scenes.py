@@ -238,9 +238,9 @@ def test_the_text_audit_samples_each_code_step():
 def test_an_emoji_or_a_wide_letter_in_the_code_is_refused():
     # The card puts every character on one column; the renderer counts UTF-16 units.
     errors = _check(_step(_entry(), 0, code='msg = "done \U0001F600"\nprint(msg)'))
-    assert any("does not fit one column" in m for m in errors), errors
+    assert any("does not take one column" in m for m in errors), errors
     errors = _check(_step(_entry(), 0, code='name = "東京"\nprint(name)'))
-    assert any("does not fit one column" in m for m in errors), errors
+    assert any("does not take one column" in m for m in errors), errors
 
 
 def test_an_emoji_in_the_output_is_refused():
@@ -250,3 +250,22 @@ def test_an_emoji_in_the_output_is_refused():
 
 def test_accented_letters_are_plain_characters():
     assert cs.wide_chars('city = "Zürich"') == []
+
+
+# ── review round 2 ──────────────────────────────────────────────────────────
+
+def test_a_combining_mark_or_an_invisible_character_in_the_code_is_refused():
+    for code in ('name = "Rene\u0301"\nprint(name)', 'x = 1\u200b\nprint(x)'):
+        errors = _check(_step(_entry(), 0, code=code))
+        assert any("does not take one column" in m for m in errors), (code, errors)
+
+
+def test_a_callout_too_wide_for_its_box_is_refused():
+    errors = _check(_step(_entry(), 1, error={"line": 3, "match": "{name}", "text": "W" * 48}))
+    assert any("does not fit the callout" in m for m in errors), errors
+
+
+def test_a_tag_and_a_label_too_wide_for_the_header_are_refused():
+    e = _entry(tag="W" * 24)
+    e["props"]["codeScenes"]["steps"][0]["label"] = "W" * 24
+    assert any("do not fit one row above the card" in m for m in _check(e))

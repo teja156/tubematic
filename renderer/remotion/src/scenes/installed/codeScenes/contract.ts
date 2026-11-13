@@ -74,6 +74,9 @@ export const LAYOUT = {
   // must end by BAND.bottom whatever the code holds.
   codeBudget: 650,
   calloutH: 80,
+  // The one-line error callout shrinks to fit its box, down to this size
+  // (mcp/code_scenes.py CALLOUT_MIN_FONT refuses a message wider than that).
+  calloutMinFont: 22,
   textWidth: 768,
   paneGap: 16,
   paneHeadH: 48,

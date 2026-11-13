@@ -852,9 +852,11 @@ the font's advance. `mcp/code_scenes.py::check_insert` refuses an insert when:
   code or does not start on the insert's first frame.
 - A later step is under 45 frames after the one before, starts within 30 frames of the end, or does
   not start within 2 frames of a word.
-- The code has more than 14 lines, a line over 40 characters, a tab, or an emoji or wide letter
-  (the card places every character on one column); or a step repeats the code before it (a step
-  that only moves the focus leaves `code` out).
+- The code has more than 14 lines, a line over 40 characters, a tab, or an emoji, a wide letter, a
+  combining mark or an invisible character (the card places every character on one column); or a
+  step repeats the code before it (a step that only moves the focus leaves `code` out).
+- An error message does not fit the callout at its smallest size, or the tag and a step's counter
+  and label do not fit one row above the card.
 - `focus` or `error.line` names a line the code does not have, or `error.match` is not on its line.
 - An output pane has more than 3 lines of 40 characters, starts a line with a shell prompt, or has
   no lines and no label.
@@ -889,10 +891,11 @@ The style must never pass for a real app or a real screenshot. The component dra
 notch, island or status bar, and an EXAMPLE tag on every chat and on every strap with no `source`,
 which the data cannot remove. `mcp/format_packs.py::check_insert` refuses what data could add on
 top: a phone-number-like run outside the ranges kept for fiction (UK `07700 900000` to `900999`, US
-`555-0100` to `555-0199`), written with spaces, hyphens, dashes, dots, slashes or brackets (a run
-with dots or slashes, and any run in a strap's date or flap, counts only at ten digits, so prices
-and dates pass), a tick or verified mark anywhere, and the name of a messaging or social app in a
-contact, title or kicker. A brand named inside a message cannot be caught by a list, so the
+`555-0100` to `555-0199`), written with spaces, hyphens, dashes, dots, slashes or brackets, a tick
+or verified mark anywhere, and the name of a messaging or social app in a contact, title or kicker.
+A run with dots or slashes counts when its digit groups have a phone number's shape (`867.5309`) or
+it has ten digits, so prices and dates pass; in a strap's date and its flap, which are numbers on
+purpose, a bare run counts only at ten digits. A brand named inside a message cannot be caught by a list, so the
 skill forbids it and the pack's `insert.review` tells the AI review to report it.
 
 It also refuses an insert when:
@@ -903,13 +906,19 @@ It also refuses an insert when:
   its line limit (lines are counted with a characters-per-line rule both sides share).
 - A mark names words its message does not have, lands before its message, overlaps another mark on
   the same message or headline, or a message carries two labels; the quiz locks before its last
-  option is read; the flap's tiles, which flip one after another, would still be flipping in the
-  last 30 frames; a chat title takes more than one line above the phone.
+  option is read; the flap's changing tiles, which flip one after another, would still be flipping
+  in the last 30 frames, or a flap value holds an emoji; a chat title or a quiz option does not fit
+  its one line at its smallest size.
 - Nothing changes for more than 3 seconds.
 
-A one-line text in a fixed box (a quiz option, the chat title, Code Scenes' callout) is capped by
-characters, which cannot tell narrow letters from wide ones, so the scene sizes it down to fit with
-`src/scenes/installed/fitText.ts`, an estimate on the wide side of Barlow's real widths.
+A character count cannot tell narrow letters from wide ones, so both styles measure text with one
+width estimate on the wide side of Barlow's real widths: `mcp/text_fit.py` in the validators and
+`src/scenes/installed/fitText.ts` in the renderer, pinned to each other by
+`mcp/tests/fixtures/text_fit_contract.json`. A one-line text in a fixed box (a quiz option, the chat
+title, Code Scenes' callout) shrinks to fit, and the validator refuses one that does not fit at the
+smallest size. Wrapped text (a bubble, a list item, the question, the headline) is counted in lines
+by the same estimate in the box each component gives it, so the browser wraps it in at most as many
+lines as the validator made room for.
 
 The renderer's side is `src/scenes/installed/FormatPacks.tsx` with `formatPacks/`: `contract.ts`
 (limits, timings, the band and the line rule), a file per format, and `draw.ts`, whose rings and

@@ -50,7 +50,9 @@ work around it. In the data:
 - Every thread is made up. Never name a real bank, courier, shop, app or person in a message, a
   contact or a title: write "your bank", "a parcel company", "Unknown number", "Mum".
 - A phone number only from the ranges kept for fiction: UK `07700 900000` to `07700 900999`, US
-  `555-0100` to `555-0199`. The tool refuses any other number anywhere in the data.
+  `555-0100` to `555-0199`. The tool refuses any other number anywhere in the data, however it is
+  written (spaces, dashes, dots or slashes). A price, a date or a plain count is not a phone
+  number.
 - No tick or verified mark, anywhere. No app name (WhatsApp, iMessage, Instagram, TikTok and the
   like) in a contact, a title or a kicker.
 - A `strap` headline is either a real headline quoted word for word with its `source` ("Reuters,
@@ -61,7 +63,7 @@ work around it. In the data:
 
 Every format holds `format` and its own keys. Lengths are counted in characters.
 
-**chat**: `title` (optional, one line above the phone: about 22 characters), `contact` `{name, number}` (name at most 24; number
+**chat**: `title` (optional, one line above the phone: about 22 characters, fewer with wide letters), `contact` `{name, number}` (name at most 24; number
 optional, fiction ranges only), `messages` (2 to 5, each `{at, from, text}`, `from` `"them"` or
 `"me"`, text at most 90), `marks` (at most 3, each `{at, message, match, kind, label}`: `message` is
 the message's index from 0, `match` the words in it to mark as written, at most 22, `kind`
@@ -71,14 +73,14 @@ the message's index from 0, `match` the words in it to mark as written, at most 
 most 24 and a text of at most 64 that fits two lines).
 
 **quiz**: `question` (at most 80, three lines), `options` (2 to 4, each `{at, text}`, text at most
-30), `answer` (the right option's index from 0), `lockAt` (the frame the answer locks in, on the
+30 and fitting one row), `answer` (the right option's index from 0), `lockAt` (the frame the answer locks in, on the
 word that gives it).
 
 **strap**: `kicker` (at most 20), `headline` (at most 70, three lines), `date` (at most 24),
 `source` (optional, at most 40), `marks` (at most 2 `{at, match}` highlights on the headline's
 words, never overlapping), `flap` (optional `{label, from, to, at}`: a value of at most 10
-characters flipping to another; its tiles flip one after another, so start it early enough to land
-before the last 30 frames).
+characters flipping to another, letters, digits and signs only; the tiles that change flip one after
+another, so start it early enough to land before the last 30 frames).
 
 ## Rules the tool enforces
 
@@ -90,7 +92,8 @@ before the last 30 frames).
 - Nothing holds still for more than 3 seconds: an 8-second insert needs a change about every two to
   three seconds (a message, a mark, a row, an option, the lock, a highlight, the flip).
 - The messages fit the phone together, and the list fits the frame; a mark lands after its message
-  is on screen.
+  is on screen. Lines are counted by the width of the words, so wide letters (W, M) take more room
+  than their count.
 - The quiz locks at least 18 frames after its last option.
 - The impersonation rules above.
 

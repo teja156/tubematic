@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  APPS, BAND, CPL, FORMATS, LAYOUT, LIMITS, TICKS, TIMING, changeFrames, isFictionNumber, threadHeight, wrapLines,
+  APPS, BAND, FORMATS, ONE_LINE, WRAP, LAYOUT, LIMITS, TICKS, TIMING, changeFrames, isFictionNumber, threadHeight, wrapLines,
 } from "./contract";
 import { expoOut, ringPath, underlinePath } from "./draw";
 
@@ -14,7 +14,8 @@ describe("the shared contract", () => {
     expect([...FORMATS]).toEqual(CASES.formats);
     expect({ ...LIMITS }).toEqual(CASES.limits);
     expect({ ...TIMING }).toEqual(CASES.timing);
-    expect({ ...CPL }).toEqual(CASES.cpl);
+    expect(JSON.parse(JSON.stringify(WRAP))).toEqual(CASES.wrap_boxes);
+    expect(JSON.parse(JSON.stringify(ONE_LINE))).toEqual(CASES.one_line);
     expect([BAND.top, BAND.bottom]).toEqual(CASES.band);
     expect([...TICKS]).toEqual(CASES.ticks);
     expect([...APPS]).toEqual(CASES.apps);
@@ -22,7 +23,7 @@ describe("the shared contract", () => {
   });
 
   it("wraps text into the fixture's line counts", () => {
-    for (const c of CASES.wrap) expect(wrapLines(c.text, c.cpl)).toBe(c.lines);
+    for (const c of CASES.wrap) expect(wrapLines(c.text, c.kind)).toBe(c.lines);
   });
 
   it("measures a thread like the validator", () => {

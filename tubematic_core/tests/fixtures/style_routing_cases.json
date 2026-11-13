@@ -754,7 +754,10 @@
       ],
       "future": "",
       "note": "A fraud told from inside, with money leaving and suspicion rising.",
-      "inserts_expect": []
+      "inserts_expect": [],
+      "inserts_ok": [
+        "format_packs"
+      ]
     },
     {
       "title": "How a Ponzi scheme pays its first investors",
@@ -842,7 +845,10 @@
       ],
       "future": "",
       "note": "A near miss for Case File Story: scams, but a list of named items with no single story.",
-      "inserts_expect": []
+      "inserts_expect": [],
+      "inserts_ok": [
+        "format_packs"
+      ]
     },
     {
       "title": "How the 2008 financial crisis happened",
@@ -1043,7 +1049,10 @@
       ],
       "future": "",
       "note": "Pair probe, Case File Story vs Illustrated: invented people, but a crime and money at stake, told in the second person.",
-      "inserts_expect": []
+      "inserts_expect": [],
+      "inserts_ok": [
+        "format_packs"
+      ]
     },
     {
       "title": "Pip the fox opens a bakery",
@@ -1637,11 +1646,10 @@
         "stick"
       ],
       "future": "",
-      "note": "Insert probe (TMDEV-239/240): a which-is-true question with options: Format Packs quiz.",
-      "inserts_expect": [
-        "format_packs"
-      ],
+      "note": "Insert probe (TMDEV-239/240): a which-is-true question; the main style (a board comparing the options) can carry it, so no insert is needed, and a Format Packs quiz or the passwords as Terminal Doc strings are both acceptable.",
+      "inserts_expect": [],
       "inserts_ok": [
+        "format_packs",
         "terminal_doc"
       ]
     },

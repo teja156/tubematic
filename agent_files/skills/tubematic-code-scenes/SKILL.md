@@ -92,6 +92,12 @@ A step:
 
 - At most 14 lines of code and 40 characters per line, indented with spaces (no tabs). Show only
   the lines the narration is about: a whole function rarely fits, and a phone cannot read it.
+- Plain characters only in the code and the output: no emoji, no wide letters (Chinese, Japanese,
+  Korean), no combining accents or invisible characters. The card puts every character in one
+  column. An accented letter typed as one character (`é`) is fine.
+- The error message fits one line of the callout, and the tag with the step counter and label fits
+  one row above the card. Wide letters (W, M) take more room than their count: shorten the text
+  when the tool says it does not fit.
 - At least 45 frames (1.5 s) between steps; the last step starts at least 30 frames before the
   insert's end; nothing holds still for more than 3 seconds, so an 8-second insert needs about
   three steps.

@@ -4,7 +4,7 @@
  * others fall back.
  */
 import React from "react";
-import { LAYOUT, TIMING, type QuizData } from "./contract";
+import { LAYOUT, ONE_LINE, TIMING, type QuizData } from "./contract";
 import { MONO, SANS } from "./fonts";
 import { arrival, backOut, clamp01, easeOut, type Look } from "./draw";
 import { fitFontSize } from "../fitText";
@@ -43,8 +43,8 @@ export const Quiz: React.FC<{ data: QuizData; frame: number; origin: number; P: 
               {"ABCD"[i]}
             </div>
             <div style={{ fontFamily: SANS, fontWeight: 700, lineHeight: "52px", color: ink, whiteSpace: "nowrap",
-              // One line in the row (padding 2x28, the letter 70, the gap 26): the size comes down for wide text.
-              fontSize: fitFontSize(o.text, width - 56 - 70 - 26 - 8, 44, 30) }}>
+              // One line in the row (680 px beside the letter): the size comes down for wide text.
+              fontSize: fitFontSize(o.text, ONE_LINE.option[1], 44, ONE_LINE.option[0]) }}>
               {o.text}
             </div>
             {right && lock > 0 ? (

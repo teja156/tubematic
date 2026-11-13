@@ -15,8 +15,8 @@ and the name of a messaging or social app in a header. A brand named inside a
 message cannot be caught by a list; the authoring skill and the AI review
 (the pack's insert.review) cover it.
 
-Keep in sync: FORMATS, LIMITS, TIMING, CPL, BAND, LAYOUT, TICKS, APPS and
-wrap_lines mirror contract.ts; both sides run the shared cases in
+Keep in sync: FORMATS, LIMITS, TIMING, WRAP, ONE_LINE, BAND, LAYOUT, TICKS,
+APPS and wrap_lines mirror contract.ts; the widths come from text_fit.py; both sides run the shared cases in
 tests/fixtures/format_packs_contract.json. The style pack's insert.block is
 BAND.
 
@@ -25,6 +25,8 @@ Free of the database and of I/O.
 from __future__ import annotations
 
 import re
+
+import text_fit
 
 SCENE_SRC = "FormatPacks"
 PROPS_KEY = "formatPacks"
@@ -41,7 +43,16 @@ LIMITS = {
 }
 TIMING = {"bubbleIn": 7, "dots": 14, "rowIn": 14, "optionIn": 10, "lock": 10, "mark": 14, "headlineIn": 12,
           "flip": 8, "flipPerTile": 3}
-CPL = {"bubble": 22, "title": 22, "item": 34, "question": 26, "headline": 22}
+# Each wrapped text's font size, the width of its box and whether it is set in
+# capitals, as the components draw it: a bubble 44 px in 640 less its padding,
+# a list title 56 px capitals, an item 36 px beside its number, the question
+# 52 px in the quiz card, the headline 60 px beside the strap's bar.
+WRAP = {"bubble": (44, 580, False), "title": (56, 796, True), "item": (36, 686, False),
+        "question": (52, 768, False), "headline": (60, 756, False)}
+# One-line texts that shrink to fit their box (fitText.ts), down to a smallest
+# size the validator holds them to: the chat title (capitals, spacing 1) and a
+# quiz option.
+ONE_LINE = {"chatTitle": (36, 620, 1, True), "option": (30, 680, 0, False)}
 BAND = (200, 1330)
 LAYOUT = {"threadBudget": 760, "bubbleLine": 54, "bubblePadY": 22, "bubbleGap": 22, "listBudget": 1100,
           "titleLine": 64, "itemLine": 46, "rowBase": 104, "rowGap": 20}
@@ -69,6 +80,10 @@ _PHONE_RUN = re.compile(r"\+?\(?\d[\d\s().\-/\u2010-\u2015]{5,}\d")
 # price reaches.
 MIN_PHONE_DIGITS = 7
 MIN_PHONE_DIGITS_IN_VALUES = 10
+# A run written with dots or slashes is a price or a date unless its digit
+# groups have a phone number's shape (867.5309, 212/867/5309) or it is as long
+# as a whole number.
+PHONE_SHAPES = {(3, 4), (3, 3, 4), (1, 3, 3, 4), (4, 3, 4), (3, 4, 4), (2, 4, 4), (5, 6), (4, 6)}
 _APP_WORDS = [re.compile(r"\bX\b") if a == "X" else re.compile(rf"\b{re.escape(a)}\b", re.I) for a in APPS]
 
 
@@ -76,33 +91,33 @@ def _int(v) -> bool:
     return isinstance(v, int) and not isinstance(v, bool)
 
 
-def wrap_lines(text: str, cpl: int) -> int:
-    """Lines `text` takes wrapped greedily at `cpl` characters (contract.ts wrapLines)."""
-    words = text.split()
-    if not words:
-        return 1
-    lines, used = 1, 0
-    for w in words:
-        word = len(w)
-        if used == 0:
-            while word > cpl:
-                lines += 1
-                word -= cpl
-            used = word
-        elif used + 1 + word <= cpl:
-            used += 1 + word
-        else:
-            lines += 1
-            used = 0
-            while word > cpl:
-                lines += 1
-                word -= cpl
-            used = word
-    return lines
+def wrap_lines(text: str, kind: str) -> int:
+    """Lines `text` takes in the box of a WRAP kind, by the shared width
+    estimate (contract.ts wrapLines, text_fit.wrap_count). The estimate is on
+    the wide side, so the browser wraps it in at most as many lines."""
+    size, box, upper = WRAP[kind]
+    return text_fit.wrap_count(text.upper() if upper else text, size, box)
+
+
+def flap_frames(old: str, new: str) -> int:
+    """Frames the board takes to show `new`: the tiles flip one after another,
+    and a tile whose character does not change is already in place
+    (strap.tsx Flap pads both values on the left to one length)."""
+    n = max(len(old), len(new))
+    a, b = old.rjust(n), new.rjust(n)
+    changed = [i for i in range(n) if a[i] != b[i]]
+    return changed[-1] * TIMING["flipPerTile"] + TIMING["flip"] if changed else 0
+
+
+def one_line_fits(text: str, kind: str) -> bool:
+    """Whether a one-line text fits its box at the smallest size the scene
+    shrinks it to (fitText.ts fitFontSize)."""
+    smallest, box, spacing, upper = ONE_LINE[kind]
+    return text_fit.fits_at(text.upper() if upper else text, box, smallest, spacing)
 
 
 def bubble_height(text: str) -> int:
-    return wrap_lines(text, CPL["bubble"]) * LAYOUT["bubbleLine"] + 2 * LAYOUT["bubblePadY"]
+    return wrap_lines(text, "bubble") * LAYOUT["bubbleLine"] + 2 * LAYOUT["bubblePadY"]
 
 
 def thread_height(texts: list[str]) -> int:
@@ -110,8 +125,8 @@ def thread_height(texts: list[str]) -> int:
 
 
 def list_height(title: str, items: list[dict]) -> int:
-    t = (wrap_lines(title, CPL["title"]) if title else 0) * LAYOUT["titleLine"] + 40
-    rows = sum(LAYOUT["rowBase"] + wrap_lines(it.get("text", ""), CPL["item"]) * LAYOUT["itemLine"] for it in items)
+    t = (wrap_lines(title, "title") if title else 0) * LAYOUT["titleLine"] + 40
+    rows = sum(LAYOUT["rowBase"] + wrap_lines(it.get("text", ""), "item") * LAYOUT["itemLine"] for it in items)
     return t + rows + max(0, len(items) - 1) * LAYOUT["rowGap"]
 
 
@@ -131,9 +146,17 @@ def real_looking_numbers(text: str, min_digits: int = MIN_PHONE_DIGITS) -> list[
     for m in _PHONE_RUN.finditer(text):
         run = m.group(0).strip()
         digits = re.sub(r"\D", "", run)
-        # A dotted or slashed run is a price or a date unless it is as long as a whole number.
-        least = max(min_digits, 10) if re.search(r"[./]", run) else min_digits
-        if least <= len(digits) <= 15 and not is_fiction_number(run):
+        if len(digits) > 15 or is_fiction_number(run):
+            continue
+        groups = tuple(len(g) for g in re.findall(r"\d+", run))
+        if re.search(r"[./]", run):
+            looks = len(digits) >= 10 or groups in PHONE_SHAPES
+        elif re.search(rf"[{_JOINERS}]", run):
+            # Spaces, hyphens and dashes: in a value only in a phone number's shape.
+            looks = len(digits) >= min_digits or (min_digits > MIN_PHONE_DIGITS and groups in PHONE_SHAPES)
+        else:
+            looks = len(digits) >= min_digits
+        if looks:
             out.append(run)
     return out
 
@@ -290,9 +313,9 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
         if title is not None:
             title = text(title, "chat title", LIMITS["titleChars"])
             header(title, "The title")
-            if title and wrap_lines(title, CPL["title"]) > 1:
-                err(f"The chat title takes more than one line above the phone; keep it to about {CPL['title']} "
-                    "characters.")
+            if title and not one_line_fits(title, "chatTitle"):
+                err("The chat title does not fit one line above the phone; shorten it (about 22 characters, fewer "
+                    "with wide letters).")
         contact = data.get("contact")
         if not isinstance(contact, dict) or not set(contact) <= {"name", "number"}:
             err("contact is {name, number}: a generic label and, if any, a number from the fiction ranges.")
@@ -352,7 +375,7 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
     elif fmt == "list":
         title = text(data.get("title"), "list title", LIMITS["titleChars"])
         header(title, "The title")
-        if title and wrap_lines(title, CPL["title"]) > LIMITS["titleLines"]:
+        if title and wrap_lines(title, "title") > LIMITS["titleLines"]:
             err(f"The list title takes more than {LIMITS['titleLines']} lines; shorten it.")
         items = timed(data.get("items"), "items", LIMITS["minItems"], LIMITS["maxItems"])
         for i, it in enumerate(items):
@@ -360,7 +383,7 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
                 err(f"Item {i + 1} is {{at, lead, text}}.")
             text(it.get("lead"), f"Item {i + 1} lead", LIMITS["leadChars"])
             body = text(it.get("text"), f"Item {i + 1} text", LIMITS["itemChars"])
-            if body and wrap_lines(body, CPL["item"]) > LIMITS["itemLines"]:
+            if body and wrap_lines(body, "item") > LIMITS["itemLines"]:
                 err(f"Item {i + 1} text takes more than {LIMITS['itemLines']} lines; shorten it.")
         arrivals(items, "Item")
         if items and all(isinstance(it.get("text"), str) for it in items) \
@@ -368,13 +391,15 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
             err("The list does not fit in the frame; shorten the rows or show fewer.")
     elif fmt == "quiz":
         q = text(data.get("question"), "question", LIMITS["questionChars"])
-        if q and wrap_lines(q, CPL["question"]) > LIMITS["questionLines"]:
+        if q and wrap_lines(q, "question") > LIMITS["questionLines"]:
             err(f"The question takes more than {LIMITS['questionLines']} lines; shorten it.")
         options = timed(data.get("options"), "options", LIMITS["minOptions"], LIMITS["maxOptions"])
         for i, o in enumerate(options):
             if not set(o) <= {"at", "text"}:
                 err(f"Option {i + 1} is {{at, text}}.")
-            text(o.get("text"), f"Option {i + 1} text", LIMITS["optionChars"])
+            opt = text(o.get("text"), f"Option {i + 1} text", LIMITS["optionChars"])
+            if opt and not one_line_fits(opt, "option"):
+                err(f"Option {i + 1} does not fit its row; shorten it (wide letters take more room).")
         arrivals(options, "Option", first_at_start=False)
         answer, lock = data.get("answer"), data.get("lockAt")
         if not _int(answer) or not 0 <= answer < max(1, len(options)):
@@ -393,7 +418,7 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
         kicker = text(data.get("kicker"), "kicker", LIMITS["kickerChars"])
         header(kicker, "The kicker")
         head = text(data.get("headline"), "headline", LIMITS["headlineChars"])
-        if head and wrap_lines(head, CPL["headline"]) > LIMITS["headlineLines"]:
+        if head and wrap_lines(head, "headline") > LIMITS["headlineLines"]:
             err(f"The headline takes more than {LIMITS['headlineLines']} lines; shorten it.")
         text(data.get("date"), "date", LIMITS["dateChars"])
         if data.get("source") is not None:
@@ -426,13 +451,15 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
                 if a and a == b:
                     err("flap.from and flap.to are the same; the board flips from one value to another.")
                 at = flap.get("at")
-                tiles = max(len(a or ""), len(b or ""))
-                flipping = max(0, tiles - 1) * TIMING["flipPerTile"] + TIMING["flip"]
-                if not _int(at) or not start + LIMITS["markLead"] <= at <= end - LIMITS["endHold"]:
+                flipping = flap_frames(a or "", b or "")
+                if any(ord(c) > 0xFFFF for c in (a or "") + (b or "")):
+                    err("A flap value holds an emoji or another character a tile cannot show; use letters, digits "
+                        "and signs.")
+                elif not _int(at) or not start + LIMITS["markLead"] <= at <= end - LIMITS["endHold"]:
                     err("flap.at must be inside the insert, after the headline is on screen.")
                 elif at + flipping > end - LIMITS["endHold"]:
-                    err(f"The flap's {tiles} tiles take {flipping} frames to flip and would still be flipping at "
-                        f"the insert's end; start it by frame {end - LIMITS['endHold'] - flipping}.")
+                    err(f"The flap takes {flipping} frames to flip its changing tiles and would still be flipping "
+                        f"at the insert's end; start it by frame {end - LIMITS['endHold'] - flipping}.")
                 else:
                     on_word(at, "The flap")
 

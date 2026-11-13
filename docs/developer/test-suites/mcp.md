@@ -967,12 +967,22 @@ text audit's per-step sampling ([Code Scenes](../10-scene-authoring.md#code-scen
   too close, too near the end or off a word, a repeated code version, a tab, too many lines, a line
   too long, a focus or error line the code lacks, an error match not on its line or a message too
   long, an output pane too long, with a shell prompt or with no lines and no label, `reveal` on a
-  later step, typing too much or into the next step, a still stretch in the middle or at the end, and
-  an emoji or a wide letter in the code or the output (accented letters pass).
+  later step, typing too much or into the next step, a still stretch in the middle or at the end, an
+  emoji, a wide letter, a combining mark or an invisible character in the code or the output
+  (accented letters pass), an error message too wide for the callout, and a tag and label too wide
+  for the header row.
 - `write_scene_config` writes a Code Scenes insert with its scene, palette and shift filled, names a
   Code Scenes problem in its refusal, and refuses `CodeScenes` as one of the scenes.
 - The output check stays empty: no code runs, so the AI review checks an output pane, and a sandboxed
   run would take over in `output_check`.
+
+### `test_text_fit.py`
+
+Covers `mcp/text_fit.py`, the width estimate the Code Scenes and Format Packs validators share with
+the renderer ([Format Packs](../10-scene-authoring.md#format-packs)). The widths, the fitted sizes
+and the line counts equal the shared fixture `fixtures/text_fit_contract.json`, which
+`fitText.test.ts` runs too; wide letters measure wider than narrow ones and emoji wider still; a
+word wider than its box breaks across lines.
 
 ### `test_format_packs.py`
 
@@ -986,13 +996,16 @@ text audit's sampling between changes ([Format Packs](../10-scene-authoring.md#f
   phone numbers; app names are found as whole words, `X` only on its own.
 - A sound chat, list, quiz and strap each pass, and a strap with a source passes.
 - What passes for a real app is refused: a real-looking number in a contact or a message (written
-  with dots, slashes or dashes too) or on the flap, a tick, an app name in a contact, chat title,
-  list title or strap kicker. Prices and dates with dots or slashes pass.
+  with dots, slashes or dashes too, and a dotted local number such as `867.5309`) or a phone-shaped
+  value on the flap, a tick, an app name in a contact, chat title, list title or strap kicker.
+  Prices, dates and a bare count on the flap pass.
 - Each other refusal names its part: wrong keys, a first item off the insert's first frame, an
   arrival off a word, too close to the one before or to the end, text over its limits, a mark on
   words its message lacks or before its message, overlapping marks on a message or the headline, two
-  labels on one message, a quiz locking too early, a flap still flipping at the end, a chat title that
-  wraps, a thread too tall for the phone, and a still stretch.
+  labels on one message, a quiz locking too early, a flap still flipping at the end (only its
+  changing tiles take time) or holding an emoji, a chat title or quiz option too wide for its line, a
+  thread too tall for the phone (wide letters wrap to more lines than their count), and a still
+  stretch.
 - `write_scene_config` writes a Format Packs insert with its scene, palette and shift filled, names
   a Format Packs problem in its refusal, and refuses `FormatPacks` as one of the scenes.
 

@@ -37,8 +37,15 @@ beat list. They expect Photo Explainer and accept mixed scenes and Storybook Atl
 around a number reads as a number story, so these topics check that the routing skill's real-failure
 question and each pack's `cannot_show` keep a text or diagram style from taking the story of a real
 rocket or company. Two negative controls keep the rule from reaching too far: the same number with no
-event in it expects Terminal Doc, and a flaw in a piece of software with nothing to see beyond its
-code expects System Flow.
+event in it expects a main style with a Terminal Doc insert, and a flaw in a piece of software with
+nothing to see beyond its code expects Stick Explainer with a System Flow insert for its path (Code
+Scenes is also acceptable there, for the faulty line).
+
+The insert probes check the insert step. Topics that read a few lines of code (a mutable default
+argument, an off-by-one, `==` against `is`) expect a Code Scenes insert; topics about a command typed
+at a shell and what it prints (`chmod 777`, `curl -v`) expect Terminal Doc, which is the pair the two
+packs' `avoid_for` entries separate. Scam texts read message by message expect a Format Packs insert.
+A topic with no code and no messages (a city fire, a cat's habit) expects none.
 
 A ticket that adds a pack adds at least three topics that expect it, and moves the topics whose
 `future` names it to `expect`. CI fails until it does.

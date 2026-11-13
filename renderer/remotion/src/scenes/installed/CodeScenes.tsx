@@ -242,7 +242,7 @@ export default function CodeScenes({
             <div style={{ padding: "16px 20px", fontFamily: SANS, fontWeight: 700, color: P.errorText,
               whiteSpace: "nowrap",
               // One line in a fixed box: the size comes down for a wide message.
-              fontSize: fitFontSize(calloutError.text, LAYOUT.cardX + LAYOUT.cardW - textLeft - 10 - 40, 34, 22) }}>
+              fontSize: fitFontSize(calloutError.text, LAYOUT.cardX + LAYOUT.cardW - textLeft - 10 - 40, 34, LAYOUT.calloutMinFont) }}>
               {calloutError.text}
             </div>
           </div>
