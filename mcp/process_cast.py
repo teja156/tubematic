@@ -145,6 +145,8 @@ def check(config: dict, fps: int, word_starts: list[int], words: list[str], extr
         if len(errors) < MAX_ERRORS:
             errors.append(msg)
 
+    if not isinstance(config, dict) or not isinstance(config.get("scenes"), list):
+        return ["The config must be an object whose scenes is a list."]
     total = config.get("totalFrames")
     scenes = config.get("scenes") or []
     use = check_scene_use(STYLE_ID, scenes)

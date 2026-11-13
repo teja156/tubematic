@@ -202,6 +202,11 @@ def test_the_example_prop_passes_the_source_rules():
     # round 2: a dynamic import must not hide behind a `from "react"` in a comment
     ('import /*c*/ ("https://x/y.js").then((m) => m) // from "react"', "an import other than a static"),
     ('import /*c*/ ("https://x/y.js") /* from "react" */;', "an import other than a static"),
+    # round 3: a comment inside the import that names an allowed module
+    ('import /* from "react" */ ("https://evil/x.js")', "an import other than a static"),
+    ('import // from "react"\n("evil")', "an import other than a static"),
+    ('import /* from "react" */ .meta.url', "an import other than a static"),
+    ('import .meta.x\nexport { a } from "react"', "an import other than a static"),
 ])
 
 def test_a_custom_prop_breaking_a_source_rule_is_refused(bad, fragment):
@@ -306,3 +311,14 @@ def test_a_wide_sign_from_a_side_slot_is_pulled_in_and_two_signs_never_overlap()
 def test_two_static_imports_on_one_line_are_fine():
     body = HOURGLASS.replace('import React from "react";', 'import React from "react"; import { Easing } from "remotion";')
     assert _check(_with_hourglass(), sources={"vid_ph1/prop-hourglass": body}, video_id="vid_ph1") == []
+
+
+def test_multi_line_and_typed_static_imports_are_fine():
+    body = HOURGLASS.replace('import React from "react";', 'import React, {\n  useMemo as _m,\n} from "react";'.replace("useMemo as _m", "Fragment"))
+    body = body.replace('import { INK', 'import type { PropDrawProps } from "../../installed/puppetHistory/ink";\nimport { INK')
+    assert _check(_with_hourglass(), sources={"vid_ph1/prop-hourglass": body}, video_id="vid_ph1") == []
+
+
+def test_the_validator_holds_a_config_of_the_wrong_shape():
+    for cfg in (None, [], {"scenes": -1}, {"scenes": None}):
+        assert ph.check(cfg, 30, WORD_STARTS, WORDS, EXTRA) == ["The config must be an object whose scenes is a list."]

@@ -39,9 +39,11 @@ STRICT_SOURCE = (
     (re.compile(r"\bReact\s*\["), "React[...] lookups (a hook by another name)"),
 )
 # A static import at the top of the file; once these are taken out, any other `import` is dynamic or import.meta.
-# A static import never holds a parenthesis, so `[^;()]` cannot run across a dynamic `import (...)` to a
-# `from "..."` written in a comment; an import may follow another on the same line after a `;`.
-_STATIC_IMPORT = re.compile(r"""(?:^|(?<=;))\s*import\s[^;()]*?\bfrom\s*["'][^"']+["']\s*;?|(?:^|(?<=;))\s*import\s*["'][^"']+["']\s*;?""", re.M)
+# Between `import` and `from` a static import holds only names, braces, commas, `*` and spaces: no
+# comment, string or parenthesis, so a dynamic `import (...)` cannot hide behind a `from "..."` written
+# in a comment. An import may follow another on the same line after a `;`.
+_STATIC_IMPORT = re.compile(r"""(?:^|(?<=;))\s*import\s+(?=[\w{*$])[\w\s{},*$]*?\bfrom\s*["'][^"']+["']\s*;?"""
+                            r"""|(?:^|(?<=;))\s*import\s*["'][^"']+["']\s*;?""", re.M)
 _OTHER_IMPORT = re.compile(r"\bimport\b")
 
 
@@ -133,7 +135,7 @@ def custom_prop_errors(custom, video_id: str, library: dict, sources: dict | Non
             if _OTHER_IMPORT.search(_STATIC_IMPORT.sub("", body)):
                 errs.append(f"{where} ({cid}): the drawing uses an import other than a static `import ... from` at the "
                             "top of the file (a dynamic import or import.meta; the check reads comments too, so the "
-                            "word import may appear only in the import lines).")
+                            "word import may appear only in the import lines, and those hold no comment).")
             named = [next((g for g in groups if g), "") for groups in _IMPORT.findall(body)]
             bad = [m or '""' for m in named if not allowed_import.match(m)]
             if bad:
