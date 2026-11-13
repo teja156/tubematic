@@ -1684,10 +1684,11 @@
       ],
       "ok": [
         "storybook_atlas",
-        "scenes"
+        "scenes",
+        "archive_engraving"
       ],
       "future": "",
-      "note": "Insert probe (TMDEV-239/240): negative control: no code, no messages.",
+      "note": "Insert probe (TMDEV-239/240): negative control: no code, no messages. Archive and Engraving is acceptable too (TMDEV-230): an event from 1666 has no photographs, and period engravings are its real visual record.",
       "inserts_expect": []
     },
     {
