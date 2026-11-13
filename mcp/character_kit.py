@@ -39,7 +39,9 @@ STRICT_SOURCE = (
     (re.compile(r"\bReact\s*\["), "React[...] lookups (a hook by another name)"),
 )
 # A static import at the top of the file; once these are taken out, any other `import` is dynamic or import.meta.
-_STATIC_IMPORT = re.compile(r"""^\s*import\s[^;]*?\bfrom\s*["'][^"']+["']\s*;?|^\s*import\s*["'][^"']+["']\s*;?""", re.M)
+# A static import never holds a parenthesis, so `[^;()]` cannot run across a dynamic `import (...)` to a
+# `from "..."` written in a comment; an import may follow another on the same line after a `;`.
+_STATIC_IMPORT = re.compile(r"""(?:^|(?<=;))\s*import\s[^;()]*?\bfrom\s*["'][^"']+["']\s*;?|(?:^|(?<=;))\s*import\s*["'][^"']+["']\s*;?""", re.M)
 _OTHER_IMPORT = re.compile(r"\bimport\b")
 
 
@@ -121,12 +123,17 @@ def custom_prop_errors(custom, video_id: str, library: dict, sources: dict | Non
             if body is None:
                 errs.append(f"{where} ({cid}): there is no {src}.tsx; write it with write_scene_file first.")
                 continue
-            for pattern, why in (*FORBIDDEN_SOURCE, HOOK, *STRICT_SOURCE):
+            for pattern, why in (*FORBIDDEN_SOURCE, HOOK):
                 if pattern.search(body):
                     errs.append(f"{where} ({cid}): the drawing uses {why}.")
+            for pattern, why in STRICT_SOURCE:
+                if pattern.search(body):
+                    errs.append(f"{where} ({cid}): the drawing uses {why} (the check reads comments and strings too, "
+                                "so leave the word out of them).")
             if _OTHER_IMPORT.search(_STATIC_IMPORT.sub("", body)):
                 errs.append(f"{where} ({cid}): the drawing uses an import other than a static `import ... from` at the "
-                            "top of the file (a dynamic import or import.meta).")
+                            "top of the file (a dynamic import or import.meta; the check reads comments too, so the "
+                            "word import may appear only in the import lines).")
             named = [next((g for g in groups if g), "") for groups in _IMPORT.findall(body)]
             bad = [m or '""' for m in named if not allowed_import.match(m)]
             if bad:

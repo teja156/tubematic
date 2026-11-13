@@ -199,7 +199,11 @@ def test_the_example_prop_passes_the_source_rules():
     ('(()=>{}).constructor("return window")()', "a constructor lookup"),
     ('React["useState"](0)', "React[...] lookups"),
     ("const {useState: u} = React; u(0);", "a React or Remotion hook"),
+    # round 2: a dynamic import must not hide behind a `from "react"` in a comment
+    ('import /*c*/ ("https://x/y.js").then((m) => m) // from "react"', "an import other than a static"),
+    ('import /*c*/ ("https://x/y.js") /* from "react" */;', "an import other than a static"),
 ])
+
 def test_a_custom_prop_breaking_a_source_rule_is_refused(bad, fragment):
     problems = _check(_with_hourglass(), sources={"vid_ph1/prop-hourglass": HOURGLASS + "\n" + bad}, video_id="vid_ph1")
     assert any(fragment in p for p in problems), problems
@@ -297,3 +301,8 @@ def test_a_wide_sign_from_a_side_slot_is_pulled_in_and_two_signs_never_overlap()
             if e["type"] == "sign" and e["text"]:
                 e["text"] = "NO" if e["who"] == "caesar" else "20 MILES"
     assert not any("would overlap" in p for p in _check(_with(short_signs)))
+
+
+def test_two_static_imports_on_one_line_are_fine():
+    body = HOURGLASS.replace('import React from "react";', 'import React from "react"; import { Easing } from "remotion";')
+    assert _check(_with_hourglass(), sources={"vid_ph1/prop-hourglass": body}, video_id="vid_ph1") == []
