@@ -404,7 +404,9 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=())
         events_total += len(events)
         exits: dict[str, int] = {}
         moves: dict[str, list[tuple[int, str, str]]] = {}
-        for n, e in enumerate(events):
+        # In frame order, as the renderer reads them: whether a prop has left
+        # depends on when its exit is, not where the exit sits in the list.
+        for n, e in sorted(enumerate(events), key=lambda p: p[1].get("at") if _int(p[1].get("at")) else -1):
             kind = e.get("do")
             at = f"{where}, event {n + 1} ({kind})"
             if kind not in EVENTS:
@@ -449,6 +451,8 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=())
                     err(f"{at}: to must be one of {list(SLOTS)} and level one of {list(LEVELS)}.")
                 elif _k(tgt) in ids:
                     moves.setdefault(tgt, []).append((f, e["to"], e.get("level", ids[tgt].get("level", "floor"))))
+                elif tgt == "critter" and cr_slot:
+                    moves.setdefault("critter", []).append((f, e["to"], "floor"))   # the critter walks the floor
             if kind == "swap":
                 if _k(e.get("prop")) not in sizes:
                     err(f"{at}: prop {e.get('prop')!r} is neither a shipped prop nor one of your customProps.")
@@ -479,7 +483,14 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=())
         # ── nothing stands on anything else, or in the banner or the captions ──
         placed = []   # (label, box, from, to)
         if cr_slot:
-            placed.append(("the critter", critter_box(room, cr_slot), start, end))
+            # The critter moves like an item, so each place it stands is checked.
+            spots = [(start, cr_slot, "floor")] + sorted(moves.get("critter", []))
+            for j, (f0, slot, _) in enumerate(spots):
+                f1 = spots[j + 1][0] if j + 1 < len(spots) else end
+                box = critter_box(room, slot)
+                if box[0] < 0 or box[2] > W:
+                    err(f"{where}: at slot {slot} the critter runs off the {'left' if box[0] < 0 else 'right'} edge.")
+                placed.append(("the critter", box, f0, f1))
         for iid, it in ids.items():
             if _k(it.get("prop")) not in sizes or _k(it.get("slot")) not in SLOTS \
                     or _k(it.get("level", "floor")) not in LEVELS or _k(it.get("scale", "m")) not in SCALES:

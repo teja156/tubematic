@@ -62,7 +62,7 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 - A new visual style, Editorial Collage (experimental): a real incident or company story laid out as
   an evidence desk, with clippings carrying the video's own headlines, grey halftone prints, cut-out
   stickers, typed index cards, big figures and a red string, as the camera glides across the desk.
-  Real people are named in text and never shown as faces, and every generated picture is marked
+  Real people are named in text and never shown as faces, and every grey print is marked
   "Illustration". It needs an OpenAI key and makes up to 10 pictures per video.
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles)
   has the details.

@@ -842,7 +842,9 @@ text audit's per-set sampling, the picture checks, and `render_paper_props`
   running off the frame or reaching the banner; an event on an item that has not entered or has
   left; a swap to a prop of another size; a face that is not in the list, or a critter `face` of
 JSON `true` or `false` (Python reads `true` as 1); a field the event does not
-  take, including a `camera` on a set. Too many snap zooms are refused, a stage still for over 3 seconds is refused and an
+  take, including a `camera` on a set. Events are read in frame order, so an event after its prop's
+  exit is refused wherever the exit sits in the list, and the critter walking onto a prop is refused
+  like two props covering each other. Too many snap zooms are refused, a stage still for over 3 seconds is refused and an
   event fixes it, and a custom prop is checked piece by piece (size, count, box, colour and text).
 - With insert windows passed as `quiet`, nothing may start inside a window, and a window over a still
   stretch does not count as still.
@@ -937,8 +939,8 @@ the text audit's per-page sampling, the picture checks, the hero sheet and page 
   thirteenth is refused (one still on every page is fine), more pages than the limit are refused, at
   most two curls are allowed, and a page where nothing new happens for too long is refused without
   counting the slow push. A long pencil stage is refused, and the hero sheet cannot be a page.
-- With insert windows passed as `quiet`, nothing starts inside a window and a window does not count
-  as still.
+- With insert windows passed as `quiet`, nothing starts inside a window, a page turn or a colour
+  flood still running when a window opens is refused, and a window does not count as still.
 - Each page is sampled once its colour has landed, the change frames are each page's start, pencil
   and colour, and the text audit and picture checks read the style.
 - `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken

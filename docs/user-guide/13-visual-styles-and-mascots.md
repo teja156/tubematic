@@ -80,7 +80,7 @@ background would flash, and a viewer reads that as a broken render.
 - Choose **Editorial Collage** for a real incident, breach, outage or market event told as an
   investigation: what happened when, the documents, the numbers, and how it spread from one company
   or person to the next. Real people are named in the headlines and never shown as faces, every
-  picture carries a small "Illustration" note, and a card that copies a real document says
+  grey print carries a small "Illustration" note, and a card that copies a real document says
   "Recreation". For a real place or machine the viewer came to see as pictures, Photo Explainer fits
   better. Each picture is an OpenAI image call, up to 10 per video. It is experimental.
 - Choose **Storybook Reveal** for a fable, a myth, a parable or a small story about one character that

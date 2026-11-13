@@ -272,14 +272,16 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, video_id:
             marks += [ca, land_frame(ca)]
         marks_of.append(marks)
 
-        # nothing starts inside an insert window
-        for f, what in ((start, "starts"), (pa, "wipes its pencil in"), (ca, "floods its colour")):
+        # nothing starts or is still moving inside an insert window, where the page is hidden
+        turn_in = max(TIMING["title"], TIMING["curl"] if turn == "curl" else 0)
+        for f, n, what in ((start, turn_in, "turns in"), (pa, TIMING["pencil"], "wipes its pencil in"),
+                           (ca, TIMING["colour"], "floods its colour")):
             if f is None or f == 0:
                 continue
-            w = window_at(f, quiet)
+            w = window_at(f, quiet) or next(((a, b) for a, b in quiet if a < f + n and b > f), None)
             if w:
-                err(f"{where} {what} at frame {f}, inside an insert ({window_text(w)}), where the page is hidden. "
-                    "Move it to a word before or after the insert.")
+                err(f"{where} {what} from frame {f} to {f + n - 1}, which runs into an insert ({window_text(w)}), "
+                    f"where the page is hidden. Move it to a word at least {n} frames before the insert, or after it.")
 
     if curls > LIMITS["maxCurls"]:
         err(f"{curls} pages turn in with a curl; a video may have at most {LIMITS['maxCurls']}. Make the others "

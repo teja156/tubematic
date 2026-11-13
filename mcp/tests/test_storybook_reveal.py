@@ -281,8 +281,12 @@ def test_a_long_pencil_stage_is_refused():
 
 def test_nothing_starts_inside_an_insert_window_and_a_window_is_not_still():
     storm = _page(_data(EXAMPLE), STORM)
-    assert any("inside an insert" in e and "starts" in e for e in _check(quiet=[(storm["start"] - 10, storm["start"] + 10)]))
+    assert any("runs into an insert" in e and "turns in" in e
+               for e in _check(quiet=[(storm["start"] - 10, storm["start"] + 10)]))
     assert any("floods its colour" in e for e in _check(quiet=[(storm["colourAt"] - 5, storm["colourAt"] + 5)]))
+    # an insert that opens while the flood is still running hides its end
+    late = (storm["colourAt"] + sr.TIMING["colour"] - 4, storm["colourAt"] + sr.TIMING["colour"] + 40)
+    assert any("floods its colour" in e and "runs into an insert" in e for e in _check(quiet=[late]))
     early = _with(_early_dawn)
     dawn = _page(_data(early), DAWN)
     land = sr.land_frame(dawn["colourAt"])

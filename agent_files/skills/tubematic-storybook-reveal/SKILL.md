@@ -179,8 +179,9 @@ miss; say in the handback why any warning stands.
 If `get_timeline` shows a segment whose `insert` is not `""`, invoke the **tubematic-inserts** skill
 and follow it: it places one insert inside each marked segment and has its data written with the
 insert style's skill. The page is hidden while an insert plays, so inside each insert's window no page
-starts, no pencil wipes in and no colour floods; `write_scene_config` refuses one that does. Put them on
-words before and after the window. The captions stay on screen through the insert. Write any `inserts`
+starts, no pencil wipes in and no colour floods, and none of them may still be running when a window
+opens (a turn-in takes 10 frames, 14 with a curl; the pencil 12; the colour 18); `write_scene_config`
+refuses one that does. Put them on words before and after the window. The captions stay on screen through the insert. Write any `inserts`
 in the same `write_scene_config` call as the scene.
 
 ## Revising

@@ -202,6 +202,25 @@ def test_an_event_on_an_item_that_has_left_or_not_arrived_is_refused():
     assert any("has not entered yet" in e for e in _check(_with(early)))
 
 
+def test_the_critter_walking_onto_a_prop_is_refused():
+    def walk(d):
+        s = d["sets"][0]   # the laptop stands at c on the floor, the critter at l
+        at = next(w for w in WORD_STARTS if 30 < w < 200)
+        s["events"].append({"at": at, "do": "move", "target": "critter", "to": "c"})
+    assert any("the critter and item" in e and "on top of each other" in e for e in _check(_with(walk)))
+
+
+def test_an_event_after_an_exit_is_refused_whatever_the_list_order():
+    def late_exit(d):
+        s = d["sets"][1]
+        it = s["items"][0]
+        later = next(w for w in WORD_STARTS if w > it["at"] + 40 and w < s["start"] + 200)
+        s["events"].insert(0, {"at": later, "do": "hop", "target": it["id"]})
+        s["events"].append({"at": later - 20 if (later - 20) in WORD_STARTS else
+                            max(w for w in WORD_STARTS if it["at"] < w < later), "do": "exit", "target": it["id"]})
+    assert any("has already left" in e for e in _check(_with(late_exit)))
+
+
 def test_too_many_zooms_are_refused():
     def zooms(d):
         s = d["sets"][3]
