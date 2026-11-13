@@ -98,7 +98,13 @@ def preview(jobs_dir, video_id: str, remotion_dir: Path, frames, *, watermark: b
             try:
                 folder.mkdir(parents=True, exist_ok=True)
                 # exclusive and never through a link: a name left by anything else is a refusal
-                fd = os.open(folder / MASCOT_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+                # the folder is opened without following a link and the file made beside that handle, so a
+                # folder swapped for a link after the check above is not followed either
+                dir_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                try:
+                    fd = os.open(MASCOT_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644, dir_fd=dir_fd)
+                finally:
+                    os.close(dir_fd)
                 with os.fdopen(fd, "w", encoding="utf-8") as fh:
                     fh.write(mascot_code)
             except OSError as e:
