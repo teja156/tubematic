@@ -1,0 +1,250 @@
+{
+ "totalFrames": 956,
+ "canvas": "light",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "PaperDiorama",
+   "startFrame": 0,
+   "durationInFrames": 956,
+   "props": {
+    "paperDiorama": {
+     "critter": {
+      "color": "hero",
+      "acc": "cap"
+     },
+     "sets": [
+      {
+       "start": 0,
+       "room": "bedroom-day",
+       "banner": "Your laptop talks",
+       "critter": {
+        "slot": "l",
+        "expr": "happy"
+       },
+       "items": [
+        {
+         "id": "laptop",
+         "prop": "laptop",
+         "slot": "c",
+         "scale": "l",
+         "at": 0,
+         "enter": "pop"
+        },
+        {
+         "id": "note",
+         "prop": "envelope",
+         "slot": "cr",
+         "level": "shelf",
+         "scale": "s",
+         "at": 121,
+         "enter": "slide"
+        }
+       ],
+       "events": [
+        {
+         "at": 50,
+         "do": "hop",
+         "target": "laptop"
+        },
+        {
+         "at": 156,
+         "do": "label",
+         "target": "note",
+         "text": "LOGINS"
+        },
+        {
+         "at": 214,
+         "do": "hop",
+         "target": "critter"
+        }
+       ]
+      },
+      {
+       "start": 252,
+       "room": "diner",
+       "banner": "Free cafe Wi-Fi",
+       "cut": "tear",
+       "critter": {
+        "slot": "l",
+        "expr": "idle"
+       },
+       "items": [
+        {
+         "id": "note",
+         "prop": "envelope",
+         "slot": "c",
+         "level": "shelf",
+         "at": 252,
+         "enter": "pop"
+        },
+        {
+         "id": "spy",
+         "prop": "magnifier",
+         "slot": "r",
+         "level": "shelf",
+         "at": 298,
+         "enter": "slide"
+        }
+       ],
+       "events": [
+        {
+         "at": 338,
+         "do": "ring",
+         "target": "note"
+        },
+        {
+         "at": 350,
+         "do": "expr",
+         "target": "critter",
+         "value": "shock"
+        },
+        {
+         "at": 405,
+         "do": "stamp",
+         "text": "READ",
+         "target": "note"
+        }
+       ]
+      },
+      {
+       "start": 442,
+       "room": "mission-control",
+       "banner": "A VPN seals it",
+       "cut": "cut",
+       "critter": {
+        "slot": "l",
+        "expr": "worried"
+       },
+       "items": [
+        {
+         "id": "note",
+         "prop": "envelope",
+         "slot": "c",
+         "level": "shelf",
+         "at": 442,
+         "enter": "pop"
+        },
+        {
+         "id": "lock",
+         "prop": "padlock",
+         "slot": "cr",
+         "level": "air",
+         "scale": "s",
+         "at": 459,
+         "enter": "drop"
+        }
+       ],
+       "events": [
+        {
+         "at": 473,
+         "do": "swap",
+         "target": "note",
+         "prop": "envelope-sealed"
+        },
+        {
+         "at": 475,
+         "do": "exit",
+         "target": "lock"
+        },
+        {
+         "at": 497,
+         "do": "expr",
+         "target": "critter",
+         "value": "happy"
+        }
+       ]
+      },
+      {
+       "start": 544,
+       "room": "bank-vault",
+       "banner": "One locked tunnel",
+       "cut": "tear",
+       "critter": {
+        "slot": "l",
+        "expr": "happy"
+       },
+       "items": [
+        {
+         "id": "laptop",
+         "prop": "laptop",
+         "slot": "c",
+         "scale": "s",
+         "at": 544,
+         "enter": "pop"
+        },
+        {
+         "id": "server",
+         "prop": "server-rack",
+         "slot": "r",
+         "at": 612,
+         "enter": "slide"
+        }
+       ],
+       "events": [
+        {
+         "at": 627,
+         "do": "route",
+         "from": "laptop",
+         "target": "server",
+         "color": "go"
+        },
+        {
+         "at": 675,
+         "do": "zoom",
+         "target": "server"
+        },
+        {
+         "at": 719,
+         "do": "label",
+         "target": "server",
+         "text": "VPN SERVER"
+        }
+       ]
+      },
+      {
+       "start": 765,
+       "room": "courtroom",
+       "banner": "But not invisible",
+       "cut": "cut",
+       "critter": {
+        "slot": "cl",
+        "expr": "squint"
+       },
+       "items": [
+        {
+         "id": "server",
+         "prop": "server-rack",
+         "slot": "cr",
+         "at": 765,
+         "enter": "pop"
+        }
+       ],
+       "events": [
+        {
+         "at": 836,
+         "do": "ring",
+         "target": "server"
+        },
+        {
+         "at": 877,
+         "do": "expr",
+         "target": "critter",
+         "value": "happy"
+        },
+        {
+         "at": 909,
+         "do": "stamp",
+         "text": "TRUST?",
+         "target": "server",
+         "color": "amber"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

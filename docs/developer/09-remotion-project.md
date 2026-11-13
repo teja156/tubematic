@@ -222,7 +222,9 @@ captions do not blink out between phrases. The hold ends 12 frames after the run
 
 The word being spoken is drawn at full opacity and the rest of its run is dimmed. After a 4-frame
 entry, nothing in the line moves or resizes. A word listed in `emphasis` is drawn in white on a red box
-from the moment it is spoken, with the box scaling in over 8 frames.
+from the moment it is spoken, with the box scaling in over 8 frames. The `label` background is an
+ivory printed label hugging the phrase, a diamond each side, every word at full strength, with a
+2-frame fade and no rise.
 
 The `log` look (`background: "log"`) draws the run as a terminal log instead
 (`Subtitles.tsx::LogStrip`): a `LOG` label and a running clock over a hairline, then the run
@@ -239,7 +241,20 @@ box's top and bottom edges grow from its centre over 3 frames. The Under the Hoo
 
 With `look` set to `"fill"`, the whole phrase is on screen from its first frame, with no rise or
 fade. The words still to come are grey, and each turns to the text colour over 2 frames as it is
-spoken and stays there. The Case File Story style uses this look.
+spoken and stays there. The Case File Story style uses this look. On a `chip` background
+(`background: "chip"`) the phrase sits on a cream paper chip, and an `emphasis` word turns to
+`accent` (red by default) once spoken; the Archive and Engraving style uses the two together.
+
+With `look` set to `"tags"` (`Subtitles.tsx::TagLine`), each word is a torn paper tag that pops in as
+it is spoken: scale 0.6 up to 1.08 and back to 1 over 4 frames (`tagScale`), then still. Each tag's
+tilt (up to 5 degrees), lift and torn top and bottom edges come from a seed of its own word
+(`tagSeed`, `tornPolygon`), so a tag looks the same on every frame and every render. A run holds up to
+`maxWords` tags. The tag is `accent` and its text `color`. The Paper Diorama style uses this look.
+
+With `look` set to `"highlight"` (`Subtitles.tsx::HighlightStrip`), the whole phrase sits on a cream
+strip from its first frame, the words still to come in grey as in `fill`, and a yellow marker bar
+wipes in under each `emphasis` word over 8 frames as it is spoken (`markerReach`). The Editorial
+Collage style uses this look.
 
 ### Fonts
 
@@ -404,6 +419,18 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
 - A Case File Story video has the one `CaseFileStory` scene and its meters and beats pass the Case
   File Story checks; no other video uses `CaseFileStory`
   ([Scene Authoring](10-scene-authoring.md#case-file-story)).
+- A Paper Diorama video has the one `PaperDiorama` scene and its sets pass the Paper Diorama checks;
+  no other video uses `PaperDiorama`
+  ([Scene Authoring](10-scene-authoring.md#paper-diorama)).
+- An Archive and Engraving video has the one `ArchiveEngraving` scene and its header and beats pass
+  the Archive and Engraving checks; no other video uses `ArchiveEngraving`
+  ([Scene Authoring](10-scene-authoring.md#archive-and-engraving)).
+- An Editorial Collage video has the one `EditorialCollage` scene and its stations pass the Editorial
+  Collage checks; no other video uses `EditorialCollage`
+  ([Scene Authoring](10-scene-authoring.md#editorial-collage)).
+- A Storybook Reveal video has the one `StorybookReveal` scene and its pages pass the Storybook Reveal
+  checks; no other video uses `StorybookReveal`
+  ([Scene Authoring](10-scene-authoring.md#storybook-reveal)).
 - `inserts`, if present or if the script marks a segment `insert`, passes `mcp/inserts.py::check`:
   the window rules, the style's own checks (`system_flow.check_insert`, `terminal_doc.check_insert`,
   `code_scenes.check_insert`, `format_packs.check_insert`),
@@ -418,7 +445,7 @@ is queued or rendering (`status_mismatch`).
 `canvas` is the only default the tool writes into most files, besides each insert's `src`, `palette`
 and `shift` and the `insertTransition`, which the agent never writes. A System Flow or Whiteboard config
 with no `subtitles` also gets its style pack's caption settings, because its captions are part of the
-style's look. A Bean Explainer, Storybook Atlas, Under the Hood or Case File Story config gets them under whatever
+style's look. A Bean Explainer, Storybook Atlas, Under the Hood, Case File Story, Paper Diorama, Archive and Engraving, Editorial Collage or Storybook Reveal config gets them under whatever
 `subtitles` keys it sets, so a config that sets only `emphasis` keeps the look. A Terminal Doc config
 gets them the same way, with its skin's colours and font over the pack's. An Under the Hood config
 also gets each plate's `aspect`, read from its photograph. The
@@ -447,12 +474,12 @@ from the video's visual style or the canvas the agent recorded, and otherwise wi
 | `fontFamily` | `system-ui, sans-serif` | A non-empty string. See [Fonts](#fonts) |
 | `fontSize` | `62` | 28 to 120 |
 | `color` | `null` | A CSS colour. `null` follows the canvas: white on dark, near-black on light |
-| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"label"` (an ivory printed label hugging the phrase, a diamond each side, every word at full strength, a 2-frame fade and no rise), `"none"` or `"log"` (typed into a terminal log strip) |
+| `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"label"` (an ivory printed label), `"none"`, `"log"` (a terminal log strip) or `"chip"` (a cream paper chip); see [Grouping words](#grouping-words) |
 | `position` | `0.78` | 0.05 to 0.95. The vertical centre as a fraction of frame height |
 | `uppercase` | `false` | `true` or `false` |
-| `accent` | `null` | A CSS colour for the word being spoken in the `log` look. `null` uses `color` |
+| `accent` | `null` | A CSS colour: the word being spoken in the `log` look, an `emphasis` word on a `chip`, the tags in the `tags` look, the marker in the `highlight` look. `null` uses each one's own colour |
 | `emphasis` | `[]` | Distinct word indexes into the timeline's words (0 is the first). Each is drawn on a red box once spoken, or in a selection box under the `selection` look. At most one word in 5 (`SUBTITLE_EMPHASIS_EVERY`) |
-| `look` | `"plain"` | `"plain"`, `"selection"` (the line builds word by word) or `"fill"` (the whole phrase at once, filling in as it is spoken); see [Grouping words](#grouping-words) |
+| `look` | `"plain"` | `"plain"`, `"selection"`, `"fill"`, `"tags"` or `"highlight"`; see [Grouping words](#grouping-words) |
 
 `server.py::_validate_subtitles` rejects an unknown key, so a typo is reported at write time.
 `server.py::_emphasis_error` checks `emphasis` against the narration's word count. The
@@ -471,7 +498,7 @@ rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 
 `renderer/remotion/src/scenes/installed/` is the committed library. A config entry can reference
 `KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`.
-`BeanExplainer`, `Whiteboard`, `UnderTheHood` and `CaseFileStory` are referenced the same way, by
+`BeanExplainer`, `Whiteboard`, `UnderTheHood`, `CaseFileStory`, `PaperDiorama`, `ArchiveEngraving`, `EditorialCollage` and `StorybookReveal` are referenced the same way, by
 videos of their own style only. `SystemFlow` and `TerminalDoc` are drawn as
 [insert scenes](#insert-scenes) from the `inserts` list, and as a video's one scene only for a video
 that holds their style from an earlier version. `CodeScenes` and `FormatPacks` are insert scenes
@@ -660,6 +687,67 @@ use Instrument Sans, which this scene loads. It decodes every still before the f
 still that does not load fails the render. The contract and the checks are in
 [Case File Story](10-scene-authoring.md#case-file-story).
 
+### `PaperDiorama`
+
+`PaperDiorama` draws a whole Paper Diorama video from `props.paperDiorama` (`critter`, `customProps`,
+`sets`): paper rooms, props standing in slots, the clay critter and the events that land on the
+stressed words. Its helpers are in `paperDiorama/`: `contract.ts` (the vocabulary and limits),
+`paint.ts` (the rough edge, grain and shadow of every paper piece), `critter.ts`, `stage.ts` (slots,
+levels and timing), `props.json` (the shipped props) and `PaperPropSheet.tsx`. It loads Archivo Black,
+Fraunces and Inter from `public/fonts/` before the first frame, and the 8 room JPEGs from
+`public/paperDiorama/rooms/`. The style's captions use the `tags` look. The `PaperPropSheet`
+composition paints a video's own `customProps` for a person or an agent to check: `paper-tools/render-props.mjs`
+renders it for the `render_paper_props` tool, from a bundle entry it writes per call. The contract and
+the checks are in [Paper Diorama](10-scene-authoring.md#paper-diorama).
+
+### `ArchiveEngraving`
+
+`ArchiveEngraving` draws a whole Archive and Engraving video from `props.archive` (`header`, `beats`):
+a parchment page with a running header, a dated serif title, one museum card (a plate or chart
+engraving, a name card for a person or a row of them, or a lined document) and an optional timeline
+ruler, with events (`strike`, `stamp`, `magnify`, `route`, `timeline`, `underline`) that land on the
+narration. Its helpers are in `archiveEngraving/`: `contract.ts` (the vocabulary, limits and page
+zones), `stage.ts` (title layout, the plate's push and crop, the ruler's scale and the event
+timing) and `emblems.ts` (the engraved roundel emblems for name cards). Its engravings are
+generated stills baked with `treat_image(..., "engraving")`. The renderer draws the "Illustration"
+footnote under a plate or chart and "Recreation" under a document, and a person has no picture
+field. It loads Cormorant Upright, Bodoni Moda SC, EB Garamond, Inter and Kalam from `public/fonts/`
+before the first frame. The style's captions use the `fill` look on the `chip` background. The
+contract and the checks are in [Archive and Engraving](10-scene-authoring.md#archive-and-engraving).
+
+### `EditorialCollage`
+
+`EditorialCollage` draws a whole Editorial Collage video from `props.collage` (`stations`): a paper desk
+larger than the frame, one station per idea (a headline over a hero) and a camera that rests on a
+station and glides to the next while a red string with a pin at each end draws between them. A
+headline is a clipping, a label bar or a black card; a hero is a print, a sticker, an index card, a
+figure or a stack of small pictures. Red pen circles, underlines, strikes, highlights, stamps and
+arrows land on the narration. Its helpers are in `editorialCollage/`: `contract.ts` (the vocabulary,
+limits, zones and timing), `stage.ts` (the stepped motion, the camera, headline and hero layout, the
+typed lines and the counting figure) and `paint.ts` (the canvas painting of the desk and its
+pieces). The pieces move in steps of twelve a second under the smooth camera. The prints and
+cut-outs are generated stills baked with `treat_image(..., "print")` and `treat_image(..., "sticker")`.
+The renderer draws the "Illustration" note on a print and "Recreation" on a recreated document, and
+a hero has no field for a person's face. It loads Source Serif 4, Bricolage Grotesque and Special Elite
+from `public/fonts/` before the first frame. The style's captions use the `highlight` look. The contract
+and the checks are in [Editorial Collage](10-scene-authoring.md#editorial-collage).
+
+### `StorybookReveal`
+
+`StorybookReveal` draws a whole Storybook Reveal video from `props.reveal` (`pages`): a cream
+picture-book page with a hand-lettered title, one rounded panel holding a square picture, and a small
+page number. Each page reveals its picture in steps: the title wipes in, the picture's pencil plate
+wipes in from the left, the colour then floods over it from the left with a soft, ragged edge, and
+the picture pushes in slowly. A page change is a hard cut or a curl from the bottom-right corner.
+Its helpers are in `storybookReveal/`: `contract.ts` (the vocabulary, limits, zones and timing) and
+`stage.ts` (the title size, the picture's fit in the panel, the push, the flood and the curl). Each
+page's picture is a generated still painted from the video's hero sheet, with its pencil plate made
+by `treat_image(..., "pencil")`; the plate lines up with the colour still pixel for pixel. The flat
+page uses no SVG filter, gradient or blur, which keeps the render cost close to a plain scene. It
+loads Patrick Hand and Lora from `public/fonts/` before the first frame. The style's captions use
+the `fill` look with no background. The contract and the checks are in
+[Storybook Reveal](10-scene-authoring.md#storybook-reveal).
+
 ### Figure and panel components
 
 Four files serve videos that use line-art figures or a light canvas. None paints a background by
@@ -832,3 +920,19 @@ files in `public/fonts/` (SIL Open Font License 1.1). Its photographs are genera
 Mono files in `public/fonts/` (SIL Open Font License 1.1). Its stills are generated for each video
 from the house lead's sheet, `mcp/case_file_assets/lead.png`, an original character generated for
 this project.
+
+`PaperDiorama`'s eight rooms in `public/paperDiorama/rooms/` come from the papercut-explainer kit (MIT
+license, kept beside them as `LICENSE-papercut-explainer.txt`). Its critter and props are original
+drawings. Its fonts are the Archivo Black, Fraunces and Inter files in `public/fonts/`, each under the
+SIL Open Font License 1.1, with the license beside them.
+
+`ArchiveEngraving`'s emblems and roundels are original drawings. Its fonts are the Cormorant Upright, Bodoni Moda SC, EB Garamond, Inter and Kalam files in `public/fonts/`, each under the SIL Open Font License 1.1 (`OFL-CormorantUpright.txt` and `OFL-BodoniModaSC.txt` sit beside the new ones). Its engravings are generated for each video.
+
+`EditorialCollage`'s pieces are original drawings and its prints and cut-outs are generated for each
+video. Its fonts are Source Serif 4 and Bricolage Grotesque (SIL Open Font License 1.1, with
+`OFL-SourceSerif4.txt` and `OFL-BricolageGrotesque.txt` beside them) and Special Elite (Apache License
+2.0, kept beside it as `Apache-SpecialElite.txt`).
+
+`StorybookReveal`'s page, panel and curl are original drawings and its pictures are generated for each
+video. Its fonts are the Patrick Hand and Lora files in `public/fonts/`, each under the SIL Open Font
+License 1.1 (`OFL-PatrickHand.txt` and `OFL-Lora.txt`).

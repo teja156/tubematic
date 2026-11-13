@@ -264,11 +264,66 @@ def _check_pack(path: pathlib.Path, data) -> dict:
     # Optional: false when a video of this style may not carry a mascot (Under
     # the Hood has its own presenter). A 3D-world style never takes one either,
     # by its renderer.
+    if "pictures" in data:
+        _check_pictures(data, fail)
     if "mascot" in data and not isinstance(data["mascot"], bool):
         fail("mascot, when present, must be true or false")
     if data.get("mascot") is False and not (isinstance(messages.get("mascot"), str) and messages["mascot"].strip()):
         fail("mascot is false, so messages.mascot must say why and what to do instead")
     return data
+
+
+# The image treatments generate_image's companion tool, treat_image, can bake
+# into a still (TMDEV-229/230/231). A pack's pictures.treatments picks from them.
+TREATMENTS = ("print", "sticker", "engraving", "pencil")
+_PICTURE_TEXT = ("still_style", "still_lead")
+_SHEET_KEYS = {"name", "lead", "style"}
+_SHEET_OPTIONAL = {"house", "house_file", "join"}
+
+
+def _check_pictures(data: dict, fail) -> None:
+    """The optional `pictures` block: a style built on generated stills. Its
+    presence caps a video's new image names at routing.images (names in
+    `apart` have a slot of their own), and its prompt texts are added to every
+    generate_image prompt. `sheet` names the per-video reference picture the
+    other stills are painted from."""
+    pics = data["pictures"]
+    if not isinstance(pics, dict):
+        fail("pictures must be an object")
+    allowed = {"cap_message", "apart", "treatments", "still_aspect", "sheet"} | set(_PICTURE_TEXT)
+    if not set(pics) <= allowed:
+        fail(f"pictures has only the keys {sorted(allowed)}")
+    if not data["needs"]["openai_key"]:
+        fail("pictures needs needs.openai_key: true (only OpenAI makes the stills)")
+    if not data["routing"].get("images"):
+        fail("pictures needs routing.images: the most generated images a video may hold")
+    msg = pics.get("cap_message")
+    if not (isinstance(msg, str) and "{count}" in msg and "{cap}" in msg):
+        fail("pictures.cap_message must say what to do instead, with {count} and {cap} in it")
+    for key in _PICTURE_TEXT:
+        if key in pics and not (isinstance(pics[key], str) and pics[key].strip()):
+            fail(f"pictures.{key}, when present, must be a non-empty string")
+    if "still_aspect" in pics and pics["still_aspect"] not in ("9:16", "1:1", "16:9"):
+        fail("pictures.still_aspect, when present, must be 9:16, 1:1 or 16:9")
+    apart = pics.get("apart", [])
+    if not (isinstance(apart, list) and all(isinstance(n, str) and n for n in apart)):
+        fail("pictures.apart, when present, must list image names")
+    treat = pics.get("treatments", [])
+    if not (isinstance(treat, list) and set(treat) <= set(TREATMENTS) and len(set(treat)) == len(treat)):
+        fail(f"pictures.treatments, when present, must list treatments from {TREATMENTS}")
+    sheet = pics.get("sheet")
+    if sheet is not None:
+        if not isinstance(sheet, dict) or not _SHEET_KEYS <= set(sheet) \
+                or not set(sheet) <= _SHEET_KEYS | _SHEET_OPTIONAL \
+                or not all(isinstance(v, str) and v.strip() for v in sheet.values()):
+            fail(f"pictures.sheet must have the keys {sorted(_SHEET_KEYS)} (and may have "
+                 f"{sorted(_SHEET_OPTIONAL)}), each a non-empty string")
+        if ("house" in sheet) != ("house_file" in sheet):
+            fail("pictures.sheet takes house and house_file together")
+        if sheet["name"] not in apart:
+            fail("pictures.sheet.name must be in pictures.apart: the sheet is not a still")
+        if "still_lead" not in pics:
+            fail("pictures.sheet needs pictures.still_lead: the words that paint a still from the sheet")
 
 
 def _load() -> dict:

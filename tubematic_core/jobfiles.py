@@ -48,6 +48,9 @@ AUDIO = "audio.mp3"
 TIMELINE = "timeline.json"
 SCENE_CONFIG = "scene-config.json"
 IMAGES = "images"
+# Stills baked by treat_image (TMDEV-229/230/231): images/treated/<name>.<treatment>.png.
+# Kept apart from images/ so a treated copy never counts against a style's picture cap.
+TREATED = "treated"
 JOB_FILES = (AUDIO, TIMELINE, SCENE_CONFIG)
 
 
@@ -121,6 +124,16 @@ def image_file(jobs_dir, video_id, filename) -> Path:
         raise UnsafePath(f"image file name {filename!r} cannot be used as a file name")
     _check_video_id(video_id)
     return join_below(jobs_dir, video_id, IMAGES, filename)
+
+
+def treated_file(jobs_dir, video_id, image_name, treatment) -> Path:
+    """`<jobs_dir>/<video_id>/images/treated/<image_name>.<treatment>.png`,
+    refusing a symlink on the way."""
+    filename = f"{image_name}.{treatment}.png"
+    if not ids.is_component(filename):
+        raise UnsafePath(f"treated image name {filename!r} cannot be used as a file name")
+    _check_video_id(video_id)
+    return join_below(jobs_dir, video_id, IMAGES, TREATED, filename)
 
 
 def scene_file(scenes_dir, video_id, scene_name) -> Path:

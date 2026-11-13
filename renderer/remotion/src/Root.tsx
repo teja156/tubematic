@@ -7,6 +7,7 @@ import { MascotSheetComposition } from "./mascot/MascotSheet";
 import { BeanPropSheet, SHEET_PAGES } from "./scenes/installed/beanExplainer/BeanPropSheet";
 import { StorybookSheet, SHEET_PAGES as STORYBOOK_SHEET_PAGES } from "./scenes/installed/storybookAtlas/StorybookSheet";
 import { PresenterSheet } from "./scenes/installed/underTheHood/PresenterSheet";
+import { PaperPropSheet, sheetPages as paperSheetPages } from "./scenes/installed/paperDiorama/PaperPropSheet";
 
 // Text-layout audit composition (VQA-9). Renders exactly what "Composition"
 // renders, plus a measurement probe. A separate composition rather than a prop
@@ -125,6 +126,20 @@ export const RemotionRoot: React.FC = () => {
         id="PresenterSheet"
         component={PresenterSheet}
         durationInFrames={1}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{}}
+      />
+
+      {/* The Paper Diorama prop sheet: the shipped props and the critter's
+          expressions (no props), or a video's own customProps
+          (render_paper_props), twelve to a page, one page per frame. */}
+      <Composition
+        id="PaperPropSheet"
+        component={PaperPropSheet as unknown as React.ComponentType<Record<string, unknown>>}
+        durationInFrames={paperSheetPages()}
+        calculateMetadata={({ props }) => ({ durationInFrames: paperSheetPages(props.props as never) })}
         fps={30}
         width={1080}
         height={1920}

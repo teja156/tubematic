@@ -1,0 +1,442 @@
+{
+ "totalFrames": 1023,
+ "fps": 30,
+ "audioDurationSeconds": 34.1,
+ "words": [
+  {
+   "word": "On",
+   "startFrame": 6,
+   "endFrame": 11
+  },
+  {
+   "word": "February",
+   "startFrame": 13,
+   "endFrame": 27
+  },
+  {
+   "word": "twenty",
+   "startFrame": 29,
+   "endFrame": 40
+  },
+  {
+   "word": "eighth,",
+   "startFrame": 42,
+   "endFrame": 53
+  },
+  {
+   "word": "2017,",
+   "startFrame": 55,
+   "endFrame": 63
+  },
+  {
+   "word": "a",
+   "startFrame": 65,
+   "endFrame": 69
+  },
+  {
+   "word": "slice",
+   "startFrame": 71,
+   "endFrame": 81
+  },
+  {
+   "word": "of",
+   "startFrame": 83,
+   "endFrame": 88
+  },
+  {
+   "word": "the",
+   "startFrame": 90,
+   "endFrame": 96
+  },
+  {
+   "word": "internet",
+   "startFrame": 98,
+   "endFrame": 112
+  },
+  {
+   "word": "went",
+   "startFrame": 114,
+   "endFrame": 122
+  },
+  {
+   "word": "quiet.",
+   "startFrame": 124,
+   "endFrame": 134
+  },
+  {
+   "word": "An",
+   "startFrame": 145,
+   "endFrame": 150
+  },
+  {
+   "word": "engineer",
+   "startFrame": 152,
+   "endFrame": 166
+  },
+  {
+   "word": "was",
+   "startFrame": 168,
+   "endFrame": 174
+  },
+  {
+   "word": "fixing",
+   "startFrame": 176,
+   "endFrame": 187
+  },
+  {
+   "word": "a",
+   "startFrame": 189,
+   "endFrame": 193
+  },
+  {
+   "word": "slow",
+   "startFrame": 195,
+   "endFrame": 203
+  },
+  {
+   "word": "billing",
+   "startFrame": 205,
+   "endFrame": 217
+  },
+  {
+   "word": "system",
+   "startFrame": 219,
+   "endFrame": 230
+  },
+  {
+   "word": "at",
+   "startFrame": 232,
+   "endFrame": 237
+  },
+  {
+   "word": "Amazon.",
+   "startFrame": 239,
+   "endFrame": 250
+  },
+  {
+   "word": "One",
+   "startFrame": 261,
+   "endFrame": 267
+  },
+  {
+   "word": "command",
+   "startFrame": 269,
+   "endFrame": 281
+  },
+  {
+   "word": "should",
+   "startFrame": 283,
+   "endFrame": 294
+  },
+  {
+   "word": "have",
+   "startFrame": 296,
+   "endFrame": 304
+  },
+  {
+   "word": "removed",
+   "startFrame": 306,
+   "endFrame": 318
+  },
+  {
+   "word": "a",
+   "startFrame": 320,
+   "endFrame": 324
+  },
+  {
+   "word": "few",
+   "startFrame": 326,
+   "endFrame": 332
+  },
+  {
+   "word": "servers.",
+   "startFrame": 334,
+   "endFrame": 346
+  },
+  {
+   "word": "But",
+   "startFrame": 357,
+   "endFrame": 363
+  },
+  {
+   "word": "one",
+   "startFrame": 365,
+   "endFrame": 371
+  },
+  {
+   "word": "number",
+   "startFrame": 373,
+   "endFrame": 384
+  },
+  {
+   "word": "in",
+   "startFrame": 386,
+   "endFrame": 391
+  },
+  {
+   "word": "it",
+   "startFrame": 393,
+   "endFrame": 398
+  },
+  {
+   "word": "was",
+   "startFrame": 400,
+   "endFrame": 406
+  },
+  {
+   "word": "wrong.",
+   "startFrame": 408,
+   "endFrame": 418
+  },
+  {
+   "word": "It",
+   "startFrame": 429,
+   "endFrame": 434
+  },
+  {
+   "word": "removed",
+   "startFrame": 436,
+   "endFrame": 448
+  },
+  {
+   "word": "far",
+   "startFrame": 450,
+   "endFrame": 456
+  },
+  {
+   "word": "more,",
+   "startFrame": 458,
+   "endFrame": 466
+  },
+  {
+   "word": "including",
+   "startFrame": 468,
+   "endFrame": 484
+  },
+  {
+   "word": "systems",
+   "startFrame": 486,
+   "endFrame": 498
+  },
+  {
+   "word": "a",
+   "startFrame": 500,
+   "endFrame": 504
+  },
+  {
+   "word": "whole",
+   "startFrame": 506,
+   "endFrame": 516
+  },
+  {
+   "word": "region",
+   "startFrame": 518,
+   "endFrame": 529
+  },
+  {
+   "word": "relied",
+   "startFrame": 531,
+   "endFrame": 542
+  },
+  {
+   "word": "on.",
+   "startFrame": 544,
+   "endFrame": 549
+  },
+  {
+   "word": "For",
+   "startFrame": 560,
+   "endFrame": 566
+  },
+  {
+   "word": "almost",
+   "startFrame": 568,
+   "endFrame": 579
+  },
+  {
+   "word": "four",
+   "startFrame": 581,
+   "endFrame": 589
+  },
+  {
+   "word": "hours,",
+   "startFrame": 591,
+   "endFrame": 601
+  },
+  {
+   "word": "sites",
+   "startFrame": 603,
+   "endFrame": 613
+  },
+  {
+   "word": "and",
+   "startFrame": 615,
+   "endFrame": 621
+  },
+  {
+   "word": "apps",
+   "startFrame": 623,
+   "endFrame": 631
+  },
+  {
+   "word": "that",
+   "startFrame": 633,
+   "endFrame": 641
+  },
+  {
+   "word": "kept",
+   "startFrame": 643,
+   "endFrame": 651
+  },
+  {
+   "word": "files",
+   "startFrame": 653,
+   "endFrame": 663
+  },
+  {
+   "word": "there",
+   "startFrame": 665,
+   "endFrame": 675
+  },
+  {
+   "word": "broke.",
+   "startFrame": 677,
+   "endFrame": 687
+  },
+  {
+   "word": "Some",
+   "startFrame": 698,
+   "endFrame": 706
+  },
+  {
+   "word": "estimates",
+   "startFrame": 708,
+   "endFrame": 724
+  },
+  {
+   "word": "put",
+   "startFrame": 726,
+   "endFrame": 732
+  },
+  {
+   "word": "the",
+   "startFrame": 734,
+   "endFrame": 740
+  },
+  {
+   "word": "damage",
+   "startFrame": 742,
+   "endFrame": 753
+  },
+  {
+   "word": "near",
+   "startFrame": 755,
+   "endFrame": 763
+  },
+  {
+   "word": "a",
+   "startFrame": 765,
+   "endFrame": 769
+  },
+  {
+   "word": "third",
+   "startFrame": 771,
+   "endFrame": 781
+  },
+  {
+   "word": "of",
+   "startFrame": 783,
+   "endFrame": 788
+  },
+  {
+   "word": "the",
+   "startFrame": 790,
+   "endFrame": 796
+  },
+  {
+   "word": "web.",
+   "startFrame": 798,
+   "endFrame": 804
+  },
+  {
+   "word": "The",
+   "startFrame": 815,
+   "endFrame": 821
+  },
+  {
+   "word": "fix",
+   "startFrame": 823,
+   "endFrame": 829
+  },
+  {
+   "word": "was",
+   "startFrame": 831,
+   "endFrame": 837
+  },
+  {
+   "word": "simple.",
+   "startFrame": 839,
+   "endFrame": 850
+  },
+  {
+   "word": "The",
+   "startFrame": 861,
+   "endFrame": 867
+  },
+  {
+   "word": "tool",
+   "startFrame": 869,
+   "endFrame": 877
+  },
+  {
+   "word": "now",
+   "startFrame": 879,
+   "endFrame": 885
+  },
+  {
+   "word": "removes",
+   "startFrame": 887,
+   "endFrame": 899
+  },
+  {
+   "word": "servers",
+   "startFrame": 901,
+   "endFrame": 913
+  },
+  {
+   "word": "slowly,",
+   "startFrame": 915,
+   "endFrame": 926
+  },
+  {
+   "word": "and",
+   "startFrame": 928,
+   "endFrame": 934
+  },
+  {
+   "word": "never",
+   "startFrame": 936,
+   "endFrame": 946
+  },
+  {
+   "word": "below",
+   "startFrame": 948,
+   "endFrame": 958
+  },
+  {
+   "word": "a",
+   "startFrame": 960,
+   "endFrame": 964
+  },
+  {
+   "word": "safe",
+   "startFrame": 966,
+   "endFrame": 974
+  },
+  {
+   "word": "minimum.",
+   "startFrame": 976,
+   "endFrame": 988
+  }
+ ]
+}

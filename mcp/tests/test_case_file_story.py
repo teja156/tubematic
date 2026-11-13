@@ -36,6 +36,7 @@ EXAMPLE_TIMELINE = json.loads((REF / "example-timeline.json").read_text())
 WORD_STARTS = [w["startFrame"] for w in EXAMPLE_TIMELINE["words"]]
 PACK = tvs.pack("case_file_story")
 EXTRA = PACK["extra"]
+PICS = PACK["pictures"]
 VID = "vid_example01"
 STILLS = ("the-bag", "counting", "the-bank", "the-counter", "cash-machine", "the-desk", "the-knock", "the-door")
 # The example's beats by index.
@@ -450,7 +451,7 @@ def test_the_lead_sheet_is_made_from_the_house_sheet_in_the_given_outfit(make_vi
     assert body == server.CASE_FILE_HOUSE_SHEET.read_bytes() and mime == "image/png"
     assert call["data"]["size"] == "1920x1088" and "background" not in call["data"]
     prompt = call["data"]["prompt"]
-    assert prompt.startswith(EXTRA["sheet_lead"]) and prompt.endswith(EXTRA["sheet_style"])
+    assert prompt.startswith(PICS["sheet"]["lead"]) and prompt.endswith(PICS["sheet"]["style"])
     # the outfit ends as a sentence, so the sheet's instructions start a new one
     assert "The character wears: a grey hooded jacket and black jeans. Show the character" in prompt
     assert out["aspect_ratio"] == "16:9" and out["reference"] == "house"
@@ -465,7 +466,7 @@ def test_a_still_with_the_lead_is_painted_from_the_videos_own_sheet(make_video, 
     assert call["url"] == server.OPENAI_IMAGE_EDITS_URL
     assert call["files"]["image[]"][1] == (server.JOBS_DIR / vid / "images" / "lead.png").read_bytes()
     assert call["data"]["size"] == "1088x1920"
-    assert call["data"]["prompt"] == f"{EXTRA['still_lead']} Night. You sit at a desk, typing. {EXTRA['still_style']}"
+    assert call["data"]["prompt"] == f"{PICS['still_lead']} Night. You sit at a desk, typing. {PICS['still_style']}"
 
 
 def test_a_still_is_always_portrait_whatever_shape_is_asked_for(make_video, paid):
@@ -484,18 +485,18 @@ def test_a_still_without_the_lead_gets_the_painting_instructions_and_no_referenc
     assert "error" not in out, out
     (call,) = paid
     assert call["url"] == server.OPENAI_IMAGES_URL and call["files"] is None
-    assert call["json"]["prompt"] == f"A duffel bag of banknotes on a table. No people. {EXTRA['still_style']}"
+    assert call["json"]["prompt"] == f"A duffel bag of banknotes on a table. No people. {PICS['still_style']}"
     server.generate_image(vid, "street", "A wet street at night")          # no full stop given
-    assert paid[-1]["json"]["prompt"] == f"A wet street at night. {EXTRA['still_style']}"
+    assert paid[-1]["json"]["prompt"] == f"A wet street at night. {PICS['still_style']}"
 
 
 @pytest.mark.parametrize("name, reference, images, fragment", [
-    ("lead", "", (), "is made from the house lead"),
-    ("lead", "the-desk", ("the-desk",), "is made from the house lead"),
-    ("the-desk", "house", (), "only makes the lead sheet"),
-    ("house", "", (), "is kept for the house lead's sheet"),
-    ("house", "lead", ("lead",), "is kept for the house lead's sheet"),
-    ("the-desk", "lead", (), "Make the lead sheet first"),
+    ("lead", "", (), "is made from the house sheet"),
+    ("lead", "the-desk", ("the-desk",), "is made from the house sheet"),
+    ("the-desk", "house", (), "only makes the reference sheet"),
+    ("house", "", (), "is kept for the house sheet"),
+    ("house", "lead", ("lead",), "is kept for the house sheet"),
+    ("the-desk", "lead", (), "Make the reference sheet first"),
     ("the-desk", "the-bag", (), "is not an image of this video yet"),
     ("the-desk", "../lead", ("lead",), "reference"),
 ])
@@ -508,7 +509,7 @@ def test_a_wrong_reference_is_refused_before_the_paid_call(make_video, paid, nam
 
 def test_a_reference_is_refused_for_every_other_style_and_their_prompts_are_untouched(make_video, paid):
     vid = make_video(style="illustrated", images=("lead",))
-    assert "case_file_story video only" in server.generate_image(vid, "a", "a scene", reference="lead")["error"]
+    assert "only for a style painted from a reference sheet" in server.generate_image(vid, "a", "a scene", reference="lead")["error"]
     assert paid == []
     out = server.generate_image(vid, "a", "a scene")
     assert "error" not in out, out

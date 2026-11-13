@@ -23,6 +23,10 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Storybook Atlas (experimental)** | A vintage picture book told in chapters, each opened by a plaque over a hand-drawn room or landscape. A small mouse guide walks beside the story while its people, named by printed tags, and hatched objects arrive on the narrator's words. No images | Nothing |
 | **Under the Hood (experimental)** | A dark canvas and close-up photographs of one physical object. Short capital labels point at its parts, gold arcs show fields and flows, numbers tick, and a cartoon presenter reacts in the bottom corner | An OpenAI key. Up to 12 generated photographs per video |
 | **Case File Story (experimental)** | A suspense story in painted pictures that puts the viewer inside a scheme or a money dilemma. One blank-faced character stands in for the viewer, meters change with the plot, cards count the numbers out, and it ends on a choice between two buttons | An OpenAI key. Up to 16 generated pictures per video, and one reference picture |
+| **Paper Diorama (experimental)** | A playful explainer in rooms of cut paper. A taped banner names each beat, paper props pop in on the narrator's words, a small clay critter reacts, and the captions are torn paper tags. No images | Nothing |
+| **Editorial Collage (experimental)** | An evidence desk. Newspaper-style clippings with the video's own headlines, grey halftone prints, cut-out stickers, typed index cards and big figures, joined by a red string as the camera glides across the desk. Red pen, highlighter and stamps land on the key words | An OpenAI key. Up to 10 generated pictures per video |
+| **Storybook Reveal (experimental)** | A picture book for a fable or a moral story. Each page is one painted picture that appears as a pencil drawing and then floods with colour, under a hand-lettered title. The hero looks the same on every page | An OpenAI key. Up to 12 generated pages per video, and one reference picture |
+| **Archive and Engraving (experimental)** | A documentary page on parchment. Engraved plates in museum frames, a serif title with one red word, red strike-throughs, stamps, routes on old charts and a timeline. People appear as name cards, never as faces | An OpenAI key. Up to 10 generated engravings per video |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
 | **Whiteboard** | One big white board. A floating marker writes and draws each step just after the narrator says it, and the camera glides between parts of the board. It ends on the whole board, each part numbered. No people and no images | Nothing |
 
@@ -66,6 +70,32 @@ background would flash, and a viewer reads that as a broken render.
   ends found out or named as a crime. Each picture is an OpenAI image call, up to 16 per video and
   one more for the character's reference picture, so it costs more per video than the styles
   without images. It is experimental.
+- Choose **Paper Diorama** for a tech, product or safety idea told playfully inside one familiar
+  place: a password manager as a bank vault, cafe Wi-Fi in a diner, two-factor login as a second lock.
+  Plain paper props stand in for the idea (a note for your data, a padlock for encryption) and the
+  script is light and warm. It suits one idea with a before and after better than a list of tips or
+  a process walked through step by step, and it never shows real products, logos or people. The props
+  come from a library of paper models, and the agent builds any it lacks from paper shapes. It is
+  experimental.
+- Choose **Editorial Collage** for a real incident, breach, outage or market event told as an
+  investigation: what happened when, the documents, the numbers, and how it spread from one company
+  or person to the next. Real people are named in the headlines and never shown as faces, every
+  grey print carries a small "Illustration" note, and a card that copies a real document says
+  "Recreation". For a real place or machine the viewer came to see as pictures, Photo Explainer fits
+  better. Each picture is an OpenAI image call, up to 10 per video. It is experimental.
+- Choose **Storybook Reveal** for a fable, a myth, a parable or a small story about one character that
+  ends on a lesson, such as a habit that grows or a kindness repaid. The script is told as a calm tale
+  in a few pages. The agent first makes a reference picture of the hero, so the hero looks the same on
+  every page. It does not suit real history (Storybook Atlas and Archive and Engraving fit that) or a
+  list of tips. Each page is an OpenAI image call, up to 12 per video and one more for the hero's
+  reference picture. It is experimental.
+- Choose **Archive and Engraving** for history told seriously: how an old belief was overturned, an
+  idea passed from one thinker to the next, a voyage on old maps, the history of a market or an
+  invention told as a documentary. A real person appears as a name card with their dates and an
+  emblem, never as a picture of their face, and every picture carries a small "Illustration" note so
+  no one takes it for a real archive print. A card that copies a real document says "Recreation".
+  For a light story of how an everyday thing was invented, Storybook Atlas fits better. Each plate is
+  an OpenAI image call, up to 10 per video. It is experimental.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
 - Choose **Whiteboard** for an idea worked out step by step: a formula built up, money arithmetic
   such as interest or a percentage, an everyday chain of causes that ends in one picture, two ideas
@@ -78,8 +108,9 @@ When you approve a topic left on Auto, the agent picks a style before it writes 
 the script is written for the style: a Whiteboard script works an idea out one step at a time,
 for example. It reads what each style is made for and avoids, compares that with the topic, and
 picks the style that clearly fits. It considers every style this install can make: Illustrated only
-while an OpenAI key is stored, Under the Hood and Case File Story only while an OpenAI key is stored
-and the video has no mascot, Cartoon 3D only while a GPU is working and the video has no mascot.
+while an OpenAI key is stored, Under the Hood, Case File Story, Editorial Collage, Archive and
+Engraving and Storybook Reveal only while an OpenAI key is stored and the video has no mascot, Paper Diorama only while the video has no mascot, Cartoon 3D only while
+a GPU is working and the video has no mascot.
 It may pick a style that generates images, which costs more per video. It does not pick a style for
 variety: the same kind of topic gets the same style every time.
 
@@ -196,7 +227,8 @@ preview of the style the video uses.
 
 A style the install cannot make stays in the list, greyed out, with the reason under its name:
 
-- **needs an OpenAI key** (Illustrated, Under the Hood, Case File Story): no OpenAI key is stored.
+- **needs an OpenAI key** (Illustrated, Under the Hood, Case File Story, Editorial Collage, Archive
+  and Engraving, Storybook Reveal): no OpenAI key is stored.
   Add one on **Settings → API Keys**.
 - **needs a working GPU** (Cartoon 3D): no renderer has passed its GPU test. See
   [GPU Rendering](10-gpu-rendering.md).
@@ -218,8 +250,10 @@ surprised, has an idea, hops, glances at something. It does not narrate and does
 
 Mascots are experimental and off by default. A video has one only if you pick it. They are drawn on
 the GPU, so you can pick a mascot only while a renderer's GPU test has passed. Cartoon 3D, Under
-the Hood and Case File Story videos cannot have one: Under the Hood has its own presenter and Case
-File Story its own lead character.
+the Hood, Case File Story, Paper Diorama, Editorial Collage, Archive and Engraving and Storybook
+Reveal videos cannot have one: Under the Hood has its own presenter, Case File Story its own lead
+character, Paper Diorama its own critter and Storybook Reveal its own hero, and Editorial Collage and
+Archive and Engraving are serious documentary pages a cartoon character would not suit.
 
 ![The Mascots page under Profiles: a form for a new mascot, and the built-in mascot Tubi marked READY](../images/mascots.png)
 
