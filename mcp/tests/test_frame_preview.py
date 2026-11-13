@@ -176,6 +176,14 @@ def test_a_mascot_file_is_never_written_through_a_planted_link(fake_node, jobs, 
     assert (folder / "mascot.js").read_text() == "export default {};" and not (folder / "mascot.js").is_symlink()
 
 
+def test_a_mascot_name_taken_by_a_directory_is_a_refusal_not_a_crash(fake_node, jobs):
+    _, remotion, log = fake_node
+    (jobs / VID / "preview" / "mascot.js").mkdir(parents=True)
+    with pytest.raises(fp.PreviewError, match="could not be staged"):
+        _preview(jobs, remotion, [10], mascot_code="export default {};")
+    assert _calls(log) == []
+
+
 def test_a_symlinked_job_file_is_a_refusal_not_a_crash(fake_node, jobs, tmp_path):
     _, remotion, _ = fake_node
     real = tmp_path / "real.json"

@@ -20,6 +20,7 @@ and its beat gate; a Cartoon 3D video is sent there.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -94,8 +95,14 @@ def preview(jobs_dir, video_id: str, remotion_dir: Path, frames, *, watermark: b
         props = cartoon._props(video_id)
         props["watermark"] = bool(watermark)
         if mascot_code:
-            folder.mkdir(parents=True, exist_ok=True)
-            (folder / MASCOT_FILE).write_text(mascot_code, encoding="utf-8")
+            try:
+                folder.mkdir(parents=True, exist_ok=True)
+                # exclusive and never through a link: a name left by anything else is a refusal
+                fd = os.open(folder / MASCOT_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    fh.write(mascot_code)
+            except OSError as e:
+                raise PreviewError(f"the mascot's code could not be staged in {PREVIEW_DIR}/: {e.strerror or e}")
             props["mascotPath"] = f"/public/{video_id}/{PREVIEW_DIR}/{MASCOT_FILE}"
         try:
             proc = cartoon.run_cli(remotion_dir, "still", [str(tjobs.job_dir(jobs_dir, video_id)), str(folder), *map(str, clean)],
