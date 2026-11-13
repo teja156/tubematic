@@ -7,6 +7,7 @@ import { MascotSheetComposition } from "./mascot/MascotSheet";
 import { BeanPropSheet, SHEET_PAGES } from "./scenes/installed/beanExplainer/BeanPropSheet";
 import { StorybookSheet, SHEET_PAGES as STORYBOOK_SHEET_PAGES } from "./scenes/installed/storybookAtlas/StorybookSheet";
 import { MidcenturySheet, SHEET_PAGES as MIDCENTURY_SHEET_PAGES } from "./scenes/installed/midcenturyHowTo/MidcenturySheet";
+import { ProcessCastSheet, SHEET_PAGES as PROCESS_CAST_SHEET_PAGES } from "./scenes/installed/processCast/ProcessCastSheet";
 import { PresenterSheet } from "./scenes/installed/underTheHood/PresenterSheet";
 
 // Text-layout audit composition (VQA-9). Renders exactly what "Composition"
@@ -139,6 +140,19 @@ export const RemotionRoot: React.FC = () => {
         id="MidcenturySheet"
         component={MidcenturySheet}
         durationInFrames={MIDCENTURY_SHEET_PAGES}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{}}
+      />
+
+      {/* The Process Cast model sheet: one page per frame (the cast's bodies,
+          tints and faces, then the stations, then the props), for a person to
+          approve the style's cast and kit. No video uses it. */}
+      <Composition
+        id="ProcessCastSheet"
+        component={ProcessCastSheet}
+        durationInFrames={PROCESS_CAST_SHEET_PAGES}
         fps={30}
         width={1080}
         height={1920}

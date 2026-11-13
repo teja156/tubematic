@@ -40,6 +40,7 @@ const ID = /^[a-z0-9_]{1,24}$/;
 // Each style's preview component: its module (from src/scenes/installed/) and export.
 const STYLES = {
   midcentury_howto: { module: "midcenturyHowTo/MidcenturySheet", component: "MidcenturyPropPreview" },
+  process_cast: { module: "processCast/ProcessCastSheet", component: "ProcessCastPropPreview" },
 };
 
 const die = (message, code = 1) => {

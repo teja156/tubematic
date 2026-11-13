@@ -57,6 +57,29 @@ globalThis.__out = { extra, fixture: {
 } };
 `,
   },
+  process_cast: {
+    dir: "processCast",
+    entry: (D, about) => `
+import { ACCESSORIES, BODIES, CAMERA_MOVES, CUSTOM, ENTRANCES, EVENT_TYPES, FACES, GEOMETRY, LIMITS, MARKS, PROPS, STATIONS, TIMING, TINTS,
+  bodySize, cloneId, propCentre, slotCount, slotX } from "${D}/contract";
+import { blinkAt } from "${D}/stage";
+const extra = {
+  bodies: [...BODIES], tints: Object.keys(TINTS), accessories: [...ACCESSORIES], faces: [...FACES], marks: [...MARKS],
+  entrances: [...ENTRANCES], camera_moves: [...CAMERA_MOVES], stations: Object.keys(STATIONS),
+  props: Object.fromEntries(Object.entries(PROPS).map(([k, v]) => [k, { text: v.text, acts: [] }])),
+};
+globalThis.__out = { extra, fixture: {
+  _about: ${JSON.stringify(about)},
+  constants: { LIMITS, TIMING, GEOMETRY, BODIES, TINTS, ACCESSORIES, FACES, MARKS, ENTRANCES, CAMERA_MOVES, EVENT_TYPES, STATIONS, PROPS, CUSTOM },
+  body_size: [["bean", 1], ["units", 1], ["units", 4], ["units", 5], ["units", 8], ["units", 16]].map(([b, n]) => ({ body: b, units: n, size: bodySize(b, n) })),
+  slot_x: [[0, "desk", 0], [0, "desk", 2], [2, "stage", 4], [1, "cell", 1]].map(([i, k, s]) => ({ index: i, kind: k, slot: s, x: slotX(i, k, s) })),
+  slot_count: Object.keys(STATIONS).map((k) => ({ kind: k, n: slotCount(k) })),
+  prop_centre: [[0, "desk", "card"], [1, "board", "file"], [2, "stage", "coin"]].map(([i, k, p]) => ({ index: i, kind: k, prop: p, centre: propCentre(i, k, PROPS[p]) })),
+  clone_id: [["packet", 1], ["packet", 2]].map(([w, n]) => ({ who: w, n, id: cloneId(w, n) })),
+  blink: [0, 1, 50, 83, 84, 200].map((f) => ({ frame: f, seed: 41, blink: blinkAt(f, 41) })),
+} };
+`,
+  },
 };
 
 async function sync(style) {

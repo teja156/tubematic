@@ -160,7 +160,7 @@ def test_under_the_hood():
     assert tvs.effective_canvas("under_the_hood", "light") == "dark"
     # its own presenter stands where a mascot would: no mascot, like Cartoon 3D
     assert p["mascot"] is False and "presenter" in p["messages"]["mascot"]
-    assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood", "case_file_story", "midcentury_howto"}
+    assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood", "case_file_story", "midcentury_howto", "process_cast"}
     rows = {r["id"]: r for r in tvs.public_list(openai_key_set=True, gpu_status="working")}
     assert rows["under_the_hood"]["mascot"] is False and rows["cartoon_3d"]["mascot"] is False
     assert rows["auto"]["mascot"] is True and rows["stick"]["mascot"] is True
@@ -483,4 +483,22 @@ def test_midcentury_howto():
     assert rows["midcentury_howto"]["mascot"] is False and rows["midcentury_howto"]["available"] is True
     # the script names the steps by number, so each gets its own medallion
     assert "opened by its number" in p["script"] and "never invent a menu" in p["script"]
+
+
+def test_process_cast():
+    p = tvs.pack("process_cast")
+    assert p["renderer"] == "dom" and p["canvas"] == "light" and p["dimension"] == "2d"
+    assert p["authoring_skill"] == "tubematic-process-cast"
+    assert p["experimental"] is True and p["order"] == 180 and p["role"] == "main"
+    assert p["inserts"] == {"host": True, "transition": "cut"}
+    assert tvs.figures_allowed("process_cast") is True
+    assert tvs.line_art_allowed("process_cast") is False and tvs.characters_allowed("process_cast") is False
+    assert tvs.needs_openai_key("process_cast") is False and tvs.needs_gpu("process_cast") is False
+    assert p["routing"]["images"] == 0 and p["captions"]["background"] == "none"
+    # its cast are drawn characters; a mascot would be confused with them (user, 2026-11-12)
+    assert p["mascot"] is False and "cast" in p["messages"]["mascot"]
+    # told apart from the mascot feature: its label, tagline and routing never say "mascot" (user, 2026-11-12)
+    assert "mascot" not in (p["label"] + p["tagline"] + json.dumps(p["routing"])).lower()
+    # Stick Explainer keeps processes acted out by people and requests walked through a system (user, 2026-11-12)
+    assert any("Stick Explainer fits it" in a and "people or roles" in a for a in p["routing"]["avoid_for"])
 

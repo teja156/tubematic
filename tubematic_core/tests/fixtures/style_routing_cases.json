@@ -9,10 +9,11 @@
       ],
       "ok": [
         "whiteboard",
-        "scenes"
+        "scenes",
+        "process_cast"
       ],
       "future": "",
-      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out.",
+      "note": "System Flow is an insert style: the path between components is its insert, inside a main style that acts the parts out. Process Cast is acceptable: DNS stays with Stick Explainer, which acts a request out through a system's parts as roles (user, 2026-11-12).",
       "inserts_expect": [
         "system_flow"
       ]
@@ -1548,6 +1549,92 @@
       "future": "",
       "note": "Pair probe with Mid-century How-To: a list of named mistakes, one section each, is Bean Explainer's even though the topic is security advice.",
       "inserts_expect": []
+    },
+    {
+      "title": "How eight bits make a byte",
+      "brief": "Why computers count in bits, how eight of them make a byte, why a byte holds 256 patterns, and how one byte stores the letter A.",
+      "expect": [
+        "process_cast"
+      ],
+      "ok": [
+        "whiteboard",
+        "bean_explainer"
+      ],
+      "future": "",
+      "note": "Units that add up, drawn as cubes that join: Process Cast. Whiteboard is acceptable for the arithmetic.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How your white blood cells catch a virus",
+      "brief": "A virus gets into your body; the cells that patrol your blood spot it, call for help, copy themselves and swallow it, and remember it for next time.",
+      "expect": [
+        "process_cast"
+      ],
+      "ok": [
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Cells as the characters of a process inside the body.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Meet the seven layers of the OSI model",
+      "brief": "The seven layers of networking introduced one by one, from the cable up to the app, each with the one job it does for a message passing through.",
+      "expect": [
+        "process_cast"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick"
+      ],
+      "future": "",
+      "note": "Pair probe with Bean Explainer's lists: named parts of a system introduced one by one as characters is Process Cast's meet-the-cast.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "What a compiler does to your code, stage by stage",
+      "brief": "Your source code goes through the lexer, the parser, the type checker, the optimiser and the code generator, and each stage hands the next a different version of it.",
+      "expect": [
+        "process_cast"
+      ],
+      "ok": [
+        "stick",
+        "whiteboard"
+      ],
+      "future": "",
+      "note": "A pipeline of named stages each part passes through.",
+      "inserts_expect": "any"
+    },
+    {
+      "title": "What happens to a sandwich after you swallow it",
+      "brief": "The trip through your stomach, small intestine and liver: what each organ does to the food, which parts become energy, and what is left over.",
+      "expect": [
+        "process_cast"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Organs and food as characters at stations along one path.",
+      "inserts_expect": []
+    },
+    {
+      "title": "How a phishing attacker steals your login",
+      "brief": "An attacker sends a fake email, you click the link, a copy of your bank's page takes your password, and the attacker logs in as you before you notice.",
+      "expect": [
+        "stick"
+      ],
+      "ok": [
+        "bean_explainer",
+        "case_file_story",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Pair probe with Process Cast: the actors are people and roles (an attacker and a user), which is Stick Explainer's.",
+      "inserts_expect": "any"
     }
   ]
 }

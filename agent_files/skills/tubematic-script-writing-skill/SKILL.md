@@ -619,6 +619,8 @@ are part of the invented situation.
 `midcentury_howto` has no photographs either: a named product, app or setting there is a flat
 object with its name on its screen or label, exactly as the real menu names it, and the presenter is
 the only person in it.
+`process_cast` has none either, and no people: the parts of the process are its characters, each
+named once in the narration the way its tag reads, and a place is a station named as its sign reads.
 A segment marked as an insert has no photographs either, and neither has a legacy whole
 `system_flow` or `terminal_doc` video (one voiced before they became insert styles). In System Flow
 a named person or place is a labelled component (`"Alice's laptop"` as a `user` or `phone` node),
