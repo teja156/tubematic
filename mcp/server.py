@@ -9041,6 +9041,12 @@ def _timeline_words(video_id: str) -> list[str]:
         return []
 
 
+def _snippet_runner(language: str, code: str):
+    """A short sandbox run for a check (the Code Scenes output panes), or None
+    when the sandbox cannot take it now: the check then refuses nothing."""
+    return sandbox_client.run_snippet(sandbox_client.spool_dir(), language, code)
+
+
 # Each insert style's own check over one insert of a config (TMDEV-224), by
 # style id: fps, the narration's word starts and words, then the entry. A new
 # insert style adds its module's check_insert here.
@@ -9048,7 +9054,7 @@ _INSERT_CHECKS = {
     system_flow.STYLE_ID: lambda fps, starts, words, e: system_flow.check_insert(
         e, fps, starts, tvs.pack(system_flow.STYLE_ID)["extra"]["icons"]),
     terminal_doc.STYLE_ID: lambda fps, starts, words, e: terminal_doc.check_insert(e, fps, starts, words),
-    code_scenes.STYLE_ID: lambda fps, starts, words, e: code_scenes.check_insert(e, fps, starts, words),
+    code_scenes.STYLE_ID: lambda fps, starts, words, e: code_scenes.check_insert(e, fps, starts, words, _snippet_runner),
     format_packs.STYLE_ID: lambda fps, starts, words, e: format_packs.check_insert(e, fps, starts, words),
 }
 

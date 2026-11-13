@@ -234,3 +234,24 @@ def test_run_files_never_land_in_images(box, through_mcp):
     r, _ = through_mcp("run_code", video_id=VID, language="python", code="open('out/a.txt', 'w').write('x')")
     assert not (box / "jobs" / VID / "images").exists()
     assert (box / "jobs" / VID / "runs" / r["run_id"] / "a.txt").read_text() == "x"
+
+
+def test_the_validator_runner_returns_the_real_output_and_keeps_nothing(box):
+    r = server._snippet_runner("python", "print('hi')")
+    assert r["exit_code"] == 0 and r["stdout"] == "hi\n"
+    assert list((box / "spool" / "done").iterdir()) == []
+
+
+def test_the_validator_runner_is_none_when_the_sandbox_is_not_there(box, monkeypatch):
+    monkeypatch.delenv("TUBEMATIC_SANDBOX_DIR")
+    assert server._snippet_runner("python", "print(1)") is None
+
+
+def test_a_wrong_output_pane_is_refused_end_to_end(box):
+    import code_scenes as cs
+    entry = {"props": {"codeScenes": {"lang": "python", "steps": [
+        {"at": 0, "code": "print(6 * 7)", "output": {"lines": ["41"]}}]}}}
+    out = cs.output_check(entry, server._snippet_runner)
+    assert len(out) == 1 and "['42']" in out[0]
+    entry["props"]["codeScenes"]["steps"][0]["output"]["lines"] = ["42"]
+    assert cs.output_check(entry, server._snippet_runner) == []

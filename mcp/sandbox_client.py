@@ -268,3 +268,21 @@ def run(spool, jobs_dir, video_id: str, language: str, code: str, timeout_s: flo
     out["files"] = store_outputs(spool, rid, jobs_dir, video_id)
     out["run_id"] = rid
     return out
+
+
+def run_snippet(spool, language: str, code: str, timeout_s: float = 5) -> dict | None:
+    """One quick run for a validator: the cleaned result, or None when it could
+    not be had for any reason (no sandbox, busy, too slow, refused). It takes
+    no inputs and keeps no files, and never raises."""
+    try:
+        if language not in P.LANGUAGES or len(code.encode("utf-8")) > P.MAX_CODE_BYTES:
+            return None
+        check_available(spool)
+        ahead = queue_length(spool)
+        rid = submit(spool, language, code, timeout_s, [])
+        try:
+            return clean_result(wait_for_result(spool, rid, timeout_s, ahead))
+        finally:
+            shutil.rmtree(Path(spool) / "done" / rid, ignore_errors=True)
+    except (SandboxError, OSError, ValueError):
+        return None

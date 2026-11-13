@@ -14,11 +14,13 @@ contract.ts; both sides run the shared cases in
 tests/fixtures/code_scenes_contract.json. The style pack's insert.block is
 BAND.
 
-No code runs anywhere: an output pane must be what the code on screen prints,
-which the authoring skill keeps small enough to be certain and the AI review
-checks against the code (`output_check` is where a real run takes over).
-
-Free of the database and of I/O.
+An output pane must be what the code on screen prints. When the code sandbox
+is up (TMDEV-242), `output_check` runs the code of every Python, JavaScript or
+TypeScript pane and refuses a pane that differs; for any other language, or
+when the sandbox is down, busy or the code needs more than it has, nothing is
+refused and the AI review checks the pane against the code (the pack's
+insert.review). The run is handed in by the caller as `run`, so this module
+stays free of the database and of I/O.
 """
 from __future__ import annotations
 
@@ -108,14 +110,50 @@ def output_from(steps: list, index: int):
     return None
 
 
-def output_check(entry: dict) -> list[str]:
-    """Whether the output panes show what the code prints. Nothing runs code
-    yet, so the AI review checks it from the code (the pack's insert.review);
-    a sandboxed run replaces this when it exists."""
-    return []
+RUNNABLE = ("python", "javascript", "typescript")
+RUN_TIMEOUT_S = 5
 
 
-def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]) -> list[str]:
+def _printed(pane: dict, stdout: str) -> bool:
+    """Whether a pane's lines are what `stdout` printed: the pane's lines, with
+    the line ends trimmed, are the start of the printed lines, and all of them
+    when the code prints no more than a pane holds."""
+    shown = [x.rstrip() for x in pane.get("lines") or []]
+    printed = [x.rstrip() for x in stdout.replace("\r\n", "\n").rstrip("\n").split("\n")] if stdout.strip() else []
+    if len(printed) <= LIMITS["outputLines"]:
+        return shown == printed
+    return printed[:len(shown)] == shown
+
+
+def output_check(entry: dict, run=None) -> list[str]:
+    """Whether the output panes show what the code prints. `run(language, code)`
+    returns the sandbox's result (the cleaned dict of sandbox_client) or None
+    when the code could not be run; a failed, killed or unrunnable snippet is
+    never refused here, the AI review still looks at it. Panes with no lines
+    (only a label such as "0 rows") are left to the review too."""
+    props = entry.get("props")
+    data = props.get(PROPS_KEY) if isinstance(props, dict) else None
+    if run is None or not isinstance(data, dict) or data.get("lang") not in RUNNABLE:
+        return []
+    steps = data.get("steps")
+    if not isinstance(steps, list):
+        return []
+    problems = []
+    for i, step in enumerate(steps):
+        pane = step.get("output") if isinstance(step, dict) else None
+        if not isinstance(pane, dict) or not pane.get("lines") or output_from(steps, i) != i:
+            continue
+        result = run(data["lang"], code_at(steps, i))
+        if not result or result.get("exit_code") != 0 or result.get("timed_out") or result.get("error"):
+            continue
+        if not _printed(pane, result.get("stdout") or ""):
+            got = [x.rstrip() for x in (result.get("stdout") or "").rstrip("\n").split("\n")][:LIMITS["outputLines"]]
+            problems.append(f"Step {i + 1}: the output pane shows {pane['lines']!r} but running the code prints "
+                            f"{got!r}. Change the pane to what it prints, or change the code.")
+    return problems
+
+
+def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str], run=None) -> list[str]:
     """Every problem with one Code Scenes insert, one sentence each (at most
     MAX_ERRORS), or [] when it may be written. The window itself is checked by
     mcp/inserts.py."""
@@ -289,7 +327,7 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
             if text_fit.width(tag.upper(), 40, 2) + text_fit.width(right, 36) + 40 > 980:
                 err(f"Step {i + 1}: the tag and the step label do not fit one row above the card; shorten them.")
                 break
-    for problem in output_check(entry):
+    for problem in output_check(entry, run):
         err(problem)
     return errors
 
