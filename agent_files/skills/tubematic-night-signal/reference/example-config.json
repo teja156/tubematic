@@ -1,0 +1,168 @@
+{
+ "totalFrames": 1376,
+ "canvas": "dark",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "NightSignal",
+   "startFrame": 0,
+   "durationInFrames": 1376,
+   "props": {
+    "nightSignal": {
+     "file": {
+      "number": 31,
+      "title": "Night Signal"
+     },
+     "clock": "03:12",
+     "scenes": [
+      {
+       "kind": "tableau",
+       "start": 0,
+       "setting": "street",
+       "items": [
+        {
+         "what": "person_phone",
+         "slot": "left"
+        },
+        {
+         "what": "person_phone",
+         "slot": "right",
+         "threat": true,
+         "face": "left",
+         "redAt": 13
+        }
+       ],
+       "connector": {
+        "from": "right",
+        "to": "left",
+        "at": 32
+       },
+       "bubble": {
+        "over": "left",
+        "icon": "qr",
+        "kind": "thought",
+        "at": 63
+       }
+      },
+      {
+       "kind": "rule",
+       "start": 176,
+       "number": 1,
+       "lines": [
+        "UNKNOWN",
+        "SENDER"
+       ],
+       "icon": "qr",
+       "slashAt": 240
+      },
+      {
+       "kind": "camera",
+       "start": 296,
+       "label": "CAM 02 / FRONT DOOR",
+       "items": [
+        {
+         "what": "qr",
+         "slot": "left"
+        },
+        {
+         "what": "door",
+         "slot": "midright",
+         "at": 449
+        },
+        {
+         "what": "person_hands_up",
+         "slot": "right",
+         "threat": true,
+         "at": 515
+        }
+       ],
+       "connector": {
+        "from": "left",
+        "to": "midright",
+        "at": 318
+       },
+       "button": {
+        "text": "OPEN",
+        "crossAt": 603
+       }
+      },
+      {
+       "kind": "tableau",
+       "start": 625,
+       "setting": "room",
+       "items": [
+        {
+         "what": "person_phone",
+         "slot": "left"
+        },
+        {
+         "what": "laptop",
+         "slot": "right",
+         "threat": true,
+         "redAt": 702
+        }
+       ],
+       "connector": {
+        "from": "left",
+        "to": "right",
+        "at": 651
+       },
+       "bubble": {
+        "over": "right",
+        "icon": "card",
+        "kind": "speech",
+        "at": 823
+       }
+      },
+      {
+       "kind": "phone",
+       "start": 869,
+       "screen": "link",
+       "title": "PREVIEW",
+       "lines": [
+        "OPENS",
+        "pay-verify",
+        ".acct.ru"
+       ],
+       "mark": {
+        "kind": "cross",
+        "at": 981
+       }
+      },
+      {
+       "kind": "steps",
+       "start": 1027,
+       "title": "BEFORE YOU SCAN",
+       "steps": [
+        {
+         "text": "Preview the link",
+         "at": 1065
+        },
+        {
+         "text": "Check the address",
+         "at": 1111
+        },
+        {
+         "text": "Pay in the real app",
+         "at": 1159
+        }
+       ]
+      },
+      {
+       "kind": "rule",
+       "start": 1219,
+       "number": 2,
+       "lines": [
+        "NEVER FROM",
+        "A STRANGER"
+       ],
+       "icon": "person",
+       "slashAt": 1317
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

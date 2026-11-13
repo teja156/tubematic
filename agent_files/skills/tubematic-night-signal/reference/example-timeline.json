@@ -1,0 +1,522 @@
+{
+ "totalFrames": 1376,
+ "fps": 30,
+ "audioDurationSeconds": 45.87,
+ "words": [
+  {
+   "word": "A",
+   "startFrame": 6,
+   "endFrame": 11
+  },
+  {
+   "word": "stranger",
+   "startFrame": 13,
+   "endFrame": 30
+  },
+  {
+   "word": "sends",
+   "startFrame": 32,
+   "endFrame": 44
+  },
+  {
+   "word": "you",
+   "startFrame": 46,
+   "endFrame": 54
+  },
+  {
+   "word": "a",
+   "startFrame": 56,
+   "endFrame": 61
+  },
+  {
+   "word": "QR",
+   "startFrame": 63,
+   "endFrame": 69
+  },
+  {
+   "word": "code.",
+   "startFrame": 71,
+   "endFrame": 81
+  },
+  {
+   "word": "It",
+   "startFrame": 93,
+   "endFrame": 99
+  },
+  {
+   "word": "looks",
+   "startFrame": 101,
+   "endFrame": 113
+  },
+  {
+   "word": "like",
+   "startFrame": 115,
+   "endFrame": 125
+  },
+  {
+   "word": "a",
+   "startFrame": 127,
+   "endFrame": 132
+  },
+  {
+   "word": "parking",
+   "startFrame": 134,
+   "endFrame": 149
+  },
+  {
+   "word": "ticket.",
+   "startFrame": 151,
+   "endFrame": 164
+  },
+  {
+   "word": "Don't",
+   "startFrame": 176,
+   "endFrame": 188
+  },
+  {
+   "word": "scan",
+   "startFrame": 190,
+   "endFrame": 200
+  },
+  {
+   "word": "it,",
+   "startFrame": 202,
+   "endFrame": 208
+  },
+  {
+   "word": "not",
+   "startFrame": 210,
+   "endFrame": 218
+  },
+  {
+   "word": "even",
+   "startFrame": 220,
+   "endFrame": 230
+  },
+  {
+   "word": "to",
+   "startFrame": 232,
+   "endFrame": 238
+  },
+  {
+   "word": "check",
+   "startFrame": 240,
+   "endFrame": 252
+  },
+  {
+   "word": "what",
+   "startFrame": 254,
+   "endFrame": 264
+  },
+  {
+   "word": "it",
+   "startFrame": 266,
+   "endFrame": 272
+  },
+  {
+   "word": "says.",
+   "startFrame": 274,
+   "endFrame": 284
+  },
+  {
+   "word": "The",
+   "startFrame": 296,
+   "endFrame": 304
+  },
+  {
+   "word": "code",
+   "startFrame": 306,
+   "endFrame": 316
+  },
+  {
+   "word": "hides",
+   "startFrame": 318,
+   "endFrame": 330
+  },
+  {
+   "word": "where",
+   "startFrame": 332,
+   "endFrame": 344
+  },
+  {
+   "word": "the",
+   "startFrame": 346,
+   "endFrame": 354
+  },
+  {
+   "word": "link",
+   "startFrame": 356,
+   "endFrame": 366
+  },
+  {
+   "word": "really",
+   "startFrame": 368,
+   "endFrame": 381
+  },
+  {
+   "word": "goes.",
+   "startFrame": 383,
+   "endFrame": 393
+  },
+  {
+   "word": "You",
+   "startFrame": 405,
+   "endFrame": 413
+  },
+  {
+   "word": "can't",
+   "startFrame": 415,
+   "endFrame": 427
+  },
+  {
+   "word": "see",
+   "startFrame": 429,
+   "endFrame": 437
+  },
+  {
+   "word": "the",
+   "startFrame": 439,
+   "endFrame": 447
+  },
+  {
+   "word": "door",
+   "startFrame": 449,
+   "endFrame": 459
+  },
+  {
+   "word": "until",
+   "startFrame": 461,
+   "endFrame": 473
+  },
+  {
+   "word": "you",
+   "startFrame": 475,
+   "endFrame": 483
+  },
+  {
+   "word": "open",
+   "startFrame": 485,
+   "endFrame": 495
+  },
+  {
+   "word": "it.",
+   "startFrame": 497,
+   "endFrame": 503
+  },
+  {
+   "word": "Behind",
+   "startFrame": 515,
+   "endFrame": 528
+  },
+  {
+   "word": "it,",
+   "startFrame": 530,
+   "endFrame": 536
+  },
+  {
+   "word": "a",
+   "startFrame": 538,
+   "endFrame": 543
+  },
+  {
+   "word": "page",
+   "startFrame": 545,
+   "endFrame": 555
+  },
+  {
+   "word": "that",
+   "startFrame": 557,
+   "endFrame": 567
+  },
+  {
+   "word": "asks",
+   "startFrame": 569,
+   "endFrame": 579
+  },
+  {
+   "word": "for",
+   "startFrame": 581,
+   "endFrame": 589
+  },
+  {
+   "word": "your",
+   "startFrame": 591,
+   "endFrame": 601
+  },
+  {
+   "word": "card.",
+   "startFrame": 603,
+   "endFrame": 613
+  },
+  {
+   "word": "Your",
+   "startFrame": 625,
+   "endFrame": 635
+  },
+  {
+   "word": "phone",
+   "startFrame": 637,
+   "endFrame": 649
+  },
+  {
+   "word": "sends",
+   "startFrame": 651,
+   "endFrame": 663
+  },
+  {
+   "word": "the",
+   "startFrame": 665,
+   "endFrame": 673
+  },
+  {
+   "word": "code",
+   "startFrame": 675,
+   "endFrame": 685
+  },
+  {
+   "word": "to",
+   "startFrame": 687,
+   "endFrame": 693
+  },
+  {
+   "word": "a",
+   "startFrame": 695,
+   "endFrame": 700
+  },
+  {
+   "word": "server",
+   "startFrame": 702,
+   "endFrame": 715
+  },
+  {
+   "word": "you",
+   "startFrame": 717,
+   "endFrame": 725
+  },
+  {
+   "word": "never",
+   "startFrame": 727,
+   "endFrame": 739
+  },
+  {
+   "word": "chose,",
+   "startFrame": 741,
+   "endFrame": 753
+  },
+  {
+   "word": "and",
+   "startFrame": 755,
+   "endFrame": 763
+  },
+  {
+   "word": "the",
+   "startFrame": 765,
+   "endFrame": 773
+  },
+  {
+   "word": "server",
+   "startFrame": 775,
+   "endFrame": 788
+  },
+  {
+   "word": "sends",
+   "startFrame": 790,
+   "endFrame": 802
+  },
+  {
+   "word": "back",
+   "startFrame": 804,
+   "endFrame": 814
+  },
+  {
+   "word": "a",
+   "startFrame": 816,
+   "endFrame": 821
+  },
+  {
+   "word": "fake",
+   "startFrame": 823,
+   "endFrame": 833
+  },
+  {
+   "word": "bank",
+   "startFrame": 835,
+   "endFrame": 845
+  },
+  {
+   "word": "page.",
+   "startFrame": 847,
+   "endFrame": 857
+  },
+  {
+   "word": "Preview",
+   "startFrame": 869,
+   "endFrame": 884
+  },
+  {
+   "word": "the",
+   "startFrame": 886,
+   "endFrame": 894
+  },
+  {
+   "word": "link",
+   "startFrame": 896,
+   "endFrame": 906
+  },
+  {
+   "word": "first.",
+   "startFrame": 908,
+   "endFrame": 920
+  },
+  {
+   "word": "If",
+   "startFrame": 932,
+   "endFrame": 938
+  },
+  {
+   "word": "the",
+   "startFrame": 940,
+   "endFrame": 948
+  },
+  {
+   "word": "address",
+   "startFrame": 950,
+   "endFrame": 965
+  },
+  {
+   "word": "looks",
+   "startFrame": 967,
+   "endFrame": 979
+  },
+  {
+   "word": "wrong,",
+   "startFrame": 981,
+   "endFrame": 993
+  },
+  {
+   "word": "close",
+   "startFrame": 995,
+   "endFrame": 1007
+  },
+  {
+   "word": "it.",
+   "startFrame": 1009,
+   "endFrame": 1015
+  },
+  {
+   "word": "Three",
+   "startFrame": 1027,
+   "endFrame": 1039
+  },
+  {
+   "word": "steps.",
+   "startFrame": 1041,
+   "endFrame": 1053
+  },
+  {
+   "word": "Preview",
+   "startFrame": 1065,
+   "endFrame": 1080
+  },
+  {
+   "word": "the",
+   "startFrame": 1082,
+   "endFrame": 1090
+  },
+  {
+   "word": "link.",
+   "startFrame": 1092,
+   "endFrame": 1102
+  },
+  {
+   "word": "Check",
+   "startFrame": 1111,
+   "endFrame": 1123
+  },
+  {
+   "word": "the",
+   "startFrame": 1125,
+   "endFrame": 1133
+  },
+  {
+   "word": "address.",
+   "startFrame": 1135,
+   "endFrame": 1150
+  },
+  {
+   "word": "Pay",
+   "startFrame": 1159,
+   "endFrame": 1167
+  },
+  {
+   "word": "in",
+   "startFrame": 1169,
+   "endFrame": 1175
+  },
+  {
+   "word": "the",
+   "startFrame": 1177,
+   "endFrame": 1185
+  },
+  {
+   "word": "real",
+   "startFrame": 1187,
+   "endFrame": 1197
+  },
+  {
+   "word": "app.",
+   "startFrame": 1199,
+   "endFrame": 1207
+  },
+  {
+   "word": "And",
+   "startFrame": 1219,
+   "endFrame": 1227
+  },
+  {
+   "word": "never",
+   "startFrame": 1229,
+   "endFrame": 1241
+  },
+  {
+   "word": "scan",
+   "startFrame": 1243,
+   "endFrame": 1253
+  },
+  {
+   "word": "a",
+   "startFrame": 1255,
+   "endFrame": 1260
+  },
+  {
+   "word": "code",
+   "startFrame": 1262,
+   "endFrame": 1272
+  },
+  {
+   "word": "that",
+   "startFrame": 1274,
+   "endFrame": 1284
+  },
+  {
+   "word": "came",
+   "startFrame": 1286,
+   "endFrame": 1296
+  },
+  {
+   "word": "from",
+   "startFrame": 1298,
+   "endFrame": 1308
+  },
+  {
+   "word": "a",
+   "startFrame": 1310,
+   "endFrame": 1315
+  },
+  {
+   "word": "stranger.",
+   "startFrame": 1317,
+   "endFrame": 1334
+  }
+ ]
+}
