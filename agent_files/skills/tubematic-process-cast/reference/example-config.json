@@ -1,0 +1,200 @@
+{
+ "totalFrames": 806,
+ "fps": 30,
+ "canvas": "light",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "ProcessCast",
+   "startFrame": 0,
+   "durationInFrames": 806,
+   "props": {
+    "processCast": {
+     "cast": [
+      {
+       "id": "bit",
+       "name": "BITS",
+       "body": "units",
+       "units": 4,
+       "tint": "teal"
+      },
+      {
+       "id": "more",
+       "name": "BITS",
+       "body": "units",
+       "units": 4,
+       "tint": "olive"
+      },
+      {
+       "id": "screen",
+       "name": "SCREEN",
+       "body": "bean",
+       "tint": "sky",
+       "accessory": "glasses"
+      }
+     ],
+     "stations": [
+      {
+       "id": "bits",
+       "kind": "stage",
+       "sign": "ONE BIT"
+      },
+      {
+       "id": "keyboard",
+       "kind": "desk",
+       "sign": "KEYBOARD"
+      }
+     ],
+     "events": [
+      {
+       "type": "enter",
+       "frame": 0,
+       "who": "bit",
+       "station": "bits",
+       "slot": 1,
+       "from": "pop"
+      },
+      {
+       "type": "react",
+       "frame": 44,
+       "who": "bit",
+       "face": "curious",
+       "mark": "question"
+      },
+      {
+       "type": "react",
+       "frame": 106,
+       "who": "bit",
+       "face": "happy"
+      },
+      {
+       "type": "carry",
+       "frame": 160,
+       "who": "bit",
+       "text": "0 OR 1"
+      },
+      {
+       "type": "react",
+       "frame": 180,
+       "who": "bit",
+       "face": "sad"
+      },
+      {
+       "type": "react",
+       "frame": 235,
+       "who": "bit",
+       "face": "worried",
+       "mark": "sweat"
+      },
+      {
+       "type": "clone",
+       "frame": 273,
+       "who": "bit",
+       "count": 3
+      },
+      {
+       "type": "react",
+       "frame": 335,
+       "who": "bit",
+       "face": "surprised",
+       "mark": "exclaim"
+      },
+      {
+       "type": "merge",
+       "frame": 359,
+       "who": "bit"
+      },
+      {
+       "type": "enter",
+       "frame": 404,
+       "who": "more",
+       "station": "bits",
+       "slot": 3,
+       "from": "drop"
+      },
+      {
+       "type": "look",
+       "frame": 440,
+       "who": "bit",
+       "at": "more"
+      },
+      {
+       "type": "join",
+       "frame": 470,
+       "who": "bit",
+       "with": "more"
+      },
+      {
+       "type": "react",
+       "frame": 515,
+       "who": "bit",
+       "face": "proud",
+       "mark": "idea"
+      },
+      {
+       "type": "carry",
+       "frame": 552,
+       "who": "bit",
+       "text": "256 PATTERNS"
+      },
+      {
+       "type": "camera",
+       "frame": 591,
+       "station": "keyboard",
+       "move": "glide"
+      },
+      {
+       "type": "move",
+       "frame": 591,
+       "who": "bit",
+       "station": "keyboard",
+       "slot": 1
+      },
+      {
+       "type": "enter",
+       "frame": 630,
+       "who": "screen",
+       "station": "keyboard",
+       "slot": 0,
+       "from": "slide"
+      },
+      {
+       "type": "prop",
+       "frame": 665,
+       "station": "keyboard",
+       "prop": "card",
+       "text": "A = 01000001"
+      },
+      {
+       "type": "react",
+       "frame": 665,
+       "who": "screen",
+       "face": "curious",
+       "mark": "question"
+      },
+      {
+       "type": "carry",
+       "frame": 719,
+       "who": "bit",
+       "text": "LETTER A"
+      },
+      {
+       "type": "hand",
+       "frame": 734,
+       "from": "bit",
+       "to": "screen"
+      },
+      {
+       "type": "react",
+       "frame": 744,
+       "who": "screen",
+       "face": "happy",
+       "mark": "check"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

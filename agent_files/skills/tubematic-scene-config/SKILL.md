@@ -81,7 +81,7 @@ correct and re-spends `generate_image` on every image beat.
    inside an insert's window: let the scene before it run on under the insert, and start the next
    scene at the window's end (its last frame + 1) or at the next segment. A DIAGRAM beat the script
    marked as a `system_flow` insert is drawn by the insert, not as a diagram scene of your own, and
-   a beat marked `terminal_doc` likewise. No mascot cue lands inside a window. With no marked
+   a beat marked with any other insert style likewise. No mascot cue lands inside a window. With no marked
    segment, write no `inserts`.
    Then call `write_scene_config(video_id, config)`, with the scenes and any `inserts` — **never** write `scene-config.json` with your own file tools. This writes the file and saves `scene_config_path` in one call.
 9. Hand back to the operator to call `validate_job`
@@ -231,15 +231,20 @@ data; `whiteboard` is one board scene whose regions of writing and doodles are w
 `storybook_atlas` is one picture-book scene whose chapters, people and props are written as
 data, `under_the_hood` is one scene of close-up photographs with labels, arcs and counters pinned to them,
 written as data, `case_file_story` is one scene of painted stills with meters and number cards,
-written as data, `night_signal` is one scene of pictogram scenes and cards, written as data, and
+written as data, `midcentury_howto` is one scene of numbered steps, a presenter and flat objects,
+written as data, `puppet_history` is one scene of puppets, sets, cards and maps joined by hard cuts,
+written as data, `comic_panels` is one scene of comic pages read panel by panel, written as data,
+`process_cast` is one scene of drawn parts acting out a process at stations, written as data,
+`night_signal` is one scene of pictogram scenes and cards, written as data,
 `flat_vector_science` is one scene of drifting flat subjects and scale shots, written as data, and
 `isometric_infographic` is one scene of isometric boards with routes and pins, written as data. None of them is this skill's work. `get_video` names the skill that authors the video in `style.authoring_skill`:
 when it is not `tubematic-scene-config`, stop here and invoke that skill.
 
-`system_flow` and `terminal_doc` are **insert styles**, never a video's style: a short System Flow
-diagram or Terminal Doc string drawn over your scenes inside a segment the script marked (Workflow
-step 8). A video whose `visual_style` is still one of them is a legacy whole video, voiced before
-they became insert styles; its style's own skill authors it, as the table says.
+`system_flow`, `terminal_doc`, `code_scenes` and `format_packs` are **insert styles**, never a
+video's style: a short diagram, string, code card or message thread drawn over your scenes inside a
+segment the script marked (Workflow step 8). A video whose `visual_style` is still `system_flow` or
+`terminal_doc` is a legacy whole video, voiced before they became insert styles; its style's own
+skill authors it, as the table says.
 
 Read `visual_style` from `get_video`:
 
@@ -256,14 +261,17 @@ Read `visual_style` from `get_video`:
 | `terminal_doc` | Dark | Nothing here: a legacy whole video is the one `TerminalDoc` scene, written as data by the tubematic-terminal-doc skill. |
 | `under_the_hood` | Dark | Nothing here: the whole video is the one `UnderTheHood` scene, written as data by the tubematic-under-the-hood skill. |
 | `case_file_story` | Dark | Nothing here: the whole video is the one `CaseFileStory` scene, written as data by the tubematic-case-file-story skill. |
+| `midcentury_howto` | Its own ground colours | Nothing here: the whole video is the one `MidcenturyHowTo` scene, written as data by the tubematic-midcentury-howto skill. |
+| `puppet_history` | Its own sets | Nothing here: the whole video is the one `PuppetHistory` scene, written as data by the tubematic-puppet-history skill. |
+| `comic_panels` | Its own newsprint | Nothing here: the whole video is the one `ComicPanels` scene, written as data by the tubematic-comic-panels skill. |
+| `process_cast` | Its own paper | Nothing here: the whole video is the one `ProcessCast` scene, written as data by the tubematic-process-cast skill. |
 | `night_signal` | Dark | Nothing here: the whole video is the one `NightSignal` scene, written as data by the tubematic-night-signal skill. |
 | `flat_vector_science` | Dark | Nothing here: the whole video is the one `FlatVectorScience` scene, written as data by the tubematic-flat-vector-science skill. |
 | `isometric_infographic` | Light (cream paper) | Nothing here: the whole video is the one `IsometricInfographic` scene, written as data by the tubematic-isometric-infographic skill. |
 | `auto` | **You choose** | Any of them — line art, generated characters, vector animation, imagery. This is the **mixed scene system**: the style-routing skill picked it before the script because no single style fit. |
 
 The three named scene styles are restrictions; `cartoon_3d`, `bean_explainer`, `whiteboard`,
-`storybook_atlas`, `under_the_hood`, `case_file_story`, `night_signal`, `flat_vector_science` and
-`isometric_infographic` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
+`storybook_atlas`, `under_the_hood`, `case_file_story`, `puppet_history`, `midcentury_howto`, `comic_panels`, `process_cast`, `night_signal`, `flat_vector_science` and `isometric_infographic` are systems of their own. `auto` reaches you only when the style-routing skill found that no style fit this topic better
 than the mixed scene system (a style it picked is the video's `visual_style` by now), or when the
 video was scripted before Auto picked styles. It is the absence of a restriction: **you pick the
 register.**
@@ -894,7 +902,7 @@ entirely.
 | `fontFamily` | container default | A CSS family, or one of `Inter`, `Oswald`, `Roboto`, `Montserrat` |
 | `fontSize` | `62` | 28–120 |
 | `color` | `null` | `null` follows the canvas — black on light, white on dark. Set one only for a real reason |
-| `background` | `"pill"` | `"pill"`, `"shadow"`, `"outline"`, `"label"`, `"none"`, `"log"` or `"card"`. `"pill"` is the safe choice over busy imagery; `"outline"` (bold text, thick dark stroke, no plate) suits illustrated and 3D cartoon scenes; `"label"` (a small printed ivory label) is the Storybook Atlas look; `"log"` (typed into a terminal log strip) is the Terminal Doc look; `"card"` (a warm white card with an ink border and a cube chip) is the Isometric Infographic look |
+| `background` | `"pill"` | `"pill"`, `"shadow"`, `"outline"`, `"label"`, `"none"`, `"log"`, `"chip"` or `"card"`. `"pill"` is the safe choice over busy imagery; `"outline"` (bold text, thick dark stroke, no plate) suits illustrated and 3D cartoon scenes; `"label"` (a small printed ivory label) is the Storybook Atlas look; `"log"` (typed into a terminal log strip) is the Terminal Doc look; `"chip"` (a cream paper chip) is the Archive and Engraving look; `"card"` (a warm white card with an ink border and a cube chip) is the Isometric Infographic look |
 | `position` | `0.78` | Vertical centre as a fraction of frame height |
 | `uppercase` | `false` | |
 | `letterSpacing` | none | -0.05 to 0.3, in em: spaced capitals (the Night Signal look) |

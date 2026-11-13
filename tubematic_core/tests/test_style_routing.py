@@ -75,11 +75,19 @@ def test_each_candidate_carries_its_routing_block_and_cost():
 @pytest.mark.parametrize("key, gpu, mascot, unavailable", [
     (True, "working", False, {}),
     (False, "working", False, {"illustrated": "needs an OpenAI key", "under_the_hood": "needs an OpenAI key",
-                                "case_file_story": "needs an OpenAI key"}),
+                                "case_file_story": "needs an OpenAI key",
+                                "archive_engraving": "needs an OpenAI key",
+                                "editorial_collage": "needs an OpenAI key",
+                                "storybook_reveal": "needs an OpenAI key"}),
     (True, "unknown", False, {"cartoon_3d": "GPU not tested yet"}),
     (True, "not_usable", False, {"cartoon_3d": "needs a working GPU"}),
     (True, "working", True, {"cartoon_3d": tvs.MASCOT_EXCLUDES_3D, "under_the_hood": tvs.MASCOT_EXCLUDED,
-                             "case_file_story": tvs.MASCOT_EXCLUDED, "night_signal": tvs.MASCOT_EXCLUDED,
+                             "case_file_story": tvs.MASCOT_EXCLUDED, "paper_diorama": tvs.MASCOT_EXCLUDED,
+                             "archive_engraving": tvs.MASCOT_EXCLUDED,
+                             "editorial_collage": tvs.MASCOT_EXCLUDED,
+                             "storybook_reveal": tvs.MASCOT_EXCLUDED, "midcentury_howto": tvs.MASCOT_EXCLUDED,
+                             "comic_panels": tvs.MASCOT_EXCLUDED, "process_cast": tvs.MASCOT_EXCLUDED,
+                             "puppet_history": tvs.MASCOT_EXCLUDED, "night_signal": tvs.MASCOT_EXCLUDED,
                              "flat_vector_science": tvs.MASCOT_EXCLUDED, "isometric_infographic": tvs.MASCOT_EXCLUDED}),
 ])
 def test_the_gates_match_what_refuses_the_choice(key, gpu, mascot, unavailable):

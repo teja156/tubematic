@@ -1,0 +1,320 @@
+{
+  "id": "midcentury_howto",
+  "label": "Mid-century How-To",
+  "order": 160,
+  "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "wipe"
+  },
+  "dimension": "2d",
+  "preview": "midcentury_howto",
+  "tagline": "A 1950s classroom-film presenter walks you through a task, one numbered step at a time.",
+  "renderer": "dom",
+  "canvas": "light",
+  "authoring_skill": "tubematic-midcentury-howto",
+  "allows": {
+    "figures": true,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "mascot": false,
+  "messages": {
+    "mascot": "Mascots are not available in the Mid-century How-To style: it has its own presenter, and a second character would compete with him for the stage. Choose another visual style, or no mascot."
+  },
+  "review": "- This video is a Mid-century How-To, and the following are its intended, approved look: a flat 1950s instructional-film cartoon in flat colour with no texture; one flat ground colour per step (mustard, dusty blue, olive, rose or sea green) with a darker floor band, and flat sunburst rays behind the title card and the summary; every shape's fill printed a few pixels off its broken ink line, the offset stepping every two frames (it reads as a gentle jitter, on purpose); a geometric presenter with a big nose in profile, white four-finger gloves and a held body, whose hand, eye and brow change on the narrator's words and who never moves his mouth to talk; flat cartoon objects (phones, laptops, keypads, locks, paper) that pop in and hold; a gloved hand that pulls back and presses on a word, sometimes a long rubber-hose arm reaching in from the frame's edge, with a ring burst; teal check and coral cross medallions; a circular inset with a short number or word joined to an object by a dashed line; a script running title at the top, a numbered medallion with \"STEP n OF N\" and a slab-serif step title, a tag card with a turning star, and numbered progress dots near the bottom; at the end a summary card listing every step beside teal medallions. Do NOT report any of these as defects, and do not suggest smoother animation, gradients, photographs or lip sync: their absence is the style.\n- Do report: an object that cannot be recognised or does not match what the narration names at that moment, a press, check or inset on the wrong object, a step title or medallion number that does not match the step the narration is on, text on a screen or card that is cut off or overflows its shape, an object, label or inset overlapping the presenter or another object, anything cut off at the frame edge, text too small to read on a phone, a face that contradicts the line (a grin on a warning), and a stretch of more than about three seconds where nothing on screen changes apart from the jitter.\n",
+  "captions": {
+    "background": "label",
+    "position": 0.775,
+    "color": "#2B2420",
+    "fontFamily": "Jost, Futura, 'Helvetica Neue', Arial, sans-serif",
+    "fontSize": 54,
+    "maxWords": 5
+  },
+  "script": "Every beat's `visual` is a **step** brief: what the presenter does and the one object the line is about (\"presenter points at the phone, Security row lights up\"), or `title card` for the opening and `summary card` for the ending.\n\nThe narration is a friendly classroom film that teaches one task. Open on why the task matters in one or two sentences (that becomes the title card), then walk the steps in order, two to six of them, each opened by its number (\"Step one: open your phone's settings.\"), so it gets its own numbered medallion and ground colour. Inside a step, name the one thing to tap, type, turn on or check, with its on-screen name in quotes or capitals where the viewer will see it (\"Tap Security.\"). Give each step one concrete action a person can follow, a short result (\"Done.\"), and at most one number worth circling (\"six digits\", \"thirty seconds\"), which becomes an inset. Talk to the viewer as \"you\", keep sentences short and calm, and land the payoff on the moment the task is done and what it protects. The video may end on one line that recounts the steps (\"Three steps, one minute.\"), which becomes the summary card. Every step must be real and correct for the product as it is today; never invent a menu that does not exist. Never write a beat that needs a photograph, a real person or a brand logo: this style draws flat objects and one presenter only.",
+  "picture": {
+    "opening": "Frame 0 shows the title card (the running title and the kicker) with the presenter already posed and the object the video is about on stage. Never an empty ground.",
+    "turn": "A new step starts on the first word of a turn or a re-opening, or a press, a check or an inset lands on that word.",
+    "payoff": "The step's result: the press that finishes the task, the screen turning teal, the check medallion.",
+    "ending": "Hold on the last step's result, or on the summary card when the narration recounts the steps, to the last frame. No sign-off card after it."
+  },
+  "routing": {
+    "best_for": [
+      "how to set up, turn on or secure something in a few numbered steps",
+      "safety and good-practice rules told as steps to follow",
+      "a product, app or device setting walked through from start to done",
+      "a small everyday procedure a viewer can copy (back up a phone, check a link, reset a router)"
+    ],
+    "avoid_for": [
+      "a list of named items, one idea each with no order to follow (Bean Explainer fits it)",
+      "how a mechanism works inside (Stick Explainer or Under the Hood fits it)",
+      "money or quantities worked out on a board (Whiteboard fits it)",
+      "history, drama or tragedy",
+      "a story with characters"
+    ],
+    "cannot_show": "photographs, real people or brand logos: every picture is the one flat presenter and flat cartoon objects",
+    "signals": [
+      "the script is a numbered procedure: step one, step two",
+      "the viewer is told what to tap, type, turn on or check",
+      "a setting, habit or safety rule the viewer can act on today",
+      "a friendly, reassuring teacher's tone",
+      "the payoff is the task done"
+    ],
+    "moods": [
+      "friendly",
+      "clear",
+      "reassuring",
+      "nostalgic"
+    ],
+    "images_per_video": "0",
+    "images": 0
+  },
+  "extra": {
+    "grounds": [
+      "mustard",
+      "blue",
+      "olive",
+      "rose",
+      "sea"
+    ],
+    "poses": [
+      "stand",
+      "present",
+      "point",
+      "thumbsup",
+      "wave",
+      "think",
+      "shrug",
+      "hips"
+    ],
+    "summary_poses": [
+      "stand",
+      "thumbsup",
+      "wave",
+      "hips"
+    ],
+    "faces": [
+      "neutral",
+      "smile",
+      "grin",
+      "worried",
+      "surprised",
+      "proud"
+    ],
+    "outfits": [
+      "coral",
+      "teal",
+      "mustard",
+      "blue"
+    ],
+    "hairs": [
+      "dark",
+      "red",
+      "blond",
+      "grey"
+    ],
+    "sides": [
+      "left",
+      "right",
+      "none"
+    ],
+    "entrances": [
+      "pop",
+      "drop",
+      "slide",
+      "rise"
+    ],
+    "objects": {
+      "phone": {
+        "text": 80,
+        "acts": [
+          "row1",
+          "row2",
+          "row3",
+          "done"
+        ]
+      },
+      "laptop": {
+        "text": 70,
+        "acts": [
+          "row1",
+          "row2",
+          "row3",
+          "done"
+        ]
+      },
+      "window": {
+        "text": 80,
+        "acts": [
+          "row1",
+          "row2",
+          "row3",
+          "done"
+        ]
+      },
+      "qr": {
+        "text": 0,
+        "acts": [
+          "scan",
+          "done"
+        ]
+      },
+      "keypad": {
+        "text": 8,
+        "acts": [
+          "type",
+          "done"
+        ]
+      },
+      "password": {
+        "text": 18,
+        "acts": [
+          "type",
+          "done"
+        ]
+      },
+      "toggle": {
+        "text": 0,
+        "acts": [
+          "flip"
+        ]
+      },
+      "button": {
+        "text": 14,
+        "acts": [
+          "light"
+        ]
+      },
+      "app": {
+        "text": 10,
+        "acts": [
+          "bounce"
+        ]
+      },
+      "router": {
+        "text": 0,
+        "acts": [
+          "blink"
+        ]
+      },
+      "lock": {
+        "text": 0,
+        "acts": [
+          "unlock"
+        ]
+      },
+      "key": {
+        "text": 0,
+        "acts": [
+          "turn"
+        ]
+      },
+      "shield": {
+        "text": 0,
+        "acts": [
+          "glow"
+        ]
+      },
+      "usb": {
+        "text": 0,
+        "acts": [
+          "plug"
+        ]
+      },
+      "battery": {
+        "text": 0,
+        "acts": [
+          "fill"
+        ]
+      },
+      "envelope": {
+        "text": 20,
+        "acts": [
+          "open"
+        ]
+      },
+      "document": {
+        "text": 40,
+        "acts": [
+          "stamp"
+        ]
+      },
+      "checklist": {
+        "text": 72,
+        "acts": [
+          "tick1",
+          "tick2",
+          "tick3",
+          "tick4"
+        ]
+      },
+      "card": {
+        "text": 16,
+        "acts": []
+      },
+      "sign": {
+        "text": 24,
+        "acts": [
+          "wobble"
+        ]
+      },
+      "calendar": {
+        "text": 6,
+        "acts": [
+          "flip"
+        ]
+      },
+      "clock": {
+        "text": 0,
+        "acts": [
+          "spin"
+        ]
+      },
+      "bulb": {
+        "text": 0,
+        "acts": [
+          "light"
+        ]
+      },
+      "gear": {
+        "text": 0,
+        "acts": [
+          "turn"
+        ]
+      },
+      "magnifier": {
+        "text": 0,
+        "acts": [
+          "scan"
+        ]
+      },
+      "bell": {
+        "text": 0,
+        "acts": [
+          "ring"
+        ]
+      },
+      "cloud": {
+        "text": 0,
+        "acts": [
+          "upload"
+        ]
+      },
+      "trash": {
+        "text": 0,
+        "acts": [
+          "drop"
+        ]
+      },
+      "table": {
+        "text": 0,
+        "acts": []
+      }
+    }
+  }
+}

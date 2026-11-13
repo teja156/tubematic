@@ -110,6 +110,12 @@ import bean_explainer  # the Bean Explainer checks (TMDEV-198), the same way
 import storybook_atlas  # the Storybook Atlas checks (TMDEV-200), the same way
 import under_the_hood  # the Under the Hood checks (TMDEV-201), the same way
 import case_file_story  # the Case File Story checks (TMDEV-202), the same way
+import character_styles  # the code-drawn character styles' checks (TMDEV-232..235), the same way
+import treatments  # the looks treat_image bakes into a still (TMDEV-229/230/231)
+import paper_diorama  # the Paper Diorama checks (TMDEV-228), the same way
+import archive_engraving  # the Archive and Engraving checks (TMDEV-230), the same way
+import editorial_collage  # the Editorial Collage checks (TMDEV-229), the same way
+import storybook_reveal  # the Storybook Reveal checks (TMDEV-231), the same way
 import night_signal  # the Night Signal checks (TMDEV-238), the same way
 import flat_vector_science  # the Flat Vector Science checks (TMDEV-236), the same way
 import isometric_infographic  # the Isometric Infographic checks (TMDEV-237), the same way
@@ -117,6 +123,8 @@ import mascot_sheets  # renders a mascot's model sheets (a Node script on softwa
 import bean_preview  # renders a Bean Explainer video's own props for the agent to look at
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
 import terminal_preview  # renders a Terminal Doc video's own moves for the agent to look at
+import code_scenes  # the Code Scenes insert checks (TMDEV-239), the same way
+import format_packs  # the Format Packs insert checks (TMDEV-240), the same way
 import inserts as inserts_mod  # the insert-scene checks (TMDEV-224)
 import picture_checks  # the first-frame and beat-change warnings (TMDEV-215), pure like text_audit
 
@@ -347,7 +355,7 @@ ANGLE_WRITE_STATUSES = ("TOPIC_PROPOSED", "TOPIC_APPROVED", "REVISION_REQUESTED"
 # one word at a time is a deliberate style, not a mistake.
 # Keep in sync: renderer/remotion/src/scenes/installed/Subtitles.tsx (which
 # holds the defaults — they are NOT repeated here, so there is nothing to drift).
-SUBTITLE_BACKGROUNDS = ("pill", "shadow", "outline", "label", "none", "log", "card")
+SUBTITLE_BACKGROUNDS = ("pill", "shadow", "outline", "label", "none", "log", "chip", "card")
 SUBTITLE_NUMERIC_RANGES = {
     "maxWords": (1, 7),
     "fontSize": (28, 120),
@@ -361,8 +369,10 @@ SUBTITLE_KEYS = ("enabled", "maxWords", "fontFamily", "fontSize", "color",
 # look: "selection" builds the line word by word with the key words in a blue
 # text-selection box (the Under the Hood style); "fill" shows the whole phrase
 # at once with the words still to come in grey (the Case File Story style);
-# "plain", or absent, is the look every other style has.
-SUBTITLE_LOOKS = ("plain", "selection", "fill")
+# "tags" pops one torn paper tag per word (Paper Diorama); "highlight" puts the
+# phrase on a cream strip with a marker under each emphasis word (Editorial
+# Collage); "plain", or absent, is the look every other style has.
+SUBTITLE_LOOKS = ("plain", "selection", "fill", "tags", "highlight")
 # emphasis: indexes into the narration's words drawn on a red box (the key word
 # of a line). One in SUBTITLE_EMPHASIS_EVERY words at most: emphasis on every
 # other word is no emphasis. write_scene_config checks the indexes against the
@@ -2914,12 +2924,20 @@ def update_video(
     scene of close-up photographs with labels pinned to them, written as data;
     needs an OpenAI key), "case_file_story" (the whole video is one scene of
     painted stills with a meter row and number cards, written as data; needs
-    an OpenAI key) or "cartoon_3d" (one 3D world; needs a working GPU).
+    an OpenAI key), "paper_diorama" (the whole video is one scene of paper
+    rooms, props and a critter, written as data), "archive_engraving" (the
+    whole video is one scene of engraved plates and museum-label cards on
+    parchment, written as data; needs an OpenAI key), "editorial_collage" (the
+    whole video is one paper desk of clippings, halftone prints and cut-out
+    stickers the camera glides across, written as data; needs an OpenAI key),
+    "storybook_reveal" (the whole video is one picture-book scene whose painted
+    pages are revealed in pencil, then colour, written as data; needs an OpenAI
+    key) or "cartoon_3d" (one 3D world; needs a working GPU).
     get_pipeline_status's visual_styles lists every style and whether this
     install can make it. The scene styles are permissions, not looks. Like script_profile_id, a human
     picks it at the topic checkpoint and it is frozen afterwards; set it here
     only from a slash command that creates a video, before flipping it to
-    TOPIC_APPROVED. "illustrated", "under_the_hood" and "case_file_story" are refused while no
+    TOPIC_APPROVED. "illustrated", "under_the_hood", "case_file_story", "archive_engraving", "editorial_collage" and "storybook_reveal" are refused while no
     OpenAI key is stored (get_pipeline_status's illustrated_available is false) — offer the other
     styles instead. Under "auto", Auto picks the style itself at
     TOPIC_APPROVED with choose_visual_style, never with this field. A changed
@@ -2931,7 +2949,8 @@ def update_video(
     already uses. Writable only when the style does not already fix a canvas —
     that is "auto" and "illustrated"; "motion_graphics", "stick",
     "system_flow", "whiteboard", "bean_explainer", "storybook_atlas", "terminal_doc",
-    "under_the_hood", "case_file_story" and "cartoon_3d" fix theirs.
+    "under_the_hood", "case_file_story", "paper_diorama", "archive_engraving", "editorial_collage",
+    "storybook_reveal" and "cartoon_3d" fix theirs.
 
     resolved_renderer: under "auto", which renderer the video uses — "dom"
     (the scene components). Auto reaches Cartoon 3D by picking the cartoon_3d
@@ -4126,7 +4145,8 @@ def upsert_project(
         videos start in — "auto" or any style in get_pipeline_status's
         visual_styles ("motion_graphics", "stick", "illustrated", "system_flow",
         "bean_explainer", "storybook_atlas", "terminal_doc", "cartoon_3d",
-        "whiteboard", "under_the_hood", "case_file_story").
+        "whiteboard", "under_the_hood", "case_file_story", "paper_diorama",
+        "archive_engraving", "editorial_collage", "storybook_reveal").
         "" means the domain has no preference and every video starts at
         "auto". Videos filed here by trending, mining or manual are unaffected.
         Changing it to "illustrated" is refused while no OpenAI key is stored.
@@ -6123,6 +6143,7 @@ def validate_job(video_id: str) -> dict:
         if "scene_config" in dir() and isinstance(scene_config, dict):
             errors.extend(_bean_custom_prop_errors(video_id, scene_config))
             errors.extend(_storybook_custom_prop_errors(video_id, scene_config))
+            errors.extend(_character_custom_prop_errors(video_id, scene_config))
             errors.extend(_fv_custom_prop_errors(video_id, scene_config))
     except Exception as e:
         errors.append(f"Custom prop check failed: {e}")
@@ -7161,48 +7182,75 @@ def _redact_keys(text: str) -> str:
     return text
 
 
-# The house lead's reference sheet (TMDEV-202): every Case File Story video's
-# own lead sheet is made from it. Shipped beside this module, so it is in the
-# image wherever mcp/ is.
-CASE_FILE_HOUSE_SHEET = Path(__file__).resolve().parent / "case_file_assets" / "lead.png"
+# A style built on generated stills says so in its pack's `pictures` block
+# (Under the Hood, Case File Story, and the TMDEV-229..231 paper styles): the
+# per-video cap, the painting instructions added to every prompt, and the
+# reference sheet the stills are painted from. A house sheet (Case File
+# Story's lead) ships beside this module, so it is in the image wherever mcp/ is.
+_MCP_DIR = Path(__file__).resolve().parent
+CASE_FILE_HOUSE_SHEET = _MCP_DIR / "case_file_assets" / "lead.png"
 
 
-def _case_file_image_plan(style: str, video_id: str, image_name: str, prompt: str,
-                          aspect_ratio: str, reference: str) -> dict:
+def _sheet_styles() -> list[str]:
+    return [sid for sid, p in tvs.PACKS.items() if p.get("pictures", {}).get("sheet")]
+
+
+def _image_plan(style: str, video_id: str, image_name: str, prompt: str,
+                aspect_ratio: str, reference: str) -> dict:
     """What generate_image sends for this call: {prompt, aspect_ratio,
-    ref_path}, or {error}. Only a Case File Story video takes a reference or
-    has its prompt extended; every other video gets its arguments back
-    unchanged with ref_path None. Nothing here spends money."""
-    cfs = case_file_story
-    if style != cfs.STYLE_ID:
-        if reference:
-            return {"error": "reference is for a case_file_story video only: this video's visual_style is "
-                             f"{style or 'auto'!r}. Leave it out."}
+    ref_path}, or {error}. Only a style whose pack has a `pictures` block has
+    its prompt extended, and only one with a `pictures.sheet` takes a
+    reference; every other video gets its arguments back unchanged with
+    ref_path None. Nothing here spends money."""
+    # A style that draws every picture itself (routing.images 0) never sends a
+    # paid request: its skill says so, and this refuses it before any spend.
+    if style in tvs.PACKS and tvs.pack(style)["routing"]["images"] == 0:
+        return {"error": f"{tvs.pack(style)['label']} draws every picture in code and takes no "
+                         f"generated images (this video's visual_style is {style!r}). Use the "
+                         "style's own parts instead."}
+    pics = tvs.PACKS[style].get("pictures") if style in tvs.PACKS else None
+    sheet = (pics or {}).get("sheet")
+    if not sheet and reference:
+        return {"error": "reference is only for a style painted from a reference sheet "
+                         f"({', '.join(_sheet_styles())}): this video's visual_style is "
+                         f"{style or 'auto'!r}. Leave it out."}
+    # A pack that only caps its pictures (Under the Hood) sends the agent's
+    # words as they are.
+    if not pics or not (sheet or pics.get("still_style") or pics.get("still_aspect")):
         return {"prompt": prompt, "aspect_ratio": aspect_ratio, "ref_path": None}
-    extra = tvs.pack(cfs.STYLE_ID)["extra"]
-    if image_name == cfs.HOUSE_REFERENCE:
-        return {"error": f"The name {cfs.HOUSE_REFERENCE!r} is kept for the house lead's sheet "
-                         f"(reference=\"{cfs.HOUSE_REFERENCE}\"). Give this picture another name."}
     # The agent's words end as a sentence, so the pack's text starts a new one.
     said = prompt.strip()
     if said[-1:] not in ".!?":
         said += "."
-    if image_name == cfs.LEAD_NAME:
-        if reference != cfs.HOUSE_REFERENCE:
-            return {"error": f"The image named {cfs.LEAD_NAME!r} is this video's lead sheet and is made from "
-                             f"the house lead: call generate_image(video_id, \"{cfs.LEAD_NAME}\", <the outfit>, "
-                             f"reference=\"{cfs.HOUSE_REFERENCE}\")."}
-        if not CASE_FILE_HOUSE_SHEET.is_file():
-            return {"error": "The house lead sheet is missing from this install (mcp/case_file_assets/lead.png)."}
-        return {"prompt": f"{extra['sheet_lead']} The character wears: {said} {extra['sheet_style']}",
-                "aspect_ratio": "16:9", "ref_path": CASE_FILE_HOUSE_SHEET}
-    if reference == cfs.HOUSE_REFERENCE:
-        return {"error": f"reference=\"{cfs.HOUSE_REFERENCE}\" only makes the lead sheet (image_name "
-                         f"\"{cfs.LEAD_NAME}\"). For a still with the lead in it, pass reference=\"{cfs.LEAD_NAME}\"."}
-    # A still covers the frame, and its focus and punch points are read as
-    # fractions of that frame: any other shape would be cropped to a strip.
+    # A still covers the frame, and its focus points are read as fractions of
+    # that frame: a style may fix the shape so no still is cropped to a strip.
+    aspect = pics.get("still_aspect", aspect_ratio)
+    style_text = pics.get("still_style", "")
+    if not sheet:
+        return {"prompt": f"{said} {style_text}".strip(), "aspect_ratio": aspect, "ref_path": None}
+    name, house = sheet["name"], sheet.get("house", "")
+    if house and image_name == house:
+        return {"error": f"The name {house!r} is kept for the house sheet "
+                         f"(reference=\"{house}\"). Give this picture another name."}
+    how = f"<the outfit>, reference=\"{house}\"" if house else "<who they are and what they wear>"
+    if image_name == name:
+        if reference != house:
+            source = "the house sheet" if house else "your description alone, with no reference"
+            return {"error": f"The image named {name!r} is this video's reference sheet and is made from "
+                             f"{source}: call generate_image(video_id, \"{name}\", {how})."}
+        join = f" {sheet['join']}" if sheet.get("join") else ""
+        sheet_prompt = f"{sheet['lead']}{join} {said} {sheet['style']}"
+        if not house:
+            return {"prompt": sheet_prompt, "aspect_ratio": "16:9", "ref_path": None}
+        house_file = _MCP_DIR / sheet["house_file"]
+        if not house_file.is_file():
+            return {"error": f"The house sheet is missing from this install (mcp/{sheet['house_file']})."}
+        return {"prompt": sheet_prompt, "aspect_ratio": "16:9", "ref_path": house_file}
+    if house and reference == house:
+        return {"error": f"reference=\"{house}\" only makes the reference sheet (image_name "
+                         f"\"{name}\"). For a still painted from it, pass reference=\"{name}\"."}
     if not reference:
-        return {"prompt": f"{said} {extra['still_style']}", "aspect_ratio": "9:16", "ref_path": None}
+        return {"prompt": f"{said} {style_text}".strip(), "aspect_ratio": aspect, "ref_path": None}
     err = _check_image_name(reference, ".png")
     if err:
         return {"error": err.replace("image_name", "reference")}
@@ -7211,11 +7259,11 @@ def _case_file_image_plan(style: str, video_id: str, image_name: str, prompt: st
     except tjobs.UnsafePath as e:
         return {"error": str(e)}
     if not ref_path.is_file():
-        hint = (f" Make the lead sheet first: generate_image(video_id, \"{cfs.LEAD_NAME}\", <the outfit>, "
-                f"reference=\"{cfs.HOUSE_REFERENCE}\")." if reference == cfs.LEAD_NAME else "")
+        hint = (f" Make the reference sheet first: generate_image(video_id, \"{name}\", {how})."
+                if reference == name else "")
         return {"error": f"reference {reference!r} is not an image of this video yet.{hint}"}
-    return {"prompt": f"{extra['still_lead']} {said} {extra['still_style']}",
-            "aspect_ratio": "9:16", "ref_path": ref_path}
+    return {"prompt": f"{pics['still_lead']} {said} {style_text}".strip(),
+            "aspect_ratio": aspect, "ref_path": ref_path}
 
 
 # How long generate_image waits for OpenAI: a picture from text, and an edit
@@ -7236,25 +7284,25 @@ _image_reservations_lock = threading.Lock()
 
 
 def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
-    """The refusal for one generated photograph too many, or "" (and then the
+    """The refusal for one generated picture too many, or "" (and then the
     name is reserved for this call).
 
-    A style whose pack caps its pictures (Under the Hood and Case File Story:
-    routing.images) is refused a NEW image name once the video's images folder
+    A style whose pack has a `pictures` block caps its pictures at
+    routing.images: a NEW image name is refused once the video's images folder
     and the calls in flight hold that many; regenerating an existing name
     stays allowed, because a bad still must be replaceable. Checked before the
     paid call, since the cap is about spend."""
     with _conn() as con:
         vrow = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
     style = ((vrow["visual_style"] if vrow else "") or "").strip()
-    if style not in (under_the_hood.STYLE_ID, case_file_story.STYLE_ID):
+    pics = tvs.PACKS[style].get("pictures") if style in tvs.PACKS else None
+    if not pics:
         return ""
-    cap = tvs.pack(style)["routing"].get("images", 0)
-    # A Case File Story video's lead sheet has a slot of its own: it is not a
-    # still, and a video that spent every slot on stills must still be able to
-    # make the sheet they are painted from.
-    apart = {case_file_story.LEAD_NAME} if style == case_file_story.STYLE_ID else set()
-    cap -= len(apart)
+    # A reference sheet has a slot of its own: it is not a still, and a video
+    # that spent every slot on stills must still be able to make the sheet
+    # they are painted from.
+    apart = set(pics.get("apart", ()))
+    cap = tvs.pack(style)["routing"]["images"] - len(apart)
     with _image_reservations_lock:
         now = time.time()
         held = {n: t for n, t in _image_reservations.get(video_id, {}).items() if now - t < _IMAGE_RESERVE_SECS}
@@ -7267,13 +7315,7 @@ def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
             held[image_name] = now
             _image_reservations[video_id] = held
             return ""
-    if style == case_file_story.STYLE_ID:
-        return (f"This Case File Story video already has {len(names)} stills, counting any being made now, "
-                f"the most a video may use ({cap}). Reuse a still in another shot with a different focus or "
-                "a punch-in, or regenerate one under its own name to replace it.")
-    return (f"This Under the Hood video already has {len(names)} photographs, counting any being made "
-            f"now, the most a video may use ({cap}). Reuse one of them on another plate with a "
-            "different focus or zoom, or regenerate one under its own name to replace it.")
+    return pics["cap_message"].format(count=len(names), cap=cap)
 
 
 def _release_image_reservation(video_id: str, image_name: str) -> None:
@@ -7326,26 +7368,28 @@ def generate_image(video_id: str, image_name: str, prompt: str,
     that was asked for — a provider answers with its own nearest bucket. Use
     them to size any frame the picture sits in, so it is not cropped to fit.
 
-    An under_the_hood video may have at most 12 photographs: a 13th new
-    image_name is refused before the paid call; regenerating an existing name
-    is allowed.
+    A style built on generated stills caps them per video (under_the_hood
+    12 photographs; case_file_story 16 stills besides its lead sheet;
+    archive_engraving and editorial_collage 10; storybook_reveal 12 pages
+    besides its hero sheet): a new image_name past the cap is refused before
+    the paid call; regenerating an existing name is allowed. Such a style also
+    adds its fixed painting instructions to every prompt, so describe only the
+    subject; its authoring skill says what to write.
 
-    reference: for a case_file_story video only (any other video refuses it).
-    The picture is then made FROM a reference picture, which is what keeps the
-    lead the same character in every still:
-      - reference="house" with image_name="lead" makes this video's lead
-        sheet: the house lead in the outfit your prompt describes. Make it
-        first, once. It is always 16:9 and it is not a picture for the video.
-      - reference="lead" (or the name of another image of this video) paints
-        that character into the scene your prompt describes. No picture of
-        such a video may itself be named "house".
-      - no reference: a still with no lead in it (an object, an exterior).
-    A still of such a video is always 9:16, because it fills the frame, and
-    the lead sheet always 16:9, whatever aspect_ratio says.
-    For a case_file_story video the style's fixed painting instructions are
-    added to every prompt, so describe only the scene: the place, what the
-    lead is doing, the light. Such a video may have at most 16 stills, besides
-    its lead sheet; a 17th new still is refused before the paid call.
+    reference: only for a style painted from a reference sheet (any other
+    video refuses it). The picture is then made FROM a reference picture,
+    which keeps one character the same in every still:
+      - case_file_story: reference="house" with image_name="lead" makes this
+        video's lead sheet, the house lead in the outfit your prompt
+        describes. No picture of such a video may itself be named "house".
+      - storybook_reveal: image_name="hero" with no reference makes this
+        video's hero sheet from your description alone.
+      - reference=<the sheet's name> (or another image of this video) paints
+        that character into the scene your prompt describes.
+      - no reference: a still with no sheet character in it.
+    Make the sheet first, once. A sheet is always 16:9 and is not a picture
+    for the video; a style may fix the shape of its stills whatever
+    aspect_ratio says (case_file_story: 9:16).
     """
     err = _video_id_error(video_id)
     if err:
@@ -7383,8 +7427,8 @@ def generate_image(video_id: str, image_name: str, prompt: str,
     # instructions and the sheet's shape, all settled before any paid call.
     with _conn() as con:
         srow = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
-    plan = _case_file_image_plan((srow["visual_style"] or "").strip(), video_id, image_name, prompt,
-                                 aspect_ratio, reference)
+    plan = _image_plan((srow["visual_style"] or "").strip(), video_id, image_name, prompt,
+                       aspect_ratio, reference)
     if "error" in plan:
         return plan
     prompt, aspect_ratio, ref_path = plan["prompt"], plan["aspect_ratio"], plan["ref_path"]
@@ -7487,6 +7531,90 @@ def generate_image(video_id: str, image_name: str, prompt: str,
         # Once the file exists the folder counts it; a failed call must not
         # keep the slot (a different name would be refused for nothing).
         _release_image_reservation(video_id, image_name)
+
+
+@mcp.tool
+def treat_image(video_id: str, image_name: str, treatment: str) -> dict:
+    """Bake a look into one of this video's generated stills, as a new PNG.
+
+    Free: it runs on the server and calls no paid service. The still
+    images/<image_name>.png is left as it is, and the treated copy is written
+    to images/treated/<image_name>.<treatment>.png, which the scene config
+    names by its public_path. A treated copy never counts against the style's
+    picture cap. Calling it again overwrites the copy (after a regenerated
+    still, treat it again).
+
+    treatment: one the video's visual style lists (its authoring skill says
+    which, and a refusal names them):
+      - "print": a grey 45-degree halftone with a white paper border
+      - "sticker": the subject cut out of a plain background, with a white
+        die-cut edge and a hard shadow, on a transparent ground. Generate the
+        still as one isolated object on a plain flat background.
+      - "engraving": ink on laid paper
+      - "pencil": a graphite line plate that lines up with the colour still
+
+    Returns {video_id, image_name, treatment, filename, public_path, width,
+    height} or {error}.
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    style = (row["visual_style"] or "").strip()
+    allowed = (tvs.PACKS[style].get("pictures", {}).get("treatments", []) if style in tvs.PACKS else [])
+    if treatment not in allowed:
+        if not allowed:
+            return {"error": f"This video's visual_style ({style or 'auto'!r}) takes no treatments."}
+        return {"error": f"treatment {treatment!r} is not one this style uses: expected one of {allowed}."}
+    err = _check_image_name(image_name, f".{max(allowed, key=len)}.png")
+    if err:
+        return {"error": err}
+    guard_err = _guard_scene_work(video_id)
+    if guard_err:
+        return guard_err
+    try:
+        source = tjobs.image_file(JOBS_DIR, video_id, f"{image_name}.png")
+        target = tjobs.treated_file(JOBS_DIR, video_id, image_name, treatment)
+    except tjobs.UnsafePath as e:
+        return {"error": str(e)}
+    if not source.is_file():
+        return {"error": f"{image_name!r} is not a still of this video yet: make it with generate_image first."}
+    from PIL import Image as _PILImage  # imported per call, as read_image does
+
+    try:
+        with _PILImage.open(source) as im:
+            im.load()
+            out = treatments.apply(im, treatment)
+    except (OSError, ValueError) as e:
+        return {"error": f"Could not treat {image_name!r}: {e}"}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    # A fresh, exclusively created temp file: a predictable name could be a
+    # planted symlink that the save would follow out of the job.
+    fd, tmp = tempfile.mkstemp(dir=str(target.parent), prefix=".", suffix=".tmp")
+    try:
+        os.fchmod(fd, _new_file_mode())  # mkstemp's 0600 would hide it from the renderer
+        with os.fdopen(fd, "wb") as fh:
+            out.save(fh, format="PNG", optimize=True)
+        os.replace(tmp, target)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    return {
+        "video_id": video_id,
+        "image_name": image_name,
+        "treatment": treatment,
+        "filename": target.name,
+        "public_path": f"/public/{video_id}/images/{tjobs.TREATED}/{target.name}",
+        "width": out.width,
+        "height": out.height,
+    }
 
 
 # Above this, an image content block is resized down anyway, so paying to ship
@@ -8334,6 +8462,95 @@ def _storybook_custom_prop_errors(video_id: str, config) -> list[str]:
     return [f"Custom prop: {e}" for e in errs]
 
 
+def _character_custom_prop_errors(video_id: str, config) -> list[str]:
+    """validate_job's re-check of a code-drawn character style's own props
+    (TMDEV-232..235) against their files as they are now; [] when the config
+    is not one of those styles or has none."""
+    scenes = config.get("scenes") if isinstance(config, dict) else None
+    mod = character_styles.for_scene(scenes[0]) if isinstance(scenes, list) and scenes else None
+    if mod is None:
+        return []
+    try:
+        custom = config["scenes"][0]["props"][mod.PROPS_KEY].get("customProps") or []
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return []
+    if not isinstance(custom, list) or not custom:
+        return []
+    errs, _, _ = mod.custom_prop_errors(custom, video_id, tvs.pack(mod.STYLE_ID)["extra"][mod.LIBRARY_KEY],
+                                        _bean_custom_sources(video_id, config, mod.PROPS_KEY))
+    return [f"Custom prop: {e}" for e in errs]
+
+
+@mcp.tool
+def render_style_props(video_id: str):
+    """Look at the props you drew for a Mid-century How-To, Process Cast, Comic
+    Panels or Puppet History video before you submit it.
+
+    Renders the props listed in the video's scene-config `customProps` (so
+    write_scene_config first): each at rest and after its first act, its
+    declared box outlined in red, with a library item of the style beside them
+    for line weight and size. Ink outside the red line means the drawing is
+    bigger than its w and h: it is cut off in the video, and the layout checks
+    miss what it covers, so enlarge the box or shrink the drawing. Rewrite a
+    prop with write_scene_file and call this again; it reads the files as they
+    are now. It renders on the CPU and waits its turn behind other heavy
+    checks, so it can take a minute or two.
+
+    Returns {video_id, props} followed by the picture, or {"error": ...} (a
+    render failure carries the renderer's error output, often a type error in
+    a prop file: fix it and call again).
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    mod = character_styles.BY_ID.get(row["visual_style"] or "")
+    if mod is None:
+        return {"error": "render_style_props is for Mid-century How-To, Process Cast, Comic Panels and Puppet "
+                         f"History videos; this video's visual_style is {row['visual_style'] or 'auto'!r}."}
+    label = tvs.pack(mod.STYLE_ID)["label"]
+    try:
+        config = json.loads(tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG).read_text(encoding="utf-8"))
+        data = config["scenes"][0]["props"][mod.PROPS_KEY]
+    except (tjobs.UnsafePath, OSError, ValueError, KeyError, IndexError, TypeError):
+        return {"error": f"This video has no {label} scene-config yet: write it with write_scene_config "
+                         "(customProps listing your props) first."}
+    custom = data.get("customProps") or [] if isinstance(data, dict) else []
+    if not custom:
+        return {"error": "The scene-config lists no customProps, so there is nothing of yours to preview."}
+    spec = {"style": mod.STYLE_ID,
+            "props": [{**c, "sample": mod.sample_text(data, c.get("id"))} for c in custom if isinstance(c, dict)]}
+    if not _heavy_checks_lock.acquire(timeout=HEAVY_CHECK_WAIT_SECS):
+        return {"error": f"Other checks kept the renderer busy for {HEAVY_CHECK_WAIT_SECS}s. Nothing is wrong "
+                         "with this video; call render_style_props again."}
+    try:
+        with tempfile.TemporaryDirectory(prefix="tubematic-style-props-") as tmp:
+            out_png = Path(tmp) / "props.png"
+            try:
+                bean_preview.render_preview(_MASCOT_REMOTION, spec, out_png, script=bean_preview.CHARACTER_SCRIPT)
+            except bean_preview.BeanPreviewError as e:
+                return {"error": str(e)}
+            from PIL import Image as PILImage
+            from fastmcp.utilities.types import Image as MCPImage
+            with PILImage.open(out_png) as src:
+                src.load()
+                img = src.convert("RGB")
+    finally:
+        _heavy_checks_lock.release()
+    longest = max(img.size)
+    if longest > _READ_IMAGE_MAX_EDGE:
+        ratio = _READ_IMAGE_MAX_EDGE / longest
+        img = img.resize((max(1, round(img.size[0] * ratio)), max(1, round(img.size[1] * ratio))), PILImage.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    meta = {"video_id": video_id, "props": [c.get("id") for c in custom if isinstance(c, dict)]}
+    return [json.dumps(meta, indent=2), MCPImage(data=buf.getvalue(), format="png")]
+
+
 @mcp.tool
 def render_bean_props(video_id: str):
     """Look at the props you drew for a Bean Explainer video before you submit it.
@@ -8470,6 +8687,72 @@ def render_storybook_props(video_id: str):
     img.save(buf, format="PNG")
     meta = {"video_id": video_id, "props": [c.get("id") for c in custom]}
     return [json.dumps(meta, indent=2), MCPImage(data=buf.getvalue(), format="png")]
+
+
+@mcp.tool
+def render_paper_props(video_id: str):
+    """Look at the props you built for a Paper Diorama video before you submit it.
+
+    Paints the props in the video's scene-config `customProps` (so
+    write_scene_config first) exactly as the video paints them: paper pieces
+    with their rough edges, grain and shadow, each with its name and size
+    under it. Check that each one reads as what it stands for at phone size,
+    and that its text is legible. Change a prop in the config, write it again
+    and call this again. It renders on the CPU and waits its turn behind other
+    heavy checks, so it can take a minute.
+
+    Returns {video_id, props} followed by the picture, or {"error": ...}.
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    if (row["visual_style"] or "") != paper_diorama.STYLE_ID:
+        return {"error": "render_paper_props is for Paper Diorama videos; this video's visual_style is "
+                         f"{row['visual_style'] or 'auto'!r}."}
+    try:
+        config = json.loads(tjobs.job_file(JOBS_DIR, video_id, tjobs.SCENE_CONFIG).read_text(encoding="utf-8"))
+        data = config["scenes"][0]["props"][paper_diorama.PROPS_KEY]
+    except (tjobs.UnsafePath, OSError, ValueError, KeyError, IndexError, TypeError):
+        return {"error": "This video has no Paper Diorama scene-config yet: write it with write_scene_config "
+                         "(customProps holding your props) first."}
+    custom = data.get("customProps") or {}
+    if not isinstance(custom, dict) or not custom:
+        return {"error": "The scene-config has no customProps, so there is nothing of yours to preview."}
+    # write_scene_config checked them, but the file may have been edited since.
+    problems = [p for name, prop in custom.items() for p in paper_diorama.prop_errors(str(name), prop)]
+    if problems:
+        return {"error": "The customProps have problems: " + " ".join(problems[:paper_diorama.MAX_ERRORS])}
+    if not _heavy_checks_lock.acquire(timeout=HEAVY_CHECK_WAIT_SECS):
+        return {"error": f"Other checks kept the renderer busy for {HEAVY_CHECK_WAIT_SECS}s. Nothing is wrong "
+                         "with this video; call render_paper_props again."}
+    try:
+        with tempfile.TemporaryDirectory(prefix="tubematic-paper-props-") as tmp:
+            out_png = Path(tmp) / "props.png"
+            try:
+                bean_preview.render_preview(_MASCOT_REMOTION, {"props": custom}, out_png,
+                                            script=bean_preview.PAPER_SCRIPT)
+            except bean_preview.BeanPreviewError as e:
+                return {"error": str(e)}
+            from PIL import Image as PILImage
+            from fastmcp.utilities.types import Image as MCPImage
+            with PILImage.open(out_png) as src:
+                src.load()
+                img = src.convert("RGB")
+    finally:
+        _heavy_checks_lock.release()
+    longest = max(img.size)
+    if longest > _READ_IMAGE_MAX_EDGE:
+        ratio = _READ_IMAGE_MAX_EDGE / longest
+        img = img.resize((max(1, round(img.size[0] * ratio)), max(1, round(img.size[1] * ratio))), PILImage.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return [json.dumps({"video_id": video_id, "props": list(custom)}, indent=2),
+            MCPImage(data=buf.getvalue(), format="png")]
 
 
 def _td_custom_list(config) -> list:
@@ -8681,6 +8964,17 @@ _INSERT_CHECKS = {
     system_flow.STYLE_ID: lambda fps, starts, words, e: system_flow.check_insert(
         e, fps, starts, tvs.pack(system_flow.STYLE_ID)["extra"]["icons"]),
     terminal_doc.STYLE_ID: lambda fps, starts, words, e: terminal_doc.check_insert(e, fps, starts, words),
+    code_scenes.STYLE_ID: lambda fps, starts, words, e: code_scenes.check_insert(e, fps, starts, words),
+    format_packs.STYLE_ID: lambda fps, starts, words, e: format_packs.check_insert(e, fps, starts, words),
+}
+
+# How long each insert style's first element takes to settle, for the frame
+# the renderer holds while the insert comes in (no insert opens on an empty
+# board). Code Scenes and Format Packs draw their first element settled on
+# their first frame, so they hold their first frame.
+_INSERT_FIRST_FRAMES = {
+    system_flow.STYLE_ID: system_flow.insert_first_frames,
+    terminal_doc.STYLE_ID: terminal_doc.insert_first_frames,
 }
 
 
@@ -8778,6 +9072,13 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     # main style's data is held quiet inside each one: its validator gets the
     # windows. The inserts themselves are checked once the captions are known.
     quiet = inserts_mod.windows(config)
+
+    # ── Insert-only styles (TMDEV-239) ───────────────────────────────────────
+    # Styles that were never a whole video: their scene is never one of a
+    # video's scenes.
+    only_insert_err = code_scenes.check_scene_use(scenes) or format_packs.check_scene_use(scenes)
+    if only_insert_err:
+        return {"error": only_insert_err}
 
     # ── System Flow (TMDEV-196) ──────────────────────────────────────────────
     # A whole-video style: one installed SystemFlow scene whose props hold the
@@ -8902,6 +9203,92 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
         given = config.get("subtitles")
         if given is None or isinstance(given, dict):
             config["subtitles"] = {**tvs.pack(case_file_story.STYLE_ID)["captions"], **(given or {})}
+    # ── Paper Diorama (TMDEV-228) ────────────────────────────────────────────
+    # One installed PaperDiorama scene whose props hold the sets, the props in
+    # their slots and the events as data, and any props of the agent's own as
+    # paper pieces (checked here too, so nothing is read from disk later).
+    pd_err = paper_diorama.check_scene_use(row["visual_style"], scenes)
+    if pd_err:
+        return {"error": pd_err}
+    if (row["visual_style"] or "") == paper_diorama.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = paper_diorama.check(config, fps, word_starts, tvs.pack(paper_diorama.STYLE_ID)["extra"],
+                                       quiet=quiet)
+        if problems:
+            return {"error": "The Paper Diorama video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(paper_diorama.STYLE_ID)["captions"], **(given or {})}
+    # ── Archive and Engraving (TMDEV-230) ────────────────────────────────────
+    # One installed ArchiveEngraving scene whose props hold the beats: a dated
+    # title and one museum card each (an engraved plate, a chart, name cards or
+    # a recreated document) and the events on it, as data.
+    ae_err = archive_engraving.check_scene_use(row["visual_style"], scenes)
+    if ae_err:
+        return {"error": ae_err}
+    if (row["visual_style"] or "") == archive_engraving.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = archive_engraving.check(config, fps, word_starts, tvs.pack(archive_engraving.STYLE_ID)["extra"],
+                                           video_id, quiet=quiet)
+        if problems:
+            return {"error": "The Archive and Engraving video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(archive_engraving.STYLE_ID)["captions"], **(given or {})}
+    # ── Editorial Collage (TMDEV-229) ────────────────────────────────────────
+    # One installed EditorialCollage scene whose props hold the stations: a
+    # headline and a hero each (halftone prints and cut-out stickers baked by
+    # treat_image, typed index cards, figures) and the events on them, as data.
+    # The code lays the stations out on the desk and moves the camera.
+    ec_err = editorial_collage.check_scene_use(row["visual_style"], scenes)
+    if ec_err:
+        return {"error": ec_err}
+    if (row["visual_style"] or "") == editorial_collage.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = editorial_collage.check(config, fps, word_starts, tvs.pack(editorial_collage.STYLE_ID)["extra"],
+                                           video_id, quiet=quiet)
+        if problems:
+            return {"error": "The Editorial Collage video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(editorial_collage.STYLE_ID)["captions"], **(given or {})}
+
+    # ── Storybook Reveal (TMDEV-231) ─────────────────────────────────────────
+    # One installed StorybookReveal scene whose props hold the pages: a title,
+    # one generated still and its pencil plate each, and the words the pencil
+    # wipes in and the colour floods in on, as data.
+    sr_err = storybook_reveal.check_scene_use(row["visual_style"], scenes)
+    if sr_err:
+        return {"error": sr_err}
+    if (row["visual_style"] or "") == storybook_reveal.STYLE_ID:
+        fps, word_starts = _timeline_word_starts(video_id)
+        problems = storybook_reveal.check(config, fps, word_starts, tvs.pack(storybook_reveal.STYLE_ID)["extra"],
+                                          video_id, quiet=quiet)
+        if problems:
+            return {"error": "The Storybook Reveal video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if given is None or isinstance(given, dict):
+            config["subtitles"] = {**tvs.pack(storybook_reveal.STYLE_ID)["captions"], **(given or {})}
+
+    # ── the code-drawn character styles (TMDEV-232..235) ─────────────────────
+    # Mid-century How-To, Process Cast, Comic Panels and Puppet History: the
+    # same shape again (one installed scene whose props hold the video as data,
+    # with the video's own props from customProps), one module each in
+    # character_styles, checked here before it costs a render.
+    for char_mod in character_styles.STYLES:
+        use_err = char_mod.check_scene_use(row["visual_style"], scenes)
+        if use_err:
+            return {"error": use_err}
+        if (row["visual_style"] or "") == char_mod.STYLE_ID:
+            fps, word_starts = _timeline_word_starts(video_id)
+            pack = tvs.pack(char_mod.STYLE_ID)
+            problems = char_mod.check(config, fps, word_starts, _timeline_words(video_id), pack["extra"], video_id,
+                                      _bean_custom_sources(video_id, config, char_mod.PROPS_KEY), quiet=quiet)
+            if problems:
+                return {"error": f"The {pack['label']} video has problems: " + " ".join(problems)}
+            given = config.get("subtitles")
+            if given is None or isinstance(given, dict):
+                config["subtitles"] = {**pack["captions"], **(given or {})}
     # ── Flat Vector Science (TMDEV-236) ──────────────────────────────────────
     # The same shape again: one installed FlatVectorScience scene whose props
     # hold the shots as data; the video's own props are prop-<name>.tsx files.
@@ -8994,7 +9381,8 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     # Each insert's src, palette and shift, and the main style's transition:
     # the renderer reads them, the agent writes none of them.
     config = inserts_mod.fill(config, canvas=canvas,
-                              transition=_insert_host(row)[0].get("transition", "cut"))
+                              transition=_insert_host(row)[0].get("transition", "cut"),
+                              first_frames=_INSERT_FIRST_FRAMES)
 
     # Backstop for "auto must resolve once and record what it resolved": if the
     # agent chose a canvas but never wrote resolved_visual_style, the canvas IS

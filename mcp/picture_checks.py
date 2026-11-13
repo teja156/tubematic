@@ -24,9 +24,14 @@ lives in this file.
 """
 import re
 
+import archive_engraving
 import bean_explainer
 import cartoon
 import case_file_story
+import character_styles
+import editorial_collage
+import storybook_reveal
+import paper_diorama
 import night_signal
 import flat_vector_science
 import isometric_infographic
@@ -54,7 +59,8 @@ OPENING = "opening"
 
 MIXED = "scenes"
 _STYLES = (system_flow, whiteboard, bean_explainer, terminal_doc, storybook_atlas, under_the_hood,
-           case_file_story, night_signal, flat_vector_science, isometric_infographic)
+           case_file_story, paper_diorama, archive_engraving, editorial_collage, storybook_reveal,
+           night_signal, flat_vector_science, isometric_infographic)
 
 # What each style can do about a beat with nothing changing on screen, in its
 # own words. The pack's picture.turn says the same at length.
@@ -68,6 +74,12 @@ _CHANGE_FIX = {
                               "in, or open a plate on that word",
     under_the_hood.STYLE_ID: "start a new plate there, or an outline, arcs, stat or chart on that word",
     case_file_story.STYLE_ID: "cut to a new shot there, a punch in, or the next card part on that word",
+    paper_diorama.STYLE_ID: "start a new set there, or bring a prop in, swap one, stamp or ring it on that word",
+    archive_engraving.STYLE_ID: "start a new beat there, or strike, stamp or magnify on that word, or bring the next "
+                                "person in",
+    editorial_collage.STYLE_ID: "start a new station there, or circle, stamp or point an arrow at the hero on that "
+                                "word, or type the next line",
+    storybook_reveal.STYLE_ID: "start a new page there, or wipe its pencil or flood its colour in on that word",
     night_signal.STYLE_ID: "start a new scene there, or pop an item in, turn the threat red, or land a "
                            "connector, bubble, mark or step on that word",
     flat_vector_science.STYLE_ID: "start a new shot there, or bring in a prop, a pill word, a rule, a rung, a "
@@ -83,6 +95,9 @@ _SUBTLE = {
     bean_explainer.STYLE_ID: {"label", "mark"},
     storybook_atlas.STYLE_ID: {"tag"},
     under_the_hood.STYLE_ID: {"footnote", "pose"},
+    paper_diorama.STYLE_ID: {"label", "expr"},
+    archive_engraving.STYLE_ID: {"underline", "timeline"},
+    editorial_collage.STYLE_ID: {"underline", "highlight"},
 }
 _WHITEBOARD_PICTURES = ("doodle", "arrow")
 
@@ -104,7 +119,7 @@ def style_of(config: dict) -> str | None:
     scenes = config.get("scenes") if isinstance(config, dict) else None
     if not isinstance(scenes, list) or not scenes:
         return None
-    for mod in _STYLES:
+    for mod in _STYLES + character_styles.STYLES:
         if any(isinstance(s, dict) and s.get("src") == mod.SCENE_SRC for s in scenes):
             return mod.STYLE_ID
     # A Cartoon 3D scene is generated TSX named "<video_id>/CartoonShort", so
@@ -168,6 +183,9 @@ def _first_frame_problem(style: str, config: dict) -> str | None:
     """Why this data-driven video's first frame shows nothing but a headline,
     a blank stage or text, or None when it shows a subject."""
     early = FIRST_FRAME_WINDOW
+    if style in character_styles.BY_ID:
+        mod = character_styles.BY_ID[style]
+        return mod.first_frame_problem(_props(config, mod))
     if style == system_flow.STYLE_ID:
         boards = _list(_props(config, system_flow), "boards")
         events = _list(boards[0], "events") if boards else []
@@ -207,6 +225,39 @@ def _first_frame_problem(style: str, config: dict) -> str | None:
             return (f"nothing moves in chapter 1 until after frame {early}, so the video opens on the "
                     "plaque over a still stage. Walk the guide, bring a person in or the subject's "
                     "prop at frame 0")
+    elif style == paper_diorama.STYLE_ID:
+        sets = _list(_props(config, paper_diorama), "sets")
+        items = _list(sets[0], "items") if sets else []
+        if not any(_int(it.get("at")) and it["at"] <= early for it in items):
+            return (f"set 1 has no prop on stage until after frame {early}, so the video opens on an "
+                    "empty room. Bring in the first sentence's subject as a prop at frame 0")
+    elif style == archive_engraving.STYLE_ID:
+        beats = _list(_props(config, archive_engraving), "beats")
+        card = beats[0].get("card") if beats and isinstance(beats[0].get("card"), dict) else {}
+        kind = card.get("kind")
+        firsts = [p.get("at") for p in _list(card, "people")[:1]] + [ln.get("at") for ln in _list(card, "lines")[:1]]
+        if kind not in archive_engraving.CARD_KINDS:
+            return "beat 1 has no card, so the video opens on a title alone. Put the first sentence's subject on its card"
+        if kind in ("people", "document") and not any(_int(f) and f <= early for f in firsts):
+            return (f"beat 1's card shows nothing until after frame {early}, so the video opens on a title over an "
+                    "empty card. Bring the first person or line in at frame 0")
+    elif style == editorial_collage.STYLE_ID:
+        stations = _list(_props(config, editorial_collage), "stations")
+        st = stations[0] if stations else {}
+        hero = st.get("hero") if isinstance(st.get("hero"), dict) else None
+        if hero is None:
+            return ("station 1 has no hero, so the video opens on a headline alone. Put a print, a sticker or a "
+                    "figure of the first sentence's subject under it")
+        lines = _list(hero, "lines")
+        if hero.get("kind") == "index" and not any(_int(ln.get("at")) and ln["at"] <= early for ln in lines[:1]):
+            return (f"station 1's index card is blank until after frame {early}, so the video opens on an empty "
+                    "card. Type its first line from frame 0, or open on a print")
+    elif style == storybook_reveal.STYLE_ID:
+        pages = _list(_props(config, storybook_reveal), "pages")
+        pencil = pages[0].get("pencilAt") if pages else None
+        if not (_int(pencil) and pencil <= early):
+            return (f"page 1 shows its title over an empty panel until after frame {early}, so the video opens on "
+                    "blank paper. Give page 1 pencilAt 0, so its drawing is on screen from the first frame")
     elif style == flat_vector_science.STYLE_ID:
         shots = _list(_props(config, flat_vector_science), "shots")
         first = shots[0] if shots else {}
@@ -253,6 +304,9 @@ def change_frames(style: str, config: dict) -> list[int]:
 def _change_frames(style: str, config: dict) -> list[int]:
     if style == MIXED:
         return _ints(s.get("startFrame") for s in _list(config, "scenes"))
+    if style in character_styles.BY_ID:
+        mod = character_styles.BY_ID[style]
+        return _ints(mod.change_frames(_props(config, mod)))
     subtle = _SUBTLE.get(style, set())
     if style == system_flow.STYLE_ID:
         boards = _list(_props(config, system_flow), "boards")
@@ -294,6 +348,27 @@ def _change_frames(style: str, config: dict) -> list[int]:
         return _ints([p.get("start") for p in plates]
                      + [e.get("frame") for p in plates for e in _list(p, "events")
                         if e.get("type") not in subtle])
+    if style == paper_diorama.STYLE_ID:
+        sets = _list(_props(config, paper_diorama), "sets")
+        return _ints([st.get("start") for st in sets]
+                     + [it.get("at") for st in sets for it in _list(st, "items")]
+                     + [e.get("at") for st in sets for e in _list(st, "events") if e.get("do") not in subtle])
+    if style == archive_engraving.STYLE_ID:
+        beats = _list(_props(config, archive_engraving), "beats")
+        cards = [b.get("card") if isinstance(b.get("card"), dict) else {} for b in beats]
+        return _ints([b.get("start") for b in beats]
+                     + [e.get("at") for b in beats for e in _list(b, "events") if e.get("do") not in subtle]
+                     + [p.get("at") for c in cards for p in _list(c, "people")]
+                     + [ln.get("at") for c in cards for ln in _list(c, "lines")])
+    if style == editorial_collage.STYLE_ID:
+        stations = _list(_props(config, editorial_collage), "stations")
+        heroes = [s.get("hero") if isinstance(s.get("hero"), dict) else {} for s in stations]
+        return _ints([s.get("start") for s in stations]
+                     + [e.get("at") for s in stations for e in _list(s, "events") if e.get("do") not in subtle]
+                     + [ln.get("at") for h in heroes for ln in _list(h, "lines")]
+                     + [h.get("countAt") for h in heroes])
+    if style == storybook_reveal.STYLE_ID:
+        return _ints(storybook_reveal.change_frames(config))
     if style == case_file_story.STYLE_ID:
         frames = []
         for beat in _list(_props(config, case_file_story), "beats"):
@@ -335,6 +410,11 @@ def _change_frames(style: str, config: dict) -> list[int]:
     return []
 
 
+def _fix(style: str) -> str:
+    mod = character_styles.BY_ID.get(style)
+    return mod.CHANGE_FIX if mod else _CHANGE_FIX[style]
+
+
 def _clock(frame: int, fps: int) -> str:
     secs = int(frame // max(1, fps))
     return f"{secs // 60}:{secs % 60:02d}"
@@ -365,7 +445,7 @@ def change_warnings(config: dict, segments: list, script_segments: list, fps: in
             f"The {ROLE_NAMES[role]} at {_clock(start, fps)} (segment {seg.get('id')}, beat "
             f"\"{seg.get('beat')}\": \"{_quote(voices.get(seg.get('id'), ''))}\") has nothing new "
             f"on screen within {CHANGE_WINDOW} frames of its first word (frame {start}). "
-            f"{_CHANGE_FIX[style][0].upper()}{_CHANGE_FIX[style][1:]}.")
+            f"{_fix(style)[0].upper()}{_fix(style)[1:]}.")
     return out
 
 

@@ -79,6 +79,9 @@
     "images_per_video": "up to 12 generated close-up photographs",
     "images": 12
   },
+  "pictures": {
+    "cap_message": "This Under the Hood video already has {count} photographs, counting any being made now, the most a video may use ({cap}). Reuse one of them on another plate with a different focus or zoom, or regenerate one under its own name to replace it."
+  },
   "extra": {
     "poses": [
       "idle",

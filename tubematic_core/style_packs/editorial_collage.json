@@ -1,0 +1,119 @@
+{
+  "id": "editorial_collage",
+  "label": "Editorial Collage",
+  "order": 120,
+  "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "cut"
+  },
+  "dimension": "2d",
+  "preview": "editorial_collage",
+  "tagline": "A news story pinned to a paper desk: clippings, halftone prints, cut-out stickers and red pen, the camera gliding between them.",
+  "renderer": "dom",
+  "canvas": "light",
+  "authoring_skill": "tubematic-editorial-collage",
+  "allows": {
+    "figures": true,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": true,
+    "gpu": false
+  },
+  "mascot": false,
+  "messages": {
+    "openai_key": "OpenAI API key not set. The Editorial Collage visual style is built on generated halftone prints and cut-out stickers, and only OpenAI makes them. Add an OpenAI key on the dashboard Settings page, or choose another visual style.",
+    "mascot": "Mascots are not available in the Editorial Collage style: its desk is an investigative collage of clippings, prints and documents, and a cartoon character would break its register. Choose another visual style, or no mascot."
+  },
+  "review": "- This video is an Editorial Collage, and the following are its intended, approved look: a warm paper desk larger than the frame, with faint fibres; one camera that rests on a station and then glides diagonally to the next, while a red string with a pin at each end draws from the last station to the new one; pieces that move in small steps (twelve a second) under a smooth camera, which is not a stutter; torn yellowed newspaper clippings with a small dark red kicker line and a large serif headline; black label bars with white capitals; black torn cards with white serif words; grey 45-degree halftone prints with a white border, taped at the corners, slightly tilted, each with a small typed note 'Illustration'; cut-out stickers with a white die-cut edge and a hard shadow, swaying slightly; ruled index cards typed on letter by letter, some with a small typed note 'Recreation'; a big yellow pill whose figure counts up, with a black label bar under it; torn red, black and tan paper scraps under the pieces; a red pen ellipse drawn round a piece in one unclosed stroke; red pen underlines and strike lines on a headline word; a yellow highlighter bar behind a headline word; a red rubber stamp landing at an angle with a small kick; a hand-cut red paper arrow; captions on a cream strip low in the middle, the whole phrase shown at once with the words still to come in grey and a yellow marker under the stressed words. People are never shown with a face: a real person is named in text only. Do NOT report any of these as defects, and do not suggest colour photographs, faces, smoother piece motion, a presenter or a mascot: their absence is the style.\n- Do report: a print or sticker that does not show what the narration describes at that moment, a recognisable or detailed face of a real, named person, garbled lettering, a real logo, masthead, brand mark or publication name in a picture or on a card, a date, name or number on a card that contradicts the narration, a circle, arrow or stamp that points at the wrong piece, a headline, card, stamp or label cut off at the frame edge while the camera rests or covering the captions, text too small to read on a phone, and a stretch of more than about three and a half seconds where nothing on the desk changes.\n",
+  "captions": {
+    "look": "highlight",
+    "background": "none",
+    "position": 0.73,
+    "color": "#171716",
+    "accent": "#DACF08",
+    "fontFamily": "'Source Serif 4', Georgia, serif",
+    "fontSize": 60,
+    "maxWords": 4
+  },
+  "script": "Every beat's `visual` is a **station** brief: the headline (a clipping, a label bar or a black card, with its words), the hero under it (a print of a place or a thing, a cut-out sticker of one object, a typed index card, a big figure, or two or three small prints) and what lands on it on which word (\"clipping 'The typo that took down the internet', kicker TECH · FEB 28, 2017; print of a data-centre aisle; highlight 'typo' on 'internet', circle the print on 'quiet'\"). The video is an investigative news story: a named incident, an outage, a breach, a market or policy event, traced through its dates, documents and numbers, cause by cause. Say the dates, the numbers and the names out loud, because each becomes a clipping, a figure or a label. Give each beat one idea and one stressed word, because a stressed word gets a mark (a circle, a highlight, a stamp, an arrow). Quote a command, a memo line or a message the way the narration says it, short, because it is typed on an index card. Name real people only in words and never describe a face. Never name a newspaper, never ask for a logo or a brand mark; companies are named in words only.",
+  "picture": {
+    "opening": "Station 1 is the headline over the hero of the first sentence's subject (usually a print), on the desk from frame 0, with a mark landing in the first seconds.",
+    "turn": "A new station (the camera glides to a new headline and hero) on the first word of a turn or a re-opening, or a circle, a stamp or an arrow landing on that word.",
+    "payoff": "The payoff station: its headline names the answer, and a stamp, a circle or a highlight lands on the payoff word.",
+    "ending": "Hold on the payoff station to the last frame. No closing card, logo, recap or sign-off after it."
+  },
+  "routing": {
+    "best_for": [
+      "a policy, economics or finance story told through its papers: a report, a spreadsheet, a memo, quotes and the numbers that changed",
+      "an investigation that follows a breach, scandal or outage through dates, documents and who knew what, more than through the machine or place itself",
+      "a company, protocol or internet story told as a timeline of documents and decisions",
+      "a market event or rule told through its figures, timestamps and the findings of the inquiry afterwards"
+    ],
+    "avoid_for": [
+      "a real failure, crash or accident whose cause lives in a real machine, rocket, device, place or company the viewer should see (Photo Explainer fits it, with a System Flow insert for the cause)",
+      "a crisis explained through real pictures in some beats and people acting out the mechanism in others (mixed scenes fit it)",
+      "a real product, place, artwork or machine the viewer came to see whole (Photo Explainer fits it)",
+      "an invented second-person scheme ending on a choice (Case File Story fits it)",
+      "a mechanism walked through step by step (Stick Explainer fits it, with System Flow inserts)",
+      "a list of tips (Bean Explainer fits it)",
+      "a playful tone or a children's subject (Paper Diorama fits it)"
+    ],
+    "cannot_show": "a real machine, rocket, place, product, logo or a person's face as a full picture: its pictures are small grey prints and its people are named in text",
+    "signals": [
+      "the story has a date, a place and named companies or people",
+      "documents, headlines, commands or messages are part of the story",
+      "a number carries the stakes (hours down, dollars lost, share of users hit)",
+      "the topic is told as an investigation: what happened, why, and what changed"
+    ],
+    "moods": [
+      "investigative",
+      "editorial",
+      "serious",
+      "curious"
+    ],
+    "images_per_video": "up to 10 generated prints and cut-outs",
+    "images": 10
+  },
+  "pictures": {
+    "cap_message": "This Editorial Collage video already has {count} prints and cut-outs, counting any being made now, the most a video may use ({cap}). Show one of them again on another station, or regenerate one under its own name to replace it.",
+    "still_style": "Documentary news photograph, plain and well lit, the subject clear and centred. No text, no letters, no logos, no watermark, no brand names. Any person is small in the frame, seen from behind or far away, with no detailed face.",
+    "treatments": [
+      "print",
+      "sticker"
+    ]
+  },
+  "extra": {
+    "headline_kinds": [
+      "clipping",
+      "label",
+      "black"
+    ],
+    "hero_kinds": [
+      "print",
+      "sticker",
+      "index",
+      "figure",
+      "stack"
+    ],
+    "events": [
+      "circle",
+      "underline",
+      "highlight",
+      "stamp",
+      "arrow",
+      "strike"
+    ],
+    "treatments": [
+      "print",
+      "sticker"
+    ],
+    "notes": {
+      "print": "Illustration",
+      "recreation": "Recreation"
+    }
+  }
+}

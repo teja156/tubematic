@@ -1,0 +1,56 @@
+{
+ "totalFrames": 797,
+ "canvas": "light",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "StorybookReveal",
+   "startFrame": 0,
+   "durationInFrames": 797,
+   "props": {
+    "reveal": {
+     "pages": [
+      {
+       "start": 0,
+       "title": "The Keeper",
+       "image": "/public/vid_example01/images/page-stairs.png",
+       "pencil": "/public/vid_example01/images/treated/page-stairs.pencil.png",
+       "focus": [
+        0.4,
+        0.45
+       ],
+       "pencilAt": 0,
+       "colourAt": 20
+      },
+      {
+       "start": 188,
+       "title": "Every Night",
+       "image": "/public/vid_example01/images/page-storm.png",
+       "pencil": "/public/vid_example01/images/treated/page-storm.pencil.png",
+       "focus": [
+        0.3,
+        0.3
+       ],
+       "pencilAt": 264,
+       "colourAt": 284,
+       "turn": "curl"
+      },
+      {
+       "start": 467,
+       "title": "Home Safe",
+       "image": "/public/vid_example01/images/page-dawn.png",
+       "pencil": "/public/vid_example01/images/treated/page-dawn.pencil.png",
+       "focus": [
+        0.5,
+        0.55
+       ],
+       "pencilAt": 602,
+       "colourAt": 616
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

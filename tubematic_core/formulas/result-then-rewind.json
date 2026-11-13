@@ -25,7 +25,8 @@
   ],
   "styles": [
     "whiteboard",
-    "system_flow"
+    "system_flow",
+    "puppet_history"
   ],
   "words": [
     150,

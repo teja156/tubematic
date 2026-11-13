@@ -1,0 +1,193 @@
+{
+ "totalFrames": 1218,
+ "canvas": "light",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "ArchiveEngraving",
+   "startFrame": 0,
+   "durationInFrames": 1218,
+   "props": {
+    "archive": {
+     "header": "Histories of Computing",
+     "beats": [
+      {
+       "start": 0,
+       "date": "9 September 1947",
+       "title": {
+        "text": "The first computer bug.",
+        "red": "bug"
+       },
+       "card": {
+        "kind": "plate",
+        "image": "/public/vid_example01/images/treated/eng-machine.engraving.png",
+        "focus": [
+         0.35,
+         0.5
+        ],
+        "name": "Harvard Mark II",
+        "note": "relay calculator, Cambridge, Mass."
+       },
+       "events": [
+        {
+         "at": 34,
+         "do": "timeline",
+         "from": 1944,
+         "to": 1947
+        },
+        {
+         "at": 127,
+         "do": "underline",
+         "word": "computer"
+        },
+        {
+         "at": 209,
+         "do": "magnify",
+         "point": [
+          0.16,
+          0.42
+         ]
+        }
+       ]
+      },
+      {
+       "start": 296,
+       "date": "9 September 1947",
+       "title": {
+        "text": "Not a metaphor",
+        "red": "metaphor"
+       },
+       "card": {
+        "kind": "document",
+        "hand": true,
+        "lines": [
+         {
+          "text": "9/9",
+          "at": 296
+         },
+         {
+          "text": "1545  Relay #70 Panel F",
+          "at": 406
+         },
+         {
+          "text": "(moth) in relay.",
+          "at": 486
+         },
+         {
+          "text": "First actual case of",
+          "at": 507
+         },
+         {
+          "text": "bug being found.",
+          "at": 556
+         }
+        ]
+       },
+       "events": [
+        {
+         "at": 373,
+         "do": "strike",
+         "word": "metaphor",
+         "with": "an actual bug."
+        },
+        {
+         "at": 580,
+         "do": "stamp",
+         "text": "9 SEP 1947"
+        }
+       ]
+      },
+      {
+       "start": 603,
+       "title": {
+        "text": "A word older than computers",
+        "red": "older"
+       },
+       "card": {
+        "kind": "people",
+        "people": [
+         {
+          "name": "Thomas Edison",
+          "dates": "1847-1931",
+          "role": "inventor",
+          "emblem": "lamp",
+          "at": 603
+         },
+         {
+          "name": "Grace Hopper",
+          "dates": "1906-1992",
+          "role": "computer scientist",
+          "initials": "GH",
+          "at": 854
+         }
+        ]
+       },
+       "events": [
+        {
+         "at": 695,
+         "do": "underline",
+         "word": "older"
+        },
+        {
+         "at": 751,
+         "do": "underline",
+         "word": "word"
+        },
+        {
+         "at": 833,
+         "do": "timeline",
+         "from": 1947,
+         "to": 1878
+        },
+        {
+         "at": 957,
+         "do": "timeline",
+         "from": 1878,
+         "to": 1947
+        }
+       ]
+      },
+      {
+       "start": 993,
+       "title": {
+        "text": "The moth that made a story.",
+        "red": "story"
+       },
+       "card": {
+        "kind": "plate",
+        "image": "/public/vid_example01/images/treated/eng-machine.engraving.png",
+        "focus": [
+         0.4,
+         0.62
+        ],
+        "name": "Harvard Mark II",
+        "note": "where the moth was found"
+       },
+       "events": [
+        {
+         "at": 1035,
+         "do": "magnify",
+         "point": [
+          0.2,
+          0.6
+         ]
+        },
+        {
+         "at": 1130,
+         "do": "underline",
+         "word": "story"
+        },
+        {
+         "at": 1173,
+         "do": "stamp",
+         "text": "LOGGED"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

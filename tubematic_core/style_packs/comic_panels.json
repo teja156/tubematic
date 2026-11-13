@@ -1,0 +1,242 @@
+{
+  "id": "comic_panels",
+  "label": "Comic Panels",
+  "order": 170,
+  "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "push"
+  },
+  "dimension": "2d",
+  "preview": "comic_panels",
+  "tagline": "A comic page builds up panel by panel: a hero, a villain, balloons, sound effects and a punchline.",
+  "renderer": "dom",
+  "canvas": "light",
+  "authoring_skill": "tubematic-comic-panels",
+  "allows": {
+    "figures": true,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "mascot": false,
+  "messages": {
+    "mascot": "Mascots are not available in the Comic Panels style: its whole cast is drawn comic characters, and one more would be confused with them. Choose another visual style, or no mascot."
+  },
+  "review": "- This video is in the Comic Panels style, and the following are its intended, approved look: comic pages on cream newsprint with a title bar, three or four panels each with thick black borders; flat colour with halftone dots; characters framed from the waist up as comic panels frame people (a house hero with a big round head and spiky black hair, invented people with simple hair and outfits, and a hooded villain silhouette with a grin), drawn in heavy black ink with flat colour; speech, thought and jagged shout balloons with a tail to who speaks; yellow caption boxes; slammed sound-effect words in burst shapes; speed lines and focus lines; a panel inking in with a wipe; the camera moving from panel to panel, punching in and shaking on a hit, and pulling back to show the whole page at the end. Do NOT report any of these as defects, and do not suggest realistic people, photographs, smooth animation or gradients: their absence is the style. A blank panel on the page that has not been read yet is correct.\n- Do report: a character, prop, balloon or sound effect that does not match what the narration says at that moment, a balloon whose tail points to the wrong character, text cut off or overflowing its balloon, caption box or sign, characters or balloons overlapping each other, anything cut off at the frame edge, text too small to read on a phone, a face that contradicts the line, a character that looks like a real, recognisable person, and a stretch of more than about three seconds where nothing on screen changes.\n",
+  "captions": {
+    "background": "label",
+    "position": 0.79,
+    "color": "#141414",
+    "fontFamily": "'Comic Neue', 'Comic Sans MS', sans-serif",
+    "fontSize": 52,
+    "maxWords": 4,
+    "uppercase": true
+  },
+  "script": "Every beat's `visual` is a **panel** brief: who is in the panel, what they do or say, and the sound or the hit if there is one (\"the hero blocks the guess; balloon: 'Not today!'; sound: CLANG\").\n\nThe narration tells the topic as a short comic: a hero (the viewer's side: you, your password, your immune system, the antibiotic) and a villain (the threat: a guessing attack, a superbug, a spammer) clash round by round. Set the scene in one line, then give each round one move and one answer, so each becomes a panel. Write a few short lines a character could say, of at most eight words, and mark them in the `visual` as balloons; the narrator never reads a balloon aloud word for word. Use a sound word where something lands (a block, a hit, a click). Land the payoff on the move that wins, with the strongest panel, and end on a short punchline. Talk to the viewer as \"you\", keep sentences short and punchy. Every move and fact must be true to how the thing works. Never write a beat that needs a photograph, a real person, a brand logo or a real event: every character is an invented comic character.",
+  "picture": {
+    "opening": "Frame 0 shows the first panel already inked with its first character or prop in it, under the page's title. Never an empty page.",
+    "turn": "A new panel inking in on the first word of a turn or a re-opening, or a character, balloon, sound effect or hit landing on that word.",
+    "payoff": "The winning move as the strongest panel: a shout balloon, a sound effect and a hit, then the pull back to the whole page.",
+    "ending": "Hold the whole finished page to the last frame. No sign-off card after it."
+  },
+  "routing": {
+    "best_for": [
+      "a fight or a showdown between two sides told as action: a defender against an invader (an antibiotic against a superbug, a spam filter against a spammer, your password against a guessing attack)",
+      "an arms race or a rivalry told round by round: one side's move, then the other side's answer",
+      "a short, punchy story with an invented hero, a villain and a twist, carried by dialogue lines and sound effects"
+    ],
+    "avoid_for": [
+      "a process with no fight in it, its parts passing work along station by station, or units being counted (Process Cast fits it)",
+      "a process or an attack walked through step by step by people or roles (Stick Explainer fits it)",
+      "a fraud, a scam, a heist or a money dilemma with the viewer inside it (Case File Story fits it)",
+      "a calm or warm story about an invented hero with nothing to fight (Illustrated fits it)",
+      "a list of named items, one idea each (Bean Explainer fits it)",
+      "a real, named person, company or event",
+      "serious, sombre or tragic topics, or violence against people"
+    ],
+    "cannot_show": "photographs, or real, named people, products and places: its people are invented comic characters and its props are drawn",
+    "signals": [
+      "the script sets two sides against each other: a hero and a villain, a defender and an invader",
+      "the story goes round by round, a move and an answer",
+      "characters say short lines that work as speech balloons",
+      "something lands: a block, a hit, a click, a sound",
+      "a punchy, playful, high-energy tone"
+    ],
+    "moods": [
+      "punchy",
+      "playful",
+      "dramatic",
+      "energetic"
+    ],
+    "images_per_video": "0",
+    "images": 0
+  },
+  "extra": {
+    "layouts": [
+      "stack3",
+      "stack4",
+      "2+1",
+      "1+2",
+      "2+2"
+    ],
+    "tones": [
+      "cream",
+      "pink",
+      "blue",
+      "yellow",
+      "green",
+      "dark"
+    ],
+    "cast_kinds": [
+      "hero",
+      "person",
+      "villain"
+    ],
+    "hairs": [
+      "spiky",
+      "bob",
+      "bun",
+      "short",
+      "bald",
+      "curly"
+    ],
+    "outfits": [
+      "blue",
+      "red",
+      "green",
+      "yellow",
+      "purple",
+      "grey"
+    ],
+    "skins": [
+      "light",
+      "tan",
+      "brown",
+      "dark"
+    ],
+    "poses": [
+      "stand",
+      "point",
+      "panic",
+      "cheer",
+      "think",
+      "type",
+      "shrug",
+      "facepalm"
+    ],
+    "faces": [
+      "neutral",
+      "happy",
+      "shocked",
+      "worried",
+      "angry",
+      "smug",
+      "sad",
+      "grin"
+    ],
+    "balloons": [
+      "speech",
+      "thought",
+      "shout"
+    ],
+    "lines": [
+      "speed",
+      "focus"
+    ],
+    "props": {
+      "phone": {
+        "text": 24,
+        "acts": []
+      },
+      "laptop": {
+        "text": 24,
+        "acts": []
+      },
+      "inbox": {
+        "text": 30,
+        "acts": []
+      },
+      "login": {
+        "text": 20,
+        "acts": []
+      },
+      "browser": {
+        "text": 24,
+        "acts": []
+      },
+      "monitor": {
+        "text": 24,
+        "acts": []
+      },
+      "server": {
+        "text": 0,
+        "acts": []
+      },
+      "lock": {
+        "text": 0,
+        "acts": []
+      },
+      "key": {
+        "text": 0,
+        "acts": []
+      },
+      "shield": {
+        "text": 0,
+        "acts": []
+      },
+      "bug": {
+        "text": 0,
+        "acts": []
+      },
+      "virus": {
+        "text": 0,
+        "acts": []
+      },
+      "cell": {
+        "text": 0,
+        "acts": []
+      },
+      "bomb": {
+        "text": 0,
+        "acts": []
+      },
+      "money": {
+        "text": 8,
+        "acts": []
+      },
+      "document": {
+        "text": 20,
+        "acts": []
+      },
+      "envelope": {
+        "text": 16,
+        "acts": []
+      },
+      "rocket": {
+        "text": 0,
+        "acts": []
+      },
+      "planet": {
+        "text": 0,
+        "acts": []
+      },
+      "clock": {
+        "text": 0,
+        "acts": []
+      },
+      "sign": {
+        "text": 16,
+        "acts": []
+      },
+      "door": {
+        "text": 0,
+        "acts": []
+      }
+    }
+  }
+}

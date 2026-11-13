@@ -1,0 +1,156 @@
+{
+ "_about": "Shared cases for the Paper Diorama contract (TMDEV-228): mcp/tests/test_paper_diorama.py and renderer/remotion/src/scenes/installed/paperDiorama/paperDiorama.test.ts both compute these and compare. Regenerate the expected values from mcp/paper_diorama.py only after changing both sides.",
+ "pop_scale": [
+  {
+   "age": 0,
+   "scale": 0.6
+  },
+  {
+   "age": 1,
+   "scale": 0.7
+  },
+  {
+   "age": 2,
+   "scale": 0.8
+  },
+  {
+   "age": 3,
+   "scale": 0.9
+  },
+  {
+   "age": 4,
+   "scale": 1.0
+  },
+  {
+   "age": 5,
+   "scale": 1.075
+  },
+  {
+   "age": 6,
+   "scale": 1.05
+  },
+  {
+   "age": 7,
+   "scale": 1.025
+  },
+  {
+   "age": 8,
+   "scale": 1.0
+  },
+  {
+   "age": 20,
+   "scale": 1.0
+  }
+ ],
+ "slot_box": [
+  {
+   "room": "diner",
+   "slot": "c",
+   "level": "floor",
+   "w": 300,
+   "h": 210,
+   "box": [
+    390.0,
+    1230,
+    690.0,
+    1440
+   ]
+  },
+  {
+   "room": "bank-vault",
+   "slot": "l",
+   "level": "shelf",
+   "w": 150,
+   "h": 200,
+   "box": [
+    115.0,
+    830,
+    265.0,
+    1030
+   ]
+  },
+  {
+   "room": "courtroom",
+   "slot": "r",
+   "level": "air",
+   "w": 220,
+   "h": 260,
+   "box": [
+    780.0,
+    430,
+    1000.0,
+    690
+   ]
+  },
+  {
+   "room": "warehouse",
+   "slot": "cl",
+   "level": "floor",
+   "w": 405,
+   "h": 283.5,
+   "box": [
+    162.5,
+    1166.5,
+    567.5,
+    1450
+   ]
+  }
+ ],
+ "stage_scale": [
+  {
+   "zooms": [],
+   "frame": 50,
+   "scale": 1.0
+  },
+  {
+   "zooms": [
+    40
+   ],
+   "frame": 42,
+   "scale": 1.09
+  },
+  {
+   "zooms": [
+    40
+   ],
+   "frame": 50,
+   "scale": 1.18
+  },
+  {
+   "zooms": [
+    40
+   ],
+   "frame": 65,
+   "scale": 1.0625
+  },
+  {
+   "zooms": [
+    40
+   ],
+   "frame": 200,
+   "scale": 1.0
+  }
+ ],
+ "banner_font_size": [
+  {
+   "text": "Hi",
+   "size": 62
+  },
+  {
+   "text": "Your laptop talks",
+   "size": 62
+  },
+  {
+   "text": "Free cafe Wi-Fi",
+   "size": 62
+  },
+  {
+   "text": "A VERY LONG BANNER RIGHT HERE",
+   "size": 40
+  }
+ ],
+ "critter": {
+  "w": 268.79999999999995,
+  "h": 283.20000000000005
+ }
+}

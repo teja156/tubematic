@@ -1,0 +1,242 @@
+{
+  "_about": "Shared cases for the Format Packs contract. mcp/tests/test_format_packs.py runs them against mcp/format_packs.py and renderer/remotion/src/scenes/installed/formatPacks/formatPacks.test.ts against contract.ts, so the validator and the renderer agree on the limits, how text wraps, what fits, which phone numbers are fiction and which names and marks are refused.",
+  "formats": [
+    "chat",
+    "list",
+    "quiz",
+    "strap"
+  ],
+  "limits": {
+    "minMessages": 2,
+    "maxMessages": 5,
+    "messageChars": 90,
+    "contactChars": 24,
+    "titleChars": 40,
+    "titleLines": 2,
+    "maxMarks": 3,
+    "markLabelChars": 16,
+    "markChars": 22,
+    "minItems": 2,
+    "maxItems": 4,
+    "leadChars": 24,
+    "itemChars": 64,
+    "itemLines": 2,
+    "questionChars": 80,
+    "questionLines": 3,
+    "minOptions": 2,
+    "maxOptions": 4,
+    "optionChars": 30,
+    "kickerChars": 20,
+    "headlineChars": 70,
+    "headlineLines": 3,
+    "dateChars": 24,
+    "sourceChars": 40,
+    "flapChars": 10,
+    "flapLabelChars": 20,
+    "maxStrapMarks": 2,
+    "minGap": 18,
+    "markLead": 8,
+    "endHold": 30,
+    "maxStillSeconds": 3
+  },
+  "timing": {
+    "bubbleIn": 7,
+    "dots": 14,
+    "rowIn": 14,
+    "optionIn": 10,
+    "lock": 10,
+    "mark": 14,
+    "headlineIn": 12,
+    "flip": 8,
+    "flipPerTile": 3
+  },
+  "band": [
+    200,
+    1330
+  ],
+  "layout": {
+    "threadBudget": 760,
+    "bubbleLine": 54,
+    "bubblePadY": 22,
+    "bubbleGap": 22,
+    "listBudget": 1100,
+    "titleLine": 64,
+    "itemLine": 46,
+    "rowBase": 104,
+    "rowGap": 20
+  },
+  "wrap": [
+    {
+      "text": "Hi Mum, I dropped my phone, this is my new number",
+      "kind": "bubble",
+      "lines": 3
+    },
+    {
+      "text": "I need to pay a bill today, can you send £800?",
+      "kind": "bubble",
+      "lines": 2
+    },
+    {
+      "text": "supercalifragilisticexpialidocious word",
+      "kind": "bubble",
+      "lines": 2
+    },
+    {
+      "text": "",
+      "kind": "bubble",
+      "lines": 1
+    },
+    {
+      "text": "Short",
+      "kind": "item",
+      "lines": 1
+    },
+    {
+      "text": "Check the sender before you tap any link in a text",
+      "kind": "item",
+      "lines": 2
+    },
+    {
+      "text": "A SINGLE VERY LONG HEADLINE THAT WRAPS ACROSS THREE LINES",
+      "kind": "bubble",
+      "lines": 3
+    },
+    {
+      "text": "WWWWWWWWWWWWWWWWWWWWWW",
+      "kind": "bubble",
+      "lines": 2
+    },
+    {
+      "text": "Streaming plan goes up again this spring",
+      "kind": "headline",
+      "lines": 2
+    }
+  ],
+  "thread_height": [
+    {
+      "texts": [
+        "Hi Mum, I dropped my phone, this is my new number",
+        "Oh no! You ok?"
+      ],
+      "height": 326
+    }
+  ],
+  "fiction_numbers": [
+    "07700 900461",
+    "07700900000",
+    "+44 7700 900999",
+    "+447700900123",
+    "0044 7700 900123",
+    "555-0100",
+    "555-0199",
+    "(212) 555-0142",
+    "+1 212 555 0101",
+    "1-212-555-0150",
+    "555.0123",
+    "07700/900461",
+    "07700–900461"
+  ],
+  "real_numbers": [
+    "07700 901461",
+    "07911 123456",
+    "555-0200",
+    "(212) 555-1234",
+    "+44 20 7946 0000",
+    "+1 415 555 2671"
+  ],
+  "ticks": [
+    "✓",
+    "✔",
+    "☑",
+    "✅",
+    "🗸",
+    "☑️",
+    "✔️"
+  ],
+  "apps": [
+    "WhatsApp",
+    "iMessage",
+    "Messenger",
+    "Instagram",
+    "TikTok",
+    "X",
+    "Twitter",
+    "Facebook",
+    "Telegram",
+    "Signal",
+    "Snapchat"
+  ],
+  "app_headers": [
+    {
+      "text": "WhatsApp support",
+      "apps": [
+        "WhatsApp"
+      ]
+    },
+    {
+      "text": "Follow on X",
+      "apps": [
+        "X"
+      ]
+    },
+    {
+      "text": "x marks the spot",
+      "apps": []
+    },
+    {
+      "text": "Unknown number",
+      "apps": []
+    },
+    {
+      "text": "Your instagram account",
+      "apps": [
+        "Instagram"
+      ]
+    },
+    {
+      "text": "Signals of a scam",
+      "apps": []
+    }
+  ],
+  "wrap_boxes": {
+    "bubble": [
+      44,
+      580,
+      false
+    ],
+    "title": [
+      56,
+      796,
+      true
+    ],
+    "item": [
+      36,
+      686,
+      false
+    ],
+    "question": [
+      52,
+      768,
+      false
+    ],
+    "headline": [
+      60,
+      756,
+      false
+    ]
+  },
+  "one_line": {
+    "chatTitle": [
+      36,
+      620,
+      1,
+      true
+    ],
+    "option": [
+      30,
+      680,
+      0,
+      false
+    ]
+  }
+}

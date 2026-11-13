@@ -1,0 +1,229 @@
+{
+  "id": "process_cast",
+  "label": "Process Cast",
+  "order": 180,
+  "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "cut"
+  },
+  "dimension": "2d",
+  "preview": "process_cast",
+  "tagline": "A cast of little drawn parts with faces acts out an invisible process, station by station.",
+  "renderer": "dom",
+  "canvas": "light",
+  "authoring_skill": "tubematic-process-cast",
+  "allows": {
+    "figures": true,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "mascot": false,
+  "messages": {
+    "mascot": "Mascots are not available in the Process Cast style: its whole cast is drawn characters, and one more would be confused with them. Choose another visual style, or no mascot."
+  },
+  "review": "- This video is a Process Cast, and the following are its intended, approved look: warm grey paper with one wobbly ink ground line across the frame, a hatched wood band under it and small grass tufts; simple characters with faces (a bean, a blob, a rounded block, a gem, or a body made of small unit cubes) drawn with a thick wobbly ink outline and coloured-pencil hatching, in teal, olive, coral, sky, mustard, plum or cream; their faces are dot eyes, short brows, blush and a small mouth that shows a feeling and never moves to talk; small stub arms only; dark monospace name tags and task cards over their heads; hanging cream station signs in monospace capitals; furniture (a desk, a cork board, a door, a shelf, a machine, a server rack, a cell membrane) and small props drawn the same way; characters popping in, hopping between spots with a squash on landing, splitting into look-alike clones that first flash as flat silhouettes and later merge back, cubes joining into a bigger body, and the camera gliding sideways from station to station; small marks beside a head (a question mark, an exclamation mark, a sweat drop, a check, a cross, a bulb). Do NOT report any of these as defects, and do not suggest realistic characters, lip sync, photographs, gradients or smooth limb animation: their absence is the style.\n- Do report: a character, tag, card or prop that does not match what the narration names at that moment, a task card handed to the wrong character, text cut off or overflowing its tag, sign or card, characters overlapping each other or the furniture, anything cut off at the frame edge, text too small to read on a phone, a face that contradicts the line (a happy face on a failure), and a stretch of more than about three seconds where nothing on screen changes.\n",
+  "captions": {
+    "background": "none",
+    "position": 0.72,
+    "color": "#2B2521",
+    "fontFamily": "Nunito, 'Trebuchet MS', sans-serif",
+    "fontSize": 60,
+    "maxWords": 4
+  },
+  "script": "Every beat's `visual` is a **cast** brief: which characters are at which station, and what one of them does on the line (\"the packet hops to the router and hands over its card\").\n\nThe narration tells an invisible process as a little play. Name the parts that act as characters once, plainly (\"Your request is a packet.\"), and keep calling them by that name, because each becomes a character with that name on its tag. Move the story from one place to the next, each place named the way its sign will read (\"the router\", \"memory\", \"the stomach\"), and give each line one thing that happens: a part arrives, hands something over, waits, splits into copies, joins with another, gets turned away. Count units aloud when the topic is about quantities (\"eight bits make a byte\"), because units are drawn as cubes that join. Talk to the viewer as \"you\", keep sentences short and warm, and land the payoff on the moment the process finishes. Every part, name and step must be true to how the thing works. Never write a beat that needs a photograph, a real person or a brand logo: every character is a drawn part with a face, and the people who use a system are not characters in this style.",
+  "picture": {
+    "opening": "Frame 0 shows the first station with the first character already entering and its sign hanging. Never an empty station.",
+    "turn": "A camera move to a new station on the first word of a turn or a re-opening, or a character entering, hopping, splitting, joining, reacting or handing over a card on that word.",
+    "payoff": "The process finishing: the card arriving where it was going, the clones merging back, the cubes joining, with the strongest reaction.",
+    "ending": "Hold on the payoff station to the last frame. No sign-off card after it."
+  },
+  "routing": {
+    "best_for": [
+      "bits, bytes or packets as countable blocks that join and add up (eight bits making a byte, a file split into packets)",
+      "a process inside the body or a cell told with its organs, cells or molecules as characters",
+      "meet the cast: the layers, codes or parts of a system introduced one by one as characters",
+      "a pipeline of named stages each part passes through (a compiler, a CI build, a build system, digestion)"
+    ],
+    "avoid_for": [
+      "a process acted out by people or roles: a user, an attacker, an admin, a customer (Stick Explainer fits it)",
+      "a request or message walked through a system's components as roles (Stick Explainer fits it)",
+      "a number, a limit or an encoding worked out step by step: binary maths, base64, a counter's maximum (Whiteboard fits it)",
+      "one everyman reacting to everyday life or a list of named items (Bean Explainer fits it)",
+      "a real, named person, product or place the viewer must recognise",
+      "serious, sombre or tragic topics"
+    ],
+    "cannot_show": "people, photographs or real, named things: every character is a drawn part with a face, and a place is a station sign",
+    "signals": [
+      "the actors of the process are things, not people: packets, cells, bits, stages, layers",
+      "the script counts units that add up",
+      "named parts are introduced one by one",
+      "a part hands a task to the next, station by station",
+      "a playful, warm, curious tone"
+    ],
+    "moods": [
+      "playful",
+      "warm",
+      "curious",
+      "clear"
+    ],
+    "images_per_video": "0",
+    "images": 0
+  },
+  "extra": {
+    "bodies": [
+      "bean",
+      "blob",
+      "block",
+      "gem",
+      "units"
+    ],
+    "tints": [
+      "teal",
+      "olive",
+      "coral",
+      "sky",
+      "mustard",
+      "plum",
+      "cream"
+    ],
+    "accessories": [
+      "none",
+      "glasses",
+      "tuft",
+      "sprout",
+      "cap"
+    ],
+    "faces": [
+      "neutral",
+      "happy",
+      "curious",
+      "proud",
+      "surprised",
+      "worried",
+      "sad"
+    ],
+    "marks": [
+      "question",
+      "exclaim",
+      "sweat",
+      "check",
+      "cross",
+      "idea"
+    ],
+    "entrances": [
+      "pop",
+      "drop",
+      "slide"
+    ],
+    "camera_moves": [
+      "glide",
+      "cut"
+    ],
+    "stations": [
+      "desk",
+      "board",
+      "door",
+      "shelf",
+      "machine",
+      "server",
+      "cell",
+      "stage"
+    ],
+    "props": {
+      "card": {
+        "text": 18,
+        "acts": []
+      },
+      "envelope": {
+        "text": 14,
+        "acts": []
+      },
+      "packet": {
+        "text": 10,
+        "acts": []
+      },
+      "box": {
+        "text": 10,
+        "acts": []
+      },
+      "file": {
+        "text": 12,
+        "acts": []
+      },
+      "folder": {
+        "text": 12,
+        "acts": []
+      },
+      "key": {
+        "text": 0,
+        "acts": []
+      },
+      "lock": {
+        "text": 0,
+        "acts": []
+      },
+      "coin": {
+        "text": 0,
+        "acts": []
+      },
+      "cookie": {
+        "text": 0,
+        "acts": []
+      },
+      "gear": {
+        "text": 0,
+        "acts": []
+      },
+      "bug": {
+        "text": 0,
+        "acts": []
+      },
+      "shield": {
+        "text": 0,
+        "acts": []
+      },
+      "stamp": {
+        "text": 0,
+        "acts": []
+      },
+      "clock": {
+        "text": 0,
+        "acts": []
+      },
+      "phone": {
+        "text": 12,
+        "acts": []
+      },
+      "laptop": {
+        "text": 14,
+        "acts": []
+      },
+      "bulb": {
+        "text": 0,
+        "acts": []
+      },
+      "magnifier": {
+        "text": 0,
+        "acts": []
+      },
+      "molecule": {
+        "text": 0,
+        "acts": []
+      },
+      "virus": {
+        "text": 0,
+        "acts": []
+      },
+      "battery": {
+        "text": 0,
+        "acts": []
+      }
+    }
+  }
+}

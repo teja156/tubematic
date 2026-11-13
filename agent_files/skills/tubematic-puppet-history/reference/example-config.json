@@ -1,0 +1,211 @@
+{
+ "totalFrames": 725,
+ "fps": 30,
+ "canvas": "light",
+ "scenes": [
+  {
+   "type": "generated",
+   "source": "installed",
+   "src": "PuppetHistory",
+   "startFrame": 0,
+   "durationInFrames": 725,
+   "props": {
+    "puppetHistory": {
+     "cast": [
+      {
+       "id": "you",
+       "costume": "legionary"
+      },
+      {
+       "id": "caesar",
+       "costume": "noble",
+       "name": "JULIUS CAESAR"
+      }
+     ],
+     "beats": [
+      {
+       "type": "set",
+       "start": 0,
+       "set": "camp",
+       "events": [
+        {
+         "type": "enter",
+         "frame": 0,
+         "who": "you",
+         "slot": 1,
+         "from": "cut",
+         "pose": "stand",
+         "face": "stern"
+        },
+        {
+         "type": "date",
+         "frame": 28,
+         "text": "50 BC"
+        },
+        {
+         "type": "act",
+         "frame": 42,
+         "who": "you",
+         "pose": "salute",
+         "face": "proud"
+        }
+       ]
+      },
+      {
+       "type": "card",
+       "start": 72,
+       "title": "ENLISTMENT",
+       "lines": [
+        "NAME: YOU",
+        "TERM: 25 YEARS",
+        "PAY: 225 A YEAR"
+       ],
+       "events": [
+        {
+         "type": "stamp",
+         "frame": 136,
+         "text": "SIGNED"
+        },
+        {
+         "type": "strike",
+         "frame": 182,
+         "line": 2,
+         "text": "MINUS GEAR"
+        },
+        {
+         "type": "date",
+         "frame": 266,
+         "text": "YEAR ONE"
+        }
+       ]
+      },
+      {
+       "type": "map",
+       "start": 288,
+       "focus": [
+        "Italy",
+        "France",
+        "Spain",
+        "Switzerland"
+       ],
+       "events": [
+        {
+         "type": "enter",
+         "frame": 288,
+         "who": "caesar",
+         "slot": 0,
+         "from": "slide",
+         "pose": "point",
+         "face": "smug"
+        },
+        {
+         "type": "fill",
+         "frame": 288,
+         "region": "Italy",
+         "color": "red"
+        },
+        {
+         "type": "arrow",
+         "frame": 342,
+         "from": "Italy",
+         "to": "France"
+        },
+        {
+         "type": "label",
+         "frame": 368,
+         "region": "France",
+         "text": "GAUL"
+        }
+       ]
+      },
+      {
+       "type": "set",
+       "start": 390,
+       "set": "field",
+       "events": [
+        {
+         "type": "enter",
+         "frame": 390,
+         "who": "you",
+         "slot": 1,
+         "from": "slide",
+         "face": "worried"
+        },
+        {
+         "type": "sign",
+         "frame": 429,
+         "who": "you",
+         "text": "20 MILES A DAY"
+        },
+        {
+         "type": "sign",
+         "frame": 460,
+         "who": "you",
+         "text": ""
+        },
+        {
+         "type": "hold",
+         "frame": 460,
+         "who": "you",
+         "prop": "shovel"
+        },
+        {
+         "type": "act",
+         "frame": 479,
+         "who": "you",
+         "pose": "hold",
+         "face": "sad"
+        }
+       ]
+      },
+      {
+       "type": "set",
+       "start": 511,
+       "set": "farm",
+       "events": [
+        {
+         "type": "enter",
+         "frame": 511,
+         "who": "you",
+         "slot": 1,
+         "from": "cut",
+         "face": "worried"
+        },
+        {
+         "type": "date",
+         "frame": 549,
+         "text": "25 BC"
+        },
+        {
+         "type": "act",
+         "frame": 627,
+         "who": "you",
+         "face": "shock"
+        },
+        {
+         "type": "swap",
+         "frame": 649,
+         "who": "you",
+         "costume": "farmer"
+        },
+        {
+         "type": "act",
+         "frame": 649,
+         "who": "you",
+         "pose": "cheer",
+         "face": "happy"
+        },
+        {
+         "type": "stamp",
+         "frame": 663,
+         "text": "RETIRED",
+         "color": "green"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

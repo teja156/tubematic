@@ -102,10 +102,13 @@ const DEFAULT_WEIGHT = 800;
  *  "log": a terminal log strip — left-aligned, each word typed on as it is
  *  spoken behind a prompt, a block caret, the word being spoken in `accent`.
  *  The Terminal Doc style uses it.
+ *  "chip": a small cream paper chip hugging the phrase, with a hairline ink
+ *  border; an `emphasis` word turns to `accent` once spoken instead of getting
+ *  the red box. The Archive and Engraving style uses it with the "fill" look.
  *  "card": a map-label card, warm white with an ink border and a flat offset
  *  shadow, the words left-aligned beside a small isometric cube chip. The
  *  Isometric Infographic style uses it. */
-export type SubtitleBackground = "pill" | "shadow" | "outline" | "label" | "none" | "log" | "card";
+export type SubtitleBackground = "pill" | "shadow" | "outline" | "label" | "none" | "log" | "chip" | "card";
 
 export interface SubtitleConfig {
   enabled?: boolean;
@@ -129,8 +132,9 @@ export interface SubtitleConfig {
    * Explainer style uses it.
    */
   emphasis?: number[];
-  /** The colour of the word being spoken in the "log" look; absent means the
-   *  text colour. Ignored by the other looks. */
+  /** The colour of the word being spoken in the "log" look, of an emphasis
+   *  word on a "chip", of the tags in the "tags" look and of the highlighter
+   *  in the "highlight" look; absent means each one's own default. */
   accent?: string | null;
   /**
    * "selection": words appear one by one as they are spoken, the latest in
@@ -140,9 +144,15 @@ export interface SubtitleConfig {
    * "fill": the whole phrase is on screen from its first frame with no rise;
    * the words still to come are grey, and each turns to the text colour as it
    * is spoken and stays there. The Case File Story style uses it.
+   * "tags": one torn paper tag per word, popping in as the word is spoken,
+   * each tilted and offset a little by a seed of its own; a page holds up to
+   * `maxWords` words. The Paper Diorama style uses it.
+   * "highlight": the whole phrase on a cream strip from its first frame, and a
+   * highlighter bar wiping in under each `emphasis` word as it is spoken. The
+   * Editorial Collage style uses it.
    * Absent means the plain look every other style has.
    */
-  look?: "plain" | "selection" | "fill";
+  look?: "plain" | "selection" | "fill" | "tags" | "highlight";
   /** Extra space between letters, in ems (-0.05 to 0.3), for the plain look;
    *  absent keeps each background's own. Night Signal sets its spaced capitals with it. */
   letterSpacing?: number;
@@ -153,6 +163,10 @@ const LABEL_PAPER = "#EBE5D2";
 const LABEL_INK = "#2F2218";
 const LABEL_TEXT = "#2A2F33";
 
+/** The "chip" plate: cream paper, a hairline of ink, the emphasis word in red. */
+const CHIP_PAPER = "#F1E8D2";
+const CHIP_INK = "#181411";
+const CHIP_ACCENT = "#A83A3A";
 /** The "card" plate: warm white, ink border and text, a red cube chip. */
 const CARD_INK = "#231A2C";
 const CARD_CHIP = "#CF5140";
@@ -377,13 +391,24 @@ export default function Subtitles({
       color={color ?? (canvas === "light" ? "#0f0f0f" : "#F7F7F7")} position={position} uppercase={uppercase} />;
   }
 
+  if (look === "tags") {
+    return <TagLine chunks={chunks} frame={frame} family={family} fontSize={fontSize} position={position}
+      ink={color ?? TAG_TEXT} tag={accent ?? TAG_PAPER} uppercase={uppercase} />;
+  }
+
   const index = visibleChunkIndex(chunks, frame);
   if (index === null) return null;
   const chunk = chunks[index];
 
+  if (look === "highlight") {
+    return <HighlightStrip chunk={chunk} emphasised={emphasised} frame={frame} family={family} fontSize={fontSize}
+      position={position} ink={color ?? STRIP_INK} marker={accent ?? STRIP_MARKER} uppercase={uppercase} />;
+  }
+
   const label = background === "label";
+  const chip = background === "chip";
   const card = background === "card";
-  const ink = color ?? (label ? LABEL_TEXT : card ? CARD_INK : canvas === "light" ? "#0f0f0f" : "#ffffff");
+  const ink = color ?? (label ? LABEL_TEXT : chip ? CHIP_INK : card ? CARD_INK : canvas === "light" ? "#0f0f0f" : "#ffffff");
   if (background === "log") {
     return <LogStrip chunk={chunk} frame={frame} family={family} fontSize={fontSize} position={position} ink={ink} accent={accent ?? ink} uppercase={uppercase} />;
   }
@@ -425,6 +450,14 @@ export default function Subtitles({
           textTransform: uppercase ? "uppercase" : "none",
           ...(background === "pill"
             ? { background: paper, padding: "14px 28px", borderRadius: 16 }
+            : {}),
+          ...(chip
+            ? {
+                left: "50%", right: "auto", width: "max-content", maxWidth: 940,
+                transform: `translate(-50%, calc(-50% + ${rise}px))`,
+                background: CHIP_PAPER, border: `2px solid ${CHIP_INK}22`, borderRadius: 6,
+                padding: `${Math.round(fontSize * 0.16)}px ${Math.round(fontSize * 0.42)}px`,
+              }
             : {}),
           ...(label
             ? {
@@ -474,6 +507,9 @@ export default function Subtitles({
           // caption legible at speed.
           const active = frame >= w.startFrame && frame <= w.endFrame;
           const spoken = frame > w.endFrame;
+          if (chip && emphasised.has(w)) {
+            return <span key={`${i}-${w.word}`} style={{ color: frame >= w.startFrame ? (accent ?? CHIP_ACCENT) : fill ? fillWordColor(frame, w.startFrame, ink) : ink }}>{w.word}</span>;
+          }
           if (emphasised.has(w) && frame >= w.startFrame) {
             const k = Math.min(1, (frame - w.startFrame) / EMPHASIS_IN);
             const pop = 0.55 + 0.45 * (1 + 2.2 * (k - 1) ** 3 + 1.2 * (k - 1) ** 2);
@@ -566,3 +602,108 @@ const LogStrip: React.FC<{
     </AbsoluteFill>
   );
 };
+
+/** The "tags" look: the paper of a tag, the text on it, and its pop. */
+const TAG_PAPER = "#C9573C";
+const TAG_TEXT = "#F3E6D3";
+const TAG_POP = 4;
+
+/** A small seeded random number in [0, 1) for a word, so a tag's tilt and
+ *  torn edge are the same on every frame and every render. */
+export function tagSeed(startFrame: number, k: number): number {
+  const x = Math.sin(startFrame * 12.9898 + k * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+/** A torn-paper outline as a CSS polygon: ragged top and bottom edges, the
+ *  sides cut nearly straight. Seeded by the word, so it never boils. */
+export function tornPolygon(seed: number): string {
+  const pts: string[] = [];
+  const n = 9;
+  for (let i = 0; i <= n; i++) pts.push(`${(i / n) * 100}% ${(tagSeed(seed, i) * 9).toFixed(1)}%`);
+  pts.push(`${98 + tagSeed(seed, 40) * 2}% 50%`);
+  for (let i = n; i >= 0; i--) pts.push(`${(i / n) * 100}% ${(100 - tagSeed(seed, 20 + i) * 9).toFixed(1)}%`);
+  pts.push(`${tagSeed(seed, 41) * 2}% 50%`);
+  return `polygon(${pts.join(", ")})`;
+}
+
+/** The pop of a tag: 0.6 to a little over 1 and back, settled after TAG_POP
+ *  frames, so a still tag costs nothing to repaint. */
+export function tagScale(age: number): number {
+  if (age >= TAG_POP) return 1;
+  const k = Math.max(0, age / TAG_POP);
+  // up to 1.08 over the first 60%, back down to 1 over the rest
+  return k < 0.6 ? 0.6 + 0.48 * (k / 0.6) : 1.08 - 0.08 * ((k - 0.6) / 0.4);
+}
+
+const TagLine: React.FC<{
+  chunks: TimelineWord[][]; frame: number; family: string; fontSize: number; position: number;
+  ink: string; tag: string; uppercase: boolean;
+}> = ({ chunks, frame, family, fontSize, position, ink, tag, uppercase }) => {
+  const index = visibleChunkIndex(chunks, frame);
+  if (index === null) return null;
+  const shown = chunks[index].filter((w) => w.startFrame <= frame);
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none" }}>
+      <div style={{
+        position: "absolute", left: 70, right: 70, top: position * 1920 - fontSize * 0.75,
+        display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: `${fontSize * 0.3}px ${fontSize * 0.22}px`,
+        fontFamily: family, fontSize, fontWeight: 900, lineHeight: 1.05, color: ink,
+        textTransform: uppercase ? "uppercase" : "none",
+      }}>
+        {shown.map((w, i) => {
+          const tilt = (tagSeed(w.startFrame, 1) - 0.5) * 10;
+          const lift = (tagSeed(w.startFrame, 2) - 0.5) * 12;
+          return (
+            <span key={`${i}-${w.word}`} style={{
+              display: "inline-block", background: tag, clipPath: tornPolygon(w.startFrame),
+              padding: `${fontSize * 0.2}px ${fontSize * 0.28}px ${fontSize * 0.24}px`,
+              transform: `translateY(${lift}px) rotate(${tilt.toFixed(2)}deg) scale(${tagScale(frame - w.startFrame).toFixed(3)})`,
+            }}>
+              {w.word}
+            </span>
+          );
+        })}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+/** The "highlight" look: a cream strip, ink type, a yellow marker bar. */
+const STRIP_PAPER = "#EFE9DD";
+const STRIP_INK = "#171716";
+const STRIP_MARKER = "#DACF08";
+const STRIP_WIPE = 8;
+
+/** How far the marker under a word has wiped in, 0 to 1. */
+export function markerReach(frame: number, startFrame: number): number {
+  return Math.max(0, Math.min(1, (frame - startFrame) / STRIP_WIPE));
+}
+
+const HighlightStrip: React.FC<{
+  chunk: TimelineWord[]; emphasised: Set<TimelineWord>; frame: number; family: string; fontSize: number;
+  position: number; ink: string; marker: string; uppercase: boolean;
+}> = ({ chunk, emphasised, frame, family, fontSize, position, ink, marker, uppercase }) => (
+  <AbsoluteFill style={{ pointerEvents: "none" }}>
+    <div style={{
+      position: "absolute", left: "50%", top: `${position * 100}%`, transform: "translate(-50%, -50%)",
+      width: "max-content", maxWidth: 940, display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "0 0.3em",
+      background: STRIP_PAPER, boxShadow: "3px 6px 10px rgba(23,23,22,0.22)",
+      padding: `${Math.round(fontSize * 0.18)}px ${Math.round(fontSize * 0.4)}px`,
+      fontFamily: family, fontSize, fontWeight: 700, lineHeight: 1.15, color: ink, textAlign: "center",
+      textTransform: uppercase ? "uppercase" : "none",
+    }}>
+      {chunk.map((w, i) => {
+        const reach = emphasised.has(w) ? markerReach(frame, w.startFrame) : 0;
+        return (
+          <span key={`${i}-${w.word}`} style={{ position: "relative", display: "inline-block", color: fillWordColor(frame, w.startFrame, ink) }}>
+            {reach > 0 && (
+              <span style={{ position: "absolute", left: "-0.08em", bottom: "0.04em", height: "0.5em", width: `calc(${reach * 100}% + ${0.16 * reach}em)`, background: marker, opacity: 0.85, transform: "skewX(-8deg)" }} />
+            )}
+            <span style={{ position: "relative" }}>{w.word}</span>
+          </span>
+        );
+      })}
+    </div>
+  </AbsoluteFill>
+);

@@ -1,0 +1,312 @@
+{
+ "totalFrames": 920,
+ "fps": 30,
+ "audioDurationSeconds": 30.67,
+ "words": [
+  {
+   "word": "Your",
+   "startFrame": 6,
+   "endFrame": 16
+  },
+  {
+   "word": "password",
+   "startFrame": 18,
+   "endFrame": 35
+  },
+  {
+   "word": "alone",
+   "startFrame": 37,
+   "endFrame": 49
+  },
+  {
+   "word": "will",
+   "startFrame": 51,
+   "endFrame": 61
+  },
+  {
+   "word": "not",
+   "startFrame": 63,
+   "endFrame": 71
+  },
+  {
+   "word": "save",
+   "startFrame": 73,
+   "endFrame": 83
+  },
+  {
+   "word": "you.",
+   "startFrame": 85,
+   "endFrame": 93
+  },
+  {
+   "word": "Turn",
+   "startFrame": 105,
+   "endFrame": 115
+  },
+  {
+   "word": "on",
+   "startFrame": 117,
+   "endFrame": 123
+  },
+  {
+   "word": "two-factor",
+   "startFrame": 125,
+   "endFrame": 145
+  },
+  {
+   "word": "login",
+   "startFrame": 147,
+   "endFrame": 159
+  },
+  {
+   "word": "in",
+   "startFrame": 161,
+   "endFrame": 167
+  },
+  {
+   "word": "three",
+   "startFrame": 169,
+   "endFrame": 181
+  },
+  {
+   "word": "steps.",
+   "startFrame": 183,
+   "endFrame": 195
+  },
+  {
+   "word": "Step",
+   "startFrame": 207,
+   "endFrame": 217
+  },
+  {
+   "word": "one:",
+   "startFrame": 219,
+   "endFrame": 227
+  },
+  {
+   "word": "open",
+   "startFrame": 229,
+   "endFrame": 239
+  },
+  {
+   "word": "your",
+   "startFrame": 241,
+   "endFrame": 251
+  },
+  {
+   "word": "phone's",
+   "startFrame": 253,
+   "endFrame": 268
+  },
+  {
+   "word": "settings.",
+   "startFrame": 270,
+   "endFrame": 287
+  },
+  {
+   "word": "Tap",
+   "startFrame": 299,
+   "endFrame": 307
+  },
+  {
+   "word": "Security.",
+   "startFrame": 309,
+   "endFrame": 326
+  },
+  {
+   "word": "Step",
+   "startFrame": 338,
+   "endFrame": 348
+  },
+  {
+   "word": "two:",
+   "startFrame": 350,
+   "endFrame": 358
+  },
+  {
+   "word": "scan",
+   "startFrame": 360,
+   "endFrame": 370
+  },
+  {
+   "word": "the",
+   "startFrame": 372,
+   "endFrame": 380
+  },
+  {
+   "word": "code",
+   "startFrame": 382,
+   "endFrame": 392
+  },
+  {
+   "word": "with",
+   "startFrame": 394,
+   "endFrame": 404
+  },
+  {
+   "word": "an",
+   "startFrame": 406,
+   "endFrame": 412
+  },
+  {
+   "word": "authenticator",
+   "startFrame": 414,
+   "endFrame": 439
+  },
+  {
+   "word": "app.",
+   "startFrame": 441,
+   "endFrame": 449
+  },
+  {
+   "word": "Hold",
+   "startFrame": 461,
+   "endFrame": 471
+  },
+  {
+   "word": "your",
+   "startFrame": 473,
+   "endFrame": 483
+  },
+  {
+   "word": "phone",
+   "startFrame": 485,
+   "endFrame": 497
+  },
+  {
+   "word": "up",
+   "startFrame": 499,
+   "endFrame": 505
+  },
+  {
+   "word": "to",
+   "startFrame": 507,
+   "endFrame": 513
+  },
+  {
+   "word": "the",
+   "startFrame": 515,
+   "endFrame": 523
+  },
+  {
+   "word": "screen.",
+   "startFrame": 525,
+   "endFrame": 538
+  },
+  {
+   "word": "Step",
+   "startFrame": 550,
+   "endFrame": 560
+  },
+  {
+   "word": "three:",
+   "startFrame": 562,
+   "endFrame": 574
+  },
+  {
+   "word": "type",
+   "startFrame": 576,
+   "endFrame": 586
+  },
+  {
+   "word": "the",
+   "startFrame": 588,
+   "endFrame": 596
+  },
+  {
+   "word": "six-digit",
+   "startFrame": 598,
+   "endFrame": 616
+  },
+  {
+   "word": "code.",
+   "startFrame": 618,
+   "endFrame": 628
+  },
+  {
+   "word": "It",
+   "startFrame": 640,
+   "endFrame": 646
+  },
+  {
+   "word": "changes",
+   "startFrame": 648,
+   "endFrame": 663
+  },
+  {
+   "word": "every",
+   "startFrame": 665,
+   "endFrame": 677
+  },
+  {
+   "word": "thirty",
+   "startFrame": 679,
+   "endFrame": 692
+  },
+  {
+   "word": "seconds.",
+   "startFrame": 694,
+   "endFrame": 709
+  },
+  {
+   "word": "Done.",
+   "startFrame": 721,
+   "endFrame": 731
+  },
+  {
+   "word": "Now",
+   "startFrame": 733,
+   "endFrame": 741
+  },
+  {
+   "word": "a",
+   "startFrame": 743,
+   "endFrame": 748
+  },
+  {
+   "word": "stolen",
+   "startFrame": 750,
+   "endFrame": 763
+  },
+  {
+   "word": "password",
+   "startFrame": 765,
+   "endFrame": 782
+  },
+  {
+   "word": "is",
+   "startFrame": 784,
+   "endFrame": 790
+  },
+  {
+   "word": "not",
+   "startFrame": 792,
+   "endFrame": 800
+  },
+  {
+   "word": "enough.",
+   "startFrame": 802,
+   "endFrame": 815
+  },
+  {
+   "word": "Three",
+   "startFrame": 827,
+   "endFrame": 839
+  },
+  {
+   "word": "steps,",
+   "startFrame": 841,
+   "endFrame": 853
+  },
+  {
+   "word": "one",
+   "startFrame": 855,
+   "endFrame": 863
+  },
+  {
+   "word": "minute.",
+   "startFrame": 865,
+   "endFrame": 878
+  }
+ ]
+}

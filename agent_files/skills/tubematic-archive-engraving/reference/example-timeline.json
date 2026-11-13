@@ -1,0 +1,447 @@
+{
+ "totalFrames": 1218,
+ "fps": 30,
+ "audioDurationSeconds": 40.6,
+ "words": [
+  {
+   "word": "In",
+   "startFrame": 6,
+   "endFrame": 12
+  },
+  {
+   "word": "September",
+   "startFrame": 14,
+   "endFrame": 32
+  },
+  {
+   "word": "1947,",
+   "startFrame": 34,
+   "endFrame": 44
+  },
+  {
+   "word": "engineers",
+   "startFrame": 46,
+   "endFrame": 64
+  },
+  {
+   "word": "at",
+   "startFrame": 66,
+   "endFrame": 72
+  },
+  {
+   "word": "Harvard",
+   "startFrame": 74,
+   "endFrame": 89
+  },
+  {
+   "word": "were",
+   "startFrame": 91,
+   "endFrame": 101
+  },
+  {
+   "word": "chasing",
+   "startFrame": 103,
+   "endFrame": 118
+  },
+  {
+   "word": "a",
+   "startFrame": 120,
+   "endFrame": 125
+  },
+  {
+   "word": "fault.",
+   "startFrame": 127,
+   "endFrame": 139
+  },
+  {
+   "word": "Deep",
+   "startFrame": 150,
+   "endFrame": 160
+  },
+  {
+   "word": "inside",
+   "startFrame": 162,
+   "endFrame": 175
+  },
+  {
+   "word": "the",
+   "startFrame": 177,
+   "endFrame": 185
+  },
+  {
+   "word": "Mark",
+   "startFrame": 187,
+   "endFrame": 197
+  },
+  {
+   "word": "Two,",
+   "startFrame": 199,
+   "endFrame": 207
+  },
+  {
+   "word": "relay",
+   "startFrame": 209,
+   "endFrame": 221
+  },
+  {
+   "word": "seventy",
+   "startFrame": 223,
+   "endFrame": 238
+  },
+  {
+   "word": "had",
+   "startFrame": 240,
+   "endFrame": 248
+  },
+  {
+   "word": "stopped",
+   "startFrame": 250,
+   "endFrame": 265
+  },
+  {
+   "word": "switching.",
+   "startFrame": 267,
+   "endFrame": 285
+  },
+  {
+   "word": "Stuck",
+   "startFrame": 296,
+   "endFrame": 308
+  },
+  {
+   "word": "between",
+   "startFrame": 310,
+   "endFrame": 325
+  },
+  {
+   "word": "its",
+   "startFrame": 327,
+   "endFrame": 335
+  },
+  {
+   "word": "contacts",
+   "startFrame": 337,
+   "endFrame": 354
+  },
+  {
+   "word": "was",
+   "startFrame": 356,
+   "endFrame": 364
+  },
+  {
+   "word": "a",
+   "startFrame": 366,
+   "endFrame": 371
+  },
+  {
+   "word": "moth.",
+   "startFrame": 373,
+   "endFrame": 383
+  },
+  {
+   "word": "They",
+   "startFrame": 394,
+   "endFrame": 404
+  },
+  {
+   "word": "taped",
+   "startFrame": 406,
+   "endFrame": 418
+  },
+  {
+   "word": "it",
+   "startFrame": 420,
+   "endFrame": 426
+  },
+  {
+   "word": "into",
+   "startFrame": 428,
+   "endFrame": 438
+  },
+  {
+   "word": "the",
+   "startFrame": 440,
+   "endFrame": 448
+  },
+  {
+   "word": "logbook,",
+   "startFrame": 450,
+   "endFrame": 465
+  },
+  {
+   "word": "with",
+   "startFrame": 467,
+   "endFrame": 477
+  },
+  {
+   "word": "a",
+   "startFrame": 479,
+   "endFrame": 484
+  },
+  {
+   "word": "note.",
+   "startFrame": 486,
+   "endFrame": 496
+  },
+  {
+   "word": "First",
+   "startFrame": 507,
+   "endFrame": 519
+  },
+  {
+   "word": "actual",
+   "startFrame": 521,
+   "endFrame": 534
+  },
+  {
+   "word": "case",
+   "startFrame": 536,
+   "endFrame": 546
+  },
+  {
+   "word": "of",
+   "startFrame": 548,
+   "endFrame": 554
+  },
+  {
+   "word": "bug",
+   "startFrame": 556,
+   "endFrame": 564
+  },
+  {
+   "word": "being",
+   "startFrame": 566,
+   "endFrame": 578
+  },
+  {
+   "word": "found.",
+   "startFrame": 580,
+   "endFrame": 592
+  },
+  {
+   "word": "But",
+   "startFrame": 603,
+   "endFrame": 611
+  },
+  {
+   "word": "engineers",
+   "startFrame": 613,
+   "endFrame": 631
+  },
+  {
+   "word": "had",
+   "startFrame": 633,
+   "endFrame": 641
+  },
+  {
+   "word": "called",
+   "startFrame": 643,
+   "endFrame": 656
+  },
+  {
+   "word": "faults",
+   "startFrame": 658,
+   "endFrame": 671
+  },
+  {
+   "word": "bugs",
+   "startFrame": 673,
+   "endFrame": 683
+  },
+  {
+   "word": "for",
+   "startFrame": 685,
+   "endFrame": 693
+  },
+  {
+   "word": "decades.",
+   "startFrame": 695,
+   "endFrame": 710
+  },
+  {
+   "word": "Thomas",
+   "startFrame": 721,
+   "endFrame": 734
+  },
+  {
+   "word": "Edison",
+   "startFrame": 736,
+   "endFrame": 749
+  },
+  {
+   "word": "wrote",
+   "startFrame": 751,
+   "endFrame": 763
+  },
+  {
+   "word": "of",
+   "startFrame": 765,
+   "endFrame": 771
+  },
+  {
+   "word": "bugs",
+   "startFrame": 773,
+   "endFrame": 783
+  },
+  {
+   "word": "in",
+   "startFrame": 785,
+   "endFrame": 791
+  },
+  {
+   "word": "his",
+   "startFrame": 793,
+   "endFrame": 801
+  },
+  {
+   "word": "inventions",
+   "startFrame": 803,
+   "endFrame": 823
+  },
+  {
+   "word": "in",
+   "startFrame": 825,
+   "endFrame": 831
+  },
+  {
+   "word": "1878.",
+   "startFrame": 833,
+   "endFrame": 843
+  },
+  {
+   "word": "Grace",
+   "startFrame": 854,
+   "endFrame": 866
+  },
+  {
+   "word": "Hopper,",
+   "startFrame": 868,
+   "endFrame": 881
+  },
+  {
+   "word": "on",
+   "startFrame": 883,
+   "endFrame": 889
+  },
+  {
+   "word": "the",
+   "startFrame": 891,
+   "endFrame": 899
+  },
+  {
+   "word": "Mark",
+   "startFrame": 901,
+   "endFrame": 911
+  },
+  {
+   "word": "Two",
+   "startFrame": 913,
+   "endFrame": 921
+  },
+  {
+   "word": "team,",
+   "startFrame": 923,
+   "endFrame": 933
+  },
+  {
+   "word": "made",
+   "startFrame": 935,
+   "endFrame": 945
+  },
+  {
+   "word": "the",
+   "startFrame": 947,
+   "endFrame": 955
+  },
+  {
+   "word": "moth",
+   "startFrame": 957,
+   "endFrame": 967
+  },
+  {
+   "word": "famous.",
+   "startFrame": 969,
+   "endFrame": 982
+  },
+  {
+   "word": "The",
+   "startFrame": 993,
+   "endFrame": 1001
+  },
+  {
+   "word": "moth",
+   "startFrame": 1003,
+   "endFrame": 1013
+  },
+  {
+   "word": "did",
+   "startFrame": 1015,
+   "endFrame": 1023
+  },
+  {
+   "word": "not",
+   "startFrame": 1025,
+   "endFrame": 1033
+  },
+  {
+   "word": "invent",
+   "startFrame": 1035,
+   "endFrame": 1048
+  },
+  {
+   "word": "the",
+   "startFrame": 1050,
+   "endFrame": 1058
+  },
+  {
+   "word": "word.",
+   "startFrame": 1060,
+   "endFrame": 1070
+  },
+  {
+   "word": "It",
+   "startFrame": 1081,
+   "endFrame": 1087
+  },
+  {
+   "word": "gave",
+   "startFrame": 1089,
+   "endFrame": 1099
+  },
+  {
+   "word": "the",
+   "startFrame": 1101,
+   "endFrame": 1109
+  },
+  {
+   "word": "word",
+   "startFrame": 1111,
+   "endFrame": 1121
+  },
+  {
+   "word": "a",
+   "startFrame": 1123,
+   "endFrame": 1128
+  },
+  {
+   "word": "story",
+   "startFrame": 1130,
+   "endFrame": 1142
+  },
+  {
+   "word": "people",
+   "startFrame": 1144,
+   "endFrame": 1157
+  },
+  {
+   "word": "still",
+   "startFrame": 1159,
+   "endFrame": 1171
+  },
+  {
+   "word": "tell.",
+   "startFrame": 1173,
+   "endFrame": 1183
+  }
+ ]
+}

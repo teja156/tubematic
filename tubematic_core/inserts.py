@@ -50,6 +50,12 @@ WORDS_PER_SECOND = 2.9
 TRANSITIONS = ("cut", "dip", "push", "wipe", "glitch")
 TRANSITION_FRAMES = {"cut": 0, "dip": 8, "push": 12, "wipe": 12, "glitch": 4}
 
+# An insert never opens on an empty board (decided 2026-11-12): through its way
+# in and its first frames it holds the frame on which its first element has
+# settled. Each insert style's module says how long that takes; at most this
+# many frames are held, so a slow first entrance finishes on screen instead.
+FIRST_FRAMES_MAX = 24
+
 # Most insert styles one video may use.
 MAX_STYLES_PER_VIDEO = 2
 

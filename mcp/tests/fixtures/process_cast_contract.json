@@ -1,0 +1,463 @@
+{
+  "_about": "Shared by renderer/remotion/src/scenes/installed/processCast/processCast.test.ts and mcp/tests/test_process_cast.py: the constants both sides use, and cases worked out by the renderer's own contract.ts and stage.ts. Written by renderer/remotion/character-tools/sync-contract.mjs; never edit it by hand.",
+  "constants": {
+    "LIMITS": {
+      "maxCast": 6,
+      "maxStations": 6,
+      "maxEvents": 120,
+      "nameChars": 14,
+      "signChars": 14,
+      "cardChars": 18,
+      "maxUnits": 16,
+      "maxClones": 3,
+      "maxStillSeconds": 3,
+      "minStationSeconds": 1.5
+    },
+    "TIMING": {
+      "enter": 8,
+      "hop": 10,
+      "trip": 20,
+      "glide": 20,
+      "hand": 12,
+      "silhouette": 2,
+      "merge": 12,
+      "minActorGap": 6,
+      "mark": 45
+    },
+    "GEOMETRY": {
+      "groundY": 1190,
+      "stationGap": 1080,
+      "slots": [
+        -390,
+        -160,
+        70
+      ],
+      "stageSlots": [
+        -420,
+        -210,
+        0,
+        210,
+        420
+      ],
+      "furnitureX": 330,
+      "signY": 330,
+      "actorW": 190,
+      "actorH": 250,
+      "unitPx": 80,
+      "stageScale": 0.9,
+      "overlapTolerance": 12,
+      "tagStagger": 64,
+      "propScale": 1.5,
+      "focusScale": 1.3,
+      "focusOthers": 0.85
+    },
+    "BODIES": [
+      "bean",
+      "blob",
+      "block",
+      "gem",
+      "units"
+    ],
+    "TINTS": {
+      "teal": "#2F8D89",
+      "olive": "#A6B23B",
+      "coral": "#CC5040",
+      "sky": "#6E9CC8",
+      "mustard": "#D9A93A",
+      "plum": "#8A5A8C",
+      "cream": "#F4ECD9"
+    },
+    "ACCESSORIES": [
+      "none",
+      "glasses",
+      "tuft",
+      "sprout",
+      "cap"
+    ],
+    "FACES": [
+      "neutral",
+      "happy",
+      "curious",
+      "proud",
+      "surprised",
+      "worried",
+      "sad"
+    ],
+    "MARKS": [
+      "question",
+      "exclaim",
+      "sweat",
+      "check",
+      "cross",
+      "idea"
+    ],
+    "ENTRANCES": [
+      "pop",
+      "drop",
+      "slide"
+    ],
+    "CAMERA_MOVES": [
+      "glide",
+      "cut"
+    ],
+    "EVENT_TYPES": [
+      "enter",
+      "move",
+      "exit",
+      "clone",
+      "merge",
+      "react",
+      "look",
+      "carry",
+      "hand",
+      "prop",
+      "join",
+      "focus",
+      "camera"
+    ],
+    "STATIONS": {
+      "desk": {
+        "w": 300,
+        "h": 170,
+        "top": 150
+      },
+      "board": {
+        "w": 300,
+        "h": 330,
+        "top": 0
+      },
+      "door": {
+        "w": 230,
+        "h": 380,
+        "top": 0
+      },
+      "shelf": {
+        "w": 280,
+        "h": 300,
+        "top": 300
+      },
+      "machine": {
+        "w": 290,
+        "h": 280,
+        "top": 280
+      },
+      "server": {
+        "w": 220,
+        "h": 360,
+        "top": 360
+      },
+      "cell": {
+        "w": 340,
+        "h": 300,
+        "top": 0
+      },
+      "stage": {
+        "w": 0,
+        "h": 0,
+        "top": 0
+      }
+    },
+    "PROPS": {
+      "card": {
+        "w": 200,
+        "h": 120,
+        "text": 18
+      },
+      "envelope": {
+        "w": 190,
+        "h": 130,
+        "text": 14
+      },
+      "packet": {
+        "w": 170,
+        "h": 130,
+        "text": 10
+      },
+      "box": {
+        "w": 170,
+        "h": 150,
+        "text": 10
+      },
+      "file": {
+        "w": 140,
+        "h": 180,
+        "text": 12
+      },
+      "folder": {
+        "w": 190,
+        "h": 150,
+        "text": 12
+      },
+      "key": {
+        "w": 170,
+        "h": 90,
+        "text": 0
+      },
+      "lock": {
+        "w": 120,
+        "h": 160,
+        "text": 0
+      },
+      "coin": {
+        "w": 120,
+        "h": 120,
+        "text": 0
+      },
+      "cookie": {
+        "w": 130,
+        "h": 130,
+        "text": 0
+      },
+      "gear": {
+        "w": 140,
+        "h": 140,
+        "text": 0
+      },
+      "bug": {
+        "w": 150,
+        "h": 140,
+        "text": 0
+      },
+      "shield": {
+        "w": 130,
+        "h": 160,
+        "text": 0
+      },
+      "stamp": {
+        "w": 130,
+        "h": 160,
+        "text": 0
+      },
+      "clock": {
+        "w": 140,
+        "h": 150,
+        "text": 0
+      },
+      "phone": {
+        "w": 110,
+        "h": 190,
+        "text": 12
+      },
+      "laptop": {
+        "w": 230,
+        "h": 160,
+        "text": 14
+      },
+      "bulb": {
+        "w": 110,
+        "h": 160,
+        "text": 0
+      },
+      "magnifier": {
+        "w": 160,
+        "h": 160,
+        "text": 0
+      },
+      "molecule": {
+        "w": 170,
+        "h": 150,
+        "text": 0
+      },
+      "virus": {
+        "w": 150,
+        "h": 150,
+        "text": 0
+      },
+      "battery": {
+        "w": 180,
+        "h": 100,
+        "text": 0
+      }
+    },
+    "CUSTOM": {
+      "maxProps": 8,
+      "minSide": 60,
+      "maxSide": 400,
+      "maxText": 18,
+      "maxActs": 0
+    }
+  },
+  "body_size": [
+    {
+      "body": "bean",
+      "units": 1,
+      "size": {
+        "w": 190,
+        "h": 250
+      }
+    },
+    {
+      "body": "units",
+      "units": 1,
+      "size": {
+        "w": 80,
+        "h": 80
+      }
+    },
+    {
+      "body": "units",
+      "units": 4,
+      "size": {
+        "w": 160,
+        "h": 160
+      }
+    },
+    {
+      "body": "units",
+      "units": 5,
+      "size": {
+        "w": 240,
+        "h": 160
+      }
+    },
+    {
+      "body": "units",
+      "units": 8,
+      "size": {
+        "w": 240,
+        "h": 240
+      }
+    },
+    {
+      "body": "units",
+      "units": 16,
+      "size": {
+        "w": 320,
+        "h": 320
+      }
+    }
+  ],
+  "slot_x": [
+    {
+      "index": 0,
+      "kind": "desk",
+      "slot": 0,
+      "x": -390
+    },
+    {
+      "index": 0,
+      "kind": "desk",
+      "slot": 2,
+      "x": 70
+    },
+    {
+      "index": 2,
+      "kind": "stage",
+      "slot": 4,
+      "x": 2580
+    },
+    {
+      "index": 1,
+      "kind": "cell",
+      "slot": 1,
+      "x": 920
+    }
+  ],
+  "slot_count": [
+    {
+      "kind": "desk",
+      "n": 3
+    },
+    {
+      "kind": "board",
+      "n": 3
+    },
+    {
+      "kind": "door",
+      "n": 3
+    },
+    {
+      "kind": "shelf",
+      "n": 3
+    },
+    {
+      "kind": "machine",
+      "n": 3
+    },
+    {
+      "kind": "server",
+      "n": 3
+    },
+    {
+      "kind": "cell",
+      "n": 3
+    },
+    {
+      "kind": "stage",
+      "n": 5
+    }
+  ],
+  "prop_centre": [
+    {
+      "index": 0,
+      "kind": "desk",
+      "prop": "card",
+      "centre": {
+        "x": 330,
+        "y": 950
+      }
+    },
+    {
+      "index": 1,
+      "kind": "board",
+      "prop": "file",
+      "centre": {
+        "x": 1410,
+        "y": 1008.5
+      }
+    },
+    {
+      "index": 2,
+      "kind": "stage",
+      "prop": "coin",
+      "centre": {
+        "x": 2160,
+        "y": 730
+      }
+    }
+  ],
+  "clone_id": [
+    {
+      "who": "packet",
+      "n": 1,
+      "id": "packet2"
+    },
+    {
+      "who": "packet",
+      "n": 2,
+      "id": "packet3"
+    }
+  ],
+  "blink": [
+    {
+      "frame": 0,
+      "seed": 41,
+      "blink": false
+    },
+    {
+      "frame": 1,
+      "seed": 41,
+      "blink": false
+    },
+    {
+      "frame": 50,
+      "seed": 41,
+      "blink": false
+    },
+    {
+      "frame": 83,
+      "seed": 41,
+      "blink": false
+    },
+    {
+      "frame": 84,
+      "seed": 41,
+      "blink": false
+    },
+    {
+      "frame": 200,
+      "seed": 41,
+      "blink": false
+    }
+  ]
+}

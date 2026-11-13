@@ -1,0 +1,70 @@
+{
+  "_about": "The worked example in SKILL.md: one Format Packs chat insert over frames 612-845 of a video whose narration in that segment is: \"Hi Mum, I dropped my phone, this is my new number. Oh no, you OK? Then the new number, and the ask: I need to pay a bill today, send eight hundred pounds.\" The word start frames are in word_starts. scripts/tests/test_format_packs_skill.py checks it passes the validator.",
+  "word_starts": [
+    612,
+    621,
+    630,
+    645,
+    655,
+    666,
+    676,
+    690,
+    701,
+    712,
+    731,
+    745,
+    760,
+    775,
+    790,
+    804,
+    818
+  ],
+  "insert": {
+    "style": "format_packs",
+    "startFrame": 612,
+    "durationInFrames": 234,
+    "props": {
+      "formatPacks": {
+        "format": "chat",
+        "title": "The 'Hi Mum' scam",
+        "contact": {
+          "name": "Unknown number",
+          "number": "07700 900461"
+        },
+        "messages": [
+          {
+            "at": 612,
+            "from": "them",
+            "text": "Hi Mum, I dropped my phone, this is my new number"
+          },
+          {
+            "at": 676,
+            "from": "me",
+            "text": "Oh no! You ok?"
+          },
+          {
+            "at": 731,
+            "from": "them",
+            "text": "I need to pay a bill today, can you send £800?"
+          }
+        ],
+        "marks": [
+          {
+            "at": 701,
+            "message": 0,
+            "match": "new number",
+            "kind": "underline",
+            "label": "New number"
+          },
+          {
+            "at": 790,
+            "message": 2,
+            "match": "£800",
+            "kind": "ring",
+            "label": "Money"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,198 @@
+{
+ "_about": "Shared cases for the Storybook Reveal contract (TMDEV-231): mcp/tests/test_storybook_reveal.py and renderer/remotion/src/scenes/installed/storybookReveal/storybookReveal.test.ts both compute these and compare. Regenerate the expected values from mcp/storybook_reveal.py only after changing both sides.",
+ "title_size": [
+  {
+   "text": "The Keeper",
+   "size": 92
+  },
+  {
+   "text": "One Stormy Night",
+   "size": 91
+  },
+  {
+   "text": "Home Safe",
+   "size": 92
+  },
+  {
+   "text": "A",
+   "size": 92
+  },
+  {
+   "text": "The Fox and the Grapes!!",
+   "size": 61
+  },
+  {
+   "text": "xxxxxxxxxxxxxxxxxxxxxxxx",
+   "size": 61
+  }
+ ],
+ "picture_box": [
+  {
+   "w": 1024,
+   "h": 1024,
+   "box": [
+    15.0,
+    0.0,
+    870.0,
+    870.0
+   ]
+  },
+  {
+   "w": 1088,
+   "h": 1920,
+   "box": [
+    203.5,
+    0.0,
+    493.0,
+    870.0
+   ]
+  },
+  {
+   "w": 1920,
+   "h": 1088,
+   "box": [
+    0.0,
+    180.0,
+    900.0,
+    510.0
+   ]
+  },
+  {
+   "w": 900,
+   "h": 870,
+   "box": [
+    0.0,
+    0.0,
+    900.0,
+    870.0
+   ]
+  },
+  {
+   "w": 1000,
+   "h": 1100,
+   "box": [
+    54.54545454545456,
+    0.0,
+    790.9090909090909,
+    870.0
+   ]
+  }
+ ],
+ "push_scale": [
+  {
+   "frame": 10,
+   "land": 38,
+   "end": 188,
+   "scale": 1.0
+  },
+  {
+   "frame": 38,
+   "land": 38,
+   "end": 188,
+   "scale": 1.0
+  },
+  {
+   "frame": 80,
+   "land": 38,
+   "end": 188,
+   "scale": 1.009408
+  },
+  {
+   "frame": 113,
+   "land": 38,
+   "end": 188,
+   "scale": 1.03
+  },
+  {
+   "frame": 188,
+   "land": 38,
+   "end": 188,
+   "scale": 1.06
+  },
+  {
+   "frame": 400,
+   "land": 38,
+   "end": 188,
+   "scale": 1.06
+  },
+  {
+   "frame": 10,
+   "land": 10,
+   "end": 10,
+   "scale": 1.0
+  }
+ ],
+ "pushed_box": [
+  {
+   "box": [
+    15,
+    0,
+    870,
+    870
+   ],
+   "scale": 1.0,
+   "focus": [
+    0.5,
+    0.5
+   ],
+   "out": [
+    15.0,
+    0.0,
+    870.0,
+    870.0
+   ]
+  },
+  {
+   "box": [
+    15,
+    0,
+    870,
+    870
+   ],
+   "scale": 1.06,
+   "focus": [
+    0.4,
+    0.45
+   ],
+   "out": [
+    -5.8799999999999955,
+    -23.49000000000001,
+    922.2,
+    922.2
+   ]
+  },
+  {
+   "box": [
+    0,
+    163.75,
+    900,
+    422.5
+   ],
+   "scale": 1.03,
+   "focus": [
+    0,
+    1
+   ],
+   "out": [
+    0.0,
+    151.075,
+    927.0,
+    435.175
+   ]
+  }
+ ],
+ "land_frame": [
+  {
+   "colourAt": 0,
+   "land": 18
+  },
+  {
+   "colourAt": 20,
+   "land": 38
+  },
+  {
+   "colourAt": 616,
+   "land": 634
+  }
+ ]
+}

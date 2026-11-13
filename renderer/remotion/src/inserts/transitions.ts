@@ -161,3 +161,17 @@ export function insertLook(transition: InsertTransition, progress: number, width
       return { ...none, insertOpacity: 1, covers: true };
   }
 }
+
+/** The insert Sequence's frame the scene holds through the way in and its first
+ *  frames: the frame on which its first element has settled (`lead` frames of
+ *  way in, then `firstFrames` into the window, never past its last frame). The
+ *  scene is frozen there while the Sequence's frame is below it, so an insert
+ *  never shows an empty board (decided 2026-11-12). */
+export function heldFrame(lead: number, firstFrames: unknown, durationInFrames: number): number {
+  // A config written before firstFrames existed, or one edited by hand with a
+  // value that is not a number, holds the first frame: never NaN, which
+  // Remotion's Freeze refuses even while inactive.
+  const n = Number(firstFrames ?? 0);
+  const first = Number.isFinite(n) ? Math.max(0, Math.min(Math.floor(n), durationInFrames - 1)) : 0;
+  return lead + first;
+}

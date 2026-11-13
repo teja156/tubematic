@@ -23,6 +23,14 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Storybook Atlas (experimental)** | A vintage picture book told in chapters, each opened by a plaque over a hand-drawn room or landscape. A small mouse guide walks beside the story while its people, named by printed tags, and hatched objects arrive on the narrator's words. No images | Nothing |
 | **Under the Hood (experimental)** | A dark canvas and close-up photographs of one physical object. Short capital labels point at its parts, gold arcs show fields and flows, numbers tick, and a cartoon presenter reacts in the bottom corner | An OpenAI key. Up to 12 generated photographs per video |
 | **Case File Story (experimental)** | A suspense story in painted pictures that puts the viewer inside a scheme or a money dilemma. One blank-faced character stands in for the viewer, meters change with the plot, cards count the numbers out, and it ends on a choice between two buttons | An OpenAI key. Up to 16 generated pictures per video, and one reference picture |
+| **Paper Diorama (experimental)** | A playful explainer in rooms of cut paper. A taped banner names each beat, paper props pop in on the narrator's words, a small clay critter reacts, and the captions are torn paper tags. No images | Nothing |
+| **Editorial Collage (experimental)** | An evidence desk. Newspaper-style clippings with the video's own headlines, grey halftone prints, cut-out stickers, typed index cards and big figures, joined by a red string as the camera glides across the desk. Red pen, highlighter and stamps land on the key words | An OpenAI key. Up to 10 generated pictures per video |
+| **Storybook Reveal (experimental)** | A picture book for a fable or a moral story. Each page is one painted picture that appears as a pencil drawing and then floods with colour, under a hand-lettered title. The hero looks the same on every page | An OpenAI key. Up to 12 generated pages per video, and one reference picture |
+| **Archive and Engraving (experimental)** | A documentary page on parchment. Engraved plates in museum frames, a serif title with one red word, red strike-throughs, stamps, routes on old charts and a timeline. People appear as name cards, never as faces | An OpenAI key. Up to 10 generated engravings per video |
+| **Puppet History (experimental)** | Round-headed cut-out puppets in era costumes act out "you are now a..." history on flat sets, document cards with stamps and struck-out numbers, and maps of today's countries, with hard cuts between scenes. No images | Nothing |
+| **Mid-century How-To (experimental)** | A 1950s classroom-film cartoon. A gloved presenter walks you through a task in numbered steps, each on its own flat colour, pressing buttons on phones, keypads and other flat objects, with checks, circled numbers and a closing card that lists the steps. No images | Nothing |
+| **Comic Panels (experimental)** | A comic page builds up panel by panel on cream newsprint, with a hero, a villain, speech balloons and sound effects like POW. The camera moves from panel to panel and pulls back to the whole page. No images | Nothing |
+| **Process Cast (experimental)** | Little drawn characters with faces, such as a packet, a cell or a byte made of cubes, act out an invisible process at stations along one ground line. They carry task cards, split and join up, and the camera glides between stations. No images | Nothing |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
 | **Flat Vector Science (experimental)** | Flat glowing creatures, cells and planets drift on a dark backdrop, named by pills whose words light up as they are spoken. Shots show scale: a dive through the ocean, a ladder of sizes, a zoom by powers of ten. No images | Nothing |
 | **Isometric Infographic (experimental)** | A small isometric world of flat blocks on cream paper. One thing travels a route that draws ahead of it, buildings drop in, pins name places with a number, and a counter keeps the running total. No images | Nothing |
@@ -69,6 +77,61 @@ background would flash, and a viewer reads that as a broken render.
   ends found out or named as a crime. Each picture is an OpenAI image call, up to 16 per video and
   one more for the character's reference picture, so it costs more per video than the styles
   without images. It is experimental.
+- Choose **Paper Diorama** for a tech, product or safety idea told playfully inside one familiar
+  place: a password manager as a bank vault, cafe Wi-Fi in a diner, two-factor login as a second lock.
+  Plain paper props stand in for the idea (a note for your data, a padlock for encryption) and the
+  script is light and warm. It suits one idea with a before and after better than a list of tips or
+  a process walked through step by step, and it never shows real products, logos or people. The props
+  come from a library of paper models, and the agent builds any it lacks from paper shapes. It is
+  experimental.
+- Choose **Editorial Collage** for a real incident, breach, outage or market event told as an
+  investigation: what happened when, the documents, the numbers, and how it spread from one company
+  or person to the next. Real people are named in the headlines and never shown as faces, every
+  grey print carries a small "Illustration" note, and a card that copies a real document says
+  "Recreation". For a real place or machine the viewer came to see as pictures, Photo Explainer fits
+  better. Each picture is an OpenAI image call, up to 10 per video. It is experimental.
+- Choose **Storybook Reveal** for a fable, a myth, a parable or a small story about one character that
+  ends on a lesson, such as a habit that grows or a kindness repaid. The script is told as a calm tale
+  in a few pages. The agent first makes a reference picture of the hero, so the hero looks the same on
+  every page. It does not suit real history (Storybook Atlas and Archive and Engraving fit that) or a
+  list of tips. Each page is an OpenAI image call, up to 12 per video and one more for the hero's
+  reference picture. It is experimental.
+- Choose **Archive and Engraving** for history told seriously: how an old belief was overturned, an
+  idea passed from one thinker to the next, a voyage on old maps, the history of a market or an
+  invention told as a documentary. A real person appears as a name card with their dates and an
+  emblem, never as a picture of their face, and every picture carries a small "Illustration" note so
+  no one takes it for a real archive print. A card that copies a real document says "Recreation".
+  For a light story of how an everyday thing was invented, Storybook Atlas fits better. Each plate is
+  an OpenAI image call, up to 10 per video. It is experimental.
+- Choose **Puppet History** for history told to the viewer as "you": a job, a rank or a rule in a
+  past era, such as a Roman legionary's twenty-five years or a week as a medieval peasant, why an
+  event happened told with light humour and a reversal at the end, or an army's march or a trade
+  route across a map. The script puts you in the era with a job, gives each beat one change, and
+  builds to a twist the picture can show, such as a costume swapped or a number struck out. A real
+  person appears only as the same puppet in a generic costume of their era with their name on a
+  plate, so the puppet never looks like them. Living people, leaders of a regime still in power and
+  tragedies are left out. Maps show today's countries, so a historical region is named by the modern
+  countries it covers. A calm history of an invention suits Storybook Atlas better. It is experimental.
+- Choose **Mid-century How-To** for a task the viewer can copy in a few steps: turning on a
+  setting, securing an account, backing up a phone, checking a link before clicking it. The script
+  opens on why the task matters, then numbers each step aloud and names what to tap, type or turn
+  on. It suits a procedure better than a list of separate tips, how something works inside, or a
+  story. It is experimental.
+- Choose **Comic Panels** for a fight or a showdown told round by round: a defender against an
+  invader, such as your password against a guessing attack or an antibiotic against a superbug, an
+  arms race where each side answers the other's move, or a short punchy story with an invented hero
+  and villain. The script sets the scene in a line, gives each round one move and one answer, and
+  writes a few short lines for the characters to say, which the video shows as balloons and the
+  narrator never reads out. A process with no fight in it suits Process Cast better, and a process
+  acted out by people in roles suits Stick Explainer. The characters are invented and never look
+  like a real person. It is experimental.
+- Choose **Process Cast** for an invisible process whose actors are things: bits adding up to a
+  byte, cells and organs at work, the layers of a system met one by one, a build passing through
+  named stages. The script names each part once and keeps calling it by that name, because each part
+  becomes a character with that name on its tag, and it moves the story from one place to the next.
+  A process acted out by people in roles, such as a user and an attacker, suits Stick Explainer
+  better. The characters are the style's own cast and have nothing to do with mascots. It is
+  experimental.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
 - Choose **Flat Vector Science** for size and scale in nature and space: how deep the ocean goes, how
   big a star is, what happens to your body somewhere extreme, how a virus copies itself. The script
@@ -93,8 +156,10 @@ When you approve a topic left on Auto, the agent picks a style before it writes 
 the script is written for the style: a Whiteboard script works an idea out one step at a time,
 for example. It reads what each style is made for and avoids, compares that with the topic, and
 picks the style that clearly fits. It considers every style this install can make: Illustrated only
-while an OpenAI key is stored, Under the Hood and Case File Story only while an OpenAI key is stored
-and the video has no mascot, Cartoon 3D only while a GPU is working and the video has no mascot.
+while an OpenAI key is stored, Under the Hood, Case File Story, Editorial Collage, Archive and
+Engraving and Storybook Reveal only while an OpenAI key is stored and the video has no mascot, Paper
+Diorama, Puppet History, Mid-century How-To, Comic Panels and Process Cast only while the video has no
+mascot, Cartoon 3D only while a GPU is working and the video has no mascot.
 It may pick a style that generates images, which costs more per video. It does not pick a style for
 variety: the same kind of topic gets the same style every time.
 
@@ -146,6 +211,30 @@ It looks at each painting and makes it again if the character changed or the pic
 wrong thing. It then chooses the meters and times the pictures, the cards and the two buttons to
 the narration. The character's head is the same in every video.
 
+A Puppet History video works the same way: the agent casts the puppets in costumes of the era, lays
+the story out as a run of beats on sets, cards and maps, and times every entrance, pose, costume
+swap, sign, stamp and map fill to the narration. The narrator stays off screen, so a puppet never
+speaks. When the library has no hand prop the video needs, such as an hourglass, the agent draws one
+in the same style and checks the drawing before the video renders.
+
+A Mid-century How-To video works like a Bean Explainer one: the agent picks each step's colour, the
+presenter's outfit and the objects, and times every gesture, press and check to the narration. The
+presenter is the same character in every video, and he never moves his mouth to the words, because
+the narrator is off screen. When the library has no object the video needs, such as a smoke alarm,
+the agent draws one in the same style and checks the drawing before the video renders.
+
+A Comic Panels video works the same way: the agent casts a hero, a villain and any invented people,
+lays the story out as one to three comic pages of three or four panels, and times every panel, character,
+balloon, sound effect and camera punch to the narration. The narrator stays off screen, so a balloon
+is always a line a character says and never the narration read twice. When the library has no prop the
+video needs, the agent draws one in the same style and checks the drawing before the video renders.
+
+A Process Cast video works the same way: the agent casts each part of the process as a character,
+picks its body, colour and name, sets up the stations, and times every entrance, hop, card, copy and
+reaction, and every camera move, to the narration. Faces show feelings and never move to the words.
+When the library has no prop the video needs, the agent draws one in the same style and checks the
+drawing before the video renders.
+
 ### Insert scenes
 
 An insert is a short scene, a few seconds long, in another look inside a video's style, where the
@@ -157,6 +246,16 @@ and the video goes back to its style right after it.
 |---|---|
 | **System Flow** | A diagram of parts: components appear as line icons in boxes, connectors draw between them, and points of light travel along the connectors, for a request crossing a network or the steps of a protocol |
 | **Terminal Doc** | Text as the picture: a password being hashed, letters scrambled into a cipher, a command typed and what it prints, a large number resolving out of noise |
+| **Code Scenes** | A few lines of real code on an editor card: the lines being read light up, a bug gets a red squiggle and a message, the code changes into its fix, and a small pane shows what it prints |
+| **Format Packs** | Phone-style formats: a made-up message thread with the scam's tells circled, a short numbered list, a quiz with a locked answer, or a news strap with a changing number |
+
+Format Packs draws no real app or brand. The phone is a plain frame with no maker's look,
+phone numbers come only from the ranges set aside for fiction, and every made-up message thread or
+headline carries an EXAMPLE tag, so a still from the video cannot pass for a real screenshot. A
+headline shown with its source is a quote from that source.
+
+Code Scenes shows what a snippet prints only when the code makes it certain. Nothing runs the code,
+so the AI review checks that output against the code and sends the video back when it does not match.
 
 An insert follows the video's canvas, so on a white video it is drawn dark on paper. A Cartoon 3D
 video takes no inserts.
@@ -201,7 +300,8 @@ preview of the style the video uses.
 
 A style the install cannot make stays in the list, greyed out, with the reason under its name:
 
-- **needs an OpenAI key** (Illustrated, Under the Hood, Case File Story): no OpenAI key is stored.
+- **needs an OpenAI key** (Illustrated, Under the Hood, Case File Story, Editorial Collage, Archive
+  and Engraving, Storybook Reveal): no OpenAI key is stored.
   Add one on **Settings → API Keys**.
 - **needs a working GPU** (Cartoon 3D): no renderer has passed its GPU test. See
   [GPU Rendering](10-gpu-rendering.md).
@@ -223,9 +323,15 @@ surprised, has an idea, hops, glances at something. It does not narrate and does
 
 Mascots are experimental and off by default. A video has one only if you pick it. They are drawn on
 the GPU, so you can pick a mascot only while a renderer's GPU test has passed. Cartoon 3D, Under
-the Hood, Case File Story, Flat Vector Science, Isometric Infographic and Night Signal videos cannot
-have one: Under the Hood has its own presenter, Case File Story its own lead character, and the other
-three draw a world a mascot would not fit, at a scale or in colours it would break.
+the Hood, Case File Story, Paper Diorama, Editorial Collage, Archive and Engraving, Storybook
+Reveal, Puppet History, Mid-century How-To, Comic Panels, Process Cast, Flat Vector Science, Isometric
+Infographic and Night Signal videos cannot have one: Under
+the Hood and Mid-century How-To have their own presenter, Case File Story its own lead character, Paper
+Diorama its own critter and Storybook Reveal its own hero, Editorial Collage and Archive and Engraving
+are serious documentary pages a cartoon character would not suit, and Puppet History, Comic Panels and
+Process Cast have a whole cast of drawn characters that a mascot would be confused with. Flat
+Vector Science, Isometric Infographic and Night Signal draw a world a mascot would not fit, at a scale
+or in colours it would break.
 
 ![The Mascots page under Profiles: a form for a new mascot, and the built-in mascot Tubi marked READY](../images/mascots.png)
 

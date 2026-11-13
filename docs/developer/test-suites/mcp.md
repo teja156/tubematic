@@ -453,6 +453,28 @@ Covers `read_image` ([`read_image`](../06-mcp-server.md#read_image)).
 Trap: the coordinate grid is drawn on a copy in memory. The file under the job directory is the
 render input, so a grid written back to it would appear in the finished video.
 
+### `test_treatments.py`
+
+Covers `mcp/treatments.py` and `treat_image`, the looks baked into a style's generated stills
+([`treat_image`](../06-mcp-server.md#treat_image)).
+
+- The pack schema's list of treatments and the module's are the same.
+- `print`, `engraving` and `pencil` keep the frame's size, so a focus point read off the still stays
+  true on the treated copy. A print is grey dots on paper inside a white border; an engraving runs
+  from ink to laid paper.
+- A sticker is cut to the subject on a transparent ground, keeps a still that is already
+  transparent, and is refused for a picture with nothing on its ground.
+- The tool writes `images/treated/<name>.<treatment>.png` and leaves the still as it was. Sixteen
+  treated copies on a Case File Story video take no picture slot: the sheet still has its own slot,
+  a 17th new still is refused and a regeneration is allowed.
+- A treatment the style does not list, an unknown one, a still the video does not have, a name
+  with a path in it, and any treatment on a style with none are refused.
+- A symlink planted at a predictable temp name beside the target is never written through: the tool
+  saves through a temp file it creates itself.
+
+Trap: nothing in `mcp/` may import numpy (`test_removed_tools.py`), so the cut-out is a Pillow flood
+fill on a quarter-size copy, sharpened against the full-size mask.
+
 ## Scene files and scene config
 
 ### `test_scene_resolution.py`
@@ -687,7 +709,8 @@ per-beat sampling ([Terminal Doc](../10-scene-authoring.md#terminal-doc)).
   move's length).
 - The `log` caption look and its `accent` are values `_validate_subtitles` accepts, read from
   `Subtitles.tsx`'s type: without that, the server would refuse the style's own captions in either
-  skin.
+  skin. The server's lists of backgrounds, keys and looks equal the ones `Subtitles.tsx` declares, so
+  a look added on one side only is caught here.
 - The skill's worked example passes. Each refusal names its beat, event and cause: an unknown skin,
   move, slot, size or tone, a cut off the words, a string too wide for its size, an encode not from
   `a` to `c` or with `b` taken, a move on an element that is still playing or not on stage, two
@@ -737,11 +760,11 @@ Covers `mcp/under_the_hood.py`, the checks `write_scene_config` runs on an Under
 - `write_scene_config` writes a sound config with the style's captions, fills each plate's `aspect`
   from its file, keeps an `emphasis` it was given, refuses a photograph too wide to cover the band
   before writing anything, refuses `UnderTheHood` on another style and other scenes on an Under the
-  Hood video. `subtitles.look` accepts `plain` and `selection` only.
+  Hood video. `subtitles.look` accepts the looks `Subtitles.tsx` draws, and no other.
 - `generate_image` refuses a 13th new photograph on an Under the Hood video before any request goes
   out, and allows regenerating an existing one; other styles are not capped. A name being generated
   holds its slot, so a second new name cannot take the last one meanwhile, and a call that fails gives
-  the slot back.
+  the slot back. The prompt goes out as the agent wrote it, since the pack's `pictures` block only caps.
 
 Trap: a plate whose own fields are bad is skipped for every check that projects through its camera,
 including the next plate's zoom-through, or a malformed `focus` raised instead of being reported.
@@ -779,17 +802,18 @@ the style: the reference picture, the text added to the prompt and the cap on pi
   card, is refused: a card is read on screen, and the consequence and the choice end the story there.
 - `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
   one, refuses `CaseFileStory` on another style and other scenes on a Case File Story video.
-  `subtitles.look` accepts `plain`, `selection` and `fill` only.
+  `subtitles.look` accepts the looks `Subtitles.tsx` draws, and no other.
 - The house lead's sheet ships beside the server. The lead sheet is made from it through the edits
-  endpoint, at 16:9, with the outfit between the pack's lead description and sheet style. A still
+  endpoint, at 16:9, with the outfit between the pack's `pictures.sheet` lead description and sheet
+  style. A still
   with `reference="lead"` sends the video's own sheet and the pack's lead description and painting
   style around the scene. A still with no reference goes to the generations endpoint with the
   painting style added. A still is sent at 9:16 whatever `aspect_ratio` asks for. A prompt with no
   final full stop gets one before the pack's text.
 - `generate_image` refuses, before any request goes out, a lead sheet without `reference="house"`,
   the house sheet used for another picture, a picture named `house`, a reference that is not yet an image of the video, a
-  reference with a path in it, and a reference on a video of another style, whose prompt is sent
-  unchanged. A 17th new still is refused and a regeneration is allowed. The lead sheet has a slot
+  reference with a path in it, and a reference on a video of a style with no reference sheet, whose
+  prompt is sent unchanged. A 17th new still is refused and a regeneration is allowed. The lead sheet has a slot
   of its own: a video that already holds 16 stills can still make it, and it never takes a still's
   place. Under the Hood keeps its own cap and wording.
 
@@ -801,6 +825,293 @@ call reserves no picture slot and reaches no paid endpoint.
 
 Trap: a reservation that lapses sooner than the slowest call gives that call's slot to a parallel
 one, and both are billed.
+### `test_paper_diorama.py`
+
+Covers `mcp/paper_diorama.py`, the checks `write_scene_config` runs on a Paper Diorama config, the
+text audit's per-set sampling, the picture checks, and `render_paper_props`
+([Paper Diorama](../10-scene-authoring.md#paper-diorama)).
+
+- The limits, timings, rooms, slots, levels, scales, entrances, cuts, faces, accessories and
+  colours equal the ones in the renderer's `contract.ts`, and the pack lists the same values and every
+  shipped prop at its size. Every shipped prop is also a valid custom prop. Both sides answer the
+  shared cases in `fixtures/paper_diorama_contract.json` (the pop, a prop's box in a slot, the stage
+  scale, the banner's font size and the critter's box).
+- The skill's worked example passes, and the pack's captions are the `tags` look the server accepts.
+- Each refusal names its set, item or event and cause: a bad room, banner, slot or colour; a set
+  off the words; an unknown prop; an item or event off a word; two things covering each other; a prop
+  running off the frame or reaching the banner; an event on an item that has not entered or has
+  left; a swap to a prop of another size; a face that is not in the list, or a critter `face` of
+JSON `true` or `false` (Python reads `true` as 1); a field the event does not
+  take, including a `camera` on a set. Events are read in frame order, so an event after its prop's
+  exit is refused wherever the exit sits in the list, and the critter walking onto a prop is refused
+  like two props covering each other. Too many snap zooms are refused, a stage still for over 3 seconds is refused and an
+  event fixes it, and a custom prop is checked piece by piece (size, count, box, colour and text).
+- With insert windows passed as `quiet`, nothing may start inside a window, and a window over a still
+  stretch does not count as still.
+- The text audit samples each set after its last entrance or event, and the picture checks read the
+  style: an empty first frame is warned about and each set start is a change frame.
+- `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
+  one and refuses `PaperDiorama` on another style and other scenes on a Paper Diorama video.
+- A list or object where the config names a room, slot, level, scale, prop or item is reported as a
+  problem, never raised.
+- `generate_image` on a Paper Diorama video is refused before any request reaches the API.
+- `render_paper_props` refuses a video with no config, with no `customProps` or of another style.
+  For a sound one it passes the video's own props and `PAPER_SCRIPT` to `bean_preview.render_preview`
+  and returns the picture after the JSON. A prop broken in the file after the write is refused before
+  any render. The preview script ships in the renderer.
+
+Trap: the tests read the TypeScript source for the contract, so a limit changed on one side only
+fails here before it reaches a render.
+
+### `test_archive_engraving.py`
+
+Covers `mcp/archive_engraving.py`, the checks `write_scene_config` runs on an Archive and Engraving
+config, the text audit's per-beat sampling, the picture checks, the cap on engravings and
+`treat_image`'s `engraving` look
+([Archive and Engraving](../10-scene-authoring.md#archive-and-engraving)).
+
+- The limits, timings, zones, card kinds, events, emblems and footnotes equal the ones in the
+  renderer's `contract.ts`, and the pack lists the same values. Both sides answer the shared cases in
+  `fixtures/archive_engraving_contract.json` (title layout, the plate's push and crop, a still's
+  point on the page, the ruler's scale and a cleaned title word).
+- The skill's worked example passes, and the pack's captions are the `fill` look on a `chip` that the
+  server accepts.
+- Each refusal names its beat, card or event and cause. A person given a picture or a face field is
+  refused, a name card with only its name fields passes, and no field hides a footnote. A chart
+  needs its route on the still and one route event. More than ten different engravings are refused,
+  and a page where nothing new happens for too long is refused.
+- With insert windows passed as `quiet`, nothing may start inside a window, and a window over a still
+  stretch does not count as still.
+- The text audit samples each beat after its last event, and the picture checks read the style.
+- `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
+  one and refuses `ArchiveEngraving` on another style.
+- An eleventh new engraving is refused by `_image_cap_error` before any paid call, and a call for it
+  never reaches OpenAI. Regenerating an existing name stays allowed. The image plan adds the
+  engraving prompt text and fixes the shape to 9:16, and refuses a reference.
+- `treat_image` bakes `engraving` into a path the validator accepts, refuses `print` for this style,
+  and a treated copy does not count against the cap.
+
+### `test_editorial_collage.py`
+
+Covers `mcp/editorial_collage.py`, the checks `write_scene_config` runs on an Editorial Collage
+config, the text audit's per-station sampling, the picture checks, the cap on stills and
+`treat_image`'s `print` and `sticker` looks
+([Editorial Collage](../10-scene-authoring.md#editorial-collage)).
+
+- The limits, timings, zones, headline and hero kinds, events and notes equal the ones in the
+  renderer's `contract.ts`, and the pack lists the same values. Both sides answer the shared cases in
+  `fixtures/editorial_collage_contract.json` (the stepped motion, the station layout, the camera, the
+  headline layout, the typed index line, a figure's text and a cleaned headline word).
+- The camera zig-zags down the desk, rests on each station and glides between them. The skill's
+  worked example passes and shows every headline kind and every hero kind but the stack, and the
+  pack's captions are the `highlight` look that the server accepts.
+- Each refusal names its station, headline, hero or event and cause. A face or portrait field is
+  refused with its reason, no field hides a note, a print always shows "Illustration" and a
+  recreation card "Recreation", a black card may stand alone and a mark needs a headline. An
+  untreated still or one baked with the wrong treatment is refused, a sticker needs the `sticker`
+  treatment and a stack takes either. More than ten different stills are refused, and a desk where
+  nothing new happens for too long is refused.
+- With insert windows passed as `quiet`, nothing starts and no glide runs inside a window.
+- The text audit samples each station once the camera has stopped, and the picture checks read the
+  style.
+- `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
+  one and refuses `EditorialCollage` on another style.
+- An eleventh new still is refused by `_image_cap_error` before any paid call and never reaches
+  OpenAI. The image plan adds the style's prompt text and keeps the shape the agent asks for.
+- `treat_image` bakes a `print` and a `sticker` into paths the validator accepts and refuses
+  `engraving` for this style.
+
+### `test_storybook_reveal.py`
+
+Covers `mcp/storybook_reveal.py`, the checks `write_scene_config` runs on a Storybook Reveal config,
+the text audit's per-page sampling, the picture checks, the hero sheet and page stills through
+`generate_image`, and `treat_image`'s `pencil` look
+([Storybook Reveal](../10-scene-authoring.md#storybook-reveal)).
+
+- The limits, timings, zones and turns equal the ones in the renderer's `contract.ts`, the pack lists
+  the same values, and its routing text names the styles that fit a story better. Both sides answer
+  the shared cases in `fixtures/storybook_reveal_contract.json` (the title size, the picture's fit
+  in the panel, the push and where the colour lands). Every title fits its line at the smallest size.
+- The pack's captions are the `fill` look with no plate that the server accepts, and the skill's
+  worked example passes.
+- Each refusal names its page and cause. The first page may open on its pencil or wipe it in on a
+  word, and a colour too close to its page's end is refused. Twelve different stills pass and a
+  thirteenth is refused (one still on every page is fine), more pages than the limit are refused, at
+  most two curls are allowed, and a page where nothing new happens for too long is refused without
+  counting the slow push. A long pencil stage is refused, and the hero sheet cannot be a page.
+- With insert windows passed as `quiet`, nothing starts inside a window, a page turn or a colour
+  flood still running when a window opens is refused, and a window does not count as still.
+- Each page is sampled once its colour has landed, the change frames are each page's start, pencil
+  and colour, and the text audit and picture checks read the style.
+- `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
+  one and refuses `StorybookReveal` on another style.
+- The hero sheet is made from the description alone, with no reference, and is wide. A page with the
+  hero is painted from the video's own sheet, and one without gets the page style and no reference.
+  A wrong reference is refused before the paid call, a reference on another style is refused, and a
+  thirteenth page still is refused while the hero keeps its own slot.
+- `treat_image` bakes a `pencil` plate into a path the validator accepts and refuses another look.
+
+Trap: the tests read the TypeScript source for the contract, so a limit changed on one side only
+fails here before it reaches a render.
+
+
+### `test_puppet_history.py`
+
+Covers `mcp/puppet_history.py`, the checks `write_scene_config` runs on a Puppet History config,
+`render_style_props` for this style, the picture checks and the text audit's per-beat sampling
+([Puppet History](../10-scene-authoring.md#puppet-history)).
+
+- The limits, timings, geometry and catalogues equal the renderer's, read from
+  `fixtures/puppet_history_contract.json`, and the pack's `extra` lists the same costumes, poses,
+  faces, sets, props and countries. After a change to `contract.ts`, `stage.ts` or the library,
+  `node character-tools/sync-contract.mjs` (from `renderer/remotion`) rewrites the fixture and the
+  pack's `extra`; never edit them by hand.
+- The style is registered in `character_styles.BY_ID` and takes no mascot.
+- The skill's worked example passes. Each refusal names its beat or event and the cause: too many
+  puppets, an unknown costume, set, pose, face or prop, a name, sign, stamp, date, label or card text
+  over its limit, a first beat off frame 0, a map country the atlas lacks (a historical name such as
+  Gaul), a fill, label or arrow outside the beat's focus, a card repeating the narration, a slot
+  out of range or taken, a puppet acting before it enters, an event of a kind the beat does not take,
+  an event off its word, nothing on the first set at frame 0, and a still stretch. A value of the
+  wrong type gets a sentence back and raises nothing.
+- A puppet is busy while it slides in, and its slot is free again once it has slid out.
+- A wide sign held from a side slot is pulled in from the frame's edges (`sign_x`, equal to the
+  renderer's `signX`), and two puppets whose signs would overlap are refused.
+- An event inside an insert window is refused, and the scene may be used only by this style.
+- The skill's example prop passes the source rules; a hook, an SVG pattern and an import of another
+  style's file are refused.
+- `write_scene_config` writes a sound config with the style's captions and refuses a broken one by
+  the style's name. `render_style_props` returns the picture for this style (the renderer stubbed),
+  and the preview script's `STYLES` table names this style's preview component.
+- The picture checks find the style and warn when no puppet is on the first set by frame 3, and the
+  text audit samples each beat once its entrances have landed.
+
+Trap: a card line that copies the narration is refused because the captions already carry those
+words, and a map country that is a historical name is refused because the atlas has today's borders
+only.
+
+### `test_midcentury_howto.py`
+
+Covers `mcp/midcentury_howto.py`, the shared custom-prop checks in `mcp/character_kit.py`, the
+`character_styles` registry, the checks `write_scene_config` and `validate_job` run on a Mid-century
+How-To config, `render_style_props`, the picture checks and the text audit's per-shot sampling
+([Mid-century How-To](../10-scene-authoring.md#mid-century-how-to)).
+
+- The limits, timings, geometry, catalogues and object boxes equal the renderer's, read from
+  `fixtures/midcentury_howto_contract.json`, and the pack's `extra` lists the same catalogues. Both
+  sides answer the fixture's worked cases (object, label, inset and presenter boxes, the arm's reach,
+  where a press lands, a screen's lines, the blink). After a change to `contract.ts`, `stage.ts` or
+  the library, `node character-tools/sync-contract.mjs` (from `renderer/remotion`) rewrites the
+  fixture and the pack's `extra`; never edit them by hand.
+- The style is registered in `character_styles.BY_ID` and takes no mascot.
+- The skill's worked example passes. Each refusal names its step, shot or event and cause: a title,
+  kicker, header or inset too long, an unknown outfit, ground, object or act, too few steps, a step
+  where no shot starts, a title card under 1.5 seconds, a summary off a shot, anything but poses on
+  the summary card or an arm pose there, the presenter on the left of it, a pose in a shot with no
+  presenter, `at` on a pose that does not aim or naming nothing on stage, an object over the
+  presenter or off the stage, text in an object with no slot, events out of order or before their
+  object lands, an inset over its object, a label that repeats the narration, and a still stretch. A
+  press too close to the last one is refused. A value of the wrong type gets a sentence back and
+  raises nothing.
+- With insert windows passed as `quiet`, a press inside a window is refused, and a window over a
+  stretch that would otherwise be too still is not counted as still.
+- The skill's example prop passes the source rules; a hook, an SVG filter, a dashed stroke,
+  randomness and an import of another style's file are refused.
+- `write_scene_config` writes a sound config with the style's captions, refuses a broken one by the
+  style's name, refuses `MidcenturyHowTo` on another style and a config naming a prop file that does
+  not exist. `validate_job`'s re-check (`_character_custom_prop_errors`) finds a prop redrawn with a
+  hook.
+- `render_style_props` refuses another style, a video with no config and a config with no
+  `customProps`, returns the picture with the character script (the renderer stubbed), and gives up
+  with a retry message when the heavy-check lock stays busy. The preview script's `STYLES` table
+  names this style's preview component.
+- The picture checks find the style, warn when the title card has no object by frame 3, and count a
+  press as a change and a label as none. The text audit samples each shot once, from after its
+  header has come in.
+
+- A summary card whose presenter is `left` or `none` is refused, because the renderer always stands
+  him on the right there.
+
+Trap: a drawing is rasterised once per look outside the render's React tree, so a hook in an
+agent's prop would read no frame and no state. The character styles add the hook rule and the
+strict source rules (`character_kit.py::STRICT_SOURCE`) to Bean Explainer's. The rules read raw text,
+so each looks for the bare word, and a name split from its call by a comment or a bracket must not
+slip past.
+
+### `test_comic_panels.py`
+
+Covers `mcp/comic_panels.py`, the checks `write_scene_config` runs on a Comic Panels config,
+`render_style_props` for this style, the picture checks and the text audit's per-panel sampling
+([Comic Panels](../10-scene-authoring.md#comic-panels)).
+
+- The limits, timings, layouts and catalogues equal the renderer's, read from
+  `fixtures/comic_panels_contract.json`, and the pack's `extra` lists the same catalogues. Both sides
+  answer the fixture's worked cases (balloon and sound-effect boxes). After a change to
+  `contract.ts`, `stage.ts` or the library, `node character-tools/sync-contract.mjs` (from
+  `renderer/remotion`) rewrites the fixture and the pack's `extra`; never edit them by hand.
+- The style is registered in `character_styles.BY_ID` and takes no mascot.
+- The skill's worked example passes. Each refusal names its page, panel or item and the cause: a
+  page or panel out of order or off a word, a layout with the wrong number of panels, a panel read
+  for too short a time, too many items, items out of frame order or too close together, an unknown
+  pose, face, tone, hair, outfit or balloon kind, a character, prop, balloon or sound effect past its
+  panel's edge, text over its limit, a balloon pointing at nothing in its panel, a balloon or caption
+  box repeating the narration, two hits within 8 frames anywhere on a page, a panel with no character or prop, and a
+  still stretch. A value of the wrong type gets a sentence back and raises nothing.
+- Balloons and sound effects in one panel may not cover each other, because they are the panel's
+  words and one hidden behind another cannot be read.
+- A character may be cut off at the bottom of its panel and no other edge, because panels frame
+  people from the waist up. Its box depends on its pose (`actor_box`): a cheer's hands above the
+  hair and a shrug's spread past the shoulders must stay inside the top and sides.
+- The sound-effect box covers the capitals and the burst, both centred on the item, and a `layout`
+  that is not text gets a sentence back.
+- An item, a panel or a page starting inside an insert window is refused.
+- The skill's example prop passes the source rules; a hook, an SVG pattern and an import of another
+  style's file are refused. So are `require`, `eval`, `Function`, a `constructor` lookup, `React[...]`,
+  a dynamic import and `import.meta`, and a hook name split from its call by a comment or a bracket.
+- `write_scene_config` writes a sound config with the style's captions and refuses a broken one by
+  the style's name. `render_style_props` returns the picture for this style (the renderer stubbed),
+  and the preview script's `STYLES` table names this style's preview component.
+- The picture checks find the style and warn when page 1, panel 1 has no character or prop by frame
+  3, and the text audit samples each panel after the camera has arrived and the panel has inked in.
+
+### `test_process_cast.py`
+
+Covers `mcp/process_cast.py`, the checks `write_scene_config` runs on a Process Cast config,
+`render_style_props` for this style, the picture checks and the text audit's per-station sampling
+([Process Cast](../10-scene-authoring.md#process-cast)).
+
+- The limits, timings, geometry and catalogues equal the renderer's, read from
+  `fixtures/process_cast_contract.json`, and the pack's `extra` lists the same catalogues. Both sides
+  answer the fixture's worked cases (body sizes, slot positions and counts, where a prop sits, clone
+  ids, the blink). After a change to `contract.ts`, `stage.ts` or the library,
+  `node character-tools/sync-contract.mjs` (from `renderer/remotion`) rewrites the fixture and the
+  pack's `extra`; never edit them by hand.
+- The style is registered in `character_styles.BY_ID` and takes no mascot.
+- The skill's worked example passes. Each refusal names its event or entry and cause: too many characters,
+  an id ending in a digit, an unknown body, kind or face, too many cubes or cubes on a body that is
+  not `units`, a name or sign too long, a station the camera never shows, events out of order, a slot
+  out of range or taken, a clone count out of range, a join with an actor not on stage, a card or
+  prop text too long, a prop off the library or off screen, nothing entering at frame 0, an event at a
+  station the camera has left, an event off its word, and a still stretch. A card handed by a
+  character that holds none and a clone that splits are refused. A value of the wrong type gets a
+  sentence back and raises nothing.
+- An event inside an insert window is refused.
+- The skill's example prop passes the source rules; a hook, an SVG pattern and an import of another
+  style's file are refused.
+- `write_scene_config` writes a sound config with the style's captions and refuses a broken one by
+  the style's name. `render_style_props` returns the picture for this style (the renderer stubbed),
+  and the preview script's `STYLES` table names this style's preview component.
+- The picture checks find the style and warn when no character enters by frame 3, a camera move
+  counts as a change and a look does not, and the text audit samples each station after the
+  camera's glide.
+- Bodies that would overlap each other or the furniture are refused
+  (`process_cast.py::crowding`), as is a body that would reach past the frame's edge in an outer
+  slot.
+- A slot an exiting actor and its clones leave is not free until the slide-out ends, a `hand` from
+  an actor to itself is refused, and a station id that is not text gets a sentence back.
+
+Trap: the slots are spaced for ordinary bodies, so a `units` body that grows past them by a join
+draws over its neighbour or the furniture unless the crowding check catches it.
 ### `test_choose_script_formula.py`
 
 Covers `choose_script_formula`, `get_video`'s `formula_routing`, the domain's default formula in
@@ -940,6 +1251,11 @@ Covers `mcp/inserts.py`, the insert half of `write_scene_config`, `choose_insert
   only. A domain cannot default to an insert style, and its `default_insert_mode` seeds new videos.
 - The text audit samples each insert's boards and beats and names them as inserts.
 
+- No insert opens on an empty board: `fill` writes each insert's `firstFrames` from its style's
+  module (System Flow's first node and label, Terminal Doc's first word, 0 for Code Scenes), capped
+  at `FIRST_FRAMES_MAX` and inside the window; `write_scene_config` writes it and accepts a config
+  sent back with it; the text audit samples the frame before each window and its first frame and
+  warns when the insert has no text of its own there.
 - An insert belongs to the segment that starts at or before it, also when the previous segment's
   last word ends on that frame; non-object `props` are refused with a sentence; captions the
   shift cannot clear are refused; a main scene starting on an insert's first frame is refused; an
@@ -947,9 +1263,70 @@ Covers `mcp/inserts.py`, the insert half of `write_scene_config`, `choose_insert
   are read before its final frames; an insert longer than its pack's `max_seconds` is refused; a
   mascot cue in an insert's transition frames is refused.
 
-Trap: `BLOCKS` in `inserts.py` is where each insert style draws on the frame; a test reads System
-Flow's band from `camera.ts`, so a layout change there that moves the block fails until the shift is
-recomputed.
+Trap: `BLOCKS` in `inserts.py` is where each insert style draws on the frame, read from each insert
+pack's `insert.block`; a test reads System Flow's band from `camera.ts`, so a layout change there
+that moves the block fails until the pack's block is updated.
+
+### `test_code_scenes.py`
+
+Covers `mcp/code_scenes.py`, the checks `write_scene_config` runs on a Code Scenes insert, and the
+text audit's per-step sampling ([Code Scenes](../10-scene-authoring.md#code-scenes)).
+
+- The languages, limits, timings and band equal the shared fixture
+  `fixtures/code_scenes_contract.json`, which `codeScenes.test.ts` runs against `contract.ts`; the
+  pack's `insert.block`, `props_key` and `component` match. The font-size cases, the typing frames
+  and which output pane each step shows come from the same fixture, and no line count within the
+  limits needs a font under 32 px.
+- A sound four-step insert and a typed first step pass.
+- Each refusal names its step and cause: an unknown language (a shell is Terminal Doc's), no steps,
+  an unknown key, a tag too long, a first step off the insert's first frame or with no code, steps
+  too close, too near the end or off a word, a repeated code version, a tab, too many lines, a line
+  too long, a focus or error line the code lacks, an error match not on its line or a message too
+  long, an output pane too long, with a shell prompt or with no lines and no label, `reveal` on a
+  later step, typing too much or into the next step, a still stretch in the middle or at the end, an
+  emoji, a wide letter, a combining or spacing mark, a control or an invisible character in the code
+  or the output (accented letters pass), a label in another script, an error message too wide for the
+  callout, and a tag and label too wide for the header row.
+- `write_scene_config` writes a Code Scenes insert with its scene, palette and shift filled, names a
+  Code Scenes problem in its refusal, and refuses `CodeScenes` as one of the scenes.
+- The output check stays empty: no code runs, so the AI review checks an output pane, and a sandboxed
+  run would take over in `output_check`.
+
+### `test_text_fit.py`
+
+Covers `mcp/text_fit.py`, the width estimate the Code Scenes and Format Packs validators share with
+the renderer ([Format Packs](../10-scene-authoring.md#format-packs)). The widths, the fitted sizes
+and the line counts equal the shared fixture `fixtures/text_fit_contract.json`, which
+`fitText.test.ts` runs too; wide letters measure wider than narrow ones and emoji wider still; a
+word wider than its box breaks across lines.
+
+### `test_format_packs.py`
+
+Covers `mcp/format_packs.py`, the checks `write_scene_config` runs on a Format Packs insert, and the
+text audit's sampling between changes ([Format Packs](../10-scene-authoring.md#format-packs)).
+
+- The formats, limits, timings, band, tick characters and app names equal the shared fixture
+  `fixtures/format_packs_contract.json`, which `formatPacks.test.ts` runs against `contract.ts`;
+  the pack's `insert.block` matches. Line wrapping and thread height match the fixture's cases.
+- Fiction-range phone numbers pass and real-looking ones do not; amounts and dates are not taken for
+  phone numbers; app names are found as whole words, `X` only on its own.
+- A sound chat, list, quiz and strap each pass, and a strap with a source passes.
+- What passes for a real app is refused: a real-looking number in a contact or a message (written
+  with dots, slashes or dashes too, and a dotted local number such as `867.5309`) or a phone-shaped
+  value on the flap, a tick, an app name in a contact, chat title, list title or strap kicker.
+  Dates, prices, grouped counts and a bare short count pass. Characters the fonts do not draw
+  (another script, an emoji with its variation selector, a spacing mark, a control or zero-width
+  character, an arrow) are refused; accents, curly quotes, currency signs and the minus sign pass.
+- Each other refusal names its part: wrong keys, a first item off the insert's first frame, an
+  arrival off a word, too close to the one before or to the end, text over its limits, a mark on
+  words its message lacks or before its message, overlapping marks on a message or the headline, two
+  labels on one message, a quiz locking too early, a flap still flipping at the end (only its
+  changing tiles take time), a chat title, quiz option, contact name, list lead or mark too wide for
+  its line, a
+  thread too tall for the phone (wide letters wrap to more lines than their count), and a still
+  stretch.
+- `write_scene_config` writes a Format Packs insert with its scene, palette and shift filled, names
+  a Format Packs problem in its refusal, and refuses `FormatPacks` as one of the scenes.
 
 ### `test_system_flow.py`
 

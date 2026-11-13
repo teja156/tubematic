@@ -56,6 +56,13 @@ import storybook_atlas  # chapter windows for the whole-video Storybook Atlas sc
 import terminal_doc  # beat windows for the whole-video Terminal Doc scene (TMDEV-199)
 import under_the_hood  # plate windows for the whole-video Under the Hood scene (TMDEV-201)
 import case_file_story  # beat windows for the whole-video Case File Story scene (TMDEV-202)
+import character_styles  # shot windows for the code-drawn character styles (TMDEV-232..235)
+import paper_diorama  # set windows for the whole-video Paper Diorama scene (TMDEV-228)
+import archive_engraving  # beat windows for the whole-video Archive and Engraving scene (TMDEV-230)
+import editorial_collage  # station windows for the whole-video Editorial Collage scene (TMDEV-229)
+import storybook_reveal  # page windows for the whole-video Storybook Reveal scene (TMDEV-231)
+import code_scenes  # step windows for a Code Scenes insert (TMDEV-239)
+import format_packs  # change windows for a Format Packs insert (TMDEV-240)
 import night_signal  # scene windows for the whole-video Night Signal scene (TMDEV-238)
 import flat_vector_science  # shot windows for the whole-video Flat Vector Science scene (TMDEV-236)
 import isometric_infographic  # board windows for the whole-video Isometric Infographic scene (TMDEV-237)
@@ -133,6 +140,8 @@ FRAME0_MOTION_FRAME = 6
 # viewer looks at.
 FRAME0_MIN_AREA = 0.01
 FRAME0_MIN_OPACITY = 0.2
+# An insert's own text this visible counts as on screen when it comes in.
+INSERT_OPEN_MIN_OPACITY = 0.3
 # A colour or gradient fill this large, or an SVG rect or a div filling it, is
 # the scene's backdrop, not a subject.
 FRAME0_BACKDROP_AREA = 0.9
@@ -305,7 +314,26 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
         # A Case File Story scene spans the whole video too; each beat is a cut,
         # sampled like a scene from the frame its last part has appeared.
         cfs_beats = (case_file_story.beat_windows(scene_config)
-                     if case_file_story.is_case_file_scene(scene) else [])
+                     if case_file_story.is_case_file_scene(scene)
+                     # A Paper Diorama set the same way, from its last entrance or event.
+                     else paper_diorama.beat_windows(scene_config) if paper_diorama.is_paper_scene(scene)
+                     # An Archive and Engraving beat the same way, once its events have played out.
+                     else archive_engraving.beat_windows(scene_config)
+                     if archive_engraving.is_archive_scene(scene)
+                     # An Editorial Collage station once the camera has stopped and its events have played out.
+                     else editorial_collage.beat_windows(scene_config)
+                     if editorial_collage.is_collage_scene(scene)
+                     # A Storybook Reveal page the same way, once its colour has landed.
+                     else storybook_reveal.page_windows(scene_config)
+                     if storybook_reveal.is_reveal_scene(scene)
+                     # A Night Signal scene, a Flat Vector Science shot or an Isometric board once its text is in.
+                     else night_signal.scene_windows(scene_config)
+                     if night_signal.is_night_signal_scene(scene)
+                     else flat_vector_science.shot_windows(scene_config)
+                     if flat_vector_science.is_flat_vector_scene(scene)
+                     else isometric_infographic.board_windows(scene_config)
+                     if isometric_infographic.is_iso_scene(scene)
+                     else [])
         if cfs_beats:
             for first, b_end in cfs_beats:
                 last = b_end - 1
@@ -315,18 +343,12 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
                 passes.append({"scene": index, "first": first, "step": step,
                                "count": min(count, span // step + 1)})
             continue
-        # A Night Signal or Flat Vector Science scene spans the whole video too;
-        # each of its scenes or shots is a cut, sampled once its text is in.
-        ns_scenes = (night_signal.scene_windows(scene_config)
-                     if night_signal.is_night_signal_scene(scene) else
-                     flat_vector_science.shot_windows(scene_config)
-                     if flat_vector_science.is_flat_vector_scene(scene) else
-                     isometric_infographic.board_windows(scene_config)
-                     if isometric_infographic.is_iso_scene(scene) else [])
-        if ns_scenes:
-            for first, s_end in ns_scenes:
-                last = s_end - 1
-                span = last - first
+        # The code-drawn character styles span the whole video too; each shot is
+        # a cut, sampled like a scene once its header and pops have settled.
+        char_mod = character_styles.for_scene(scene)
+        if char_mod is not None:
+            for first, end in char_mod.audit_windows(scene_config):
+                span = end - 1 - first
                 count = min(SAMPLES_PER_SCENE, span + 1)
                 step = max(1, span // max(1, count - 1))
                 passes.append({"scene": index, "first": first, "step": step,
@@ -387,6 +409,10 @@ def plan_passes(scene_config: dict) -> tuple[list[dict], list[str]]:
             units, tail = system_flow.insert_board_windows(entry), system_flow.TIMING["boardFade"]
         elif style == terminal_doc.STYLE_ID:
             units, tail = terminal_doc.insert_beat_windows(entry), terminal_doc.TIMING["readMargin"]
+        elif style == code_scenes.STYLE_ID:
+            units, tail = code_scenes.insert_step_windows(entry), 0
+        elif style == format_packs.STYLE_ID:
+            units, tail = format_packs.insert_unit_windows(entry), 0
         else:
             units, tail = [], 0
         for u_start, u_end in units:
@@ -599,6 +625,43 @@ def _pair_key(scene: int, a: dict, b: dict) -> tuple:
     return (scene, *sorted((_excerpt(a), _excerpt(b))))
 
 
+def insert_open_passes(scene_config: dict) -> list[dict]:
+    """One pass per insert at its last held frame before the window (when it
+    has a way in) and its window's first frame, to check it does not open on
+    an empty board (decided 2026-11-12: the insert shows its first element
+    settled from its first frame; CompositionBuilder holds that frame). Kept
+    out of plan_passes, whose plans the style tests pin."""
+    out = []
+    for k, e in enumerate(scene_config.get("inserts") or []):
+        if not isinstance(e, dict) or not isinstance(e.get("startFrame"), int):
+            continue
+        lead = tinserts.TRANSITION_FRAMES.get(scene_config.get("insertTransition") or "cut", 0)
+        start = e["startFrame"]
+        first = start - 1 if lead > 0 and start > 0 else start
+        out.append({"scene": len(scene_config.get("scenes") or []) + k, "first": first,
+                    "step": max(1, start - first), "count": 2 if first < start else 1,
+                    "kind": "insert_open"})
+    return out
+
+
+def insert_open_findings(pass_result: dict, scene_config: dict) -> list[str]:
+    """A warning for an insert with no visible text of its own on its last held
+    frame or its first frame: it opened on an empty board."""
+    # Insert passes are numbered after the scenes (the driver echoes the number).
+    k = (pass_result.get("scene") or 0) - len(scene_config.get("scenes") or [])
+    entries = scene_config.get("inserts") or []
+    style = entries[k].get("style") if 0 <= k < len(entries) and isinstance(entries[k], dict) else "?"
+    for f in pass_result.get("frames") or []:
+        seen = [el for el in f.get("elements") or []
+                if el.get("layer") == "insert" and (el.get("opacity") or 0) >= INSERT_OPEN_MIN_OPACITY
+                and (el.get("text") or "").strip()]
+        if not seen:
+            return [f"Insert {k + 1} ({style}) opens on an empty board at frame {f.get('frame')}: nothing of its own "
+                    "is on screen yet. Start its first element on the insert's first frame (a node, a word, the "
+                    "code, the first message), so it is drawn while the insert comes in."]
+    return []
+
+
 def frame0_pass(scene_config: dict) -> dict | None:
     """The extra pass that measures a mixed-scenes video's first frames, or
     None for any other video (a data-driven style's first frame is checked
@@ -692,6 +755,9 @@ def summarise(driver_output: dict, scene_config: dict, mascot_cues: list | None 
     first_frame: list[str] = []
     for pass_result in driver_output.get("passes") or []:
         scene_index = pass_result.get("scene")
+        if pass_result.get("kind") == "insert_open":
+            first_frame += insert_open_findings(pass_result, scene_config)
+            continue
         if pass_result.get("kind") == "frame0":
             # Frame 0 is mid-entrance for text by design, so the text checks
             # skip it; this pass is for the pictures.
@@ -898,6 +964,7 @@ def audit_text_layout(video_id: str, scene_config: dict, scene_config_path: Path
         extra = frame0_pass(scene_config)
         if extra:
             passes = passes + [extra]
+        passes = passes + insert_open_passes(scene_config)
 
         public_dir = _stage(video_id, remotion_dir, scene_config_path,
                             timeline_path, audio_path)

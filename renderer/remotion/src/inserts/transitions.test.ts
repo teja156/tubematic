@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TRANSITION_FRAMES, activeInsert, glitchBands, insertLook, insertProgress, transitionOf } from "./transitions";
+import { TRANSITION_FRAMES, activeInsert, glitchBands, heldFrame, insertLook, insertProgress, transitionOf } from "./transitions";
 
 describe("insert transitions", () => {
   it("reads an unknown or missing transition as a cut", () => {
@@ -84,5 +84,22 @@ describe("insert transitions", () => {
     expect(look.mainShiftX).toBe(-look.insertShiftX);
     if (look.insertOpacity > 0) expect(look.insertClipPath).toMatch(/^path\("M /);
     expect(insertLook("glitch", 1, 1080, 200).covers).toBe(true);
+  });
+});
+
+describe("the held first frame", () => {
+  it("holds the frame the first element settles on, through the way in", () => {
+    expect(heldFrame(8, 16, 240)).toBe(24);
+    expect(heldFrame(12, 0, 240)).toBe(12);
+    expect(heldFrame(0, undefined, 240)).toBe(0);
+  });
+  it("never holds past the window or before the way in ends", () => {
+    expect(heldFrame(8, 500, 60)).toBe(8 + 59);
+    expect(heldFrame(8, -5, 60)).toBe(8);
+  });
+  it("holds the first frame for a value that is not a number", () => {
+    expect(heldFrame(8, "abc", 60)).toBe(8);
+    expect(heldFrame(8, Number.NaN, 60)).toBe(8);
+    expect(heldFrame(8, "16", 60)).toBe(24);
   });
 });

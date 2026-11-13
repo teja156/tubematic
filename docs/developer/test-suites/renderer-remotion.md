@@ -6,8 +6,16 @@ The suite covers the pure TypeScript helpers of the Remotion project's
 [`BeanExplainer`](../09-remotion-project.md#beanexplainer),
 [`Whiteboard`](../09-remotion-project.md#whiteboard),
 [`TerminalDoc`](../09-remotion-project.md#terminaldoc),
-[`UnderTheHood`](../09-remotion-project.md#underthehood) and
-[`CaseFileStory`](../09-remotion-project.md#casefilestory) scenes. Each test file sits beside the code
+[`UnderTheHood`](../09-remotion-project.md#underthehood),
+[`CaseFileStory`](../09-remotion-project.md#casefilestory),
+[`PaperDiorama`](../09-remotion-project.md#paperdiorama),
+[`ArchiveEngraving`](../09-remotion-project.md#archiveengraving),
+[`EditorialCollage`](../09-remotion-project.md#editorialcollage),
+[`StorybookReveal`](../09-remotion-project.md#storybookreveal),
+[`PuppetHistory`](../09-remotion-project.md#puppethistory),
+[`MidcenturyHowTo`](../09-remotion-project.md#midcenturyhowto),
+[`ComicPanels`](../09-remotion-project.md#comicpanels) and
+[`ProcessCast`](../09-remotion-project.md#processcast) scenes. Each test file sits beside the code
 it covers as `*.test.ts`. The tests run under Node 22 with no browser, canvas or render, because the
 math and geometry classes of `three` work in Node without a DOM.
 
@@ -23,6 +31,20 @@ does not run `npm test`, so run the suite yourself after you change either modul
 
 The soundtrack tools under `cartoon-tools/audio/` have a pytest suite of their own, described on
 [`cartoon-audio.md`](cartoon-audio.md).
+
+## Caption looks
+
+### `src/scenes/installed/subtitleLooks.test.ts`
+
+Covers the `tags` and `highlight` looks of `Subtitles.tsx`
+([Grouping words](../09-remotion-project.md#grouping-words)).
+
+- A word's tag has the same tilt and torn edge on every frame and every render, and two words get
+  different edges. The torn outline stays inside the tag's box.
+- A tag pops from 0.6 past 1 and is back at 1 from its fourth frame, so a still tag costs nothing to
+  repaint.
+- The marker under an emphasis word starts at the word's first frame, wipes in over 8 frames and
+  holds.
 
 ## Insert scenes
 
@@ -41,6 +63,43 @@ Covers `src/inserts/transitions.ts`, how an insert scene goes in and out over it
   never shows fewer bands than an earlier one, the main layer jolts the other way from the insert, and the
   insert covers the frame only at full progress (`glitchBands`).
 - `activeInsert` finds the window a frame falls in.
+- `heldFrame` is the way in plus the insert's `firstFrames`, never before the way in ends and never
+  past the window: the frame `CompositionBuilder` freezes the scene on until then, so no insert opens
+  on an empty board.
+
+### `src/scenes/installed/codeScenes/codeScenes.test.ts`
+
+Covers `codeScenes/contract.ts`, `tokens.ts` and `morph.ts`
+([Code Scenes](../10-scene-authoring.md#code-scenes)).
+
+- The languages, limits, timings and band equal `mcp/tests/fixtures/code_scenes_contract.json`, and
+  the fixture's font sizes, typing frames and output panes come out the same as in
+  `mcp/code_scenes.py`.
+- The largest code the limits allow, a callout and a full output pane fit inside the band at 32 px
+  or more.
+- Every language colours without throwing, pieces keep their columns, and keywords take a colour of
+  their own.
+- The morph keeps unchanged pieces still, moves the pieces a new line pushes down, fades new pieces
+  in and removed ones out.
+
+### `src/scenes/installed/formatPacks/formatPacks.test.ts`
+
+Covers `formatPacks/contract.ts` and `draw.ts` ([Format Packs](../10-scene-authoring.md#format-packs)).
+
+- The formats, limits, timings, band and lists equal `mcp/tests/fixtures/format_packs_contract.json`;
+  wrapping and thread heights come out as in `mcp/format_packs.py`, and the largest thread and the
+  phone stay inside the band.
+- Fiction-range phone numbers are told from real-looking ones the same way as the validator.
+- Every change is listed in order with the insert's first frame first; rows ease on the card's
+  curve, and marks are drawn as single paths.
+
+### `src/scenes/installed/fitText.test.ts`
+
+Covers `fitText.ts`, the width estimate that sizes a one-line text down to fit its box and counts a
+wrapped text's lines ([Format Packs](../10-scene-authoring.md#format-packs)). Its widths, fitted
+sizes and line counts equal `mcp/tests/fixtures/text_fit_contract.json`, which `mcp/text_fit.py`
+runs too; wide letters count wider than narrow ones, the base size is kept when the text fits, a
+long wide line shrinks until its estimate fits, and the size never goes under the minimum.
 
 ## Storybook Atlas
 
@@ -139,6 +198,150 @@ Covers `contract.ts`, `stage.ts` and the icon tables
   stretch over the stillness limit.
 - Under the `fill` caption look a word is grey until it is spoken, then the text colour, and a
   text colour the blend cannot parse switches on the word's frame without throwing.
+
+## Paper Diorama
+
+### `src/scenes/installed/paperDiorama/paperDiorama.test.ts`
+
+Covers `contract.ts`, `stage.ts`, `paint.ts`, `critter.ts` and the shipped props
+([Paper Diorama](../10-scene-authoring.md#paper-diorama)).
+
+- The pop, a prop's box in a slot, the stage scale, the banner's font size and the critter's box are
+  computed as in the shared cases `mcp/tests/test_paper_diorama.py` runs.
+- An item is hidden before its frame, pops in, moves to another slot, swaps its prop and leaves on
+  its events, and the critter changes its face on its event.
+- A torn reveal grows over its frames, and a ring is drawn partway when it is partly through.
+- A rounded rectangle's outline stays inside its box with a rough edge of about a pixel.
+- Every shipped prop uses the palette and keeps its pieces inside its box, the critter is drawn
+  inside its own box in every expression, and every room has its picture.
+
+## Archive and Engraving
+
+### `src/scenes/installed/archiveEngraving/archiveEngraving.test.ts`
+
+Covers `contract.ts`, `stage.ts` and `emblems.ts` ([Archive and Engraving](../10-scene-authoring.md#archive-and-engraving)).
+
+- Title layout, the plate's push and crop, a still's point on the page, the ruler's scale and a
+  cleaned title word are computed as in the shared cases `mcp/tests/test_archive_engraving.py` runs.
+- The renderer draws the "Illustration" and "Recreation" footnotes itself, and a person has no
+  picture, face or portrait field in the contract.
+- The ruler's marker slides from one year to the next, a document line writes on and a route is drawn
+  dot by dot, and the magnifier goes to the side away from its point.
+- Plates are numbered in Roman numerals.
+- Every emblem is drawn inside the roundel's field and the ring stays inside its box.
+
+## Editorial Collage
+
+### `src/scenes/installed/editorialCollage/editorialCollage.test.ts`
+
+Covers `contract.ts`, `stage.ts` and `paint.ts` ([Editorial Collage](../10-scene-authoring.md#editorial-collage)).
+
+- The stepped motion, the station layout, the camera, the headline layout, a typed index line, a
+  figure's text and a cleaned headline word are computed as in the shared cases
+  `mcp/tests/test_editorial_collage.py` runs.
+- Stations zig-zag down the desk, a column each side. The camera rests, then glides for
+  `TIMING.glide` frames from a station's start, and never scales.
+- Pieces move on twelve steps a second, the string sags below the straight line between its pins, the
+  pen ellipse is an unclosed stroke, and a figure counts up from zero over `TIMING.count` frames.
+- Every hero kind, at every picture aspect, stays inside the station's zones.
+- The renderer paints the "Illustration" and "Recreation" notes itself, which no data can switch
+  off, and the contract has no field for a person's face.
+
+## Storybook Reveal
+
+### `src/scenes/installed/storybookReveal/storybookReveal.test.ts`
+
+Covers `contract.ts` and `stage.ts` ([Storybook Reveal](../10-scene-authoring.md#storybook-reveal)).
+
+- The title size, the picture's fit in the panel, the push and where the colour lands are computed as
+  in the shared cases `mcp/tests/test_storybook_reveal.py` runs.
+- The title wipes in (whole at once on the first page), the pencil wipes in (whole at frame 0 on a
+  first page that opens on it), and the push holds until the colour has landed and never goes past it.
+- A square still fills the panel's height, whole and centred, a tall one stays whole inside the panel,
+  and the push keeps its focus point.
+- The colour flood starts left of the panel and ends right of it even at its softest edge, runs from
+  top to bottom with a ragged edge, and the page curl turns the old page away over `TIMING.curl`
+  frames from the bottom-right corner.
+- The scene's source holds no SVG filter, gradient or blur, which keeps its render cost low.
+
+## Puppet History
+
+### `src/scenes/installed/puppetHistory/puppetHistory.test.ts`
+
+Covers `contract.ts`, `stage.ts`, the library and the map
+([Puppet History](../10-scene-authoring.md#puppet-history)).
+
+- The constants agree with the shared cases `mcp/tests/test_puppet_history.py` runs, and running
+  `character-tools/sync-contract.mjs` leaves the fixture and the style pack unchanged, so a
+  catalogue or limit changed without the sync fails here.
+- The library draws every costume, set and prop the contract lists, and every set keeps its decor
+  on stage and off the caption band.
+- The stage opens with the first puppet in place at frame 0. A puppet slides in from the nearest
+  edge and stops dead in its slot, a puppet in the right slot faces left, a swapped costume lasts
+  into later beats, and a card line is struck out before the new value is scrawled. Beats change
+  with a hard cut.
+- A sign's centre is pulled in from the frame's edges for a wide sign in a side slot (`signX`, the
+  cases `mcp/tests/test_puppet_history.py` runs).
+- The map knows today's countries by `world-atlas`'s names and fits the focus countries by their
+  largest landmass, so a far territory does not pull the map across an ocean.
+
+## Mid-century How-To
+
+### `src/scenes/installed/midcenturyHowTo/midcenturyHowTo.test.ts`
+
+Covers `contract.ts`, `stage.ts`, the presenter's arm and the object library
+([Mid-century How-To](../10-scene-authoring.md#mid-century-how-to)).
+
+- The constants and the geometry (object, label, inset and presenter boxes, the arm's reach, a
+  screen's lines, the blink) agree with the shared cases `mcp/tests/test_midcentury_howto.py` runs.
+- Running `character-tools/sync-contract.mjs` leaves the fixture and the style pack unchanged, so a
+  catalogue or limit changed without the sync fails here.
+- The library draws every object the contract and the pack list, and each object's acts have
+  distinct names.
+- The `point` and `present` poses aim the glove at the object, and each pose's bitmap box holds its
+  arm and glove.
+- The worked example opens on the title card, walks the steps and ends on the summary, where the
+  presenter stands on the right; a close-up shot has no presenter.
+- A press lands on the row its act lights and uses the presenter's own hand within reach and the
+  hose arm from the edge out of it; the hand pulls back before the press, holds, then returns. Each
+  shot starts empty.
+
+## Comic Panels
+
+### `src/scenes/installed/comicPanels/comicPanels.test.ts`
+
+Covers `contract.ts`, `stage.ts` and the library
+([Comic Panels](../10-scene-authoring.md#comic-panels)).
+
+- The constants and the box helpers (balloon and sound-effect sizes, a character's box) agree with
+  the shared cases `mcp/tests/test_comic_panels.py` runs.
+- Running `character-tools/sync-contract.mjs` leaves the fixture and the style pack unchanged, so a
+  catalogue or limit changed without the sync fails here.
+- Every layout's panels lie on the page under the title bar, and the library draws every prop the
+  contract lists.
+- The stage opens on page 1, panel 1, framed and inked at frame 0. The camera glides to the next
+  panel over `TIMING.read` frames and then holds still (the two top panels of a page share one
+  framing with the title bar), pulls back to the whole page at the splash,
+  and punches in and shakes on a hit before it settles. An item pops in and lands on 1, so a
+  held picture never repaints, and a panel or item that starts at frame 0 is drawn finished.
+
+## Process Cast
+
+### `src/scenes/installed/processCast/processCast.test.ts`
+
+Covers `contract.ts`, `stage.ts` and the library
+([Process Cast](../10-scene-authoring.md#process-cast)).
+
+- The constants and the geometry (body sizes, slot positions and counts, where a prop sits, clone
+  ids, the blink) agree with the shared cases `mcp/tests/test_process_cast.py` runs.
+- Running `character-tools/sync-contract.mjs` leaves the fixture and the style pack unchanged, so a
+  catalogue or limit changed without the sync fails here.
+- The library draws every prop the contract and the pack list, and every kind of furniture.
+- The worked example brings its first character in at frame 0 at the first station with the camera
+  there; a split shows its clones as silhouettes for the first frames and a merge takes them back;
+  a join adds the cubes up and removes the other body; the camera glides to the next station while
+  the character makes the trip; a focus holds until it is cleared and ends when its actor leaves, so
+  the others at the station are not left shrunk.
 
 ## Night Signal
 

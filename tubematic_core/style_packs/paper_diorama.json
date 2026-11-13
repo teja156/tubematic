@@ -1,0 +1,367 @@
+{
+  "id": "paper_diorama",
+  "label": "Paper Diorama",
+  "order": 110,
+  "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": true,
+    "transition": "cut"
+  },
+  "dimension": "2d",
+  "preview": "paper_diorama",
+  "tagline": "A playful explainer told in paper rooms, with cut-paper props and a little clay critter.",
+  "renderer": "dom",
+  "canvas": "light",
+  "authoring_skill": "tubematic-paper-diorama",
+  "allows": {
+    "figures": true,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "mascot": false,
+  "messages": {
+    "mascot": "Mascots are not available in the Paper Diorama style: it has its own clay critter, which stands where a mascot would. Choose another visual style, or no mascot."
+  },
+  "review": "- This video is a Paper Diorama, and the following are its intended, approved look: rooms built of flat cut paper with visible grain; props that are flat pieces of coloured paper with slightly rough edges and soft shadows, popping, sliding or dropping into place and swapping state in a single frame; one small boxy clay-coloured critter with eyes and no mouth, a cap or a hat, four stubby legs, bobbing gently and blinking, swapping whole expressions in one frame; a cream paper banner taped across the top in heavy capitals, changing with each room; dark label pills over props; red rubber stamps that slam in at an angle; red hand-drawn rings around a prop, left unclosed; a dotted paper route between two props; captions as torn coral paper tags, one word per tag, tilted a little, popping in as each word is spoken, low on the floor. The props are simplified paper models, not realistic pictures, and the banner, labels and stamps carry their own words. Do NOT report any of these as defects, and do not suggest realistic images, smoother character animation, a mouth for the critter, or more on-screen text: their absence is the style.\n- Do report: a prop that does not show what the narration names at that moment, a label, stamp or banner that contradicts the narration, two props or a prop and the critter covering each other, a prop cut off at the frame edge, a stamp or label over the captions, garbled lettering, a real logo or brand on a prop, and a stretch of more than about three seconds where nothing on the stage changes apart from the critter's idle bob.\n",
+  "captions": {
+    "look": "tags",
+    "background": "none",
+    "position": 0.79,
+    "color": "#F3E6D3",
+    "accent": "#C9573C",
+    "fontFamily": "Fraunces, 'Cooper Black', Georgia, serif",
+    "fontSize": 66,
+    "maxWords": 3
+  },
+  "script": "Every beat's `visual` is a **set** brief: the room, the banner and what happens on the stage (\"diner; banner FREE CAFE WI-FI; an envelope pops up, a magnifier slides in, ring the envelope on 'read'\"). The video is a playful explainer told inside familiar paper rooms with one small critter who reacts. Tell it as one concrete situation the viewer recognises, with plain things standing in for the idea: a note for data, a padlock for encryption, a bank for money, a server rack for the cloud. Give each beat one room and a banner of two to five words that names the idea of the beat; a new room is a new idea. Write short sentences with one stressed word each, because every stressed word gets one visual event (a prop arriving, a stamp, a ring, a swap). Keep the register light and warm; a joke is welcome, a lecture is not. Never name a brand or show a real logo, and never put a real person in it.",
+  "picture": {
+    "opening": "Set 1 is the room of the first sentence with its banner and a prop already popping in from frame 0.",
+    "turn": "A new set (a new room and banner, often with a tear cut) on the first word of a turn or a re-opening, or a stamp or ring landing on that word.",
+    "payoff": "The payoff set: its prop the largest thing on stage, with a stamp, a ring or a snap zoom on the payoff word.",
+    "ending": "Hold on the payoff set to the last frame. No closing card, logo, recap or sign-off after it."
+  },
+  "routing": {
+    "best_for": [
+      "a tech, product or security idea explained playfully inside one familiar room or format: a heist in a bank vault, a server room, a courtroom, a diner",
+      "how an everyday digital thing works told as a small situation with stand-in props (a note for data, a padlock for encryption, a vault for a password manager)",
+      "light, comedy-tinged explainers of a concept with a clear before and after",
+      "privacy and safety tips told as a scene the viewer recognises (cafe Wi-Fi, a stranger at the door, a lost phone)"
+    ],
+    "avoid_for": [
+      "sombre history, a tragedy or a serious documentary subject (Archive and Engraving fits it)",
+      "a list of separate tips, mistakes or facts, one idea each (Bean Explainer fits it)",
+      "a process acted out by generic roles step by step (Stick Explainer fits it)",
+      "how data is transformed step by step, such as a hash, a cipher or an encoding (Stick Explainer or Whiteboard fits it, with a Terminal Doc insert)",
+      "a real, specific product, place or person the viewer came to see (Photo Explainer fits it)",
+      "how a physical device works inside, part by part (Under the Hood fits it)",
+      "dense numbers, charts or a calculation",
+      "an invented character's everyday story with no tech or safety idea in it (Illustrated fits it)"
+    ],
+    "cannot_show": "real photographs, real people or real logos: everything is a simple paper model",
+    "signals": [
+      "the topic can be told as one familiar situation or place: a heist, a cafe, a courtroom, a vault",
+      "plain objects can stand in for the abstract parts (a note, a padlock, a key, a server)",
+      "the script has a clear before and after, a failure and a fix",
+      "a light, playful narrator suits it"
+    ],
+    "moods": [
+      "playful",
+      "warm",
+      "crafted",
+      "curious"
+    ],
+    "images_per_video": "none: rooms and props are drawn in code",
+    "images": 0
+  },
+  "extra": {
+    "rooms": [
+      "bank-vault",
+      "courtroom",
+      "warehouse",
+      "mission-control",
+      "airport-gate",
+      "subway-platform",
+      "diner",
+      "bedroom-day"
+    ],
+    "slots": [
+      "l",
+      "cl",
+      "c",
+      "cr",
+      "r"
+    ],
+    "levels": [
+      "floor",
+      "shelf",
+      "air"
+    ],
+    "scales": [
+      "s",
+      "m",
+      "l"
+    ],
+    "events": [
+      "exit",
+      "move",
+      "swap",
+      "expr",
+      "hop",
+      "stamp",
+      "ring",
+      "route",
+      "label",
+      "zoom"
+    ],
+    "enters": [
+      "pop",
+      "slide",
+      "drop"
+    ],
+    "cuts": [
+      "cut",
+      "tear"
+    ],
+    "expressions": [
+      "idle",
+      "happy",
+      "shock",
+      "worried",
+      "squint",
+      "sleep"
+    ],
+    "accessories": [
+      "none",
+      "cap",
+      "hardhat",
+      "headset",
+      "glasses",
+      "bowtie",
+      "beret",
+      "visor"
+    ],
+    "critter_colors": [
+      "hero",
+      "cap",
+      "sage",
+      "amber",
+      "purple",
+      "pink"
+    ],
+    "props": {
+      "laptop": [
+        300,
+        210
+      ],
+      "envelope": [
+        220,
+        150
+      ],
+      "padlock": [
+        160,
+        200
+      ],
+      "server-rack": [
+        200,
+        420
+      ],
+      "bank": [
+        300,
+        280
+      ],
+      "coin-stack": [
+        150,
+        150
+      ],
+      "magnifier": [
+        220,
+        290
+      ],
+      "envelope-sealed": [
+        220,
+        150
+      ],
+      "phone": [
+        140,
+        260
+      ],
+      "monitor": [
+        320,
+        290
+      ],
+      "monitor-error": [
+        320,
+        290
+      ],
+      "keyboard": [
+        340,
+        110
+      ],
+      "cloud": [
+        300,
+        240
+      ],
+      "cloud-rain": [
+        300,
+        240
+      ],
+      "database": [
+        200,
+        260
+      ],
+      "router": [
+        300,
+        200
+      ],
+      "cable-plug": [
+        200,
+        200
+      ],
+      "shield": [
+        200,
+        240
+      ],
+      "key": [
+        260,
+        110
+      ],
+      "key-card": [
+        220,
+        150
+      ],
+      "padlock-open": [
+        160,
+        200
+      ],
+      "safe": [
+        240,
+        240
+      ],
+      "safe-open": [
+        240,
+        240
+      ],
+      "folder": [
+        260,
+        200
+      ],
+      "document": [
+        200,
+        260
+      ],
+      "chart-board": [
+        280,
+        320
+      ],
+      "chart-board-down": [
+        280,
+        320
+      ],
+      "clock": [
+        220,
+        220
+      ],
+      "lightbulb": [
+        220,
+        260
+      ],
+      "lightbulb-on": [
+        220,
+        260
+      ],
+      "gear": [
+        220,
+        220
+      ],
+      "warning-sign": [
+        240,
+        320
+      ],
+      "check-badge": [
+        200,
+        200
+      ],
+      "cross-badge": [
+        200,
+        200
+      ],
+      "question-bubble": [
+        220,
+        210
+      ],
+      "speech-bubble": [
+        240,
+        190
+      ],
+      "package-box": [
+        240,
+        220
+      ],
+      "package-box-open": [
+        240,
+        220
+      ],
+      "credit-card": [
+        240,
+        150
+      ],
+      "wallet": [
+        240,
+        180
+      ],
+      "house": [
+        280,
+        280
+      ],
+      "robot": [
+        220,
+        300
+      ],
+      "trophy": [
+        200,
+        260
+      ],
+      "battery": [
+        140,
+        240
+      ],
+      "battery-empty": [
+        140,
+        240
+      ],
+      "globe": [
+        240,
+        260
+      ],
+      "trash-can": [
+        200,
+        260
+      ],
+      "trash-can-full": [
+        200,
+        260
+      ],
+      "signpost": [
+        240,
+        320
+      ],
+      "plant-pot": [
+        200,
+        260
+      ],
+      "coffee-cup": [
+        200,
+        200
+      ],
+      "alarm-bell": [
+        220,
+        220
+      ]
+    }
+  }
+}

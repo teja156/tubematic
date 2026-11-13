@@ -52,12 +52,40 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   [Where you choose](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#where-you-choose)
   has the details.
 
+- A new visual style, Paper Diorama (experimental): a playful explainer told in rooms of cut paper,
+  with a taped banner for each beat, paper props that pop into place on the narrator's words, a small
+  clay critter that reacts, stamps and red rings on the key words, and torn paper tags for captions.
+  It makes no images and needs no OpenAI key. Auto picks it for a tech, product or safety idea told
+  inside one familiar place.
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles)
+  has the details.
+- A new visual style, Editorial Collage (experimental): a real incident or company story laid out as
+  an evidence desk, with clippings carrying the video's own headlines, grey halftone prints, cut-out
+  stickers, typed index cards, big figures and a red string, as the camera glides across the desk.
+  Real people are named in text and never shown as faces, and every grey print is marked
+  "Illustration". It needs an OpenAI key and makes up to 10 pictures per video.
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles)
+  has the details.
+- A new visual style, Storybook Reveal (experimental): a fable or a moral story told as a picture
+  book, each page a painted picture that appears as a pencil drawing and then floods with colour. The
+  hero looks the same on every page. It needs an OpenAI key and makes up to 12 pages per video, plus
+  one reference picture of the hero.
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles)
+  has the details.
+- A new visual style, Archive and Engraving (experimental): history told as a documentary page on
+  parchment, with engraved plates, a title with one red word, red strike-throughs, stamps, routes on
+  old charts and a timeline. People appear as name cards with their dates, never as faces, and every
+  generated picture is marked "Illustration". It needs an OpenAI key and makes up to 10 pictures per
+  video.
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles)
+  has the details.
 - Insert scenes: a video can carry a few short scenes, a few seconds each, in another look inside its
   style, where the narration reaches something that look shows best: a **System Flow** diagram for a
   request crossing a network, a **Terminal Doc** string for a password being hashed or a command
   being typed. The video's style keeps the opening, the answer and the ending, the captions stay on
   screen through an insert, and an insert follows the video's canvas, so on a white video it is drawn
-  dark on paper. The agent decides after it picks the style, and many videos get none.
+  dark on paper, and it never opens on an empty board: its first element is already drawn as it
+  comes in. The agent decides after it picks the style, and many videos get none.
   [Insert scenes](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#insert-scenes) has
   the details.
 - Three new experimental styles, each with its own preview, that Auto can pick:
@@ -71,6 +99,52 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   for approval, New Video, and a domain's defaults, which every new video in the domain starts with.
   The video's window shows the agent's decision and its reason in an **Inserts** row, and the Script
   tab marks the parts of the script an insert shows.
+- Two more insert styles. **Code Scenes** puts a few lines of real code on an editor card: the lines
+  being read light up, a bug gets a red squiggle and a message, the code changes into its fix, and
+  a small pane shows what it prints. **Format Packs** shows a made-up message thread with a scam's
+  tells circled, a short numbered list, a quiz with a locked answer, or a news strap with a changing
+  number. Format Packs draws no real app or brand: a plain phone frame, phone numbers from the ranges
+  set aside for fiction, and an EXAMPLE tag on every made-up thread or headline.
+  [Insert scenes](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#insert-scenes) has
+  the details.
+- A new experimental style, **Puppet History**: "you are now a..." history told by round-headed
+  cut-out puppets in costumes of the era, on flat illustrated sets, typed document cards where a
+  stamp lands and a number is struck out, and flat maps of today's countries where regions fill in and
+  arrows grow, with hard cuts between scenes. It suits history told to the viewer as "you" (a Roman
+  legionary, a medieval peasant), why an event happened told with light humour, and an army's march
+  or a trade route, and Auto can pick it. A real person appears only as the same puppet in a generic
+  costume with a name plate, never a living person or a tragedy played for laughs. It needs no API
+  key and no GPU, generates no images, and takes no mascot, because its whole cast is drawn
+  characters and a mascot would be confused with them.
+  [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
+  details.
+- A new experimental style, **Mid-century How-To**: a 1950s classroom-film cartoon in which a gloved
+  presenter walks the viewer through a task in numbered steps, each on its own flat colour, pressing
+  buttons on phones, keypads and other flat objects, with checks, circled numbers and a closing card
+  that lists the steps. It suits a task the viewer can copy, such as turning on two-factor sign-in or
+  backing up a phone, and Auto can pick it. It needs no API key and no GPU, generates no images, and
+  takes no mascot, because its presenter has the stage.
+  [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
+  details.
+- A new experimental style, **Process Cast**: little drawn characters with faces act out an invisible
+  process at stations along one ground line. They carry and hand over task cards, split into copies
+  and merge back, join their cubes into a bigger body and react, while the camera glides from
+  station to station. It suits a process whose actors are things, such as bits adding up to a byte,
+  cells and organs, the layers of a system or the stages of a build, and Auto can pick it. It needs
+  no API key and no GPU, generates no images, and takes no mascot, because its whole cast is drawn
+  characters and a mascot would be confused with them.
+  [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
+  details.
+- A new experimental style, **Comic Panels**: the topic is told as a comic. A page of cream newsprint
+  holds three or four panels that ink in one by one, with a hero, a villain and invented people, speech,
+  thought and shout balloons, sound effects such as POW and CLANG, and speed lines, while the camera
+  moves from panel to panel, punches in on a hit and pulls back to show the whole page at the end. It
+  suits a fight told round by round, such as a password against a guessing attack or an antibiotic
+  against a superbug, an arms race, or a short punchy story of an invented hero and villain, and Auto
+  can pick it. It needs no API key and no GPU, generates no images, and takes no mascot, because its
+  whole cast is drawn characters and a mascot would be confused with them.
+  [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
+  details.
 
 ### Changed
 

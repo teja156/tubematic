@@ -87,11 +87,11 @@ restart.
 
 ---
 
-## The 56 tools
+## The 59 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
-(Gemini). Five tools take [the scene-work claim](#the-scene-work-claim).
+(Gemini). Six tools take [the scene-work claim](#the-scene-work-claim).
 
 ### Video tools
 
@@ -134,6 +134,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 |---|---|
 | [`generate_image`](#generate_image) | Generate a scene image |
 | [`generate_character`](#generate_character) | Generate a transparent character cut-out |
+| [`treat_image`](#treat_image) | Bake a style's look into a generated still, as a new PNG |
 | [`read_image`](#read_image) | Return a stored image as a picture |
 | [`preview_doodles`](#preview_doodles) | Draw a Whiteboard video's own doodles as a picture |
 
@@ -147,6 +148,8 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`list_scene_files`](#list_scene_files) | List generated and installed scenes |
 | [`render_bean_props`](#render_bean_props) | Render a Bean Explainer video's own props as a picture |
 | [`render_storybook_props`](#render_storybook_props) | Render a Storybook Atlas video's own props as a picture |
+| [`render_paper_props`](#render_paper_props) | Render a Paper Diorama video's own props as a picture |
+| [`render_style_props`](#render_style_props) | Render a Puppet History, Mid-century How-To, Comic Panels or Process Cast video's own props as a picture |
 | [`render_style_parts`](#render_style_parts) | Render a Night Signal, Flat Vector Science or Isometric Infographic video's own parts as a picture |
 | [`preview_terminal_moves`](#preview_terminal_moves) | Render a Terminal Doc video's own moves as a picture |
 | [`write_scene_config`](#write_scene_config) | Validate and write `scene-config.json` |
@@ -249,7 +252,7 @@ videos.
 | `voice` | `{voice_id, name, model_id, source}` or `null` |
 | `elevenlabs_model_id`, `pronunciation_mode` | What the script is written for. Both follow from `voice` |
 | `voice_speed`, `effective_voice_speed`, `voice_speed_source` | The video's own speed (`null` when it has none), the speed its next voicing uses, and where that comes from (`video` or `roster`). See [Speed](08-scripting-and-voice.md#speed) |
-| `illustrated_available` | `true` when an OpenAI key is stored, which Illustrated, Under the Hood and Case File Story need. The key is not returned |
+| `illustrated_available` | `true` when an OpenAI key is stored, which Illustrated, Under the Hood, Case File Story, Archive and Engraving, Editorial Collage and Storybook Reveal need. The key is not returned |
 | `cartoon_3d_available`, `mascots_available` | `true` while some renderer's GPU test passed (`renderers.py::gpu_status` says `working`) |
 | `mascot` | `{id, name, version}` or `null` |
 | `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows, script, picture}`. Under `auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config`, `script` is `""` and `picture` is the mixed scenes' block |
@@ -426,9 +429,9 @@ Fields writable only at `TOPIC_PROPOSED`:
   mascot in the same update.
 - A new `mascot_id` must exist, be approved and not archived, and some renderer's GPU test must
   have passed (the not-tested case has its own message). `""` clears it, and echoing the stored
-  mascot is not refused. A mascot is refused on a `cartoon_3d`, `under_the_hood`, `case_file_story`, `flat_vector_science`,
-  `isometric_infographic` or `night_signal` video (`visual_styles.py::NO_MASCOT_STYLES`), and a switch to
-  one of those styles clears the stored one.
+  mascot is not refused. A mascot is refused on a `cartoon_3d`, `under_the_hood`, `case_file_story`, `paper_diorama`, `archive_engraving`, `editorial_collage`, `storybook_reveal`, `puppet_history`, `midcentury_howto`, `comic_panels`, `process_cast`, `flat_vector_science`,
+  `isometric_infographic` or `night_signal` video
+  (`visual_styles.py::NO_MASCOT_STYLES`), and a switch to one of those styles clears the stored one.
 - A `visual_style` different from the stored one clears the record of a style `auto` picked
   (`style_pick`, `style_runner_up`, `style_reason`) and the renderer and canvas recorded for the old
   scenes (`resolved_renderer`, `resolved_visual_style`). The same value again keeps them, because the
@@ -714,31 +717,38 @@ side. The scene skill tells the agent to leave the default alone, because any ot
 cropped hard to fit the frame. The Under the Hood skill asks for `1:1`, because its plates are drawn
 at their own shape in a band narrower than the frame.
 
-On an `under_the_hood` video the tool refuses a new `image_name` once the video's images folder and
-its calls in flight hold 12 pictures, the pack's `routing.images`, before any request; regenerating an
-existing name is allowed (`server.py::_image_cap_error`). A call reserves its name under a lock before
-the request and releases it when it ends, so parallel calls cannot each take the last slot and a
-failed call does not keep one. A `case_file_story` video is capped the same way at 16 stills. Its lead
-sheet has a slot of its own, so the pack's `routing.images` is 17.
+A video whose style draws every picture in code (its pack's `routing.images` is 0, as for Paper
+Diorama, Whiteboard or Bean Explainer) is refused before any request (`server.py::_image_plan`).
 
-`reference` is for a `case_file_story` video; any other video refuses it. With one, the picture is
-made from a reference picture through `POST https://api.openai.com/v1/images/edits`, with the same
-model and sizes, which keeps the story's lead the same character in every still:
+A style built on generated stills has a `pictures` block in its pack, and that block drives three
+things here (`visual_styles.py::_check_pictures` checks its shape):
+
+- The cap. A new `image_name` is refused once the video's images folder and its calls in flight hold
+  the pack's `routing.images`, before any request; regenerating an existing name is allowed
+  (`server.py::_image_cap_error`). Names in `pictures.apart` (a reference sheet) have a slot of their
+  own. A call reserves its name under a lock before the request and releases it when it ends, so
+  parallel calls cannot each take the last slot and a failed call does not keep one. The refusal is
+  the pack's `pictures.cap_message`. Under the Hood is capped at 12 photographs; Case File Story at 16
+  stills plus its lead sheet, so its `routing.images` is 17. Archive and Engraving is capped at 10 engravings, Editorial Collage at 10 prints and cut-outs, and Storybook Reveal at 12 pages plus its hero sheet, so its `routing.images` is 13.
+- The prompt. The pack's `pictures.still_style` is added after the agent's words, and
+  `pictures.still_aspect`, when set, fixes the shape of every still.
+- The reference. Only a style with `pictures.sheet` takes `reference`; any other video refuses it.
+  With one, the picture is made from a reference picture through
+  `POST https://api.openai.com/v1/images/edits`, with the same model and sizes, which keeps a
+  story's character the same in every still:
 
 | Call | Reference picture | Result |
 |---|---|---|
-| `image_name="lead"`, `reference="house"` | The house lead's sheet shipped in `mcp/case_file_assets/` | The video's lead sheet, always 16:9. The prompt is the outfit |
-| `reference="lead"`, or another image of the video | That image | A still with the lead painted into the scene the prompt describes, always 9:16 |
-| No `reference` | None | A still with no lead in it, always 9:16 |
+| `image_name=<sheet name>`, `reference=<house>` | The house sheet shipped in `mcp/` (Case File Story's lead) | The video's sheet, always 16:9 |
+| `image_name=<sheet name>`, no `reference`, on a style with no house sheet (Storybook Reveal's `hero`) | None | The video's sheet made from the prompt alone, always 16:9 |
+| `reference=<sheet name>`, or another image of the video | That image | A still painted from it, with `pictures.still_lead` before the prompt |
+| No `reference` | None | A still with no sheet character in it |
 
-On such a video the tool adds the pack's fixed text to the prompt: the lead's description before
-the scene and the painting style after it. It refuses, before any request, a lead sheet asked for
-without `reference="house"`, the house sheet used for another picture, and a reference that is not
-yet a picture of the video, and a picture named `house`, the name kept for the house sheet
-(`server.py::_case_file_image_plan`). The result carries `reference`. A call with a reference
-waits up to 600 seconds for OpenAI's response, as `generate_character` does, and a reserved slot
-lasts 900 seconds, longer than that wait.
-The reasons are in [Case File Story](10-scene-authoring.md#the-lead-and-the-stills).
+The tool refuses, before any request, a sheet asked for the wrong way, the house name used for
+another picture, and a reference that is not yet a picture of the video (`server.py::_image_plan`).
+The result carries `reference`. A call with a reference waits up to 600 seconds for OpenAI's
+response, as `generate_character` does, and a reserved slot lasts 900 seconds, longer than that wait.
+The reasons are in [Case File Story](10-scene-authoring.md#the-lead-and-the-stills). Storybook Reveal paints each square (1:1) page from `reference="hero"` with the `pencil` treatment in view, so its hero keeps one face and one set of clothes across the tale.
 
 ### `generate_character`
 
@@ -753,13 +763,35 @@ character. Both send `background: "transparent"`. A stored `character_model` out
 catalog is refused by name before any request. `input_fidelity` is not sent, because every model in
 the catalog rejects it.
 
+### `treat_image`
+
+`treat_image(video_id, image_name, treatment)` bakes a look into one of the video's generated stills
+and writes it as a new PNG, `images/treated/<image_name>.<treatment>.png`. It is free: Pillow on the server
+(`mcp/treatments.py`), no paid call. The still itself is left as it is, and a
+treated copy never counts against the style's cap. The treatments a video may use are its pack's
+`pictures.treatments`; any other is refused.
+
+| Treatment | What it makes |
+|---|---|
+| `print` | A grey 45-degree halftone with a white paper border, the frame's size |
+| `sticker` | The subject keyed out of a plain background (or a still's own transparency), a white die-cut edge and a hard shadow, cropped to the subject |
+| `engraving` | Ink on laid paper: a contrast curve, then dark ink to warm paper |
+| `pencil` | A graphite line plate from the still's edges over a light tone, which lines up with the colour still pixel for pixel |
+
+Archive and Engraving is the style that uses `engraving`; its engravings must be baked with it before a card names them. Editorial Collage uses `print` and `sticker` for its prints and cut-outs, and Storybook Reveal uses `pencil` for its pages. Every picture a scene names must be baked first.
+
+The looks are baked once because the same work as a CSS or SVG filter costs 10 to 100 times more per
+frame in software GL. The tool takes the scene-work claim, as it writes into the video's folder.
+
 ### `read_image`
 
 `read_image(video_id, image_name, grid=True)` returns the image itself after a text block. With
 `grid`, it overlays a labelled grid in normalised `[u, v]` coordinates (0 to 1 across and down the
 image), so the agent can read off an anchor point for an overlay. The grid is drawn on a copy in
 memory. `cartoon_still`, `cartoon_read_still`, `render_mascot_sheets`, `render_bean_props`,
-`preview_doodles`, `render_storybook_props`, `render_style_parts` and `preview_terminal_moves` also return pictures.
+`preview_doodles`, `render_storybook_props`, `render_paper_props`, `render_style_props`, `render_style_parts` and
+`preview_terminal_moves` also
+return pictures.
 
 ### `preview_doodles`
 
@@ -850,6 +882,31 @@ beside it at the same scale, and its first state again on a night-navy swatch fo
 `renderer/remotion/storybook-tools/render-props.mjs` on software GL, under the same lock and
 timeouts, and a killed preview leaves its folder in `storybook-tools/.tmp/`.
 
+### `render_paper_props`
+
+`render_paper_props(video_id)` renders the props a Paper Diorama video's agent painted for it (the
+config's `customProps`, so `write_scene_config` comes first) and returns the picture after a JSON
+block. Props are paper pieces written as data, never code, so the sheet shows each prop as the scene
+paints it, with the same rough edge, grain and shadow ([Paper Diorama](10-scene-authoring.md#paper-diorama)).
+It runs the same way as `render_bean_props`: `bean_preview.py::render_preview` with `script=PAPER_SCRIPT`
+runs `renderer/remotion/paper-tools/render-props.mjs` on the `PaperPropSheet` composition, on
+software GL, under the same `_heavy_checks_lock` and timeouts.
+
+### `render_style_props`
+
+`render_style_props(video_id)` renders the props the agent drew for a video in a
+[character style](10-scene-authoring.md#character-styles) (the config's `customProps`, so
+`write_scene_config` comes first) and returns the picture after a JSON block naming them. Each prop
+is drawn with its declared box outlined in red and the first text the config gives it, beside a
+library prop for line weight and size: for Puppet History beside a library scroll, for Mid-century How-To at rest and at the end of its first
+act beside a library phone, for Comic Panels beside a library sign, for Process Cast beside a library card. A video in any other style is
+refused. It runs the same way as [`render_bean_props`](#render_bean_props):
+`bean_preview.py::render_preview` with `script=CHARACTER_SCRIPT` runs
+`renderer/remotion/character-tools/render-props.mjs` on software GL, under the same lock and
+timeouts, and a killed preview leaves its folder in `character-tools/.tmp/`. The script draws the
+props on the style's own preview component (`PuppetHistoryPropPreview` for Puppet History, `MidcenturyPropPreview` for Mid-century How-To,
+`ComicPanelsPropPreview` for Comic Panels, `ProcessCastPropPreview` for Process Cast).
+
 ### `render_style_parts`
 
 `render_style_parts(video_id)` renders the parts a Night Signal, Flat Vector Science or Isometric Infographic video's agent
@@ -937,6 +994,9 @@ It checks:
   narration, the video's own moves and their files, no still stretch over 3 seconds). No other style
   may use `TerminalDoc`. The style pack's caption settings, in the skin's colours, fill every
   `subtitles` key the config leaves out. The rules are in [Terminal Doc](10-scene-authoring.md#terminal-doc).
+- `inserts`, when the config has them or the script marks a segment, pass `mcp/inserts.py::check`
+  and each insert style's own `check_insert`; `CodeScenes` and `FormatPacks` are never one of the
+  `scenes`. The rules are in [Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts).
 - An `under_the_hood` video holds the one installed `UnderTheHood` scene, and its plates and events
   pass `mcp/under_the_hood.py` (plates and poses on word starts, at most 12 different photographs,
   each covering the plate band, pinned points that stay visible through the push, chips inside the
@@ -950,6 +1010,61 @@ It checks:
   its limits, no still stretch over 4 seconds). No other style may use `CaseFileStory`. The style
   pack's caption settings fill every `subtitles` key the config leaves out. The rules are in
   [Case File Story](10-scene-authoring.md#case-file-story).
+- A `paper_diorama` video holds the one installed `PaperDiorama` scene, and its sets, items and events
+  pass `mcp/paper_diorama.py` (`check`, `check_scene_use` and `prop_errors`: sets and events on word
+  starts, slots and levels from the contract, no two things covering each other, bounded custom
+  props). No other style may use `PaperDiorama`. The style pack's caption settings fill every
+  `subtitles` key the config leaves out. The rules are in
+  [Paper Diorama](10-scene-authoring.md#paper-diorama).
+- An `archive_engraving` video holds the one installed `ArchiveEngraving` scene, and its header and
+  beats pass `mcp/archive_engraving.py` (`check` and `check_scene_use`: beats and events on word
+  starts, at most 10 different engravings, each baked with `treat_image`, card kinds, people as
+  name cards with no picture or face field, charts with their route on the still, text within its
+  limits, no still stretch over 3.5 seconds). No other style may use `ArchiveEngraving`. The style
+  pack's caption settings fill every `subtitles` key the config leaves out. The rules are in
+  [Archive and Engraving](10-scene-authoring.md#archive-and-engraving).
+- An `editorial_collage` video holds the one installed `EditorialCollage` scene, and its stations
+  pass `mcp/editorial_collage.py` (`check`, `check_scene_use` and `beat_windows`: stations and marks on
+  word starts, at most 10 different prints and cut-outs, each baked with `treat_image`, headline and
+  hero kinds, text within its limits, no real person given a face). No other style may use
+  `EditorialCollage`. The style pack's caption settings fill every `subtitles` key the config leaves
+  out. The rules are in [Editorial Collage](10-scene-authoring.md#editorial-collage).
+- A `storybook_reveal` video holds the one installed `StorybookReveal` scene, and its pages pass
+  `mcp/storybook_reveal.py` (`check`, `check_scene_use`, `page_windows` and `change_frames`: pages
+  and their reveal steps on word starts, at most 12 different pictures and never the hero sheet, each
+  baked with `treat_image`, short titles, a picture that stays on screen long enough to read). No other
+  style may use `StorybookReveal`. The style pack's caption settings fill every `subtitles` key the
+  config leaves out. The rules are in [Storybook Reveal](10-scene-authoring.md#storybook-reveal).
+- A `puppet_history` video holds the one installed `PuppetHistory` scene, and its cast and beats
+  pass `mcp/puppet_history.py` (beats and events on words, each beat's puppets entering in it, one
+  puppet a slot, the countries a map names, text within its limits, a card that does not repeat the
+  narration, the video's own props and their files, no still stretch over 3 seconds). No other style
+  may use `PuppetHistory`. The style pack's caption settings fill every `subtitles` key the config
+  leaves out. The rules are in [Puppet History](10-scene-authoring.md#puppet-history).
+- A `midcentury_howto` video holds the one installed `MidcenturyHowTo` scene, and its title, steps
+  and shots pass `mcp/midcentury_howto.py` (steps and shots on word starts, poses and presses on
+  words, the object library and the video's own props and their files, objects, labels and insets
+  inside the stage and clear of the presenter and of each other, labels that do not repeat the
+  narration, no still stretch over 3 seconds). No other style may use `MidcenturyHowTo`. The style
+  pack's caption settings fill every `subtitles` key the config leaves out. The rules are in
+  [Mid-century How-To](10-scene-authoring.md#mid-century-how-to).
+- A `comic_panels` video holds the one installed `ComicPanels` scene, and its cast, pages and panels
+  pass `mcp/comic_panels.py` (panels and items starting on words, panels read for at least 1.5
+  seconds, the prop library and the video's own props and their files, characters, props, balloons
+  and sound effects inside their panel, balloons and sound effects clear of each other, balloons
+  pointing at someone in the panel, balloons and caption boxes that do not repeat the narration, no
+  still stretch over 3 seconds). No other style may use `ComicPanels`. The style pack's caption
+  settings fill every `subtitles` key the config leaves out. The rules are in
+  [Comic Panels](10-scene-authoring.md#comic-panels).
+- A `process_cast` video holds the one installed `ProcessCast` scene, and its cast, stations and
+  events pass `mcp/process_cast.py` (events on words, the camera starting at the first station and
+  showing every station, everything happening at the station the camera shows, slots never shared,
+  bodies clear of each other and of the furniture, the prop library and the video's own props and
+  their files, no still stretch over 3 seconds). No other style may use `ProcessCast`. The style
+  pack's caption settings fill every `subtitles` key the config leaves out. The rules are in
+  [Process Cast](10-scene-authoring.md#process-cast).
+- `subtitles.emphasis`, on any style, names word indexes the narration has, at most one word in 5.
+  `subtitles.look` is `plain`, `selection`, `fill`, `tags` or `highlight`.
 - A `night_signal` video holds the one installed `NightSignal` scene, and its scenes pass
   `mcp/night_signal.py` (scenes and items on word starts, one red threat per scene, library or own
   pictograms, connectors and bubbles between occupied slots, cards that stay long enough to read, no
@@ -1026,10 +1141,11 @@ video has no formula on record. See
 8. Cartoon 3D readiness, for a config with a Cartoon 3D scene: the video's generated source exists
    and the [beat gate](#cartoon_beat_gate) has passed for the source on disk. An open gate is one
    error naming the tool that closes it. A symlink anywhere in the source tree fails the check.
-9. A Bean Explainer, Storybook Atlas or Flat Vector Science video's own props: each file its
-   `customProps` names exists and still passes the source rules `write_scene_config` applied, since the
-   agent may have redrawn it since (`server.py::_bean_custom_prop_errors`,
-   `server.py::_storybook_custom_prop_errors`, `server.py::_fv_custom_prop_errors`).
+9. A Bean Explainer, Storybook Atlas, character-style or Flat Vector Science video's own props: each file its
+   `customProps` names exists and still passes the source rules `write_scene_config` applied, since
+   the agent may have redrawn it since (`server.py::_bean_custom_prop_errors`,
+   `server.py::_storybook_custom_prop_errors`, `server.py::_character_custom_prop_errors`,
+   `server.py::_fv_custom_prop_errors`).
 10. A Terminal Doc video's own moves, the same way (`server.py::_td_custom_move_errors`).
 11. Mascot cues, for a video that has a mascot: the scene-config carries a non-empty `mascot` list.
    `write_scene_config` already checked the cues (see
@@ -1351,8 +1467,8 @@ stateDiagram-v2
 - The claim window is `{VOICE_READY, REVISION_REQUESTED}`. The revision loop writes scenes while the
   video is at `REVISION_REQUESTED` and then moves it back before submitting. A move within the
   window keeps the claim, and a move out of it releases the claim.
-- Five tools take the claim: `generate_image`, `generate_character`, `write_scene_file`,
-  `write_scene_config` and `submit_render`.
+- Six tools take the claim: `generate_image`, `generate_character`, `treat_image`,
+  `write_scene_file`, `write_scene_config` and `submit_render`.
 - Reads are exempt: `read_image`, `get_scene_config`, `read_scene_file`, `get_timeline`,
   `validate_job`, `list_scene_files`, `get_video`. A session that looked at a video would otherwise
   hold it for the full TTL and block a second session from diagnosing it, and reads are what the

@@ -715,6 +715,130 @@ Covers the `tubematic-case-file-story` skill ([Case File Story](../10-scene-auth
 Trap: an agent that skips the lead sheet, or leaves `reference` off a still, gets a different
 character in each painting, and nothing after the paid call can repair that.
 
+### `test_paper_diorama_skill.py`
+
+Covers the `tubematic-paper-diorama` skill ([Paper Diorama](../10-scene-authoring.md#paper-diorama)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes by `style.authoring_skill`.
+- The skill and `reference/contract.md` list every room, slot, event and expression, and the contract
+  also lists every level, scale, entrance, cut, accessory and colour. The limits and floors
+  the skill states are the ones `mcp/paper_diorama.py` enforces.
+- The skill tells the agent never to call `generate_image` or `generate_character`, to look at its own
+  props with `render_paper_props`, and to hand inserts to the `tubematic-inserts` skill.
+- The worked example is valid JSON with the one `PaperDiorama` scene and carries no `subtitles`.
+
+### `test_archive_engraving_skill.py`
+
+Covers the `tubematic-archive-engraving` skill ([Archive and Engraving](../10-scene-authoring.md#archive-and-engraving)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes by `style.authoring_skill`.
+- The skill and its contract list every card kind, event and emblem, and the limits it states are
+  the ones `mcp/archive_engraving.py` enforces.
+- Every still is engraved with `treat_image`, and the skill never pictures a named person.
+- The skill hands inserts to the `tubematic-inserts` skill, and its look step is marked for the
+  frame preview.
+- The worked example is valid JSON with the one `ArchiveEngraving` scene and carries no `subtitles`.
+
+### `test_editorial_collage_skill.py`
+
+Covers the `tubematic-editorial-collage` skill ([Editorial Collage](../10-scene-authoring.md#editorial-collage)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes by `style.authoring_skill`.
+- The skill and its contract list every headline kind, hero kind and event, and the limits it states
+  are the ones `mcp/editorial_collage.py` enforces.
+- Every still is baked with `treat_image`, and the skill never pictures a named person.
+- The skill hands inserts to the `tubematic-inserts` skill, its look step is marked for the frame
+  preview, and its text keeps the docs' writing rules.
+- The worked example is valid JSON with the one `EditorialCollage` scene and carries only its
+  `emphasis` in `subtitles`.
+
+### `test_storybook_reveal_skill.py`
+
+Covers the `tubematic-storybook-reveal` skill ([Storybook Reveal](../10-scene-authoring.md#storybook-reveal)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes by `style.authoring_skill`.
+- The skill and its contract list every page turn, and the limits it states are the ones
+  `mcp/storybook_reveal.py` enforces.
+- The hero sheet is made once and every page is painted from it, and the skill never pictures a
+  real or named person or a brand.
+- The skill hands inserts to the `tubematic-inserts` skill, its look step is marked for the frame
+  preview, and its text keeps the docs' writing rules.
+- The worked example is valid JSON with the one `StorybookReveal` scene and three pictures.
+
+### `test_puppet_history_skill.py`
+
+Covers the `tubematic-puppet-history` skill ([Puppet History](../10-scene-authoring.md#puppet-history)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- `reference/contract.md` lists every catalogue the validator accepts, and no others.
+- The limits the skill states are the ones `mcp/puppet_history.py` enforces.
+- The skill keeps a real person unrecognisable (the house puppet in a generic costume with a name
+  plate), keeps living people and leaders of regimes still in power off the plates, and keeps
+  tragedy out of the gags, and the pack carries the same rules in its routing, script and review text.
+- The worked example passes the validator, its worked prop, `example-prop-hourglass.tsx`, passes the
+  source checks, and the uninstaller removes the skill.
+
+Trap: skill text that lets a puppet look like a real person or a tragedy become a gag leads the
+agent to a video the AI review rejects. The test pins the wording.
+
+### `test_midcentury_howto_skill.py`
+
+Covers the `tubematic-midcentury-howto` skill
+([Mid-century How-To](../10-scene-authoring.md#mid-century-how-to)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- `reference/contract.md` lists the pack's objects and no others, each with its text limit and
+  acts, and every catalogue the validator accepts.
+- The limits the skill states are the ones `mcp/midcentury_howto.py` enforces.
+- It names the tools it uses, `render_style_props` among them, never calls `generate_image`, and
+  says the presenter never moves his mouth to talk.
+- The reference files ship, the worked example passes the validator, and the uninstaller removes the
+  skill.
+- The skill teaches objects of the agent's own within the validator's limits, and its worked prop,
+  `example-prop-alarm.tsx`, passes the validator's source checks.
+
+Trap: a skill that teaches a limit the validator does not enforce gets the agent refused on every
+video. Change a limit in `contract.ts`, run the sync script, and change the skill text with it.
+
+### `test_comic_panels_skill.py`
+
+Covers the `tubematic-comic-panels` skill ([Comic Panels](../10-scene-authoring.md#comic-panels)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- `reference/contract.md` lists the pack's props and layouts and every catalogue the validator accepts.
+- The limits the skill states are the ones `mcp/comic_panels.py` enforces.
+- It says the narrator is off screen and a balloon is never the narration read aloud, that the cast
+  is invented and never a real person, and that the style takes no mascot.
+- The worked example passes the validator, its worked prop, `example-prop-trophy.tsx`, passes the
+  source checks, and the uninstaller removes the skill.
+
+Trap: skill text that lets a balloon repeat the narration, or a character look like a real person,
+leads the agent to a video the validator or the AI review refuses. The test pins the wording.
+
+### `test_process_cast_skill.py`
+
+Covers the `tubematic-process-cast` skill ([Process Cast](../10-scene-authoring.md#process-cast)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- `reference/contract.md` lists the pack's props and stations and no others, and every catalogue
+  the validator accepts.
+- The limits and timings the skill states are the ones `mcp/process_cast.py` enforces.
+- It says the cast has nothing to do with an install's mascot and the style takes no mascot, that a
+  face never moves its mouth with the words, never calls `generate_image`, and runs no code or shell.
+- The worked example passes the validator, its worked prop, `example-prop-ticket.tsx`, passes the
+  source checks, and the uninstaller removes the skill.
+
+Trap: skill text that calls the cast mascots, or lets a character talk, leads the agent to the wrong
+video for this style. The test pins the wording that keeps them apart.
+
 ### `test_night_signal_skill.py`
 
 Covers the `tubematic-night-signal` skill ([Night Signal](../10-scene-authoring.md#night-signal)).
@@ -808,14 +932,38 @@ Covers the `tubematic-formula-routing` skill
 Trap: a skill that named formulas would prefer the ones it knew about, and a new formula would need
 an edit to be picked. The candidates are data for that reason.
 
+### `test_code_scenes_skill.py`
+
+Covers the `tubematic-code-scenes` skill ([Code Scenes](../10-scene-authoring.md#code-scenes)).
+
+- Its name matches the pack's `authoring_skill`, and it loads without being explicit-only.
+- It states the limits `mcp/code_scenes.py` enforces and lists the languages it accepts and no
+  others. Its worked example
+  (`agent_files/skills/tubematic-code-scenes/reference/example-insert.json`) passes the validator
+  at the frames the skill names.
+- It keeps the boundary with Terminal Doc (a command typed at a shell goes there) and the rule that
+  output is shown only when certain, because nothing runs the code; it has one **Check and submit**
+  step; `uninstall.py` removes it.
+
+### `test_format_packs_skill.py`
+
+Covers the `tubematic-format-packs` skill ([Format Packs](../10-scene-authoring.md#format-packs)).
+
+- Its name matches the pack's `authoring_skill`, it names every format, and it states the limits
+  `mcp/format_packs.py` enforces. Its worked example
+  (`agent_files/skills/tubematic-format-packs/reference/example-insert.json`) passes the validator.
+- It keeps the impersonation line: every thread made up, phone numbers from the fiction ranges, no
+  tick, the EXAMPLE tag, and no invented source for a headline. It has one **Check and submit** step,
+  and `uninstall.py` removes it.
+
 ### `test_insert_skills.py`
 
 Covers the skills that make a video with insert scenes
 ([Main styles and inserts](../10-scene-authoring.md#main-styles-and-inserts)).
 
 - The operator runs `tubematic-insert-routing` after style routing and before formula routing at
-  `TOPIC_APPROVED`, and treats System Flow and Terminal Doc as insert styles, with a whole video in
-  one of them only as a legacy case.
+  `TOPIC_APPROVED`, and names every insert pack as an insert style, with a whole System Flow or
+  Terminal Doc video only as a legacy case.
 - The script-writing skill's insert marks keep to the rules `update_video` enforces (never the first
   or last segment, never two in a row, never the payoff, only the video's chosen insert styles), name
   the target length from `tubematic_core/inserts.py` and the `insert_long` warning the server
@@ -825,10 +973,13 @@ Covers the skills that make a video with insert scenes
   cards and its ending. The scene system draws a marked diagram beat as the insert, and under Photo
   Explainer draws no diagram scene of its own (an insert, or a labelled photograph). Cartoon 3D,
   whose pack takes none, says so.
-- The insert styles' skills open with an **As an insert** section that states the limits
+- The insert styles' skills open with an **As an insert** section; System Flow's and Terminal Doc's
+  still name the legacy whole video, which a style that was only ever an insert has none of. The
+  first two state the limits
   `mcp/system_flow.py` and `mcp/terminal_doc.py` enforce on an insert (the board or beat count, no
   moves of the agent's own and no skin in Terminal Doc), and keep the legacy whole-video path.
-- The skills README lists both insert skills, and none of these skills carries a ticket id.
+- The skills README lists the insert routing and insert placing skills, and none of these skills
+  carries a ticket id.
 
 Trap: these skills are read at different steps by one agent. One that still teaches System Flow or
 Terminal Doc as a whole-video style sends the agent down a path `write_scene_config` refuses.
