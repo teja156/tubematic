@@ -469,6 +469,8 @@ Covers `mcp/treatments.py` and `treat_image`, the looks baked into a style's gen
   a 17th new still is refused and a regeneration is allowed.
 - A treatment the style does not list, an unknown one, a still the video does not have, a name
   with a path in it, and any treatment on a style with none are refused.
+- A symlink planted at a predictable temp name beside the target is never written through: the tool
+  saves through a temp file it creates itself.
 
 Trap: nothing in `mcp/` may import numpy (`test_removed_tools.py`), so the cut-out is a Pillow flood
 fill on a quarter-size copy, sharpened against the full-size mask.
@@ -838,7 +840,8 @@ text audit's per-set sampling, the picture checks, and `render_paper_props`
 - Each refusal names its set, item or event and cause: a bad room, banner, slot or colour; a set
   off the words; an unknown prop; an item or event off a word; two things covering each other; a prop
   running off the frame or reaching the banner; an event on an item that has not entered or has
-  left; a swap to a prop of another size; a face that is not in the list; a field the event does not
+  left; a swap to a prop of another size; a face that is not in the list, or a critter `face` of
+JSON `true` or `false` (Python reads `true` as 1); a field the event does not
   take, including a `camera` on a set. Too many snap zooms are refused, a stage still for over 3 seconds is refused and an
   event fixes it, and a custom prop is checked piece by piece (size, count, box, colour and text).
 - With insert windows passed as `quiet`, nothing may start inside a window, and a window over a still
@@ -847,6 +850,7 @@ text audit's per-set sampling, the picture checks, and `render_paper_props`
   style: an empty first frame is warned about and each set start is a change frame.
 - `write_scene_config` writes a sound config with the style's captions, writes nothing for a broken
   one and refuses `PaperDiorama` on another style and other scenes on a Paper Diorama video.
+- `generate_image` on a Paper Diorama video is refused before any request reaches the API.
 - `render_paper_props` refuses a video with no config, with no `customProps` or of another style.
   For a sound one it passes the video's own props and `PAPER_SCRIPT` to `bean_preview.render_preview`
   and returns the picture after the JSON. A prop broken in the file after the write is refused before

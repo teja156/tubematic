@@ -144,13 +144,16 @@ export interface Person {
   role: string;
   emblem?: Emblem;
   initials?: string;
-  at?: number;            // in a `people` card: the frame this person arrives, on a word
+}
+/** A person in a `people` card: each one arrives on a word. */
+export interface TimedPerson extends Person {
+  at: number;
 }
 
 export interface PlateCard { kind: "plate"; image: string; focus?: UV; name: string; note?: string }
 export interface ChartCard { kind: "chart"; image: string; focus?: UV; name: string; note?: string; route: UV[] }
 export interface PersonCard extends Person { kind: "person" }
-export interface PeopleCard { kind: "people"; people: Person[] }
+export interface PeopleCard { kind: "people"; people: TimedPerson[] }
 export interface DocLine { text: string; at: number }
 export interface DocumentCard { kind: "document"; lines: DocLine[]; hand?: boolean }
 export type Card = PlateCard | ChartCard | PersonCard | PeopleCard | DocumentCard;

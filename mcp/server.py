@@ -7191,6 +7191,12 @@ def _image_plan(style: str, video_id: str, image_name: str, prompt: str,
     its prompt extended, and only one with a `pictures.sheet` takes a
     reference; every other video gets its arguments back unchanged with
     ref_path None. Nothing here spends money."""
+    # A style that draws every picture itself (routing.images 0) never sends a
+    # paid request: its skill says so, and this refuses it before any spend.
+    if style in tvs.PACKS and tvs.pack(style)["routing"]["images"] == 0:
+        return {"error": f"{tvs.pack(style)['label']} draws every picture in code and takes no "
+                         f"generated images (this video's visual_style is {style!r}). Use the "
+                         "style's own parts instead."}
     pics = tvs.PACKS[style].get("pictures") if style in tvs.PACKS else None
     sheet = (pics or {}).get("sheet")
     if not sheet and reference:
@@ -7573,9 +7579,20 @@ def treat_image(video_id: str, image_name: str, treatment: str) -> dict:
     except (OSError, ValueError) as e:
         return {"error": f"Could not treat {image_name!r}: {e}"}
     target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_name(f".{target.name}.tmp")
-    out.save(tmp, format="PNG", optimize=True)
-    os.replace(tmp, target)
+    # A fresh, exclusively created temp file: a predictable name could be a
+    # planted symlink that the save would follow out of the job.
+    fd, tmp = tempfile.mkstemp(dir=str(target.parent), prefix=".", suffix=".tmp")
+    try:
+        os.fchmod(fd, _new_file_mode())  # mkstemp's 0600 would hide it from the renderer
+        with os.fdopen(fd, "wb") as fh:
+            out.save(fh, format="PNG", optimize=True)
+        os.replace(tmp, target)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
     return {
         "video_id": video_id,
         "image_name": image_name,

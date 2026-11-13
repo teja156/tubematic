@@ -373,17 +373,16 @@ export function nameSize(name: string, width: number, max: number): number {
   return Math.max(22, Math.min(max, Math.floor((width - 28) / (longest * 0.62)), Math.floor(((width - 28) * 2) / (name.length * 0.62))));
 }
 
-const PeopleLayer: React.FC<{ card: PeopleCard; beat: Beat; frame: number }> = ({ card, beat, frame }) => {
+const PeopleLayer: React.FC<{ card: PeopleCard; frame: number }> = ({ card, frame }) => {
   const boxes = peopleBoxes(card.people.length);
   const top = Z.cardTop + 20, height = Z.cardBottom - Z.cardTop - 30;
   const size = Math.min(210, Math.round(boxes[0][1] - 60));
   // the connectors join the roundels, which sit at a fixed height in every card of the row
   const ry = top + PEOPLE_ROUNDEL_TOP + size / 2;
-  const at = (p: Person, i: number) => p.at ?? (i === 0 ? beat.start : beat.start);
   return (
     <>
       {card.people.map((p, i) => {
-        const age = frame - at(p, i);
+        const age = frame - p.at;
         if (age < 0) return null;
         const k = easeOut(age / TIMING.person);
         return (
@@ -395,7 +394,7 @@ const PeopleLayer: React.FC<{ card: PeopleCard; beat: Beat; frame: number }> = (
       })}
       <svg width={W} height={H} style={{ position: "absolute", left: 0, top: 0 }}>
         {card.people.slice(1).map((p, i) => {
-          const age = frame - at(p, i + 1);
+          const age = frame - p.at;
           if (age < 0) return null;
           const x0 = boxes[i][0] + boxes[i][1] / 2 + size / 2 + 4;
           const x1 = boxes[i + 1][0] + boxes[i + 1][1] / 2 - size / 2 - 4;
@@ -486,7 +485,7 @@ const BeatLayer: React.FC<{ beat: Beat; frame: number; end: number; figure: numb
           <PersonLayer person={card} box={[Z.cardLeft + 70, Z.cardTop, Z.cardRight - Z.cardLeft - 140, Z.cardBottom - Z.cardTop]} size={240}
             nameSize={nameSize(card.name, Z.cardRight - Z.cardLeft - 140, 62)} small={false} />
         )}
-        {card.kind === "people" && <PeopleLayer card={card} beat={beat} frame={frame} />}
+        {card.kind === "people" && <PeopleLayer card={card} frame={frame} />}
         {card.kind === "document" && <DocumentLayer card={card} frame={frame} />}
         {stamp && <Stamp e={stamp} frame={frame} x={stampX(beat, frame, end)} />}
       </div>

@@ -166,6 +166,9 @@ def test_the_scene_is_this_styles_alone():
     (lambda d: d["sets"][0].update(camera="push"), "unknown field"),
     (lambda d: d.update(critter={"color": "green"}), "critter.color"),
     (lambda d: d["sets"][0]["items"][0].update(colour="red"), "unknown field"),
+    # JSON true equals 1 in Python; the renderer takes only the numbers 1 and -1.
+    (lambda d: d["sets"][0]["critter"].update(face=True), "critter.face must be"),
+    (lambda d: d["sets"][0]["critter"].update(face=False), "critter.face must be"),
 ])
 def test_a_bad_config_is_refused_with_its_cause(mutate, fragment):
     errors = _check(_with(mutate))
@@ -289,6 +292,19 @@ def test_a_broken_config_writes_nothing_and_the_scene_is_refused_on_another_styl
     bad = _with(lambda d: d["sets"][0].update(room="moon-base"))
     assert "Paper Diorama video has problems" in server.write_scene_config(vid, bad)["error"]
     assert not (tmp_path / "jobs" / vid / "scene-config.json").exists()
+
+
+def test_a_paper_diorama_video_never_sends_a_paid_image_request(make_video, monkeypatch):
+    import httpx
+
+    def no_call(*a, **k):
+        raise AssertionError("generate_image reached the paid API")
+
+    monkeypatch.setattr(httpx, "Client", no_call)
+    monkeypatch.setattr(server, "_openai_key", lambda: "sk-test")
+    vid = make_video()
+    err = server.generate_image(vid, "server", "a server rack")["error"]
+    assert "takes no generated images" in err and "Paper Diorama" in err
 
 
 def test_the_scene_on_another_style_is_refused(make_video):

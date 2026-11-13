@@ -352,7 +352,7 @@ def check(config: dict, fps: int, word_starts: list[int], extra: dict, quiet=())
                 err(f"{where}: critter must be null or {{slot, face, expr}} with slot one of {list(SLOTS)}.")
             else:
                 cr_slot = cr["slot"]
-                if cr.get("face", 1) not in (1, -1):
+                if not _int(cr.get("face", 1)) or cr.get("face", 1) not in (1, -1):
                     err(f"{where}: critter.face must be 1 (facing right) or -1 (facing left).")
                 if cr.get("expr", "idle") not in CRITTER["expressions"]:
                     err(f"{where}: critter.expr must be one of {list(CRITTER['expressions'])}.")

@@ -217,7 +217,8 @@ const SetLayer: React.FC<{
   return (
     <AbsoluteFill style={{ overflow: "hidden" }}>
       <AbsoluteFill style={scale !== 1 ? { transform: `scale(${scale.toFixed(4)})`, transformOrigin: `${ox}px ${oy}px` } : undefined}>
-        <Room room={set.room} />
+        {/* Keyed by room: a new room mounts afresh and holds the render until it is painted. */}
+        <Room key={set.room} room={set.room} />
         {events.filter((e) => e.do === "route").map((e, i) => {
           const a = e.from ? box(e.from) : null, b = e.target ? box(e.target) : null;
           if (!a || !b) return null;

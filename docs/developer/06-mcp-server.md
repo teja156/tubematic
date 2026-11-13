@@ -714,6 +714,9 @@ side. The scene skill tells the agent to leave the default alone, because any ot
 cropped hard to fit the frame. The Under the Hood skill asks for `1:1`, because its plates are drawn
 at their own shape in a band narrower than the frame.
 
+A video whose style draws every picture in code (its pack's `routing.images` is 0, as for Paper
+Diorama, Whiteboard or Bean Explainer) is refused before any request (`server.py::_image_plan`).
+
 A style built on generated stills has a `pictures` block in its pack, and that block drives three
 things here (`visual_styles.py::_check_pictures` checks its shape):
 

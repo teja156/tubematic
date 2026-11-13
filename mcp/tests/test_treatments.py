@@ -127,6 +127,20 @@ def test_a_treated_copy_never_counts_against_the_cap(make_video, tmp_path):
     assert server._image_cap_error(vid, "s3", images) == ""            # a regeneration
 
 
+def test_a_planted_link_beside_the_target_is_never_written_through(make_video, tmp_path):
+    vid = make_video()
+    treated = tmp_path / "jobs" / vid / "images" / "treated"
+    treated.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("keep me")
+    # The name a predictable temp file would have had.
+    (treated / ".desk.print.png.tmp").symlink_to(outside)
+    assert "error" not in server.treat_image(vid, "desk", "print")
+    assert outside.read_text() == "keep me"
+    assert (treated / "desk.print.png").is_file() and not (treated / "desk.print.png").is_symlink()
+    assert sorted(p.name for p in treated.iterdir()) == [".desk.print.png.tmp", "desk.print.png"]
+
+
 @pytest.mark.parametrize("name, treatment, fragment", [
     ("desk", "engraving", "not one this style uses"),
     ("desk", "sepia", "not one this style uses"),
