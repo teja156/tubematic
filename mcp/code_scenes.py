@@ -62,8 +62,9 @@ def wide_chars(text: str) -> list[str]:
     marks and invisible format characters. The card places every character on
     a column grid and the renderer counts UTF-16 units, so one of these would
     land in the wrong place or shrink the font."""
-    return [c for c in text if ord(c) > 0xFFFF or unicodedata.east_asian_width(c) in ("W", "F")
-            or unicodedata.combining(c) or unicodedata.category(c) in ("Mn", "Me", "Cf")]
+    return [c for c in text if c not in "\r\n" and (ord(c) > 0xFFFF or unicodedata.east_asian_width(c) in ("W", "F")
+            or unicodedata.combining(c) or unicodedata.category(c) in ("Mn", "Me", "Cf")
+            or text_fit.unsupported_chars(c))]
 
 
 def code_lines(code: str) -> list[str]:
@@ -140,6 +141,13 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
         v = data.get(key)
         if v is not None and (not isinstance(v, str) or len(v) > cap):
             err(f"codeScenes.{key} must be text of at most {cap} characters.")
+    words = [data.get("tag"), data.get("file")] + [x for s in (data.get("steps") or []) if isinstance(s, dict)
+                                                   for x in (s.get("label"), (s.get("error") or {}).get("text")
+                                                             if isinstance(s.get("error"), dict) else None)]
+    odd = [c for w in words if isinstance(w, str) for c in text_fit.unsupported_chars(w)]
+    if odd:
+        err(f"{odd[0]!r} in a tag, file name, label or error message is not a character the card's fonts draw; "
+            "use plain Latin text.")
     steps = data.get("steps")
     if not isinstance(steps, list) or not 1 <= len(steps) <= LIMITS["maxSteps"]:
         err(f"codeScenes.steps must list 1 to {LIMITS['maxSteps']} steps.")

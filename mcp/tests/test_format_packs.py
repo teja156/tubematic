@@ -352,7 +352,7 @@ def test_a_flap_with_only_its_first_tile_changing_may_start_late():
 def test_an_emoji_on_the_flap_is_refused():
     e = _strap()
     e["props"]["formatPacks"]["flap"].update({"to": "\U0001F4C8 up"})
-    assert any("tile cannot show" in m for m in _check(e))
+    assert any("not a character the format's fonts draw" in m for m in _check(e))
 
 
 @pytest.mark.parametrize("number", ["867.5309", "867/5309"])
@@ -368,3 +368,45 @@ def test_a_phone_shaped_flap_value_is_refused_and_a_bare_count_is_not():
     assert any("looks like a real phone number" in m for m in _check(e))
     e["props"]["formatPacks"]["flap"].update({"from": "1500000", "to": "2500000"})
     assert not any("phone number" in m for m in _check(e))
+
+
+# ── review round 3 ──────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("text", ["\u6771\u4eac\u306b\u3044\u307e\u3059", "Sent \u2603\ufe0f", "ka \u0915\u093e",
+                                  "nul\x00here", "zero\u200bwidth"])
+def test_characters_the_fonts_do_not_draw_are_refused(text):
+    e = _chat()
+    e["props"]["formatPacks"]["messages"][1]["text"] = text
+    assert any("not a character the format's fonts draw" in m for m in _check(e))
+
+
+def test_accents_quotes_currency_and_arrows_pass():
+    e = _chat()
+    e["props"]["formatPacks"]["messages"][1]["text"] = "Caf\u00e9 \u201cnow\u201d \u20ac50 \u2192 ok"
+    assert not any("fonts draw" in m for m in _check(e))
+
+
+@pytest.mark.parametrize("text", ["It was 12-03-2026", "A count of 1-000-000", "Ref 8675309"])
+def test_dates_grouped_counts_and_bare_short_runs_are_not_phone_numbers(text):
+    e = _chat()
+    e["props"]["formatPacks"]["messages"][1]["text"] = text
+    assert not any("phone number" in m for m in _check(e))
+
+
+def test_a_wide_contact_name_is_refused():
+    e = _chat()
+    e["props"]["formatPacks"]["contact"]["name"] = "W" * 24
+    assert any("does not fit the phone's header" in m for m in _check(e))
+
+
+def test_marked_words_wider_than_a_line_are_refused():
+    e = _chat()
+    e["props"]["formatPacks"]["messages"][2]["text"] = "Pay " + "W" * 22 + " today"
+    e["props"]["formatPacks"]["marks"][1]["match"] = "W" * 22
+    assert any("wider than a bubble line" in m for m in _check(e))
+
+
+def test_a_wide_list_lead_is_refused():
+    e = _list()
+    e["props"]["formatPacks"]["items"][0]["lead"] = "W" * 23
+    assert any("lead does not fit one line" in m for m in _check(e))

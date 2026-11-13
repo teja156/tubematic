@@ -53,6 +53,10 @@ WRAP = {"bubble": (44, 580, False), "title": (56, 796, True), "item": (36, 686, 
 # size the validator holds them to: the chat title (capitals, spacing 1) and a
 # quiz option.
 ONE_LINE = {"chatTitle": (36, 620, 1, True), "option": (30, 680, 0, False)}
+# Texts that must fit one line at their own size: a list item's lead (44 px in
+# the row beside its number) and the contact name (40 px beside the avatar).
+LEAD_BOX = (44, 686)
+CONTACT_BOX = (40, 640)
 BAND = (200, 1330)
 LAYOUT = {"threadBudget": 760, "bubbleLine": 54, "bubblePadY": 22, "bubbleGap": 22, "listBudget": 1100,
           "titleLine": 64, "itemLine": 46, "rowBase": 104, "rowGap": 20}
@@ -75,14 +79,11 @@ _US = re.compile(r"^(?:\+?1)?(?:\d{3})?55501\d{2}$")
 # number uses. Amounts with commas are not one; a price or a date with dots or
 # slashes has too few digits (real_looking_numbers counts them).
 _PHONE_RUN = re.compile(r"\+?\(?\d[\d\s().\-/\u2010-\u2015]{5,}\d")
-# Digits a run needs to read as a phone number: seven in text, ten in a value
-# that is a number on purpose (a strap's date and its flap), which no date or
-# price reaches.
+# The fewest digits a phone number has.
 MIN_PHONE_DIGITS = 7
-MIN_PHONE_DIGITS_IN_VALUES = 10
-# A run written with dots or slashes is a price or a date unless its digit
-# groups have a phone number's shape (867.5309, 212/867/5309) or it is as long
-# as a whole number.
+# Digit groups in the shape of a written phone number (867.5309, 212 867 5309,
+# 020 7946 0000, 07911 123456); a date (12-03-2026) or a grouped count
+# (1-000-000) has another shape.
 PHONE_SHAPES = {(3, 4), (3, 3, 4), (1, 3, 3, 4), (4, 3, 4), (3, 4, 4), (2, 4, 4), (5, 6), (4, 6)}
 _APP_WORDS = [re.compile(r"\bX\b") if a == "X" else re.compile(rf"\b{re.escape(a)}\b", re.I) for a in APPS]
 
@@ -140,23 +141,19 @@ def is_fiction_number(raw: str) -> bool:
     return bool(_UK.match(n) or _US.match(n))
 
 
-def real_looking_numbers(text: str, min_digits: int = MIN_PHONE_DIGITS) -> list[str]:
-    """Phone-number-like runs in `text` outside the fiction ranges."""
+def real_looking_numbers(text: str) -> list[str]:
+    """Phone-number-like runs in `text` outside the fiction ranges: a run with a
+    plus sign or brackets, one whose digit groups have a phone number's shape
+    (867.5309, 020 7946 0000), or one of ten or more digits. A date, a price, a
+    grouped count (1-000-000) or a bare short count is not one."""
     out = []
     for m in _PHONE_RUN.finditer(text):
         run = m.group(0).strip()
         digits = re.sub(r"\D", "", run)
-        if len(digits) > 15 or is_fiction_number(run):
+        if len(digits) > 15 or len(digits) < MIN_PHONE_DIGITS or is_fiction_number(run):
             continue
         groups = tuple(len(g) for g in re.findall(r"\d+", run))
-        if re.search(r"[./]", run):
-            looks = len(digits) >= 10 or groups in PHONE_SHAPES
-        elif re.search(rf"[{_JOINERS}]", run):
-            # Spaces, hyphens and dashes: in a value only in a phone number's shape.
-            looks = len(digits) >= min_digits or (min_digits > MIN_PHONE_DIGITS and groups in PHONE_SHAPES)
-        else:
-            looks = len(digits) >= min_digits
-        if looks:
+        if re.search(r"[+()]", run) or groups in PHONE_SHAPES or len(digits) >= 10:
             out.append(run)
     return out
 
@@ -249,12 +246,13 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
         if has_tick(s):
             err("No tick or verified mark anywhere: it reads as a verified account. Remove it.")
             break
-    # A strap's date and its flap are numbers on purpose, so only a run as long
-    # as a whole phone number counts there.
-    on_purpose = {k: v for k, v in data.items() if k in ("date", "flap")}
-    found = [n for s in _strings({k: v for k, v in data.items() if k not in ("date", "flap")})
-             for n in real_looking_numbers(s)]
-    found += [n for s in _strings(on_purpose) for n in real_looking_numbers(s, MIN_PHONE_DIGITS_IN_VALUES)]
+    odd = [c for x in _strings(data) for c in text_fit.unsupported_chars(x)]
+    if odd and not any(has_tick(x) for x in _strings(data)):
+        err(f"{odd[0]!r} is not a character the format's fonts draw (they draw Latin letters, digits, punctuation, "
+            "currency signs and arrows): no emoji, other scripts or invisible characters. Rewrite it in plain text.")
+    # Every string, the strap's date and flap included: the rule tells a date,
+    # a price or a count from a phone number by its shape.
+    found = [n for x in _strings(data) for n in real_looking_numbers(x)]
     if found:
         err(f"{found[0]!r} looks like a real phone number. Use one from the ranges kept for fiction: UK 07700 "
             "900000 to 900999, or 555-0100 to 555-0199 in North America.")
@@ -320,7 +318,10 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
         if not isinstance(contact, dict) or not set(contact) <= {"name", "number"}:
             err("contact is {name, number}: a generic label and, if any, a number from the fiction ranges.")
         else:
-            header(text(contact.get("name"), "contact.name", LIMITS["contactChars"]), "The contact")
+            name = text(contact.get("name"), "contact.name", LIMITS["contactChars"])
+            header(name, "The contact")
+            if name and not text_fit.fits_at(name, CONTACT_BOX[1], CONTACT_BOX[0]):
+                err("contact.name does not fit the phone's header beside the avatar; shorten it.")
             number = contact.get("number")
             if number is not None and (not isinstance(number, str) or not is_fiction_number(number)):
                 err("contact.number must come from the ranges kept for fiction: UK 07700 900000 to 900999, or "
@@ -353,6 +354,8 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
                 err(f"{where}: match must be words in message {mi} as written.")
             elif len(k["match"]) > LIMITS["markChars"]:
                 err(f"{where}: match is at most {LIMITS['markChars']} characters; mark the few words that give it away.")
+            elif not text_fit.fits_at(k["match"], WRAP["bubble"][1], WRAP["bubble"][0]):
+                err(f"{where}: the marked words are wider than a bubble line; mark fewer words.")
             elif _overlaps(msg, k["match"], [o.get("match") for o in marks[:i]
                                             if isinstance(o, dict) and o.get("message") == mi]):
                 err(f"{where}: its words overlap another mark on message {mi}; mark different words.")
@@ -381,7 +384,9 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
         for i, it in enumerate(items):
             if not set(it) <= {"at", "lead", "text"}:
                 err(f"Item {i + 1} is {{at, lead, text}}.")
-            text(it.get("lead"), f"Item {i + 1} lead", LIMITS["leadChars"])
+            lead = text(it.get("lead"), f"Item {i + 1} lead", LIMITS["leadChars"])
+            if lead and not text_fit.fits_at(lead, LEAD_BOX[1], LEAD_BOX[0]):
+                err(f"Item {i + 1} lead does not fit one line of its row; shorten it.")
             body = text(it.get("text"), f"Item {i + 1} text", LIMITS["itemChars"])
             if body and wrap_lines(body, "item") > LIMITS["itemLines"]:
                 err(f"Item {i + 1} text takes more than {LIMITS['itemLines']} lines; shorten it.")
@@ -433,6 +438,8 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
                 err(f"Mark {i + 1}: match must be words in the headline as written.")
             elif len(k["match"]) > LIMITS["markChars"]:
                 err(f"Mark {i + 1}: match is at most {LIMITS['markChars']} characters.")
+            elif not text_fit.fits_at(k["match"], WRAP["headline"][1], WRAP["headline"][0]):
+                err(f"Mark {i + 1}: the marked words are wider than a headline line; mark fewer words.")
             elif _overlaps(head, k["match"], [o.get("match") for o in marks[:i]]):
                 err(f"Mark {i + 1}: its words overlap another mark on the headline; mark different words.")
             at = k.get("at")
@@ -452,10 +459,7 @@ def check_insert(entry: dict, fps: int, word_starts: list[int], words: list[str]
                     err("flap.from and flap.to are the same; the board flips from one value to another.")
                 at = flap.get("at")
                 flipping = flap_frames(a or "", b or "")
-                if any(ord(c) > 0xFFFF for c in (a or "") + (b or "")):
-                    err("A flap value holds an emoji or another character a tile cannot show; use letters, digits "
-                        "and signs.")
-                elif not _int(at) or not start + LIMITS["markLead"] <= at <= end - LIMITS["endHold"]:
+                if not _int(at) or not start + LIMITS["markLead"] <= at <= end - LIMITS["endHold"]:
                     err("flap.at must be inside the insert, after the headline is on screen.")
                 elif at + flipping > end - LIMITS["endHold"]:
                     err(f"The flap takes {flipping} frames to flip its changing tiles and would still be flipping "

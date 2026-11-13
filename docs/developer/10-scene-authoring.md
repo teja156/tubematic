@@ -890,12 +890,18 @@ no code for it; its props carry `formatPacks: {format, ...}`, written with the
 The style must never pass for a real app or a real screenshot. The component draws a phone with no
 notch, island or status bar, and an EXAMPLE tag on every chat and on every strap with no `source`,
 which the data cannot remove. `mcp/format_packs.py::check_insert` refuses what data could add on
-top: a phone-number-like run outside the ranges kept for fiction (UK `07700 900000` to `900999`, US
-`555-0100` to `555-0199`), written with spaces, hyphens, dashes, dots, slashes or brackets, a tick
-or verified mark anywhere, and the name of a messaging or social app in a contact, title or kicker.
-A run with dots or slashes counts when its digit groups have a phone number's shape (`867.5309`) or
-it has ten digits, so prices and dates pass; in a strap's date and its flap, which are numbers on
-purpose, a bare run counts only at ten digits. A brand named inside a message cannot be caught by a list, so the
+top: a phone number outside the ranges kept for fiction (UK `07700 900000` to `900999`, US
+`555-0100` to `555-0199`), a tick or verified mark anywhere, and the name of a messaging or social
+app in a contact, title or kicker. A run of seven or more digits counts as a phone number when it
+has a plus sign or brackets, when its digit groups have a phone number's shape (`867.5309`,
+`020 7946 0000`), or when it has ten digits or more, whatever joins them (spaces, dashes, dots,
+slashes); a date, a price, a grouped count (`1-000-000`) or a bare short count passes.
+
+Both styles accept only the characters their bundled fonts draw, which are Latin-only: letters,
+digits, punctuation, currency signs and arrows (`text_fit.unsupported_chars`). Another script, an
+emoji, a combining mark or a control character would be drawn in a fallback font of another width,
+or not at all, so the validators refuse it, and the width estimate only measures characters it
+knows. A brand named inside a message cannot be caught by a list, so the
 skill forbids it and the pack's `insert.review` tells the AI review to report it.
 
 It also refuses an insert when:
@@ -907,8 +913,8 @@ It also refuses an insert when:
 - A mark names words its message does not have, lands before its message, overlaps another mark on
   the same message or headline, or a message carries two labels; the quiz locks before its last
   option is read; the flap's changing tiles, which flip one after another, would still be flipping
-  in the last 30 frames, or a flap value holds an emoji; a chat title or a quiz option does not fit
-  its one line at its smallest size.
+  in the last 30 frames; a chat title or a quiz option does not fit its one line at its smallest
+  size; a contact name, a list item's lead or a mark's words do not fit one line.
 - Nothing changes for more than 3 seconds.
 
 A character count cannot tell narrow letters from wide ones, so both styles measure text with one

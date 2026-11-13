@@ -269,3 +269,16 @@ def test_a_tag_and_a_label_too_wide_for_the_header_are_refused():
     e = _entry(tag="W" * 24)
     e["props"]["codeScenes"]["steps"][0]["label"] = "W" * 24
     assert any("do not fit one row above the card" in m for m in _check(e))
+
+
+
+# ── review round 3 ──────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("code", ['k = "\u0915\u093e"\nprint(k)', 'x = "a\x00b"\nprint(x)'])
+def test_spacing_marks_and_control_characters_in_the_code_are_refused(code):
+    assert any("does not take one column" in m for m in _check(_step(_entry(), 0, code=code)))
+
+
+def test_a_label_in_another_script_is_refused():
+    e = _step(_entry(), 0, label="\u30d0\u30b0")
+    assert any("not a character the card's fonts draw" in m for m in _check(e))

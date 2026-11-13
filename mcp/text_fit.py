@@ -18,6 +18,25 @@ SEMI = "fr()[]{}\"/\\-"
 WIDE = "MWmw@%"
 
 
+def _supported(ch: str) -> bool:
+    o = ord(ch)
+    if o < 0x20 or 0x7F <= o < 0xA0:
+        return False  # control characters
+    return (o <= 0x024F  # Latin, Latin-1, Latin Extended-A and -B
+            or 0x2010 <= o <= 0x2027 or 0x2030 <= o <= 0x205E  # dashes, quotes, bullets, primes
+            or 0x20A0 <= o <= 0x20CF  # currency signs
+            or o == 0x2122 or 0x2190 <= o <= 0x21FF)  # trade mark, arrows
+
+
+def unsupported_chars(text: str) -> list[str]:
+    """Characters the bundled fonts (Barlow, JetBrains Mono, IBM Plex Mono,
+    all Latin-only) do not draw: other scripts, emoji, combining and invisible
+    characters, control characters. The browser would draw them in a fallback
+    font of another width, or not at all, so these styles refuse them and the
+    estimate below only ever measures characters it knows."""
+    return [c for c in text if not _supported(c)]
+
+
 def char_em(ch: str) -> float:
     if ch == " ":
         return 0.26

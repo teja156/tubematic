@@ -815,7 +815,8 @@ Covers the skills that make a video with insert scenes
   first two state the limits
   `mcp/system_flow.py` and `mcp/terminal_doc.py` enforce on an insert (the board or beat count, no
   moves of the agent's own and no skin in Terminal Doc), and keep the legacy whole-video path.
-- The skills README lists both insert skills, and none of these skills carries a ticket id.
+- The skills README lists the insert routing and insert placing skills, and none of these skills
+  carries a ticket id.
 
 Trap: these skills are read at different steps by one agent. One that still teaches System Flow or
 Terminal Doc as a whole-video style sends the agent down a path `write_scene_config` refuses.

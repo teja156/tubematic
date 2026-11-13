@@ -49,6 +49,9 @@ work around it. In the data:
 
 - Every thread is made up. Never name a real bank, courier, shop, app or person in a message, a
   contact or a title: write "your bank", "a parcel company", "Unknown number", "Mum".
+- Plain Latin text only: letters (accents are fine), digits, punctuation, currency signs and
+  arrows. No emoji, other scripts or invisible characters: the format's fonts draw Latin text only,
+  and the tool refuses anything else.
 - A phone number only from the ranges kept for fiction: UK `07700 900000` to `07700 900999`, US
   `555-0100` to `555-0199`. The tool refuses any other number anywhere in the data, however it is
   written (spaces, dashes, dots or slashes). A price, a date or a plain count is not a phone
@@ -93,7 +96,8 @@ another, so start it early enough to land before the last 30 frames).
   three seconds (a message, a mark, a row, an option, the lock, a highlight, the flip).
 - The messages fit the phone together, and the list fits the frame; a mark lands after its message
   is on screen. Lines are counted by the width of the words, so wide letters (W, M) take more room
-  than their count.
+  than their count. A contact name, a list item's lead and the words a mark covers each fit one
+  line.
 - The quiz locks at least 18 frames after its last option.
 - The impersonation rules above.
 

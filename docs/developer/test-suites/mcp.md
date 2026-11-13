@@ -968,9 +968,9 @@ text audit's per-step sampling ([Code Scenes](../10-scene-authoring.md#code-scen
   too long, a focus or error line the code lacks, an error match not on its line or a message too
   long, an output pane too long, with a shell prompt or with no lines and no label, `reveal` on a
   later step, typing too much or into the next step, a still stretch in the middle or at the end, an
-  emoji, a wide letter, a combining mark or an invisible character in the code or the output
-  (accented letters pass), an error message too wide for the callout, and a tag and label too wide
-  for the header row.
+  emoji, a wide letter, a combining or spacing mark, a control or an invisible character in the code
+  or the output (accented letters pass), a label in another script, an error message too wide for the
+  callout, and a tag and label too wide for the header row.
 - `write_scene_config` writes a Code Scenes insert with its scene, palette and shift filled, names a
   Code Scenes problem in its refusal, and refuses `CodeScenes` as one of the scenes.
 - The output check stays empty: no code runs, so the AI review checks an output pane, and a sandboxed
@@ -998,12 +998,15 @@ text audit's sampling between changes ([Format Packs](../10-scene-authoring.md#f
 - What passes for a real app is refused: a real-looking number in a contact or a message (written
   with dots, slashes or dashes too, and a dotted local number such as `867.5309`) or a phone-shaped
   value on the flap, a tick, an app name in a contact, chat title, list title or strap kicker.
-  Prices, dates and a bare count on the flap pass.
+  Dates, prices, grouped counts and a bare short count pass. Characters the fonts do not draw
+  (another script, an emoji with its variation selector, a spacing mark, a control or zero-width
+  character) are refused; accents, curly quotes, currency signs and arrows pass.
 - Each other refusal names its part: wrong keys, a first item off the insert's first frame, an
   arrival off a word, too close to the one before or to the end, text over its limits, a mark on
   words its message lacks or before its message, overlapping marks on a message or the headline, two
   labels on one message, a quiz locking too early, a flap still flipping at the end (only its
-  changing tiles take time) or holding an emoji, a chat title or quiz option too wide for its line, a
+  changing tiles take time), a chat title, quiz option, contact name, list lead or mark too wide for
+  its line, a
   thread too tall for the phone (wide letters wrap to more lines than their count), and a still
   stretch.
 - `write_scene_config` writes a Format Packs insert with its scene, palette and shift filled, names

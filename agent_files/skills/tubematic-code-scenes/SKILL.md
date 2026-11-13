@@ -92,9 +92,10 @@ A step:
 
 - At most 14 lines of code and 40 characters per line, indented with spaces (no tabs). Show only
   the lines the narration is about: a whole function rarely fits, and a phone cannot read it.
-- Plain characters only in the code and the output: no emoji, no wide letters (Chinese, Japanese,
-  Korean), no combining accents or invisible characters. The card puts every character in one
-  column. An accented letter typed as one character (`é`) is fine.
+- Plain Latin characters only, in the code, the output, the tag, the labels and the error message:
+  letters, digits, punctuation, currency signs and arrows. No emoji, no other scripts, no combining
+  accents or invisible characters: the card's fonts draw Latin text only and put every character in
+  one column. An accented letter typed as one character (`é`) is fine.
 - The error message fits one line of the callout, and the tag with the step counter and label fits
   one row above the card. Wide letters (W, M) take more room than their count: shorten the text
   when the tool says it does not fit.
