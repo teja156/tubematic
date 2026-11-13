@@ -42,7 +42,7 @@ Every composition runs at 30 fps, so frame 30 is one second in. Two rules follow
 | `Composition` | `CompositionBuilder` | 1080×1920, duration read from `timeline.json` |
 | `TextLayoutAudit` | `CompositionBuilder` plus `TextLayoutProbe` | The same |
 | `MascotSheet` | `MascotSheet` | One frame, sized per sheet |
-| `BeanPropSheet`, `StorybookSheet`, `PresenterSheet`, `MidcenturySheet`, `ComicPanelsSheet`, `ProcessCastSheet` | A style's model sheet | 1080×1920, one frame per page |
+| `BeanPropSheet`, `StorybookSheet`, `PresenterSheet`, `PuppetHistorySheet`, `MidcenturySheet`, `ComicPanelsSheet`, `ProcessCastSheet` | A style's model sheet | 1080×1920, one frame per page |
 | `Placeholder` | A static placeholder | 1080×1920, 90 frames |
 
 A renderer turns `Composition` into a video with `npx remotion render Composition`.
@@ -393,6 +393,9 @@ the whole render, because Remotion's `<Img>` retries twice and then cancels it.
 - A Case File Story video has the one `CaseFileStory` scene and its meters and beats pass the Case
   File Story checks; no other video uses `CaseFileStory`
   ([Scene Authoring](10-scene-authoring.md#case-file-story)).
+- A Puppet History video has the one `PuppetHistory` scene and its cast and beats pass the Puppet
+  History checks; no other video uses `PuppetHistory`
+  ([Scene Authoring](10-scene-authoring.md#puppet-history)).
 - A Mid-century How-To video has the one `MidcenturyHowTo` scene and its steps and shots pass the
   Mid-century How-To checks; no other video uses `MidcenturyHowTo`
   ([Scene Authoring](10-scene-authoring.md#mid-century-how-to)).
@@ -415,7 +418,7 @@ is queued or rendering (`status_mismatch`).
 `canvas` is the only default the tool writes into most files, besides each insert's `src`, `palette`
 and `shift` and the `insertTransition`, which the agent never writes. A System Flow or Whiteboard config
 with no `subtitles` also gets its style pack's caption settings, because its captions are part of the
-style's look. A Bean Explainer, Storybook Atlas, Under the Hood, Case File Story, Mid-century How-To, Comic Panels or Process Cast config gets them under whatever
+style's look. A Bean Explainer, Storybook Atlas, Under the Hood, Case File Story, Puppet History, Mid-century How-To, Comic Panels or Process Cast config gets them under whatever
 `subtitles` keys it sets, so a config that sets only `emphasis` keeps the look. A Terminal Doc config
 gets them the same way, with its skin's colours and font over the pack's. An Under the Hood config
 also gets each plate's `aspect`, read from its photograph. The
@@ -468,7 +471,7 @@ rules are on [Scene Authoring](10-scene-authoring.md#mascots).
 
 `renderer/remotion/src/scenes/installed/` is the committed library. A config entry can reference
 `KenBurnsImage`, `PanelImage` and `StepFlowDiagram` directly, with `"source": "installed"`.
-`BeanExplainer`, `Whiteboard`, `StorybookAtlas`, `UnderTheHood`, `CaseFileStory`, `MidcenturyHowTo`,
+`BeanExplainer`, `Whiteboard`, `StorybookAtlas`, `UnderTheHood`, `CaseFileStory`, `PuppetHistory`, `MidcenturyHowTo`,
 `ComicPanels` and `ProcessCast` are referenced the same way, by
 videos of their own style only. `SystemFlow` and `TerminalDoc` are drawn as
 [insert scenes](#insert-scenes) from the `inserts` list, and as a video's one scene only for a video
@@ -635,6 +638,34 @@ and IBM Plex Mono (400 and 700) from `public/fonts/` before the first frame; the
 use Instrument Sans, which this scene loads. It decodes every still before the first frame, and a
 still that does not load fails the render. The contract and the checks are in
 [Case File Story](10-scene-authoring.md#case-file-story).
+
+### `PuppetHistory`
+
+`PuppetHistory` draws a whole Puppet History video from `props.puppetHistory`: the sets as flat
+colour bands with cached decor, the puppets in their costumes with name plates, signs and hand props,
+the document cards with their stamps and struck-out lines, the flat map of today's countries with its
+fills, arrows and labels, and the corner date. Its helpers and libraries are in `puppetHistory/`:
+`contract.ts` (limits, timings, geometry and the costume, set, pose, face and `PROPS` catalogues),
+`stage.ts` (what is on stage at a frame), `puppet.tsx` and `torso.ts`, `costumes.tsx`, `sets.tsx`,
+`props.tsx`, `map.tsx`, `ink.tsx` and `fonts.ts`. It loads Fredoka (700), Kalam (700) and IBM Plex
+Mono (700) from `public/fonts/` before the first frame; the style's captions use Fredoka, which this
+scene loads. The `PuppetHistorySheet` composition renders the costumes with every pose and face, the
+sets, and the hand props with each prop's box outlined in red, one page per frame: `npx remotion still
+src/index.ts PuppetHistorySheet out.png --frame=<page>`.
+
+The map uses three packages: `d3-geo` for the projection, `topojson-client` to read the atlas and
+`world-atlas` for the country shapes (its 1:110m `countries-110m.json`, from Natural Earth). They are
+dependencies of the Remotion project in `package.json`, with `@types/d3-geo` and
+`@types/topojson-client` as development dependencies. The projection is fitted to the beat's focus
+countries by their largest landmass. The country names `contract.ts` exports come from the same file,
+so the catalogue and the drawing cannot disagree.
+
+A Puppet History video can also use props its agent drew, in `generated/<video_id>/prop-*.tsx`,
+imported through `characterKit/customProps.ts`. `character-tools/render-props.mjs` renders them for
+the `render_style_props` tool on the `PuppetHistoryPropPreview` component, and
+`character-tools/sync-contract.mjs` rewrites the style pack's `extra` and
+`mcp/tests/fixtures/puppet_history_contract.json` from the renderer's code. The contract and the
+checks are in [Puppet History](10-scene-authoring.md#puppet-history).
 
 ### `MidcenturyHowTo`
 
@@ -871,6 +902,11 @@ files in `public/fonts/` (SIL Open Font License 1.1). Its photographs are genera
 Mono files in `public/fonts/` (SIL Open Font License 1.1). Its stills are generated for each video
 from the house lead's sheet, `mcp/case_file_assets/lead.png`, an original character generated for
 this project.
+
+`PuppetHistory`'s puppets, costumes, sets and props are original drawings. Its fonts are the Fredoka,
+Kalam and IBM Plex Mono files in `public/fonts/`, each under the SIL Open Font License 1.1, with the
+license beside them. Its map draws the 1:110m country shapes of `world-atlas` (ISC license), which
+are Natural Earth data in the public domain, with `d3-geo` (ISC) and `topojson-client` (ISC).
 
 `MidcenturyHowTo`'s presenter and objects are original drawings. Its fonts in `public/fonts/` are
 Alfa Slab One, Oleo Script and Jost, each under the SIL Open Font License 1.1, with the license beside

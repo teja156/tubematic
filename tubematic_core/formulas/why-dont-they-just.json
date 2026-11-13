@@ -25,7 +25,8 @@
   "styles": [
     "system_flow",
     "storybook_atlas",
-    "whiteboard"
+    "whiteboard",
+    "puppet_history"
   ],
   "words": [
     150,

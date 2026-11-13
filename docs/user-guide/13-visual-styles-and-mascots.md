@@ -23,6 +23,7 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Storybook Atlas (experimental)** | A vintage picture book told in chapters, each opened by a plaque over a hand-drawn room or landscape. A small mouse guide walks beside the story while its people, named by printed tags, and hatched objects arrive on the narrator's words. No images | Nothing |
 | **Under the Hood (experimental)** | A dark canvas and close-up photographs of one physical object. Short capital labels point at its parts, gold arcs show fields and flows, numbers tick, and a cartoon presenter reacts in the bottom corner | An OpenAI key. Up to 12 generated photographs per video |
 | **Case File Story (experimental)** | A suspense story in painted pictures that puts the viewer inside a scheme or a money dilemma. One blank-faced character stands in for the viewer, meters change with the plot, cards count the numbers out, and it ends on a choice between two buttons | An OpenAI key. Up to 16 generated pictures per video, and one reference picture |
+| **Puppet History (experimental)** | Round-headed cut-out puppets in era costumes act out "you are now a..." history on flat sets, document cards with stamps and struck-out numbers, and maps of today's countries, with hard cuts between scenes. No images | Nothing |
 | **Mid-century How-To (experimental)** | A 1950s classroom-film cartoon. A gloved presenter walks you through a task in numbered steps, each on its own flat colour, pressing buttons on phones, keypads and other flat objects, with checks, circled numbers and a closing card that lists the steps. No images | Nothing |
 | **Comic Panels (experimental)** | A comic page builds up panel by panel on cream newsprint, with a hero, a villain, speech balloons and sound effects like POW. The camera moves from panel to panel and pulls back to the whole page. No images | Nothing |
 | **Process Cast (experimental)** | Little drawn characters with faces, such as a packet, a cell or a byte made of cubes, act out an invisible process at stations along one ground line. They carry task cards, split and join up, and the camera glides between stations. No images | Nothing |
@@ -69,6 +70,15 @@ background would flash, and a viewer reads that as a broken render.
   ends found out or named as a crime. Each picture is an OpenAI image call, up to 16 per video and
   one more for the character's reference picture, so it costs more per video than the styles
   without images. It is experimental.
+- Choose **Puppet History** for history told to the viewer as "you": a job, a rank or a rule in a
+  past era, such as a Roman legionary's twenty-five years or a week as a medieval peasant, why an
+  event happened told with light humour and a reversal at the end, or an army's march or a trade
+  route across a map. The script puts you in the era with a job, gives each beat one change, and
+  builds to a twist the picture can show, such as a costume swapped or a number struck out. A real
+  person appears only as the same puppet in a generic costume of their era with their name on a
+  plate, so the puppet never looks like them. Living people, leaders of a regime still in power and
+  tragedies are left out. Maps show today's countries, so a historical region is named by the modern
+  countries it covers. A calm history of an invention suits Storybook Atlas better. It is experimental.
 - Choose **Mid-century How-To** for a task the viewer can copy in a few steps: turning on a
   setting, securing an account, backing up a phone, checking a link before clicking it. The script
   opens on why the task matters, then numbers each step aloud and names what to tap, type or turn
@@ -102,7 +112,7 @@ the script is written for the style: a Whiteboard script works an idea out one s
 for example. It reads what each style is made for and avoids, compares that with the topic, and
 picks the style that clearly fits. It considers every style this install can make: Illustrated only
 while an OpenAI key is stored, Under the Hood and Case File Story only while an OpenAI key is stored
-and the video has no mascot, Mid-century How-To, Comic Panels and Process Cast only while the video has no mascot,
+and the video has no mascot, Puppet History, Mid-century How-To, Comic Panels and Process Cast only while the video has no mascot,
 Cartoon 3D only while a GPU is working and the video has no mascot.
 It may pick a style that generates images, which costs more per video. It does not pick a style for
 variety: the same kind of topic gets the same style every time.
@@ -154,6 +164,12 @@ clothes the story calls for, then makes each painting from it, so the character 
 It looks at each painting and makes it again if the character changed or the picture shows the
 wrong thing. It then chooses the meters and times the pictures, the cards and the two buttons to
 the narration. The character's head is the same in every video.
+
+A Puppet History video works the same way: the agent casts the puppets in costumes of the era, lays
+the story out as a run of beats on sets, cards and maps, and times every entrance, pose, costume
+swap, sign, stamp and map fill to the narration. The narrator stays off screen, so a puppet never
+speaks. When the library has no hand prop the video needs, such as an hourglass, the agent draws one
+in the same style and checks the drawing before the video renders.
 
 A Mid-century How-To video works like a Bean Explainer one: the agent picks each step's colour, the
 presenter's outfit and the objects, and times every gesture, press and check to the narration. The
@@ -250,9 +266,9 @@ surprised, has an idea, hops, glances at something. It does not narrate and does
 
 Mascots are experimental and off by default. A video has one only if you pick it. They are drawn on
 the GPU, so you can pick a mascot only while a renderer's GPU test has passed. Cartoon 3D, Under
-the Hood, Case File Story, Mid-century How-To, Comic Panels and Process Cast videos cannot have one: Under the Hood
-and Mid-century How-To have their own presenter, Case File Story its own lead character, and Comic
-Panels and Process Cast a whole cast of drawn characters that a mascot would be confused with.
+the Hood, Case File Story, Puppet History, Mid-century How-To, Comic Panels and Process Cast videos cannot have one: Under the Hood
+and Mid-century How-To have their own presenter, Case File Story its own lead character, and Puppet History,
+Comic Panels and Process Cast a whole cast of drawn characters that a mascot would be confused with.
 
 ![The Mascots page under Profiles: a form for a new mascot, and the built-in mascot Tubi marked READY](../images/mascots.png)
 

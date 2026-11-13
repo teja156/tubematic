@@ -99,6 +99,27 @@ globalThis.__out = { extra, fixture: {
 } };
 `,
   },
+  puppet_history: {
+    dir: "puppetHistory",
+    entry: (D, about) => `
+import { BEAT_EVENTS, BEAT_TYPES, COSTUMES, COUNTRIES, CUSTOM, ENTRANCES, EVENT_TYPES, FACES, FILLS, GEOMETRY, LIMITS, POSES, PROPS, SETS, STAMP_COLORS, TIMING,
+  puppetBox, signWidth } from "${D}/contract";
+import { blinkAt } from "${D}/stage";
+const extra = {
+  costumes: [...COSTUMES], poses: Object.keys(POSES), faces: [...FACES], sets: [...SETS], stamp_colors: [...STAMP_COLORS], fills: Object.keys(FILLS),
+  entrances: [...ENTRANCES], countries: [...COUNTRIES].sort(),
+  props: Object.fromEntries(Object.entries(PROPS).map(([k, v]) => [k, { text: v.text, acts: [] }])),
+};
+globalThis.__out = { extra, fixture: {
+  _about: ${JSON.stringify(about)},
+  constants: { LIMITS, TIMING, GEOMETRY, POSES, FACES, COSTUMES, SETS, PROPS, STAMP_COLORS, FILLS: Object.keys(FILLS), ENTRANCES, BEAT_TYPES, EVENT_TYPES, BEAT_EVENTS, CUSTOM },
+  slots: GEOMETRY.slots.length,
+  puppet_box: [0, 1, 2].map((s) => ({ slot: s, box: puppetBox(s) })),
+  sign_width: ["", "TAX", "20 MILES A DAY"].map((t) => ({ text: t, w: signWidth(t) })),
+  blink: [0, 1, 50, 99, 100, 200].map((f) => ({ frame: f, seed: 23, blink: blinkAt(f, 23) })),
+} };
+`,
+  },
 };
 
 async function sync(style) {

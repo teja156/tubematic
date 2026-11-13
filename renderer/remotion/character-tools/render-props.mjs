@@ -42,6 +42,7 @@ const STYLES = {
   midcentury_howto: { module: "midcenturyHowTo/MidcenturySheet", component: "MidcenturyPropPreview" },
   process_cast: { module: "processCast/ProcessCastSheet", component: "ProcessCastPropPreview" },
   comic_panels: { module: "comicPanels/ComicPanelsSheet", component: "ComicPanelsPropPreview" },
+  puppet_history: { module: "puppetHistory/PuppetHistorySheet", component: "PuppetHistoryPropPreview" },
 };
 
 const die = (message, code = 1) => {

@@ -102,7 +102,7 @@ One row per video, from proposed topic to published file.
 | `voiced_speed` | REAL | `NULL` | The speed the audio was last made at, written by `generate_voice`. `NULL` until a voicing records it |
 | `notified_status` | TEXT NOT NULL | `''` | The arrival a Discord notification was last sent for, as `<status>@<updated_at>`. `''` means none. Nothing clears it: a marker for a status the video has left matches nothing. See [Notifications](02-pipeline.md#notifications) |
 | `script_profile_id` | TEXT NOT NULL | `''` | The script profile. `''` means the generic style |
-| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a main [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `bean_explainer`, `cartoon_3d`, `whiteboard`, `storybook_atlas`, `under_the_hood`, `case_file_story`, `midcentury_howto`, `comic_panels` or `process_cast`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
+| `visual_style` | TEXT NOT NULL | `auto` | `auto` or a main [style pack](10-scene-authoring.md#style-packs) id: `motion_graphics`, `stick`, `illustrated`, `bean_explainer`, `cartoon_3d`, `whiteboard`, `storybook_atlas`, `under_the_hood`, `case_file_story`, `puppet_history`, `midcentury_howto`, `comic_panels` or `process_cast`. Set while the video is `TOPIC_PROPOSED` and frozen after, except for the style Auto picks at `TOPIC_APPROVED`. See [Visual style columns](#visual-style-columns) |
 | `resolved_visual_style` | TEXT NOT NULL | `''` | The canvas `auto` settled on: `dark` or `light`. Written once by the agent |
 | `resolved_renderer` | TEXT NOT NULL | `''` | The renderer an `auto` video uses: `dom` or `cartoon_3d`. Written once by the agent, and not over HTTP |
 | `style_pick` | TEXT NOT NULL | `''` | What Auto picked before the script: a style pack id (then also `visual_style`), `scenes` for the mixed scene system, or `''` when Auto has not decided or a person chose the style |
@@ -165,7 +165,8 @@ written as data, `whiteboard` one board
 scene written as data, `storybook_atlas` one picture-book scene in chapters written as data,
 `under_the_hood` one scene of annotated
 close-up photographs written as data, `case_file_story` one scene of painted stills with meters
-and number cards written as data (these two need an OpenAI key), `midcentury_howto` one scene of
+and number cards written as data (these two need an OpenAI key), `puppet_history` one scene of
+round-headed puppets in era costumes acting out beats on sets, cards and maps written as data, `midcentury_howto` one scene of
 a cartoon presenter and numbered steps written as data, `comic_panels` one scene of comic pages read panel
 by panel written as data, and `process_cast` one scene of a drawn cast
 acting out a process at stations, written as data. `cartoon_3d` selects a different renderer (one painted 3D world written as code for the

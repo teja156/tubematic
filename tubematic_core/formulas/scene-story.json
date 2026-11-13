@@ -25,7 +25,8 @@
   "styles": [
     "storybook_atlas",
     "bean_explainer",
-    "illustrated"
+    "illustrated",
+    "puppet_history"
   ],
   "words": [
     90,

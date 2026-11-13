@@ -64,6 +64,17 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   for approval, New Video, and a domain's defaults, which every new video in the domain starts with.
   The video's window shows the agent's decision and its reason in an **Inserts** row, and the Script
   tab marks the parts of the script an insert shows.
+- A new experimental style, **Puppet History**: "you are now a..." history told by round-headed
+  cut-out puppets in costumes of the era, on flat illustrated sets, typed document cards where a
+  stamp lands and a number is struck out, and flat maps of today's countries where regions fill in and
+  arrows grow, with hard cuts between scenes. It suits history told to the viewer as "you" (a Roman
+  legionary, a medieval peasant), why an event happened told with light humour, and an army's march
+  or a trade route, and Auto can pick it. A real person appears only as the same puppet in a generic
+  costume with a name plate, never a living person or a tragedy played for laughs. It needs no API
+  key and no GPU, generates no images, and takes no mascot, because its whole cast is drawn
+  characters and a mascot would be confused with them.
+  [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
+  details.
 - A new experimental style, **Mid-century How-To**: a 1950s classroom-film cartoon in which a gloved
   presenter walks the viewer through a task in numbered steps, each on its own flat colour, pressing
   buttons on phones, keypads and other flat objects, with checks, circled numbers and a closing card

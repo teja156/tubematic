@@ -515,10 +515,11 @@
       ],
       "ok": [
         "scenes",
-        "motion_graphics"
+        "motion_graphics",
+        "puppet_history"
       ],
       "future": "",
-      "note": "",
+      "note": "Pair probe with Puppet History: the calm history of an invention told through time is Storybook Atlas's; its spread over a map is acceptable as Puppet History.",
       "inserts_expect": []
     },
     {
@@ -1710,6 +1711,68 @@
       "future": "",
       "note": "Pair probe with Comic Panels: a defender, but no fight told round by round; a mechanism walked through by roles, which is Stick Explainer's.",
       "inserts_expect": "any"
+    },
+    {
+      "title": "You're a Roman legionary for twenty-five years",
+      "brief": "You sign up at seventeen: the pay is docked for your own gear, you march twenty miles a day into Gaul, and twenty-five years later you retire with a small farm.",
+      "expect": [
+        "puppet_history"
+      ],
+      "ok": [
+        "storybook_atlas",
+        "illustrated",
+        "cartoon_3d",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Second-person history: a job and its rules in a past era, with a contract, a map and a reversal at the end.",
+      "inserts_expect": []
+    },
+    {
+      "title": "A week as a medieval peasant",
+      "brief": "You farm the lord's land three days a week for free, hand a tenth of your harvest to the church, pay to grind your grain at his mill, and still owe rent.",
+      "expect": [
+        "puppet_history"
+      ],
+      "ok": [
+        "cartoon_3d",
+        "illustrated",
+        "storybook_atlas",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Daily life and work in a past era told to 'you', the rules stacking up against you: Puppet History. Cartoon 3D is acceptable for the place.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Why the US bought Alaska for two cents an acre",
+      "brief": "In 1867 Russia sells Alaska to the United States for 7.2 million dollars; newspapers mock it as Seward's Folly, until gold is found thirty years later.",
+      "expect": [
+        "puppet_history"
+      ],
+      "ok": [
+        "storybook_atlas",
+        "motion_graphics",
+        "scenes"
+      ],
+      "future": "",
+      "note": "Why a historical event happened, with a map, a price on a contract and a reversal; the real people appear only by name.",
+      "inserts_expect": []
+    },
+    {
+      "title": "Life in the trenches of World War One",
+      "brief": "What a soldier's day in a Western Front trench was like in 1916: the mud, the rats, the rotation between the front line and reserve, and the shelling.",
+      "expect": [
+        "motion_graphics"
+      ],
+      "ok": [
+        "scenes",
+        "storybook_atlas",
+        "cartoon_3d"
+      ],
+      "future": "",
+      "note": "Pair probe with Puppet History: a past-era daily life, but a war's suffering is a tragedy, which that style never plays for laughs. Told through pictures of the real place: Photo Explainer.",
+      "inserts_expect": []
     }
   ]
 }

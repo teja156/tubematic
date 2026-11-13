@@ -8,6 +8,7 @@ The suite covers the pure TypeScript helpers of the Remotion project's
 [`TerminalDoc`](../09-remotion-project.md#terminaldoc),
 [`UnderTheHood`](../09-remotion-project.md#underthehood),
 [`CaseFileStory`](../09-remotion-project.md#casefilestory),
+[`PuppetHistory`](../09-remotion-project.md#puppethistory),
 [`MidcenturyHowTo`](../09-remotion-project.md#midcenturyhowto),
 [`ComicPanels`](../09-remotion-project.md#comicpanels) and
 [`ProcessCast`](../09-remotion-project.md#processcast) scenes. Each test file sits beside the code
@@ -139,6 +140,25 @@ Covers `contract.ts`, `stage.ts` and the icon tables
   stretch over the stillness limit.
 - Under the `fill` caption look a word is grey until it is spoken, then the text colour, and a
   text colour the blend cannot parse switches on the word's frame without throwing.
+
+## Puppet History
+
+### `src/scenes/installed/puppetHistory/puppetHistory.test.ts`
+
+Covers `contract.ts`, `stage.ts`, the library and the map
+([Puppet History](../10-scene-authoring.md#puppet-history)).
+
+- The constants agree with the shared cases `mcp/tests/test_puppet_history.py` runs, and running
+  `character-tools/sync-contract.mjs` leaves the fixture and the style pack unchanged, so a
+  catalogue or limit changed without the sync fails here.
+- The library draws every costume, set and prop the contract lists, and every set keeps its decor
+  on stage and off the caption band.
+- The stage opens with the first puppet in place at frame 0. A puppet slides in from the nearest
+  edge and stops dead in its slot, a puppet in the right slot faces left, a swapped costume lasts
+  into later beats, and a card line is struck out before the new value is scrawled. Beats change
+  with a hard cut.
+- The map knows today's countries by `world-atlas`'s names and fits the focus countries by their
+  largest landmass, so a far territory does not pull the map across an ocean.
 
 ## Mid-century How-To
 

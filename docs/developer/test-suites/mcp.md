@@ -802,6 +802,39 @@ call reserves no picture slot and reaches no paid endpoint.
 Trap: a reservation that lapses sooner than the slowest call gives that call's slot to a parallel
 one, and both are billed.
 
+### `test_puppet_history.py`
+
+Covers `mcp/puppet_history.py`, the checks `write_scene_config` runs on a Puppet History config,
+`render_style_props` for this style, the picture checks and the text audit's per-beat sampling
+([Puppet History](../10-scene-authoring.md#puppet-history)).
+
+- The limits, timings, geometry and catalogues equal the renderer's, read from
+  `fixtures/puppet_history_contract.json`, and the pack's `extra` lists the same costumes, poses,
+  faces, sets, props and countries. After a change to `contract.ts`, `stage.ts` or the library,
+  `node character-tools/sync-contract.mjs` (from `renderer/remotion`) rewrites the fixture and the
+  pack's `extra`; never edit them by hand.
+- The style is registered in `character_styles.BY_ID` and takes no mascot.
+- The skill's worked example passes. Each refusal names its beat or event and the cause: too many
+  puppets, an unknown costume, set, pose, face or prop, a name, sign, stamp, date, label or card text
+  over its limit, a first beat off frame 0, a map country the atlas lacks (a historical name such as
+  Gaul), a fill, label or arrow outside the beat's focus, a card repeating the narration, a slot
+  out of range or taken, a puppet acting before it enters, an event of a kind the beat does not take,
+  an event off its word, nothing on the first set at frame 0, and a still stretch. A value of the
+  wrong type gets a sentence back and raises nothing.
+- A puppet is busy while it slides in, and its slot is free again once it has slid out.
+- An event inside an insert window is refused, and the scene may be used only by this style.
+- The skill's example prop passes the source rules; a hook, an SVG pattern and an import of another
+  style's file are refused.
+- `write_scene_config` writes a sound config with the style's captions and refuses a broken one by
+  the style's name. `render_style_props` returns the picture for this style (the renderer stubbed),
+  and the preview script's `STYLES` table names this style's preview component.
+- The picture checks find the style and warn when no puppet is on the first set by frame 3, and the
+  text audit samples each beat once its entrances have landed.
+
+Trap: a card line that copies the narration is refused because the captions already carry those
+words, and a map country that is a historical name is refused because the atlas has today's borders
+only.
+
 ### `test_midcentury_howto.py`
 
 Covers `mcp/midcentury_howto.py`, the shared custom-prop checks in `mcp/character_kit.py`, the

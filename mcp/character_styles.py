@@ -4,8 +4,9 @@ kind is one module here (character_kit says what each module exposes)."""
 import comic_panels
 import midcentury_howto
 import process_cast
+import puppet_history
 
-STYLES = (midcentury_howto, comic_panels, process_cast)
+STYLES = (puppet_history, midcentury_howto, comic_panels, process_cast)
 BY_ID = {m.STYLE_ID: m for m in STYLES}
 
 

@@ -1,0 +1,385 @@
+{
+  "_about": "Shared by renderer/remotion/src/scenes/installed/puppetHistory/puppetHistory.test.ts and mcp/tests/test_puppet_history.py: the constants both sides use, and cases worked out by the renderer's own contract.ts and stage.ts. Written by renderer/remotion/character-tools/sync-contract.mjs; never edit it by hand.",
+  "constants": {
+    "LIMITS": {
+      "maxCast": 4,
+      "maxBeats": 14,
+      "maxEvents": 100,
+      "nameChars": 18,
+      "signChars": 14,
+      "stampChars": 10,
+      "dateChars": 12,
+      "titleChars": 22,
+      "cardLines": 5,
+      "lineChars": 26,
+      "strikeChars": 12,
+      "labelChars": 18,
+      "maxFocus": 8,
+      "maxArrows": 6,
+      "maxStillSeconds": 3,
+      "minBeatSeconds": 1.5,
+      "echoWords": 5
+    },
+    "TIMING": {
+      "slide": 16,
+      "pop": 8,
+      "move": 16,
+      "minActorGap": 6,
+      "stamp": 7,
+      "strike": 14,
+      "fill": 12,
+      "arrow": 18,
+      "endMargin": 6
+    },
+    "GEOMETRY": {
+      "waistY": 1640,
+      "frontY": 1600,
+      "slots": [
+        210,
+        540,
+        870
+      ],
+      "puppetScale": 1,
+      "puppetW": 330,
+      "puppetH": 470,
+      "plateY": 1735,
+      "signY": 1440,
+      "signH": 128,
+      "stampY": 860,
+      "cardStampY": 1180,
+      "dateX": 70,
+      "dateY": 400,
+      "map": [
+        40,
+        330,
+        1000,
+        740
+      ],
+      "card": [
+        150,
+        430,
+        780,
+        940
+      ]
+    },
+    "POSES": {
+      "stand": {
+        "l": -14,
+        "r": -14,
+        "head": 0
+      },
+      "point": {
+        "l": -14,
+        "r": 98,
+        "head": 4
+      },
+      "salute": {
+        "l": -14,
+        "r": 196,
+        "head": 0
+      },
+      "wave": {
+        "l": -14,
+        "r": 150,
+        "head": -4
+      },
+      "shrug": {
+        "l": 52,
+        "r": 52,
+        "head": 6
+      },
+      "hold": {
+        "l": -14,
+        "r": 62,
+        "head": 0
+      },
+      "cheer": {
+        "l": 145,
+        "r": 145,
+        "head": 0
+      },
+      "panic": {
+        "l": 138,
+        "r": 138,
+        "head": -6
+      },
+      "think": {
+        "l": -14,
+        "r": 170,
+        "head": 8
+      },
+      "sign": {
+        "l": 88,
+        "r": 88,
+        "head": 0
+      }
+    },
+    "FACES": [
+      "stern",
+      "happy",
+      "proud",
+      "worried",
+      "shock",
+      "sad",
+      "smug",
+      "angry"
+    ],
+    "COSTUMES": [
+      "plain",
+      "dress",
+      "peasant",
+      "farmer",
+      "worker",
+      "clerk",
+      "noble",
+      "royal",
+      "knight",
+      "legionary",
+      "soldier_1910s",
+      "soldier_1940s",
+      "sailor",
+      "pilot",
+      "explorer",
+      "scientist",
+      "monk"
+    ],
+    "SETS": [
+      "farm",
+      "street",
+      "office",
+      "palace",
+      "castle",
+      "deck",
+      "market",
+      "factory",
+      "camp",
+      "lab",
+      "classroom",
+      "field"
+    ],
+    "PROPS": {
+      "scroll": {
+        "w": 150,
+        "h": 170,
+        "text": 10
+      },
+      "letter": {
+        "w": 150,
+        "h": 120,
+        "text": 10
+      },
+      "coin_bag": {
+        "w": 130,
+        "h": 140,
+        "text": 0
+      },
+      "quill": {
+        "w": 90,
+        "h": 170,
+        "text": 0
+      },
+      "book": {
+        "w": 150,
+        "h": 120,
+        "text": 0
+      },
+      "lantern": {
+        "w": 100,
+        "h": 160,
+        "text": 0
+      },
+      "hammer": {
+        "w": 110,
+        "h": 170,
+        "text": 0
+      },
+      "shovel": {
+        "w": 80,
+        "h": 200,
+        "text": 0
+      },
+      "flag": {
+        "w": 160,
+        "h": 200,
+        "text": 6
+      },
+      "telescope": {
+        "w": 180,
+        "h": 80,
+        "text": 0
+      },
+      "cup": {
+        "w": 100,
+        "h": 110,
+        "text": 0
+      },
+      "bread": {
+        "w": 150,
+        "h": 90,
+        "text": 0
+      },
+      "sword": {
+        "w": 60,
+        "h": 200,
+        "text": 0
+      },
+      "basket": {
+        "w": 150,
+        "h": 130,
+        "text": 0
+      }
+    },
+    "STAMP_COLORS": [
+      "red",
+      "green",
+      "blue"
+    ],
+    "FILLS": [
+      "red",
+      "blue",
+      "green",
+      "yellow",
+      "purple",
+      "grey"
+    ],
+    "ENTRANCES": [
+      "slide",
+      "pop",
+      "cut"
+    ],
+    "BEAT_TYPES": [
+      "set",
+      "card",
+      "map"
+    ],
+    "EVENT_TYPES": [
+      "enter",
+      "move",
+      "exit",
+      "act",
+      "swap",
+      "sign",
+      "hold",
+      "stamp",
+      "date",
+      "strike",
+      "fill",
+      "arrow",
+      "label"
+    ],
+    "BEAT_EVENTS": {
+      "set": [
+        "enter",
+        "move",
+        "exit",
+        "act",
+        "swap",
+        "sign",
+        "hold",
+        "stamp",
+        "date"
+      ],
+      "map": [
+        "enter",
+        "move",
+        "exit",
+        "act",
+        "swap",
+        "sign",
+        "hold",
+        "fill",
+        "arrow",
+        "label",
+        "date"
+      ],
+      "card": [
+        "stamp",
+        "strike",
+        "date"
+      ]
+    },
+    "CUSTOM": {
+      "maxProps": 6,
+      "minSide": 50,
+      "maxSide": 300,
+      "maxText": 10,
+      "maxActs": 0
+    }
+  },
+  "slots": 3,
+  "puppet_box": [
+    {
+      "slot": 0,
+      "box": [
+        45,
+        1170,
+        375,
+        1640
+      ]
+    },
+    {
+      "slot": 1,
+      "box": [
+        375,
+        1170,
+        705,
+        1640
+      ]
+    },
+    {
+      "slot": 2,
+      "box": [
+        705,
+        1170,
+        1035,
+        1640
+      ]
+    }
+  ],
+  "sign_width": [
+    {
+      "text": "",
+      "w": 160
+    },
+    {
+      "text": "TAX",
+      "w": 162
+    },
+    {
+      "text": "20 MILES A DAY",
+      "w": 536
+    }
+  ],
+  "blink": [
+    {
+      "frame": 0,
+      "seed": 23,
+      "blink": false
+    },
+    {
+      "frame": 1,
+      "seed": 23,
+      "blink": false
+    },
+    {
+      "frame": 50,
+      "seed": 23,
+      "blink": false
+    },
+    {
+      "frame": 99,
+      "seed": 23,
+      "blink": true
+    },
+    {
+      "frame": 100,
+      "seed": 23,
+      "blink": false
+    },
+    {
+      "frame": 200,
+      "seed": 23,
+      "blink": false
+    }
+  ]
+}

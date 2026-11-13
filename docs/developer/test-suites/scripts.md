@@ -715,6 +715,23 @@ Covers the `tubematic-case-file-story` skill ([Case File Story](../10-scene-auth
 Trap: an agent that skips the lead sheet, or leaves `reference` off a still, gets a different
 character in each painting, and nothing after the paid call can repair that.
 
+### `test_puppet_history_skill.py`
+
+Covers the `tubematic-puppet-history` skill ([Puppet History](../10-scene-authoring.md#puppet-history)).
+
+- The skill is loadable by an unattended run (not explicit-only), its pack names it as the authoring
+  skill, and the operator skill routes to it.
+- `reference/contract.md` lists every catalogue the validator accepts, and no others.
+- The limits the skill states are the ones `mcp/puppet_history.py` enforces.
+- The skill keeps a real person unrecognisable (the house puppet in a generic costume with a name
+  plate), keeps living people and leaders of regimes still in power off the plates, and keeps
+  tragedy out of the gags, and the pack carries the same rules in its routing, script and review text.
+- The worked example passes the validator, its worked prop, `example-prop-hourglass.tsx`, passes the
+  source checks, and the uninstaller removes the skill.
+
+Trap: skill text that lets a puppet look like a real person or a tragedy become a gag leads the
+agent to a video the AI review rejects. The test pins the wording.
+
 ### `test_midcentury_howto_skill.py`
 
 Covers the `tubematic-midcentury-howto` skill

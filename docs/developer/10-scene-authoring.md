@@ -51,7 +51,7 @@ style looks like.
 
 For the scene styles, a style is a set of permissions: which canvas, and which kinds of figure. It
 does not decide any beat's treatment. `cartoon_3d`, `bean_explainer`, `whiteboard`,
-`storybook_atlas`, `under_the_hood`, `case_file_story`, `midcentury_howto`, `comic_panels` and `process_cast` replace
+`storybook_atlas`, `under_the_hood`, `case_file_story`, `puppet_history`, `midcentury_howto`, `comic_panels` and `process_cast` replace
 the scene system with one whole-video scene of their own. `system_flow` and `terminal_doc` are insert styles: they draw short
 scenes inside another style's video and are never a video's style
 ([Main styles and inserts](#main-styles-and-inserts)). A video voiced before that keeps its whole
@@ -70,6 +70,7 @@ System Flow or Terminal Doc scene, so both stay in the table below.
 | `terminal_doc` | `dark` | No | No | No |
 | `under_the_hood` | `dark` | Its own presenter | No | No |
 | `case_file_story` | `dark` | Its own lead, painted into the stills | No | No |
+| `puppet_history` | `light`, painted over by its own sets | Its own cast | No | No |
 | `midcentury_howto` | `light`, painted over by its step grounds | Its own presenter | No | No |
 | `comic_panels` | `light`, painted over by its own newsprint | Its own cast | No | No |
 | `process_cast` | `light`, painted over by its own paper | Its own cast | No | No |
@@ -87,7 +88,9 @@ with one board scene ([Whiteboard](#whiteboard)), `storybook_atlas` with one pic
 ([Storybook Atlas](#storybook-atlas)), `terminal_doc` (likewise) with one typographic scene
 ([Terminal Doc](#terminal-doc)), `under_the_hood` with one scene of annotated close-up
 photographs ([Under the Hood](#under-the-hood)), `case_file_story` with one scene of painted
-stills, meters and number cards ([Case File Story](#case-file-story)), `midcentury_howto` with
+stills, meters and number cards ([Case File Story](#case-file-story)), `puppet_history` with one
+scene of puppets in era costumes acting out beats on sets, cards and maps
+([Puppet History](#puppet-history)), `midcentury_howto` with
 one scene of a cartoon presenter walking through numbered steps
 ([Mid-century How-To](#mid-century-how-to)), `comic_panels` with one scene of comic pages read
 panel by panel ([Comic Panels](#comic-panels)), and `process_cast` with one scene of a drawn cast
@@ -137,7 +140,7 @@ style.
 | `routing` | What Auto reads to pick a style: `best_for`, `avoid_for`, `cannot_show`, `signals`, and the optional `moods` and `images` (below) |
 | `script` | Optional. How to write the narration and each segment's `visual` brief for this style; `get_video` returns it as `style.script` and the script-writing skill follows it |
 | `picture` | `{opening, turn, payoff, ending}`: how the style shows the first frame, a turn or re-opening, the payoff, and how a video in it ends. `get_video` returns it as `style.picture`; [The opening and the beats](#the-opening-and-the-beats) says how it is used |
-| `extra` | Style-specific data, such as System Flow's icon list, Bean Explainer's and Storybook Atlas's cast and prop catalogues, Mid-century How-To's object library, Comic Panels' layout, cast and prop catalogues, Process Cast's body, station and prop catalogues or Whiteboard's doodle library |
+| `extra` | Style-specific data, such as System Flow's icon list, Bean Explainer's and Storybook Atlas's cast and prop catalogues, Puppet History's catalogues, Mid-century How-To's object library, Comic Panels' layout, cast and prop catalogues, Process Cast's body, station and prop catalogues or Whiteboard's doodle library |
 | `role` | `main` for a style that carries a whole video, `insert` for one that draws only insert scenes ([Main styles and inserts](#main-styles-and-inserts)) |
 | `inserts` | A main style only: `{host, transition}`, whether it takes insert scenes and how it goes into one |
 | `insert` | An insert style only: `{max_seconds, palettes, props_key, component, review}` |
@@ -582,7 +585,7 @@ steps. Mixed scenes take theirs from `visual_styles.py::SCENES_PICTURE`.
 
 The voice starts a few frames into the video, so a picture on frame 0 cannot sit on a word. The
 styles that time events to words accept an event at frame 0 for that reason: Bean Explainer,
-Storybook Atlas, Mid-century How-To, Comic Panels and Process Cast take any event there, and Whiteboard takes region 1's first item. Whiteboard draws
+Storybook Atlas, Puppet History, Mid-century How-To, Comic Panels and Process Cast take any event there, and Whiteboard takes region 1's first item. Whiteboard draws
 that item from `TIMING.openLead` frames before frame 0 instead of `TIMING.lag` frames after its word,
 so the first frame shows ink being drawn, and System Flow draws a node whose event is within
 `TIMING.openWithin` frames of the start from frame 0, half grown. Both changes touch the opening
@@ -675,6 +678,8 @@ with `FIRST_FRAME_WINDOW` as the early limit):
 - Terminal Doc: beat 1 has nothing on stage by frame 3.
 - Storybook Atlas: nothing moves in chapter 1 by frame 3.
 - Under the Hood: plate 1 has no photograph.
+- Puppet History: beat 1 is a set and no puppet is on it by frame 3, or the first beat does not
+  start at frame 0 (`puppet_history.py::first_frame_problem`).
 - Mid-century How-To: the title card has no object on stage by frame 3
   (`midcentury_howto.py::first_frame_problem`).
 - Comic Panels: page 1, panel 1 has no character or prop by frame 3 or does not start at frame 0
@@ -1393,7 +1398,7 @@ each beat as if it were a scene, from the frame its last part has appeared.
 ## Character styles
 
 A character style draws its whole video from data with a cast and objects drawn in code, and lets
-the agent draw an object the library lacks. They are Mid-century How-To, Comic Panels and Process Cast;
+the agent draw an object the library lacks. They are Puppet History, Mid-century How-To, Comic Panels and Process Cast;
 `mcp/character_styles.py` lists them (`STYLES`, by pack order). Each has its own section below, and
 they share this machinery.
 
@@ -1442,6 +1447,126 @@ On the MCP side:
 A new character style is a pack, an installed scene and its folder, one module added to
 `character_styles.py::STYLES`, an entry in each of the two `character-tools` scripts, and its
 authoring skill.
+
+## Puppet History
+
+A Puppet History video is one installed scene, `PuppetHistory`, that spans the whole video: "you are
+now a..." history told by round-headed cut-out puppets in era costumes, framed from the waist up. The
+video is a run of beats joined by hard cuts. A beat is a set (a flat illustrated place where puppets
+slide in, act and hold up signs and props), a card (a typed document where a stamp lands and a number
+is struck out and a new one scrawled) or a map (today's countries, where regions fill in and arrows
+grow). The captions are the shared caption layer in its `outline` look, near the top of the frame, in
+capitals, in Fredoka. The agent writes no scene code. Its props carry
+`puppetHistory: {cast, beats, customProps}`, written with the `tubematic-puppet-history` skill, whose
+`reference/contract.md` documents every field and catalogue, and whose `reference/example-config.json`
+is the worked example.
+
+- `cast` lists 1 to 4 puppets, each `{id, costume, name}`. There is one puppet design: a big round
+  white head, dot eyes, mitten hands and pill arms. `costume` is one of 17 generic era costumes
+  (`contract.ts::COSTUMES`) and `name` is an optional name plate of at most 18 characters.
+- `beats` lists 1 to 14 beats, each `{type, start, events}`, in order. The first starts at frame 0 and
+  every other starts on a word. A beat lasts at least 1.5 seconds. A `set` beat names one of 12 sets
+  (`farm`, `street`, `office`, `palace`, `castle`, `deck`, `market`, `factory`, `camp`, `lab`,
+  `classroom`, `field`). A `map` beat names a `focus` of 1 to 8 countries. A `card` beat has a
+  `title` of at most 22 characters and 1 to 5 `lines` of at most 26.
+- A video has at most 100 events. Each is listed in frame order, lands within 2 frames of a word (or
+  at its beat's start) and at least 6 frames before its beat ends. A beat takes only its kind's
+  events: a card takes stamps, strike-outs and dates.
+
+| Event | What the scene draws |
+|---|---|
+| `enter`, `move`, `exit` | A puppet slides in from the nearest edge and stops dead, pops in or cuts in, in slot 0, 1 or 2 (left, middle, right); walks to another slot; or slides out |
+| `act` | The puppet changes its pose (10 poses), its face (8 faces) or both |
+| `swap` | Its costume changes on the spot, for the rest of the video |
+| `sign` | It holds a cream sign of up to 14 characters in front of its chest (`""` lowers it) |
+| `hold` | It holds a hand prop from the library of 14, or the video's own, in its raised hand, with an optional label (`""` drops it) |
+| `stamp` | A rubber stamp of up to 10 characters lands with a kick, in `red`, `green` or `blue` |
+| `date` | The hand-lettered date in the corner changes (up to 12 characters) |
+| `strike` | A card line is struck out and a new value of up to 12 characters scrawled in red |
+| `fill`, `arrow`, `label` | A focus country fills with one of six colours, a curved arrow grows from one focus country to another (at most 6 a beat), or a hand-lettered label of up to 18 characters appears on a country |
+
+A real, historical person is the house puppet in a generic costume of their era, with their name on
+the plate, because the rig has no likeness to draw and the style never invents one. The pack, the
+skill and the AI review carry the same rules: never a living person or a leader of a regime still in
+power, no costume or prop that copies a real uniform, insignia or signature feature, and never a
+tragedy played for laughs (a war's dead, a disaster, a persecution or a famine is told plainly or
+left out).
+
+Maps show today's countries (the 1:110m Natural Earth data in `world-atlas`, public domain), because
+the atlas has no historical borders. A historical region is named by the modern countries it covers
+(Gaul is France, Mesopotamia is Iraq and Syria) and given its old name with a `label`. The map
+fits and labels each focus country by its largest landmass (`map.tsx::mainland`), because a far
+territory such as France's French Guiana would stretch the fit across an ocean and pull the label out
+to sea. `extra.countries` in the pack lists the names the tools accept.
+
+A held sign is drawn in front of the chest (`GEOMETRY.signY`) with both hands at its sides, because the
+rig's straight arms cannot reach above the head. Nobody carries over a hard cut, so each beat's
+puppets `enter` in it (a puppet is busy for 16 frames after a slide-in or a move and 8 after a
+pop-in), while a costume swap lasts into later beats. A puppet in the right slot faces left and the
+others face right, so every puppet looks toward the middle of the frame. What starts at frame 0 is
+drawn finished: beat 1 is a card or a map, or a puppet enters at frame 0, so the video never opens
+on an empty set.
+
+Its `routing` gives Auto history addressed to the viewer in a past era (a Roman legionary, a medieval
+peasant, a 1920s factory worker), why an event happened told with light humour and a reversal, and a
+march or a trade route across a map. A calm history of an invention or one person's life stays with
+Storybook Atlas, a scam or a money dilemma with Case File Story, a real event told through pictures of
+the real things with Photo Explainer and an invented hero with Illustrated. A living person, a
+regime still in power and any tragedy are outside it. The `scene-story`, `result-then-rewind` and
+`why-dont-they-just` formulas list the style.
+
+The library holds 14 hand props (`contract.ts::PROPS`, each with its box and label limit), checked by
+a person on the `PuppetHistorySheet` composition. For a prop the viewer must recognise and the library
+lacks, the agent draws its own as `generated/<video_id>/prop-<name>.tsx`, modelled on
+`puppetHistory/props.tsx` and drawn with `ink.tsx`'s helpers, lists it in `customProps` with its box
+and label limit, and looks at it with [`render_style_props`](06-mcp-server.md#render_style_props)
+before it submits. A Puppet History prop has no acts and draws from its `text` alone.
+
+The renderer's side is `src/scenes/installed/PuppetHistory.tsx` with `puppetHistory/`:
+
+- `contract.ts` holds the limits, timings, geometry and catalogues, and the country list read from the
+  atlas.
+- `stage.ts` works out what is on stage at a frame: the beat, each puppet's slot, entrance, pose, face,
+  costume, sign and prop, the stamps, the strike-outs, the date and the map's fills and arrows.
+- `puppet.tsx` and `torso.ts` draw the puppet, `costumes.tsx` the costumes, `sets.tsx` the sets,
+  `props.tsx` the hand props, `map.tsx` the map and `ink.tsx` the palette and the ink helpers.
+- `PuppetHistorySheet.tsx` holds the model sheet and `PuppetHistoryPropPreview`, the picture
+  `render_style_props` returns.
+
+Every puppet look, prop, sign, stamp and decor piece is a [cached bitmap](#character-styles). A set's
+background is flat colour bands drawn as plain page boxes, plus decor pieces of at most about 640 by
+640 units, because a full-frame bitmap costs about 0.2 CPU-seconds per frame on the CPU renderer. The
+camera never moves, so a held shot repaints only what changes. Measured on the CPU renderer over the
+whole example video, it costs 0.26 CPU-seconds a frame, the same as System Flow's example rendered
+under the same load. A card's title and lines, the name plates, the date and the map labels are page text, so the
+text-layout audit measures them; signs and stamps are pictures, sized by the validator.
+
+`mcp/puppet_history.py` checks a config in `write_scene_config` and refuses it when:
+
+- A `puppet_history` video has anything but the one `PuppetHistory` scene, from frame 0 for
+  `totalFrames`, or another style uses `PuppetHistory`.
+- A cast, beat or event count or a text runs past its limit above, a costume, pose, face, set,
+  entrance, stamp colour, fill colour or hand prop is not in the catalogue or the video's
+  `customProps`, a map names a country the atlas lacks, or a fill, label or arrow names a country
+  outside the beat's `focus`.
+- Beats start out of order or off a word, a beat lasts under 1.5 seconds, an event is out of frame
+  order, outside its beat, not within 2 frames of a word, or in a beat that does not take its kind,
+  or a card repeats 5 narration words in a row.
+- A puppet acts while it is not on stage, still entering or moving, or less than 6 frames after its
+  last change, two puppets share a slot, or a puppet that has left acts again.
+- Beat 1 is a set with no puppet entering at frame 0.
+- A beat or event starts inside an insert window.
+- A custom prop breaks the [shared rules](#character-styles): at most 6 a video, a box of 50 to 300
+  units a side, a label of at most 10 characters, no acts, and imports of `react`, `remotion` and the
+  style's `ink` or `contract` only.
+- Nothing changes for more than 3 seconds. An insert window is not counted as still.
+
+`mcp/tests/test_puppet_history.py` pins `puppet_history.py` to `contract.ts` through the shared cases
+in `fixtures/puppet_history_contract.json`, and to the pack. The pack's `captions` fill every
+`subtitles` key the config leaves out. The text-layout audit samples each beat as if it were a scene,
+from the frame its entrances have landed. A Puppet History video takes no mascot (`"mascot": false`),
+because its whole cast is house puppets and one more character would be confused with them. Its pack
+hosts inserts with a `cut` transition.
 
 ## Mid-century How-To
 

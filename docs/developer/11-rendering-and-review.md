@@ -138,8 +138,8 @@ render is not handed out.
   (`voice_file_path`, `timeline_path`, `scene_config_path`) whose file (`audio.mp3`,
   `timeline.json`, `scene-config.json`) is absent, or whose value is empty because that step did not
   finish. Images are optional and are not checked.
-- A video whose style takes no mascot (Cartoon 3D, Under the Hood, Case File Story, Mid-century
-  How-To, Comic Panels, Process Cast) that also holds a mascot, and a mascot video whose pinned
+- A video whose style takes no mascot (Cartoon 3D, Under the Hood, Case File Story, Puppet History,
+  Mid-century How-To, Comic Panels, Process Cast) that also holds a mascot, and a mascot video whose pinned
   code cannot be read, go to `FAILED`
   ([The mascot's code](20-gpu-and-remote-renderers.md#the-mascots-code)).
 
@@ -420,7 +420,8 @@ as if it were a scene, with the same allowance at each board's start. A Bean Exp
 scene is sampled the same way, shot by shot, a Whiteboard video's region by region and once more
 for the closing pull-back, a Terminal Doc video's beat by beat, an Under the Hood video's plate
 by plate, ending before a zoom-through takes a plate's labels away, a Case File Story video's
-beat by beat, from the frame a card's last part has appeared, a Mid-century How-To video's shot
+beat by beat, from the frame a card's last part has appeared, a Puppet History video's beat by
+beat, once the entrances have landed, a Mid-century How-To video's shot
 by shot, from the frame its step header and entrances have settled, a Comic Panels video's panel
 by panel, once the camera has arrived and the panel has inked in, and a Process Cast video's
 station by station, once the camera has arrived and the entrances have settled

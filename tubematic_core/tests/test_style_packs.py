@@ -160,7 +160,7 @@ def test_under_the_hood():
     assert tvs.effective_canvas("under_the_hood", "light") == "dark"
     # its own presenter stands where a mascot would: no mascot, like Cartoon 3D
     assert p["mascot"] is False and "presenter" in p["messages"]["mascot"]
-    assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood", "case_file_story", "midcentury_howto", "comic_panels", "process_cast"}
+    assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood", "case_file_story", "midcentury_howto", "comic_panels", "process_cast", "puppet_history"}
     rows = {r["id"]: r for r in tvs.public_list(openai_key_set=True, gpu_status="working")}
     assert rows["under_the_hood"]["mascot"] is False and rows["cartoon_3d"]["mascot"] is False
     assert rows["auto"]["mascot"] is True and rows["stick"]["mascot"] is True
@@ -522,3 +522,25 @@ def test_comic_panels():
         assert f"({neighbour} fits it)" in avoid, neighbour
     # a balloon is a character's line, never the narration read twice
     assert "never reads a balloon aloud" in p["script"]
+
+
+def test_puppet_history():
+    p = tvs.pack("puppet_history")
+    assert p["renderer"] == "dom" and p["canvas"] == "light" and p["dimension"] == "2d"
+    assert p["authoring_skill"] == "tubematic-puppet-history"
+    assert p["experimental"] is True and p["order"] == 150 and p["role"] == "main"
+    assert p["inserts"] == {"host": True, "transition": "cut"}
+    assert tvs.figures_allowed("puppet_history") is True
+    assert tvs.line_art_allowed("puppet_history") is False and tvs.characters_allowed("puppet_history") is False
+    assert tvs.needs_openai_key("puppet_history") is False and tvs.needs_gpu("puppet_history") is False
+    assert p["routing"]["images"] == 0 and p["captions"]["background"] == "outline"
+    # its cast is house puppets; a mascot would be one character too many (user, 2026-11-12)
+    assert p["mascot"] is False and "puppets" in p["messages"]["mascot"]
+    # real people only as the house puppet with a name plate; never living; no tragedy for laughs (user, 2026-11-12)
+    avoid = " ".join(p["routing"]["avoid_for"])
+    assert "living person" in avoid and "tragedy" in avoid
+    assert "never a living person" in p["script"] and "Never play a tragedy for laughs" in p["script"]
+    for neighbour in ("Storybook Atlas", "Case File Story", "Photo Explainer", "Illustrated"):
+        assert f"({neighbour} fits it)" in avoid, neighbour
+    # maps show today's countries, and the agent names a historical region by them
+    assert "today's countries" in p["routing"]["cannot_show"] and "today's countries" in p["script"]

@@ -43,6 +43,7 @@ _TUBEMATIC_SKILLS = [
     "tubematic-case-file-story",
     "tubematic-midcentury-howto",
     "tubematic-comic-panels",
+    "tubematic-puppet-history",
     "tubematic-process-cast",
     "tubematic-style-routing",
     "tubematic-insert-routing",
