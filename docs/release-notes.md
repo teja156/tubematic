@@ -57,7 +57,8 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   request crossing a network, a **Terminal Doc** string for a password being hashed or a command
   being typed. The video's style keeps the opening, the answer and the ending, the captions stay on
   screen through an insert, and an insert follows the video's canvas, so on a white video it is drawn
-  dark on paper. The agent decides after it picks the style, and many videos get none.
+  dark on paper, and it never opens on an empty board: its first element is already drawn as it
+  comes in. The agent decides after it picks the style, and many videos get none.
   [Insert scenes](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#insert-scenes) has
   the details.
 - An **Inserts** setting (Auto or None) sits beside the style wherever you choose one: a topic waiting

@@ -83,7 +83,9 @@ def font_size_for(lines: int, cols: int) -> int:
 
 
 def type_frames(code: str) -> int:
-    return math.ceil(len(code.replace("\n", "")) * TIMING["typePerChar"])
+    """Frames a typed first step takes: its first line is on the card from the
+    insert's first frame, so only the lines after it are typed."""
+    return math.ceil(len("".join(code_lines(code)[1:])) * TIMING["typePerChar"])
 
 
 def code_at(steps: list, index: int) -> str:

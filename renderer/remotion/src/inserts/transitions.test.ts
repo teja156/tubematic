@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TRANSITION_FRAMES, activeInsert, insertLook, insertProgress, transitionOf } from "./transitions";
+import { TRANSITION_FRAMES, activeInsert, heldFrame, insertLook, insertProgress, transitionOf } from "./transitions";
 
 describe("insert transitions", () => {
   it("reads an unknown or missing transition as a cut", () => {
@@ -61,5 +61,17 @@ describe("insert transitions", () => {
     expect(activeInsert(120, windows, "cut")).toMatchObject({ index: 0, local: 20, progress: 1 });
     expect(activeInsert(459, windows, "cut")).toMatchObject({ index: 1 });
     expect(activeInsert(460, windows, "cut")).toBeNull();
+  });
+});
+
+describe("the held first frame", () => {
+  it("holds the frame the first element settles on, through the way in", () => {
+    expect(heldFrame(8, 16, 240)).toBe(24);
+    expect(heldFrame(12, 0, 240)).toBe(12);
+    expect(heldFrame(0, undefined, 240)).toBe(0);
+  });
+  it("never holds past the window or before the way in ends", () => {
+    expect(heldFrame(8, 500, 60)).toBe(8 + 59);
+    expect(heldFrame(8, -5, 60)).toBe(8);
   });
 });

@@ -38,6 +38,9 @@ Covers `src/inserts/transitions.ts`, how an insert scene goes in and out over it
   shows. A dip veils the main in the canvas colour before the insert fades up; a push moves the main
   out as the insert comes in; a wipe uncovers the insert from the right.
 - `activeInsert` finds the window a frame falls in.
+- `heldFrame` is the way in plus the insert's `firstFrames`, never before the way in ends and never
+  past the window: the frame `CompositionBuilder` freezes the scene on until then, so no insert opens
+  on an empty board.
 
 ### `src/scenes/installed/codeScenes/codeScenes.test.ts`
 

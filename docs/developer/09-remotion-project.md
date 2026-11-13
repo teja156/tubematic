@@ -128,8 +128,7 @@ do not move, so audio sync is unaffected.
 ### Insert scenes
 
 An insert is a short scene in an insert style (System Flow, Terminal Doc, Code Scenes, Format Packs)
-drawn over the main
-style for a window of frames. The rules for when a video has inserts and where they go are in
+drawn over the main style for a window of frames. The rules for when a video has inserts and where they go are in
 [Main styles and inserts](10-scene-authoring.md#main-styles-and-inserts).
 
 `CompositionBuilder` wraps each entry of the config's `inserts` list in a `<Sequence>` at its
@@ -147,8 +146,20 @@ The main style names one transition into and out of its inserts (`insertTransiti
 transition runs just outside the insert's window: the way in over the frames before it and the way
 out over the frames after it, so the whole window is on screen and the main style is already on its
 next picture as the insert leaves. The insert's `Sequence` covers those frames too, and the component
-holds its first frame through the way in and its last through the way out (`InsertPlacement.lead`). `inserts/transitions.ts` holds the transitions as pure functions of the frame
-(`insertProgress`, `activeInsert`, `insertLook`), and `TRANSITION_FRAMES` gives their lengths.
+holds its first frame through the way in and its last through the way out (`InsertPlacement.lead`).
+`inserts/transitions.ts` holds the transitions as pure functions of the frame (`insertProgress`,
+`activeInsert`, `insertLook`), and `TRANSITION_FRAMES` gives their lengths.
+
+An insert never opens on an empty board. Each entry carries `firstFrames`, the frames its first
+element takes to settle (System Flow's first node and its label, Terminal Doc's first word; Code
+Scenes and Format Packs draw theirs settled on their first frame, so 0). `write_scene_config` fills
+it from the insert style's module (`server.py::_INSERT_FIRST_FRAMES`), capped at
+`tubematic_core/inserts.py::FIRST_FRAMES_MAX`. `CompositionBuilder` wraps every insert's scene in a
+Remotion `<Freeze>` at `transitions.ts::heldFrame`: until the Sequence reaches that frame, the scene
+shows the frame on which its first element has settled. The transition therefore reveals content,
+and later elements animate in as written. An event inside the held frames is shown already settled
+from the start. The text-layout audit checks the frame before the window and its first frame for
+text of the insert's own (`text_audit.insert_open_passes`).
 
 | Transition | Frames | What it looks like |
 |---|---|---|

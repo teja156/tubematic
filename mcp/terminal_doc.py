@@ -885,6 +885,25 @@ def _event_problem(e: dict, t: str, custom: dict) -> str:
     return ""
 
 
+def insert_first_frames(entry: dict) -> int:
+    """Frames the moves on the insert's first frame take to play out (a word
+    scrambling or typing in), for the frame the renderer holds while the insert
+    comes in. 0 when nothing starts on its first frame."""
+    try:
+        start = entry["startFrame"]
+        events = entry["props"][PROPS_KEY]["beats"][0]["events"]
+    except (KeyError, IndexError, TypeError):
+        return 0
+    held = 0
+    for e in events:
+        if isinstance(e, dict) and e.get("at") == start:
+            try:
+                held = max(held, move_frames(e))
+            except (KeyError, TypeError, ValueError):
+                held = max(held, TIMING["reveal"])
+    return held
+
+
 def insert_beat_windows(entry: dict) -> list[tuple[int, int]]:
     """(start, end) of every beat of one Terminal Doc insert, for the text audit."""
     props = entry.get("props")

@@ -28,7 +28,7 @@ BLOCKS = {sid: tuple(p["insert"]["block"]) for sid, p in tvs.INSERT_PACKS.items(
 CAPTION_GAP = 24
 EDGE = 60
 MAX_ERRORS = 12
-ENTRY_KEYS = {"style", "startFrame", "durationInFrames", "props", "src", "palette", "shift"}
+ENTRY_KEYS = {"style", "startFrame", "durationInFrames", "props", "src", "palette", "shift", "firstFrames"}
 
 
 def _int(v) -> bool:
@@ -256,9 +256,14 @@ def cue_errors(cues, spans: list[tuple[int, int]]) -> list[str]:
     return out
 
 
-def fill(config: dict, *, canvas: str, transition: str) -> dict:
-    """The config with each insert's src, palette and shift, and the main
-    style's transition, filled in. The agent writes none of these."""
+def fill(config: dict, *, canvas: str, transition: str, first_frames: dict | None = None) -> dict:
+    """The config with each insert's src, palette, shift and firstFrames, and
+    the main style's transition, filled in. The agent writes none of these.
+
+    first_frames: insert style id -> a function(entry) giving the frames its
+    first element takes to settle. The renderer holds that frame through the
+    insert's way in and its first frames, so an insert never opens on an empty
+    board (CompositionBuilder's Freeze)."""
     entries = config.get("inserts") or []
     if not entries:
         config.pop("inserts", None)
@@ -269,8 +274,11 @@ def fill(config: dict, *, canvas: str, transition: str) -> dict:
         style = e["style"]
         block = tvs.PACKS[style]["insert"]
         palette = canvas if canvas in block["palettes"] else block["palettes"][0]
+        settle = (first_frames or {}).get(style)
+        held = settle(e) if settle else 0
         out.append({**e, "src": block["component"], "palette": palette,
-                    "shift": shift_for(style, config.get("subtitles"))})
+                    "shift": shift_for(style, config.get("subtitles")),
+                    "firstFrames": max(0, min(int(held), tinserts.FIRST_FRAMES_MAX, e["durationInFrames"] - 1))})
     config["inserts"] = out
     config["insertTransition"] = transition
     return config

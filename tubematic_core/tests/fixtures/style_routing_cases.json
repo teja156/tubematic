@@ -753,7 +753,7 @@
         "illustrated"
       ],
       "future": "",
-      "note": "A fraud told from inside, with money leaving and suspicion rising.",
+      "note": "A fraud told from inside, with money leaving and suspicion rising. Format Packs (TMDEV-240) is also acceptable as an insert: the fraudster's fake invoice message is a message beat it was made for; the story itself stays the main style's.",
       "inserts_expect": [],
       "inserts_ok": [
         "format_packs"
@@ -844,10 +844,11 @@
         "stick"
       ],
       "future": "",
-      "note": "A near miss for Case File Story: scams, but a list of named items with no single story.",
+      "note": "A near miss for Case File Story: scams, but a list of named items with no single story. Format Packs (TMDEV-240) is also acceptable as an insert: one scam text read with its tells is the beat it was made for; the list itself stays the main style's. A System Flow insert for its SIM-swap beat (an attacker's request routed through the carrier) is acceptable too, as on the SIM-swap topic.",
       "inserts_expect": [],
       "inserts_ok": [
-        "format_packs"
+        "format_packs",
+        "system_flow"
       ]
     },
     {
@@ -1048,7 +1049,7 @@
         "scenes"
       ],
       "future": "",
-      "note": "Pair probe, Case File Story vs Illustrated: invented people, but a crime and money at stake, told in the second person.",
+      "note": "Pair probe, Case File Story vs Illustrated: invented people, but a crime and money at stake, told in the second person. Format Packs (TMDEV-240) is also acceptable as an insert: the coworker's offer read as a message thread; the dilemma and its choice stay the main style's.",
       "inserts_expect": [],
       "inserts_ok": [
         "format_packs"

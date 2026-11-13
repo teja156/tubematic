@@ -40,10 +40,11 @@ function focusOpacity(step: CodeStep | undefined, row: number): number {
   return step.focus.includes(row + 1) ? 1 : 0.3;
 }
 
-/** Characters typed so far on a typed first step, or Infinity. */
-function typedChars(step: CodeStep, frame: number): number {
+/** Characters typed so far on a typed first step, or Infinity. The first line
+ *  is there from the first frame, so an insert never opens on an empty card. */
+function typedChars(step: CodeStep, frame: number, firstLine: number): number {
   if (step.reveal !== "type") return Infinity;
-  return Math.max(0, Math.floor((frame - step.at) / TIMING.typePerChar));
+  return firstLine + Math.max(0, Math.floor((frame - step.at) / TIMING.typePerChar));
 }
 
 export default function CodeScenes({
@@ -98,8 +99,8 @@ export default function CodeScenes({
   // A typed first step shows its pieces as their characters are reached.
   let cursor: { row: number; col: number } | null = null;
   if (si === 0 && step.reveal === "type") {
-    const typed = typedChars(step, frame);
     const lines = codeLines(codeAt(data, 0));
+    const typed = typedChars(step, frame, lines[0].length);
     const offsets: number[] = [];
     let acc = 0;
     lines.forEach((l) => {

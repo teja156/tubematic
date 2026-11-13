@@ -8580,6 +8580,15 @@ _INSERT_CHECKS = {
     format_packs.STYLE_ID: lambda fps, starts, words, e: format_packs.check_insert(e, fps, starts, words),
 }
 
+# How long each insert style's first element takes to settle, for the frame
+# the renderer holds while the insert comes in (no insert opens on an empty
+# board). Code Scenes and Format Packs draw their first element settled on
+# their first frame, so they hold their first frame.
+_INSERT_FIRST_FRAMES = {
+    system_flow.STYLE_ID: system_flow.insert_first_frames,
+    terminal_doc.STYLE_ID: terminal_doc.insert_first_frames,
+}
+
 
 def _insert_host(row) -> tuple[dict, str]:
     """The `inserts` block of the style a video's main scenes are drawn in,
@@ -8852,7 +8861,8 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     # Each insert's src, palette and shift, and the main style's transition:
     # the renderer reads them, the agent writes none of them.
     config = inserts_mod.fill(config, canvas=canvas,
-                              transition=_insert_host(row)[0].get("transition", "cut"))
+                              transition=_insert_host(row)[0].get("transition", "cut"),
+                              first_frames=_INSERT_FIRST_FRAMES)
 
     # Backstop for "auto must resolve once and record what it resolved": if the
     # agent chose a canvas but never wrote resolved_visual_style, the canvas IS

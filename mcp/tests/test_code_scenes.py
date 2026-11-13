@@ -143,7 +143,8 @@ def test_typing_too_much_is_refused():
 
 
 def test_typing_that_runs_into_the_next_step_is_refused():
-    code = "values = [1, 2, 3]\nprint(sum(values))\nprint(max(values))"
+    # The first line is on the card from the start; the rest types in.
+    code = "x = 0\nvalues = [1, 2, 3]\nprint(sum(values))\nprint(max(values))"
     e = _entry(steps=[{"at": 600, "code": code, "reveal": "type"}, {"at": 640, "focus": [2]},
                       {"at": 735, "focus": [3]}])
     errors = _check(e)

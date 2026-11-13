@@ -520,3 +520,57 @@ def test_a_mascot_cue_in_an_inserts_transition_frames_is_refused(video):
     cfg["mascot"] = [{"frame": 10, "on": True, "x": 0.5, "y": 0.5}, {"frame": 595, "on": True, "x": 0.5, "y": 0.5}]
     result = server.write_scene_config(vid, cfg)
     assert "falls inside an insert" in result.get("error", ""), result
+
+
+
+# ── an insert never opens on an empty board (decided 2026-11-12) ────────────
+
+def test_fill_holds_each_inserts_first_element_until_it_has_settled():
+    import code_scenes
+    import system_flow
+    import terminal_doc
+    from test_code_scenes import _entry as _cs_entry
+    first = {"system_flow": system_flow.insert_first_frames, "terminal_doc": terminal_doc.insert_first_frames}
+    cfg = ins.fill(_config(_sf_insert(), _td_insert(start=1000, dur=200), _cs_entry()), canvas="dark",
+                   transition="dip", first_frames=first)
+    held = {e["style"]: e["firstFrames"] for e in cfg["inserts"]}
+    # The node box lands in nodeIn frames, then its label types on.
+    label = len(_board()["nodes"][0]["label"])
+    assert held["system_flow"] == min(tinserts.FIRST_FRAMES_MAX, max(
+        system_flow.TIMING["nodeIn"],
+        system_flow.TIMING["labelTypeDelay"] + system_flow.TIMING["labelTypeFrames"] * label))
+    assert held["terminal_doc"] == terminal_doc.TIMING["reveal"]   # a word scrambling in
+    assert held["code_scenes"] == 0                                 # the card is drawn on its first frame
+    assert code_scenes.STYLE_ID in held
+
+
+def test_the_hold_is_capped_and_stays_inside_the_window():
+    slow = {"system_flow": lambda e: 500}
+    cfg = ins.fill(_config(_sf_insert(dur=240)), canvas="dark", transition="dip", first_frames=slow)
+    assert cfg["inserts"][0]["firstFrames"] == tinserts.FIRST_FRAMES_MAX
+
+
+def test_write_scene_config_writes_the_held_frames(video):
+    vid = video()
+    result = server.write_scene_config(vid, copy.deepcopy(_config(_sf_insert())))
+    written = json.loads(pathlib.Path(result["path"]).read_text())
+    assert 16 <= written["inserts"][0]["firstFrames"] <= tinserts.FIRST_FRAMES_MAX
+    # A config written back as it was read (a revision) passes with the filled key.
+    again = server.write_scene_config(vid, written)
+    assert "error" not in again, again
+
+
+def test_the_text_audit_checks_each_insert_opens_with_its_first_element():
+    import text_audit
+    cfg = {**_config(_sf_insert(), _td_insert(start=1000, dur=200)), "insertTransition": "dip"}
+    passes = text_audit.insert_open_passes(cfg)
+    assert [(p["scene"], p["first"], p["count"]) for p in passes] == [(1, 599, 2), (2, 999, 2)]
+    empty = {"scene": 1, "kind": "insert_open", "frames": [
+        {"frame": 599, "elements": [{"layer": "scene", "text": "main", "opacity": 1}]}]}
+    drawn = {"scene": 1, "kind": "insert_open", "frames": [
+        {"frame": 599, "elements": [{"layer": "insert", "text": "Browser", "opacity": 0.8}]},
+        {"frame": 600, "elements": [{"layer": "insert", "text": "Browser", "opacity": 1}]}]}
+    assert "opens on an empty board" in text_audit.insert_open_findings(empty, cfg)[0]
+    assert text_audit.insert_open_findings(drawn, cfg) == []
+    out = text_audit.summarise({"passes": [empty]}, cfg)
+    assert any("Insert 1 (system_flow) opens on an empty board" in w for w in out)

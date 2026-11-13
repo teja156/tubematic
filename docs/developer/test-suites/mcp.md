@@ -940,6 +940,11 @@ Covers `mcp/inserts.py`, the insert half of `write_scene_config`, `choose_insert
   only. A domain cannot default to an insert style, and its `default_insert_mode` seeds new videos.
 - The text audit samples each insert's boards and beats and names them as inserts.
 
+- No insert opens on an empty board: `fill` writes each insert's `firstFrames` from its style's
+  module (System Flow's first node and label, Terminal Doc's first word, 0 for Code Scenes), capped
+  at `FIRST_FRAMES_MAX` and inside the window; `write_scene_config` writes it and accepts a config
+  sent back with it; the text audit samples the frame before each window and its first frame and
+  warns when the insert has no text of its own there.
 - An insert belongs to the segment that starts at or before it, also when the previous segment's
   last word ends on that frame; non-object `props` are refused with a sentence; captions the
   shift cannot clear are refused; a main scene starting on an insert's first frame is refused; an

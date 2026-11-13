@@ -105,9 +105,11 @@ export function codeLines(code: string): string[] {
   return lines;
 }
 
-/** Frames a typed first step takes to type out. */
+/** Frames a typed first step takes to type out. Its first line is on the card
+ *  from the insert's first frame (no insert opens empty), so only the lines
+ *  after it are typed. */
 export function typeFrames(code: string): number {
-  return Math.ceil(code.replace(/\n/g, "").length * TIMING.typePerChar);
+  return Math.ceil(codeLines(code).slice(1).join("").length * TIMING.typePerChar);
 }
 
 export type CodeError = { line: number; match: string; text: string };

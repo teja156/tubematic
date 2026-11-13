@@ -347,6 +347,7 @@ still cover every frame ([scene-config.json](09-remotion-project.md#scene-config
 | `src` | `write_scene_config` | The installed scene that draws the style, from the pack's `insert.component` |
 | `palette` | `write_scene_config` | The video's canvas, which the insert follows |
 | `shift` | `write_scene_config` | Pixels the insert's layout moves down (up when negative) to stay clear of the main style's captions |
+| `firstFrames` | `write_scene_config` | Frames the insert's first element takes to settle; the renderer holds that frame through the way in, so no insert opens on an empty board ([Insert scenes](09-remotion-project.md#insert-scenes)) |
 
 `write_scene_config` also fills the top-level `insertTransition` from the main pack's
 `inserts.transition`. The agent writes none of the filled keys, so a revision cannot set a look the
@@ -425,7 +426,9 @@ yet voiced, and leaves them alone from voicing on.
   segment is narrated.
 - The scene takes the `insert` prop as above and has a look for every palette it lists.
 - Its module has a `check_insert(entry, …)` over the window and an `insert_*_windows(entry)` for the
-  text audit; register them in `server.py::_INSERT_CHECKS` and in `text_audit.plan_passes`. A style
+  text audit; register them in `server.py::_INSERT_CHECKS` and in `text_audit.plan_passes`. When
+  its first element animates in, its module also has `insert_first_frames(entry)`, registered in
+  `server.py::_INSERT_FIRST_FRAMES`, so the renderer holds the frame it has settled on. A style
   that was never a whole video also refuses its component in `scenes` (`check_scene_use`, called
   beside `code_scenes.check_scene_use` in `write_scene_config`).
 - Its authoring skill opens with an **As an insert** section and ends with one **Check and submit**
@@ -628,6 +631,7 @@ sampled frames in a browser. Its findings go to the `warnings` list of the resul
 | `Text overlap in scene` | Two text elements overlap. The line names both strings, their boxes, the frame and the overlap percentage |
 | `Text outside the safe zone in scene` | Text crosses a safe-zone edge. The line names the edges, and says when the text runs past the frame |
 | `Mascot over text in scene` | Text sits under the mascot's box |
+| `Insert N (style) opens on an empty board` | An insert has no text of its own on the frame before its window or on its first frame: its first element does not start on the insert's first frame |
 | `Text-layout audit` | The audit was skipped, could not run, or could not measure part of a scene. The line says which |
 | `First frame (scene 0` | A mixed-scenes video's frame 0 shows nothing but text or a backdrop, or nothing moves between frame 0 and frame 6 |
 
