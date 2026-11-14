@@ -1671,6 +1671,31 @@ Trap: a still's name can only be a plain file name under the video's stills dire
 before any path is built. A judge passes names back, so a traversal there would read any file the
 server can. A symlink under the job's `cartoon/` directory or in the source tree is refused too.
 
+### `test_frame_preview.py`
+
+Covers `mcp/frame_preview.py` and the `preview_frames` tool
+([`preview_frames`](../06-mcp-server.md#preview_frames)). A stub `node` on `PATH` plays the `still`
+command line, so nothing is bundled or rendered.
+
+- Frames are accepted one to six at a time and only inside the video; the last frame is allowed.
+  Nothing runs for a refused list.
+- The props equal the render's: the three job-file paths, the watermark from the setting, and
+  `mascotPath` for a video with a mascot, with the pinned code staged beside the pictures. A mascot
+  file left by an earlier call is removed when the video has no mascot, and one that is a planted
+  symlink is replaced, never written through.
+- A call clears the previous call's pictures. A Cartoon 3D video is sent to `cartoon_still`. A missing
+  job file names the step that writes it. A symlinked `preview/` or job file is refused before anything is written.
+- `preview/record.json` holds the hash of the scene-config and timeline looked at, `ok` or `unavailable`.
+  A rewritten config or timeline has not been looked at. A call refused for its arguments records
+  nothing, and a record that is damaged, wrong or a symlink is no look.
+- `submit_render` returns `preview_not_taken` for a video nobody looked at, queues it after a look
+  or an `unavailable` record, and asks nothing of a Cartoon 3D video.
+- A renderer that refuses the folder is named as older than the tool, so an upgrade that is half done
+  does not look like a broken scene.
+
+Trap: the folder, the PNG names and the props are what the stills server's path check and the
+Composition expect. Change one and the other side refuses or draws a different frame from the render.
+
 ### `test_cartoon_scene.py`
 
 Covers `_validate_cartoon_scene`, the shape of a Cartoon 3D scene config in `write_scene_config`

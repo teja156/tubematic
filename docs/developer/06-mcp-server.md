@@ -77,7 +77,7 @@ tool that needs it.
 | `MCP_PORT` | `4100` | Listen port |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Model for topic mining |
 | `GEMINI_BASE` | `https://generativelanguage.googleapis.com/v1beta` | Gemini text endpoint |
-| `TUBEMATIC_STILLS_SERVER` | `http://tubematic-renderer:4455` (set in Compose) | Stills server for the Cartoon 3D tools |
+| `TUBEMATIC_STILLS_SERVER` | `http://tubematic-renderer:4455` (set in Compose) | Stills server for the Cartoon 3D tools and `preview_frames` |
 
 API keys are settings. `generate_voice` reads `elevenlabs_api_key`, `generate_image` and
 `generate_character` read `openai_api_key`, and `mine_youtube_topics` reads `gemini_api_key`, from
@@ -87,7 +87,7 @@ restart.
 
 ---
 
-## The 59 tools
+## The 60 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -153,6 +153,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`render_style_parts`](#render_style_parts) | Render a Night Signal, Flat Vector Science or Isometric Infographic video's own parts as a picture |
 | [`preview_terminal_moves`](#preview_terminal_moves) | Render a Terminal Doc video's own moves as a picture |
 | [`write_scene_config`](#write_scene_config) | Validate and write `scene-config.json` |
+| [`preview_frames`](#preview_frames) | Render chosen frames of the composed scene as pictures |
 | [`get_scene_config`](#get_scene_config) | Read `scene-config.json` |
 | [`get_timeline`](#get_timeline) | Read `timeline.json` |
 | [`validate_job`](#validate_job) | Run the pre-render checks |
@@ -223,7 +224,8 @@ The calls one video takes when it has no mascot and is not Cartoon 3D:
 14. `write_scene_file(video_id, scene_name, tsx_content)` writes each new scene and returns its `src`.
 15. `write_scene_config(video_id, config)` writes `scene-config.json`.
 16. `validate_job(video_id)` returns `errors` to fix and `warnings` to judge.
-17. `submit_render(video_id)` moves the video to `RENDER_QUEUED`. The renderer takes it from there.
+17. `preview_frames(video_id, frames)` shows the finished scene as the render draws it. The style's skill names the frames, and the agent fixes what it sees.
+18. `submit_render(video_id)` moves the video to `RENDER_QUEUED`. The renderer takes it from there.
 
 ---
 
@@ -788,10 +790,39 @@ frame in software GL. The tool takes the scene-work claim, as it writes into the
 `read_image(video_id, image_name, grid=True)` returns the image itself after a text block. With
 `grid`, it overlays a labelled grid in normalised `[u, v]` coordinates (0 to 1 across and down the
 image), so the agent can read off an anchor point for an overlay. The grid is drawn on a copy in
-memory. `cartoon_still`, `cartoon_read_still`, `render_mascot_sheets`, `render_bean_props`,
+memory. `preview_frames`, `cartoon_still`, `cartoon_read_still`, `render_mascot_sheets`, `render_bean_props`,
 `preview_doodles`, `render_storybook_props`, `render_paper_props`, `render_style_props`, `render_style_parts` and
 `preview_terminal_moves` also
 return pictures.
+
+### `preview_frames`
+
+`preview_frames(video_id, frames)` renders one to six frames (0 to `total_frames - 1`) of the video's
+composed scene as the render will draw them: the main style, any insert, the captions, the mascot
+and the watermark. It returns a text block naming the frames, then the pictures at half size, and
+keeps them under `<video_id>/preview/` until the next call. It reads the scene source as it is on
+disk, takes no scene-work claim and calls no paid API. The skills ask the agent to look at the
+opening, the way in and out of each insert, and the turn and payoff frames after
+`write_scene_config`, fix what looks wrong and look again. `submit_render` asks for it
+([below](#submit_render)): `validate_job` does not, so it can run before the look.
+
+`mcp/frame_preview.py` builds the props the render gets (`render_agent.py::render_props`): the three
+job-file paths, the watermark from the `watermark_enabled` setting, and, for a video with a mascot,
+`mascotPath` pointing at the pinned mascot version's code, written to
+`preview/mascot.js`. It then runs the `still` command line the Cartoon 3D tools use, which asks the
+[stills server](11-rendering-and-review.md#the-stills-server) for each frame and renders on the
+MCP container's CPU when none answers. A Cartoon 3D video is refused with a pointer to
+`cartoon_still`. The call fails with a message naming an older renderer when the stills server
+refuses the `preview/` folder, which happens only between upgrading the MCP server and the
+renderer. One preview or Cartoon 3D tool runs per video at a time.
+
+Each call writes `preview/record.json`: the hash of the `scene-config.json` and `timeline.json` it
+looked at, and `ok` when the frames drew or `unavailable` (with the reason) when the tool itself failed
+to draw them. A call refused for its arguments, such as too many frames, records nothing. The file is
+written beside a folder handle opened without following a link, and read the same way, so a link planted
+in its place is no record. On the CPU fallback a call costs
+about 6 CPU seconds to bundle the project and about 1 more per frame; the stills server keeps the
+bundle, so it costs the frames alone.
 
 ### `preview_doodles`
 
@@ -1185,6 +1216,10 @@ by skipping `validate_job`:
 
 - A Cartoon 3D video with an open gate returns `cartoon_not_ready`.
 - A mascot video whose scene-config has no cue track returns `mascot_cues_missing`.
+- A video whose current `scene-config.json` and `timeline.json` have no `preview/record.json` of that
+  content returns `preview_not_taken`. A config rewritten after the look, such as in a revision,
+  needs a new look. A record of `unavailable` passes, so a renderer that cannot draw never stops the
+  pipeline. A Cartoon 3D video is not asked: its beat gate is its look.
 
 When it queues a Cartoon 3D video it records the source's fingerprint in
 `<jobs>/<video_id>/cartoon/source.json`. The renderer renders that tree or fails the render back to

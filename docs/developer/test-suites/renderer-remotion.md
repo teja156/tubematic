@@ -478,6 +478,21 @@ Trap: the verdict needs two judges because two judges can disagree about the sam
 values are asserted word for word because `gate/beatGateCli.ts` prints them to tell the author which
 judge to run next.
 
+### `renderer/remotion/cartoon-tools/merged-public.test.ts`
+
+Covers `renderer/remotion/cartoon-tools/merged-public.mjs::syncMergedPublic`, the directory the
+[stills server](../11-rendering-and-review.md#the-stills-server) and its local fallback serve as
+`/public/`.
+
+- A video's files and the project's fonts and watermark come out of one directory. A folder is a link
+  and a plain file is a copy.
+- A video filed after the first sync is served by the next one, and a video that is gone is dropped.
+- The jobs volume wins a name clash, and neither source directory is written to.
+
+Trap: Remotion's static server answers 404 for a symlinked file, so the watermark must be a copy.
+Without the fonts and the watermark a frame of a video fails on the image or draws its text in a
+fallback font, which would make a preview misreport the text layout.
+
 ### `renderer/remotion/cartoon-tools/out-path.test.ts`
 
 Covers `renderer/remotion/cartoon-tools/out-path.mjs::outPathError` and `planRequest`, the checks the
@@ -486,6 +501,9 @@ write, before it bundles or opens a browser.
 
 - The paths the Cartoon 3D tools write (`<video_id>/cartoon/stills/…`, `<video_id>/cartoon/beatgate/…`)
   pass, and an output directory under a video's `cartoon/` folder passes.
+- The folder `preview_frames` writes (`<video_id>/preview/…`) passes by the same rules. Look-alikes
+  (`previews/`, `Preview/`, a file named `preview.png`, a `preview` that is not under a video) and a
+  non-PNG in it are refused, as is a `preview/` that is a symlink.
 - A path elsewhere in `/jobs`, outside it, relative, or escaping with `..` is refused, as is a file that
   is not a PNG and a missing path.
 - A path through any symlink is refused, a dangling one and one pointing back inside included,

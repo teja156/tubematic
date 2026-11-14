@@ -14,16 +14,19 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 ### Upgrade notes
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode) after you
-   upgrade. The skills that write scripts, handle revisions and pick a video's style changed, and a
+   upgrade. The skills that write scripts, handle revisions, pick a video's style and look at a finished scene changed, and a
    session started before the upgrade keeps the old ones.
 2. To go back to 2.2.x after upgrading, restore the database backup the upgrade took. 2.2.x cannot
    read the new voice speed column, and it reads a voice list with a speed on an `eleven_v3` or
    `eleven_v4` voice as empty. Restoring the backup also returns the videos the upgrade sent back to
-   Auto (point 4) to their 2.2.x state, and any script written for them since is lost.
+   Auto (point 5) to their 2.2.x state, and any script written for them since is lost.
 3. Run this upgrade without `--no-stop`. `upgrade.py` refuses `--no-stop` for it, because old and new
    containers running side by side could pick System Flow or Terminal Doc again for the videos the
    upgrade moves.
-4. System Flow and Terminal Doc are now insert styles, never a style for a whole video (see Changed). On upgrade, a
+4. A video whose scene was written before the upgrade and is not queued for rendering yet is not
+   queued until its scene has been looked at (see Added). Its agent does this on its next run, and a
+   session started before the upgrade is told what to do by the refusal it gets.
+5. System Flow and Terminal Doc are now insert styles, never a style for a whole video (see Changed). On upgrade, a
    video in one of them that is not voiced yet (a topic waiting for approval, an approved topic, a
    script waiting at Script Ready, or a topic or script sent back for revision before it was voiced)
    goes back to Auto: its agent picks a new style and writes a new
@@ -34,6 +37,14 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ### Added
 
+- Every video is now checked by its own agent before it is queued for a render. The agent draws
+  chosen frames of the finished scene (the opening, the way in and out of each insert, the turn and
+  the payoff) with the captions, the mascot and the watermark as the render draws them, fixes what
+  looks wrong, such as a label on the wrong side or overlapping text, and looks again. This applies to
+  every visual style, and again to every revision, so fewer videos come back from review for a fault
+  that was visible all along. A video whose current scene was never looked at is not queued, and a
+  renderer that cannot draw the frames does not stop it. It costs no API credit. Each frame costs some
+  processor time on the machine that runs Tubematic.
 - Each video now has its own voice speed, from 0.90x to 1.25x. The agent picks it with the script:
   faster for a quick list, slower for a script dense with numbers or a calm story. You see it and
   can change it in the video's window before you approve the script, and the window shows the speed

@@ -193,7 +193,7 @@ def test_submit_render_rejected_for_non_owner_leaves_status_voice_ready(job_db, 
     assert row["status"] == "VOICE_READY"
 
 
-def test_unclaimed_video_passes_every_guard(job_db, scene_dirs, monkeypatch):
+def test_unclaimed_video_passes_every_guard(job_db, scene_dirs, monkeypatch, looked):
     """The normal single-session path: nobody pre-claims, every guarded tool
     just works. This is the concrete proof claim-on-first-use doesn't change
     existing behavior."""
@@ -305,7 +305,7 @@ def test_status_mismatch_does_not_release(job_db):
     assert server._scene_claims["vid_1"][0] == "session:a"
 
 
-def test_revision_loop_end_to_end(job_db, scene_dirs):
+def test_revision_loop_end_to_end(job_db, scene_dirs, looked):
     job_db("vid_1", status="REVISION_REQUESTED")
     server.write_scene_file("vid_1", "intro-hook", "x")  # claims as "no-session"
     server.set_video_status("vid_1", "VOICE_READY")
