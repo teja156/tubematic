@@ -280,6 +280,10 @@ The Mascots page's create form uses the same agent, model and effort controls
 - A closed row is one line: the name, a chip for each default the domain sets
   (`lib/domains.ts::domainChips`), the topic and video counts, the status and the pause button. The
   panel is rendered only while its row is open.
+- The seed domains are two lists. Active seeds show first. Paused seeds sit under a **Paused (N)**
+  disclosure, closed until opened and hidden when none are paused. A paused seed's row has a
+  **Delete** button, which opens a confirmation naming the domain and what goes with it, then sends
+  `DELETE /projects/<id>` through the same per-domain write queue. A refusal shows on the row.
 - The panel groups the controls as Look, Narration, Agent and Limits, each with a sentence that
   says which videos it reaches. The add form renders the Look, Narration and Agent groups from the
   same component, `DomainDefaults`. Look holds the style, the mascot and the **Inserts** setting.

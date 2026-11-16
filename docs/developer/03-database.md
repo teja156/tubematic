@@ -311,6 +311,10 @@ The API and the MCP server check `description` only when it changes, so a longer
 stored is kept. The limit is low because `list_projects` returns every domain's description on
 every research run.
 
+Deleting a domain removes its row and its videos, with their comments, publications and metrics.
+Nothing in the schema cascades from `projects`, so the route deletes in order. See
+[Deleting a domain](02-pipeline.md#deleting-a-domain).
+
 The defaults are copied into the video's own columns (`videos.voice_id`,
 `videos.script_profile_id`, `videos.agent_id`, `videos.formula_choice` and so on) when the video is
 created. Changing one does not reach videos already filed.

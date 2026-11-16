@@ -1,7 +1,14 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import {
-  createProject, createVideo, setProjectStatus, setSettings, setStrategies, setMiningSources,
+  API_AUTH, BASE, createProject, createVideo, setProjectStatus, setSettings, setStrategies, setMiningSources,
 } from "../fixtures/seed";
+
+// Paused seeds sit in a collapsed group; open it before reading one of them.
+async function openPausedGroup(page: Page) {
+  const toggle = page.getByTestId("paused-domains-toggle");
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+}
 
 test.describe("Topics page", () => {
   let uid: string;
@@ -330,8 +337,11 @@ test.describe("Topics page", () => {
     // Click Pause
     await row.getByTestId(`toggle-domain-${slug}`).click();
 
-    // Badge should change to PAUSED
-    await expect(row).toContainText("PAUSED", { timeout: 3000 });
+    // The row leaves the active list for the collapsed Paused group, where it
+    // reads PAUSED.
+    await expect(row).toHaveCount(0, { timeout: 3000 });
+    await openPausedGroup(page);
+    await expect(page.getByTestId(`domain-row-${slug}`)).toContainText("PAUSED");
   });
 
   test("resuming a paused domain changes badge back to ACTIVE", async ({ page }) => {
@@ -341,14 +351,54 @@ test.describe("Topics page", () => {
 
     await page.goto("/topics");
 
+    await openPausedGroup(page);
     const row = page.getByTestId(`domain-row-${slug}`);
     await expect(row).toBeVisible();
     await expect(row).toContainText("PAUSED");
 
-    // Click Resume
+    // Click Resume: the row returns to the active list.
     await row.getByTestId(`toggle-domain-${slug}`).click();
 
-    await expect(row).toContainText("ACTIVE", { timeout: 3000 });
+    await expect(page.getByTestId(`domain-row-${slug}`)).toContainText("ACTIVE", { timeout: 3000 });
+  });
+
+  // ── Delete a paused domain ─────────────────────────────────────────────────
+
+  test("a paused seed can be deleted after a confirmation, and its videos go with it", async ({ page }) => {
+    const slug = `delete-test-${uid}`;
+    await createProject({ id: slug, name: `Delete Test ${uid}`, is_curriculum_seed: true });
+    const video = await createVideo({ topic: `[${uid}] goes with it`, project_id: slug, strategy: "curriculum" });
+    await setProjectStatus(slug, "paused");
+
+    await page.goto("/topics");
+    await openPausedGroup(page);
+    const row = page.getByTestId(`domain-row-${slug}`);
+
+    await row.getByTestId(`delete-domain-${slug}`).click();
+    await expect(page.getByTestId("delete-domain-warning")).toContainText("cannot be undone");
+
+    // Cancel leaves it.
+    await page.getByTestId("delete-domain-cancel").click();
+    await expect(row).toBeVisible();
+
+    await row.getByTestId(`delete-domain-${slug}`).click();
+    await page.getByTestId("delete-domain-ok").click();
+    await expect(page.getByTestId(`domain-row-${slug}`)).toHaveCount(0);
+
+    await page.reload();
+    await expect(page.getByTestId(`domain-row-${slug}`)).toHaveCount(0);
+    const res = await fetch(`${BASE}/videos/${video.id}`, { headers: API_AUTH });
+    expect(res.status).toBe(404);
+  });
+
+  test("an active seed offers no Delete", async ({ page }) => {
+    const slug = `nodelete-test-${uid}`;
+    await createProject({ id: slug, name: `No Delete ${uid}`, is_curriculum_seed: true });
+
+    await page.goto("/topics");
+    const row = page.getByTestId(`domain-row-${slug}`);
+    await expect(row).toBeVisible();
+    await expect(row.getByTestId(`delete-domain-${slug}`)).toHaveCount(0);
   });
 
   test("a domain that is not a curriculum seed offers no pause control", async ({ page }) => {

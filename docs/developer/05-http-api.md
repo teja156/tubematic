@@ -820,6 +820,15 @@ Body `{status}`. `200` with the row, shaped like `GET /projects`. `400` for a va
 `active` or `paused`. `404` for an unknown domain. `409` for `paused` on a domain that is not a
 curriculum seed. See [Domain pause](02-pipeline.md#domain-pause).
 
+### `DELETE /projects/<project_id>`
+
+Deletes a paused curriculum seed and every video filed under it. `200` with
+`{ok, deleted_videos, file_errors}`. A file that could not be removed is listed in `file_errors`
+and the rows are gone either way. `404` for an unknown domain. `409` for `manual`, a domain that is
+not a curriculum seed, a domain that is not paused, or a domain with a video in a status that
+`DELETE /videos/<id>` refuses; the error names the statuses. See
+[Deleting a domain](02-pipeline.md#deleting-a-domain).
+
 ## Settings
 
 How settings are stored, typed and masked is in [Settings internals](04-settings.md). The keys are

@@ -17,6 +17,7 @@ import { MiningSources } from "@/components/MiningSources";
 import { useVisualStyles } from "@/components/VisualStylesProvider";
 import { SaveStatus } from "@/components/SaveStatus";
 import { ToastStack, useToasts } from "@/components/Toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { responseError, useSaveStatus, useSerialQueue, type SaveState } from "@/lib/saveStatus";
 import { formulaOptions, type ScriptFormulaNames } from "@/lib/scriptFormulas";
 import { INSERT_MODE_OPTIONS, INSERTS_TITLE, insertMode } from "@/lib/inserts";
@@ -372,13 +373,15 @@ const badgeStyle = {
 // status. The defaults themselves sit in a panel under the line, opened by
 // "Edit defaults". Seven pickers and a cap on the line itself left no room
 // for the name, and nowhere to say which videos each default applies to.
-function DomainRow({ project, videoCounts, status, onToggle, onSave, onInvalid, lists, canIllustrate, gpu }: {
+function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, onInvalid, lists, canIllustrate, gpu }: {
   project: Project;
   videoCounts: Record<string, number>;
   /** How the last change to this domain went: shown on the line itself, so a
    *  refusal is seen with the panel closed too. */
   status?: SaveState;
   onToggle: (id: string, next: ProjectStatus) => void;
+  /** Asks to delete this domain; the page opens the confirmation. */
+  onDelete: (project: Project) => void;
   /** Resolves to whether the change was stored. */
   onSave: (id: string, patch: Partial<Project>) => Promise<boolean>;
   /** An entry refused before it is sent, shown like a refused save. */
@@ -525,6 +528,33 @@ function DomainRow({ project, videoCounts, status, onToggle, onSave, onInvalid, 
             >
               {isPaused ? "Resume topic generation" : "Pause topic generation"}
             </button>
+
+            {/* Delete is offered on a paused seed only: pausing first is the
+                second step that keeps a domain from being deleted by one
+                stray click. The confirmation says what goes with it. */}
+            {isPaused && (
+              <button
+                data-testid={`delete-domain-${project.id}`}
+                onClick={() => onDelete(project)}
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 11,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  padding: "6px 14px",
+                  background: "transparent",
+                  border: "1px solid var(--border-2)",
+                  color: "var(--red)",
+                  cursor: "pointer",
+                  transition: "all .12s",
+                  flexShrink: 0,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255,107,107,0.5)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-2)"; }}
+              >
+                Delete
+              </button>
+            )}
           </>
         )}
 
@@ -870,6 +900,9 @@ const SAVED_FIELD: Record<string, string> = {
 // for one another, so one that never answered would hold every later change
 // to that domain behind it; past this it counts as not having reached the API.
 const DOMAIN_WRITE_TIMEOUT_MS = 30_000;
+// A delete removes every render and job folder under the domain before it
+// answers, so it is given longer than a field change.
+const DOMAIN_DELETE_TIMEOUT_MS = 120_000;
 
 export default function TopicsPage() {
   const [projects, setProjectsState] = useState<Project[]>([]);
@@ -1013,6 +1046,30 @@ export default function TopicsPage() {
     }));
   }
 
+  // The domain waiting on the delete confirmation, and whether the Paused
+  // group is open. Paused seeds sit in a collapsed group so the active ones
+  // are what the page opens on.
+  const [deleting, setDeleting] = useState<Project | null>(null);
+  const [pausedOpen, setPausedOpen] = useState(false);
+
+  function handleDeleteDomain(project: Project) {
+    const id = project.id;
+    void statuses.run(id, () => queued(id, async () => {
+      const r = await apiFetch(`/projects/${id}`, {
+        method: "DELETE",
+        signal: AbortSignal.timeout(DOMAIN_DELETE_TIMEOUT_MS),
+      }).catch(() => null);
+      // A refusal (a video still rendering, the domain no longer paused) is
+      // reported beside the row, which stays.
+      if (!r?.ok) {
+        return r ? responseError(r) : "could not delete this domain";
+      }
+      setProjects((prev) => prev.filter((p) => p.id !== id));
+      push("success", `Deleted domain “${project.name}” and everything filed under it.`);
+      return null;
+    }));
+  }
+
   function saveDomain(id: string, patch: Partial<Project>): Promise<boolean> {
     return statuses.run(id, () => queued(id, async () => {
       const project = projectsRef.current.find((p) => p.id === id);
@@ -1137,6 +1194,8 @@ export default function TopicsPage() {
   }
 
   const seedDomains = projects.filter((p) => p.is_curriculum_seed === 1);
+  const activeSeeds = seedDomains.filter((p) => p.status !== "paused");
+  const pausedSeeds = seedDomains.filter((p) => p.status === "paused");
   const otherDomains = projects.filter((p) => p.is_curriculum_seed !== 1);
 
   return (
@@ -1205,11 +1264,41 @@ export default function TopicsPage() {
           </div>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 24 }}>
-          {seedDomains.map((p) => (
-            <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
-          ))}
-        </div>
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 24 }}>
+            {activeSeeds.map((p) => (
+              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
+            ))}
+          </div>
+
+          {/* Paused seeds, collapsed: they generate nothing, and deleting a
+              domain starts here. */}
+          {pausedSeeds.length > 0 && (
+            <section data-testid="paused-domains" style={{ marginBottom: 24 }}>
+              <button
+                type="button"
+                data-testid="paused-domains-toggle"
+                aria-expanded={pausedOpen}
+                aria-controls="paused-domains-list"
+                onClick={() => setPausedOpen((o) => !o)}
+                style={{
+                  fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase",
+                  color: "var(--mute)", background: "transparent", border: "none", cursor: "pointer",
+                  padding: 0, marginBottom: 10,
+                }}
+              >
+                {pausedOpen ? "▾" : "▸"} Paused ({pausedSeeds.length})
+              </button>
+              {pausedOpen && (
+                <div id="paused-domains-list" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {pausedSeeds.map((p) => (
+                    <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </>
       )}
 
       {/* Other domains */}
@@ -1220,11 +1309,56 @@ export default function TopicsPage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {otherDomains.map((p) => (
-              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
+              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
             ))}
           </div>
         </section>
       )}
+      <Dialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
+        <DialogContent
+          data-testid="delete-domain-confirm"
+          className="border-[#1e1e30] bg-[#0d0d1a] text-[#f0f0ff]"
+          style={{ maxWidth: 520 }}
+        >
+          <DialogHeader>
+            <DialogTitle style={{ fontSize: 15, fontWeight: 600 }}>
+              Delete “{deleting?.name}”?
+            </DialogTitle>
+          </DialogHeader>
+          <p data-testid="delete-domain-warning" style={{ fontSize: 13, lineHeight: 1.6, color: "var(--dim)", margin: 0 }}>
+            This permanently deletes the domain and all {deleting?.topic_count ?? 0} topics
+            and videos filed under it, with their rendered files, comments and publishing
+            records. It cannot be undone. Posts already live on YouTube, Instagram, TikTok
+            or Facebook stay up there; only this record of them goes. Spending history is kept.
+          </p>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+            <button
+              data-testid="delete-domain-cancel"
+              onClick={() => setDeleting(null)}
+              style={{
+                fontFamily: "var(--mono)", fontSize: 11, padding: "7px 14px", cursor: "pointer",
+                background: "transparent", border: "1px solid var(--border-2)", color: "var(--dim)",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              data-testid="delete-domain-ok"
+              onClick={() => {
+                const target = deleting;
+                setDeleting(null);
+                if (target) handleDeleteDomain(target);
+              }}
+              style={{
+                fontFamily: "var(--mono)", fontSize: 11, padding: "7px 14px", cursor: "pointer",
+                background: "transparent", border: "1px solid var(--red)", color: "var(--red)",
+              }}
+            >
+              Delete domain
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </>
   );

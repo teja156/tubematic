@@ -181,7 +181,8 @@ and post links. An archived video cannot be played or restored.
 
 Holds the research mode toggles, the mining sources, and a row for each domain. A row shows the
 domain's name, the defaults it has set, how many topics and videos it holds, and its status. A
-curriculum seed also has a **Pause topic generation** button.
+curriculum seed also has a **Pause topic generation** button. Paused seeds are listed under a
+closed **Paused** group, and each has a **Delete** button.
 
 **Edit defaults** opens the domain's choices under its row:
 

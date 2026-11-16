@@ -83,6 +83,10 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
 - Mining sources: a refused save shows the API's message, and a successful save lists what the API
   stored. The Mining toggle is disabled while the API reports `mining_available: false`.
 - The pause control appears on a curriculum seed only, labelled "Pause topic generation".
+- A paused seed leaves the active list for a collapsed **Paused** group, and the group is absent when
+  nothing is paused. **Delete** shows on a paused seed only. It asks first, naming the domain and its
+  topic count, and **Cancel** sends nothing. A confirmed delete drops the row, and a refusal shows
+  on the row and keeps it. Cases that read a paused row open the group first.
 - A closed domain row renders no picker. It shows a chip for each default the domain sets, or
   "Install defaults for everything", and the topic count against the cap. **Edit defaults** opens
   one row's panel and leaves the others closed.

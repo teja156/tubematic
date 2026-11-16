@@ -12,6 +12,14 @@ async function openDefaults(id = "seed-1") {
   fireEvent.click(await waitFor(() => screen.getByTestId(`domain-edit-${id}`)));
 }
 
+// Paused seeds sit in a collapsed "Paused" group. A case that reads a paused
+// row opens it first; opening an already-open group is a no-op.
+async function openPaused() {
+  const { fireEvent } = await import("@testing-library/react");
+  const toggle = await waitFor(() => screen.getByTestId("paused-domains-toggle"));
+  if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
+}
+
 function mockFetch({ miningOk = true, miningUrls = [MINING_URL] as string[],
                      savedUrls = undefined as string[] | undefined,
                      failBody = {} as Record<string, unknown> } = {}) {
@@ -240,9 +248,11 @@ describe("TopicsPage — domain pause", () => {
     render(<TopicsPage />);
     const { fireEvent } = await import("@testing-library/react");
     fireEvent.click(await waitFor(() => screen.getByTestId("toggle-domain-seed-1")));
-    await waitFor(() => {
-      expect(screen.getByTestId("domain-status-seed-1").textContent).toBe("PAUSED");
-    });
+    // The row leaves the active list for the collapsed Paused group.
+    await waitFor(() => expect(screen.queryByTestId("domain-row-seed-1")).toBeNull());
+    expect(screen.getByTestId("paused-domains-toggle").textContent).toContain("Paused (1)");
+    await openPaused();
+    expect(screen.getByTestId("domain-status-seed-1").textContent).toBe("PAUSED");
     expect(screen.getByTestId("toggle-domain-seed-1").textContent).toBe("Resume topic generation");
   });
 
@@ -256,6 +266,115 @@ describe("TopicsPage — domain pause", () => {
       .toContain("not a curriculum seed"));
     expect(alertSpy).not.toHaveBeenCalled();
     expect(screen.getByTestId("domain-status-seed-1").textContent).toBe("ACTIVE");
+  });
+});
+
+// ── Paused group and deleting a domain (TMDEV-248) ──────────────────────────
+
+describe("TopicsPage — paused group and delete", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const SEED = {
+    id: "seed-1", name: "Linux internals", description: "", is_curriculum_seed: 1,
+    status: "active", default_visual_style: "", created_at: "2026-01-01T00:00:00Z", topic_count: 7,
+  };
+  const PAUSED = { ...SEED, id: "seed-2", name: "Networking", status: "paused" };
+  const NON_SEED = { ...SEED, id: "plain-1", name: "Trending", is_curriculum_seed: 0 };
+
+  function mockDomains(rows: object[], deleteAnswer = { ok: true, status: 200, body: { ok: true } as object }) {
+    return vi.spyOn(global, "fetch").mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = url.toString();
+      if (init?.method === "DELETE") {
+        return Promise.resolve({
+          ok: deleteAnswer.ok, status: deleteAnswer.status,
+          json: () => Promise.resolve(deleteAnswer.body),
+        } as Response);
+      }
+      if (urlStr.endsWith("/projects")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(rows) } as Response);
+      }
+      if (urlStr.includes("/research/strategies")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ strategies: [] }) } as Response);
+      }
+      if (urlStr.includes("/research/mining-sources")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ youtube_urls: [] }) } as Response);
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) } as Response);
+    });
+  }
+
+  const deleteCalls = (spy: ReturnType<typeof mockDomains>) =>
+    spy.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "DELETE");
+
+  it("lists active seeds and keeps paused ones in a collapsed group", async () => {
+    mockDomains([SEED, PAUSED]);
+    render(<TopicsPage />);
+    await waitFor(() => screen.getByTestId("domain-row-seed-1"));
+    expect(screen.queryByTestId("domain-row-seed-2")).toBeNull();
+    const toggle = screen.getByTestId("paused-domains-toggle");
+    expect(toggle.textContent).toContain("Paused (1)");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    await openPaused();
+    expect(screen.getByTestId("domain-row-seed-2")).toBeTruthy();
+    expect(screen.getByTestId("paused-domains-toggle").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("shows no Paused group when nothing is paused", async () => {
+    mockDomains([SEED]);
+    render(<TopicsPage />);
+    await waitFor(() => screen.getByTestId("domain-row-seed-1"));
+    expect(screen.queryByTestId("paused-domains")).toBeNull();
+  });
+
+  it("offers Delete on a paused seed only", async () => {
+    mockDomains([SEED, PAUSED, NON_SEED]);
+    render(<TopicsPage />);
+    await waitFor(() => screen.getByTestId("domain-row-seed-1"));
+    expect(screen.queryByTestId("delete-domain-seed-1")).toBeNull();
+    expect(screen.queryByTestId("delete-domain-plain-1")).toBeNull();
+    await openPaused();
+    expect(screen.getByTestId("delete-domain-seed-2")).toBeTruthy();
+  });
+
+  it("asks first, naming the domain and what goes with it, and Cancel sends nothing", async () => {
+    const spy = mockDomains([PAUSED]);
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openPaused();
+    fireEvent.click(screen.getByTestId("delete-domain-seed-2"));
+    const warning = await waitFor(() => screen.getByTestId("delete-domain-warning"));
+    expect(warning.textContent).toContain("7 topics");
+    expect(warning.textContent).toContain("cannot be undone");
+    expect(screen.getByTestId("delete-domain-confirm").textContent).toContain("Networking");
+    fireEvent.click(screen.getByTestId("delete-domain-cancel"));
+    await waitFor(() => expect(screen.queryByTestId("delete-domain-confirm")).toBeNull());
+    expect(deleteCalls(spy)).toHaveLength(0);
+    expect(screen.getByTestId("domain-row-seed-2")).toBeTruthy();
+  });
+
+  it("deletes after the confirmation and drops the row", async () => {
+    const spy = mockDomains([PAUSED]);
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openPaused();
+    fireEvent.click(screen.getByTestId("delete-domain-seed-2"));
+    fireEvent.click(await waitFor(() => screen.getByTestId("delete-domain-ok")));
+    await waitFor(() => expect(screen.queryByTestId("domain-row-seed-2")).toBeNull());
+    expect(deleteCalls(spy)).toHaveLength(1);
+    expect(String(deleteCalls(spy)[0][0])).toContain("/projects/seed-2");
+    expect(screen.getByText(/Deleted domain/)).toBeTruthy();
+  });
+
+  it("reports a refused delete beside the domain and keeps the row", async () => {
+    mockDomains([PAUSED], { ok: false, status: 409, body: { error: "A video in this domain is still in progress (1 RENDERING)." } });
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openPaused();
+    fireEvent.click(screen.getByTestId("delete-domain-seed-2"));
+    fireEvent.click(await waitFor(() => screen.getByTestId("delete-domain-ok")));
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-seed-2").textContent)
+      .toContain("still in progress"));
+    expect(screen.getByTestId("domain-row-seed-2")).toBeTruthy();
   });
 });
 
@@ -814,6 +933,7 @@ describe("TopicsPage — topic cap", () => {
 
     mockDomains({ ...DOMAIN, status: "paused", topic_cap: 40, expired: true });
     render(<TopicsPage />);
+    await openPaused();
     await openDefaults();
     await waitFor(() => expect(screen.getByTestId("domain-status-seed-1").textContent).toBe("PAUSED"));
     expect(screen.getByTestId("domain-expired-seed-1")).toBeTruthy();
@@ -1279,6 +1399,7 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     expect(statusCalls()).toBe(0);
     release();
     await waitFor(() => expect(statusCalls()).toBe(1));
+    await openPaused();
     await waitFor(() => expect(screen.getByTestId("domain-status-seed-1").textContent).toBe("PAUSED"));
     expect(screen.getByTestId("domain-chip-agent-seed-1").textContent).toBe("AgentAutomatic · low");
   });
