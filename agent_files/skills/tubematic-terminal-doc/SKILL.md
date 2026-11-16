@@ -247,7 +247,11 @@ of the frame, below the captions and off the stage, and bring it on only for a f
    of your own, look at them now with `preview_terminal_moves` (Step 3b).
 2. `validate_job(video_id)`: fix its errors, then read its `warnings`. The text audit measures the
    stage text in a browser; an overlap is a measurement, so move, shorten or clear the text.
-3. `submit_render(video_id)`.
+3. **Look before you submit.** Call `preview_frames(video_id, frames)`, as the **tubematic-scene-config** skill's
+   *Look before you submit* step says: frame 0, the first words of the turn and the payoff, and the way in and out of any
+   insert. Fix what you see and look again. `submit_render` refuses with `preview_not_taken` until the current config
+   has been looked at, and a config rewritten after the look needs a new look.
+4. `submit_render(video_id)`.
 
 In the handback, say which skin you chose and why, how many beats you made, which moves carried the
 video, and any move you wrote yourself and why no shipped move could show it.

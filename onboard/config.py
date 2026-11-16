@@ -131,7 +131,7 @@ MAX_LOG_RETENTION_DAYS = 365
 MIN_RETENTION_DAYS = 0
 MAX_RETENTION_DAYS = 365
 
-# "Teja (eleven_v4) and Adam (eleven_v3)" — the pre-loaded roster, for help text.
+# "Bill (eleven_v4) and Adam (eleven_v3)" — the pre-loaded roster, for help text.
 _DEFAULT_VOICE_NAMES = " and ".join(
     f"{v['name']} ({v['model_id']})" for v in _voice_models.DEFAULT_VOICES)
 

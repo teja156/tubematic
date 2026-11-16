@@ -178,8 +178,10 @@ not count a window. With no marked segment, write no `inserts`.
    name plates, dates, card text and map labels in a browser; an overlap is a measurement, so move or
    shorten what it reports. Signs, stamps and prop labels are drawn into pictures, which
    `write_scene_config` already sized from their text.
-3. **Look before you submit.** (Reserved: a later tool lets you look at chosen frames of the composed
-   video here. Until it exists, go straight on.)
+3. **Look before you submit.** Call `preview_frames(video_id, frames)`, as the **tubematic-scene-config** skill's
+   *Look before you submit* step says: frame 0, the first words of the turn and the payoff, and the way in and out of any
+   insert. Fix what you see and look again. `submit_render` refuses with `preview_not_taken` until the current config
+   has been looked at, and a config rewritten after the look needs a new look.
 4. `submit_render(video_id)`.
 
 In the handback, say how many beats of each kind you made, who the cast is in which costumes (and

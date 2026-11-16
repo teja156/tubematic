@@ -497,7 +497,7 @@ def test_validate_job_ignores_a_video_without_a_mascot(db):
     assert server.MASCOT_CUES_MISSING not in server.validate_job(VID)["errors"]
 
 
-def test_submit_render_refuses_a_mascot_video_without_cues_and_queues_one_with(db):
+def test_submit_render_refuses_a_mascot_video_without_cues_and_queues_one_with(db, looked):
     _mascot()
     _video(status="VOICE_READY", mascot="moss")
     _job_files()

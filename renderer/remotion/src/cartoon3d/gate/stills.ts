@@ -15,6 +15,8 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+// @ts-expect-error a plain .mjs module beside the stills server, bundled into the command lines by esbuild
+import { syncMergedPublic } from "../../../cartoon-tools/merged-public.mjs";
 
 export interface StillJob {
   composition: string;
@@ -67,13 +69,22 @@ export const renderStills = async (root: string, jobs: StillJob[], scale = 0.5):
   const { gl, chromeMode, multi, browserExecutable } = flagsOf();
   const chromiumOptions = { gl, enableMultiProcessOnLinux: multi };
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "cartoon-stills-bundle-"));
+  let mergedDir: string | null = null;
   let browser: Awaited<ReturnType<typeof openBrowser>> | null = null;
   try {
     // remotion.config.ts does not apply to the Node API: the Tailwind override and the public dir are passed here
     // CARTOON_PUBLIC_DIR: the directory served as /public/ (the MCP container passes the shared jobs
     // volume, so a video's files are /public/<vid>/... with nothing staged); default the project's own
+    // The jobs volume alone has no fonts or watermark, so it is served merged with the project's public/ (as the
+    // stills server does, cartoon-tools/merged-public.mjs).
+    let publicDir = path.join(root, "public");
+    if (process.env.CARTOON_PUBLIC_DIR) {
+      mergedDir = fs.mkdtempSync(path.join(os.tmpdir(), "cartoon-stills-public-"));
+      publicDir = mergedDir;
+      syncMergedPublic(publicDir, process.env.CARTOON_PUBLIC_DIR, path.join(root, "public"));
+    }
     const serveUrl = await bundle({
-      entryPoint: path.join(root, "src/index.ts"), outDir, publicDir: process.env.CARTOON_PUBLIC_DIR || path.join(root, "public"),
+      entryPoint: path.join(root, "src/index.ts"), outDir, publicDir,
       webpackOverride: enableTailwind, symlinkPublicDir: true, onProgress: () => {},
     });
     browser = await openBrowser("chrome", { chromiumOptions, chromeMode, browserExecutable, logLevel: "error" });
@@ -98,5 +109,6 @@ export const renderStills = async (root: string, jobs: StillJob[], scale = 0.5):
   } finally {
     try { await browser?.close({ silent: true }); } catch { /* already gone */ }
     fs.rmSync(outDir, { recursive: true, force: true });
+    if (mergedDir) fs.rmSync(mergedDir, { recursive: true, force: true });
   }
 };

@@ -19,7 +19,7 @@
 // current bundle was made from, and re-bundles when it differs: an edit to a video's code is seen by its next still
 // (~20 s once), an unchanged tree costs a directory walk.
 //           GET  /health                   {ok, bundled, browser, public, gl, chromeMode}
-// An out or outDir must lie under <public>/<video>/cartoon/ (out-path.mjs), or the request is answered 400 with
+// An out or outDir must lie under <public>/<video>/cartoon/ or <video>/preview/ (out-path.mjs), or the request is answered 400 with
 // nothing drawn: the port has no credential, and in production the public directory is the read-write /jobs volume.
 // Responses: JSON {ok, out | outs, ms, logs}. Browser console lines are collected per request and returned as
 // `logs` (what `npx remotion still` never shows).
@@ -32,7 +32,9 @@
 import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import { planRequest } from "./out-path.mjs";
+import { syncMergedPublic } from "./merged-public.mjs";
 import { bundle } from "@remotion/bundler";
 import { openBrowser, renderStill, selectComposition } from "@remotion/renderer";
 import { enableTailwind } from "@remotion/tailwind-v4";
@@ -56,6 +58,9 @@ const chromiumOptions = { gl: GL, enableMultiProcessOnLinux: MULTI, disableWebSe
 const browserOptions = { chromiumOptions, chromeMode: CHROME_MODE, browserExecutable: BROWSER, logLevel: "error" };
 
 const GENERATED = path.join(ROOT, "src/scenes/generated");
+// what a render serves as /public/: the jobs volume plus the project's fonts, watermark and mascots (merged-public.mjs)
+const MERGED_PUBLIC = fs.mkdtempSync(path.join(os.tmpdir(), "stills-public-"));
+const syncPublic = () => syncMergedPublic(MERGED_PUBLIC, PUBLIC, path.join(ROOT, "public"));
 const STILLS_IDLE_MS = 10 * 60 * 1000;
 
 let serveUrl = null;
@@ -83,11 +88,12 @@ export const treeStamp = (dir) => {
 
 const rebundle = async () => {
   const t = Date.now();
+  syncPublic();
   const stamp = treeStamp(GENERATED);
   // remotion.config.ts does not apply to the Node API: the Tailwind override and the public dir are passed here,
   // and the public dir is symlinked so files added under it later are served without another bundle
   const previous = serveUrl;
-  serveUrl = await bundle({ entryPoint: ENTRY, publicDir: PUBLIC, webpackOverride: enableTailwind, symlinkPublicDir: true, onProgress: () => {} });
+  serveUrl = await bundle({ entryPoint: ENTRY, publicDir: MERGED_PUBLIC, webpackOverride: enableTailwind, symlinkPublicDir: true, onProgress: () => {} });
   bundledStamp = stamp;
   if (previous && previous !== serveUrl) fs.rmSync(previous, { recursive: true, force: true });
   console.log(`[stills] bundled in ${Date.now() - t} ms: ${serveUrl} (public ${PUBLIC})`);
@@ -95,6 +101,7 @@ const rebundle = async () => {
 
 /** bundle when there is none, or re-bundle when the generated source tree changed since the current bundle */
 const freshen = async () => {
+  syncPublic();   // a video filed since the last request is served too
   if (!serveUrl) {
     await rebundle();
   } else if (treeStamp(GENERATED) !== bundledStamp) {
@@ -169,7 +176,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/rebundle") { touch(); await (busy = busy.then(rebundle)); return json(res, 200, { ok: true }); }
     if (req.method === "POST" && (req.url === "/still" || req.url === "/stills")) {
       const b = await body(req);
-      // every file goes under <public>/<video>/cartoon/: checked before any bundle or browser, and the loop below
+      // every file goes under <public>/<video>/cartoon/ or preview/: checked before any bundle or browser, and the loop below
       // writes exactly the targets checked here
       const plan = planRequest(PUBLIC, req.url, b);
       if (plan.error) return json(res, 400, { ok: false, error: plan.error });
@@ -214,6 +221,7 @@ const server = http.createServer(async (req, res) => {
         console.log(`[stills] could not start (${startFailed}); exiting so the renderer starts it again`);
         json(res, 503, { ok: false, startFailed: true, error: startFailed });
         if (serveUrl) fs.rmSync(serveUrl, { recursive: true, force: true });
+        fs.rmSync(MERGED_PUBLIC, { recursive: true, force: true });
         setTimeout(() => process.exit(1), 100);
         return;
       } finally {
@@ -227,6 +235,10 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => console.log(`[stills] listening on http://${HOST}:${PORT}`));
-const bye = async () => { try { await browser?.close({ silent: true }); } catch { /* already gone */ } process.exit(0); };
+const bye = async () => {
+  try { await browser?.close({ silent: true }); } catch { /* already gone */ }
+  fs.rmSync(MERGED_PUBLIC, { recursive: true, force: true });
+  process.exit(0);
+};
 process.on("SIGINT", bye);
 process.on("SIGTERM", bye);

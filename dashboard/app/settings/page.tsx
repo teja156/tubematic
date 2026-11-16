@@ -16,7 +16,8 @@ import {
 import { useTimeZone } from "@/components/TimeZoneProvider";
 import { VoicePreviewButton } from "@/components/VoicePreviewButton";
 import { formatDate, formatDateTime, formatRelative } from "@/lib/datetime";
-import { AGENT_EFFORTS } from "@/lib/agents";
+import { AGENT_EFFORTS, effortOptionLabel } from "@/lib/agents";
+import { domainAgent, domainAgentOptions, domainModelOptions } from "@/lib/domains";
 import { mascotGate, mascotGateNote, mascotOptions } from "@/lib/mascots";
 import { codePoints } from "@/lib/utils";
 import { formatBytes } from "@/lib/format";
@@ -653,6 +654,9 @@ function SettingsBody() {
   const { toasts, push, dismiss } = useToasts();
   const [mascots, setMascots] = useState<Mascot[]>([]);
   const [gpu, setGpu] = useState<GpuStatus | null>(null);
+  // undefined until /agents answers, like the Topics page: the research picker
+  // names no agent it has not seen.
+  const [agents, setAgents] = useState<Agent[] | undefined>(undefined);
 
   async function load() {
     const r = await apiFetch("/settings");
@@ -688,6 +692,9 @@ function SettingsBody() {
     // Best effort; the picker only needs the pickable ones.
     apiFetch("/mascots").then((r) => r.json())
       .then((rows) => setMascots(Array.isArray(rows) ? rows : []))
+      .catch(() => {});
+    apiFetch("/agents").then((r) => (r.ok ? r.json() : null))
+      .then((rows) => setAgents(Array.isArray(rows) ? rows : undefined))
       .catch(() => {});
     apiFetch("/render/gpu").then((r) => (r.ok ? r.json() : null))
       .then((g) => setGpu(g && typeof g.status === "string" ? (g as GpuStatus) : null))
@@ -1046,6 +1053,74 @@ function SettingsBody() {
           {...numField("max_research_runs_per_day")}
         />
       </Row>
+
+      {/* ── Research agent ── */}
+      <SectionLabel label="Research Agent" />
+      {(() => {
+        const defaultAgent = (agents ?? []).find((a) => a.is_default && !a.archived_at) ?? null;
+        const chosen = domainAgent(agents, val("research_agent_id") ?? "");
+        const pickerStyle = {
+          fontFamily: "var(--mono)", fontSize: 11, padding: "7px 8px", maxWidth: 260,
+          background: "var(--panel)", color: "var(--ink)", border: "1px solid var(--border-2)",
+        };
+        return (
+          <>
+            <Row
+              label="Research agent"
+              note="The agent that runs topic research. Blank uses the default agent. Videos, script profiles and mascots keep their own agent. If the chosen agent is uninstalled, research falls back to the default agent."
+            >
+              <SaveStatus status={statuses.get("research_agent_id")} testId="status-select-research-agent" />
+              <select
+                data-testid="select-research-agent"
+                value={val("research_agent_id") ?? ""}
+                // The model goes with the agent: the stored one belongs to the
+                // other agent's list, and the API would refuse the pair.
+                onChange={(e) => void save(
+                  { research_agent_id: e.target.value, research_agent_model: "" },
+                  "research_agent_id", { optimistic: true },
+                )}
+                style={pickerStyle}
+              >
+                {domainAgentOptions(
+                  agents, val("research_agent_id") ?? "",
+                  defaultAgent ? `Default agent (${defaultAgent.name})` : "Default agent",
+                ).map((o) => (
+                  <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
+                ))}
+              </select>
+            </Row>
+            <Row
+              label="Research model"
+              note="A model of the research agent. Pick an agent first to choose one."
+            >
+              <SaveStatus status={statuses.get("research_agent_model")} testId="status-select-research-model" />
+              <select
+                data-testid="select-research-model"
+                value={val("research_agent_model") ?? ""}
+                disabled={!chosen}
+                onChange={(e) => choose("research_agent_model", e.target.value)}
+                style={{ ...pickerStyle, opacity: chosen ? 1 : 0.5 }}
+              >
+                {domainModelOptions(chosen, val("research_agent_model") ?? "").map((o) => (
+                  <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
+                ))}
+              </select>
+            </Row>
+            <Row label="Research effort" note="Blank uses the research agent's own effort level.">
+              <SaveStatus status={statuses.get("research_agent_effort")} testId="status-select-research-effort" />
+              <select
+                data-testid="select-research-effort"
+                value={val("research_agent_effort") ?? ""}
+                onChange={(e) => choose("research_agent_effort", e.target.value)}
+                style={pickerStyle}
+              >
+                <option value="">{effortOptionLabel(chosen ?? defaultAgent)}</option>
+                {AGENT_EFFORTS.map((e) => <option key={e} value={e}>{e}</option>)}
+              </select>
+            </Row>
+          </>
+        );
+      })()}
 
       {/* ── Section 4: Trending Sources ── */}
       <SectionLabel label="Trending Sources" />

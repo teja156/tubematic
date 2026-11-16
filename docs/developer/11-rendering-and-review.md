@@ -347,8 +347,8 @@ with `jobfiles.py::join_below`, which refuses a symlink in any component.
 
 ## The stills server
 
-The MCP container's Cartoon 3D tools (`cartoon_beat_gate`, `cartoon_still`) need stills of a video's
-composition, and the built-in renderer's container is the one on the main install that can have the
+The MCP container's Cartoon 3D tools (`cartoon_beat_gate`, `cartoon_still`) and `preview_frames` need stills of a
+video's composition, and the built-in renderer's container is the one on the main install that can have the
 GPU. The built-in renderer therefore runs `renderer/remotion/cartoon-tools/stills-server.mjs` as a
 child process. A remote renderer has no `/jobs` volume and runs none.
 
@@ -356,20 +356,24 @@ child process. A remote renderer has no `/jobs` volume and runs none.
   Chromium, which then stay, so the stills after it take a few seconds each. A cold software-GL
   still in the MCP container takes 25 to 30.
 - Ten minutes after the last request (`STILLS_IDLE_MS`) it closes the browser and deletes the
-  bundle, and the next still builds them again. Only Cartoon 3D authoring asks it for stills, so on
-  an install that never uses Cartoon 3D it stays a Node process of about 100 MB.
+  bundle, and the next still builds them again. Only Cartoon 3D authoring and `preview_frames` ask it for stills, so on
+  an install whose agent never calls either it stays a Node process of about 100 MB.
 - If that first bundle or the browser fails, it answers `503` with `startFailed` and exits. The
   client (`src/cartoon3d/gate/stills.ts`) then renders the stills itself, as it does when no server
   answers or the server dies in the middle of a request, and `_ensure_stills_server` starts the
   server again.
 - It starts with the GL options a render gets (`_gl_options`), so a GPU test that passes moves it
   onto the GPU and one that fails moves it back.
-- It serves the `/jobs` volume as its public directory, so a video's files are
-  `/public/<video_id>/…` with nothing copied.
+- It serves the `/jobs` volume merged with the project's own `public/` (fonts, `watermark.png`, the
+  built-in mascots), so a video's files are `/public/<video_id>/…` with nothing copied and a frame
+  draws its text in the fonts a render uses. `cartoon-tools/merged-public.mjs` builds that directory
+  from links to folders and copies of plain files, and refreshes it before every request, since
+  videos are filed while the bundle lives. The local fallback in `src/cartoon3d/gate/stills.ts`
+  serves the same merge.
 - It writes each still to the path the request names, so the renderer mounts `/jobs` read-write.
   Its port takes requests with no credential, so `cartoon-tools/out-path.mjs::planRequest` checks
   every file a request would write before it bundles or opens a browser, and the server answers 400
-  to a path outside `/jobs/<video_id>/cartoon/`, a path through any symlink, or frames that are not
+  to a path outside `/jobs/<video_id>/cartoon/` and `/jobs/<video_id>/preview/`, a path through any symlink, or frames that are not
   non-negative integers. It checks again once the request's turn comes, since renders are
   serialised, and then writes only the files that were checked.
 - It listens on `TUBEMATIC_STILLS_PORT` (4455) on the Compose network only. The MCP container

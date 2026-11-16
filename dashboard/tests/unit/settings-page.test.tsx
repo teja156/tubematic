@@ -1044,6 +1044,70 @@ describe("SettingsPage", () => {
     );
   });
 
+  describe("the research agent pickers (TMDEV-243)", () => {
+    const claude = () => makeAgent({ id: "claude", name: "Claude Code", is_default: true,
+                                     models: ["opus", "sonnet"], effort: "high" });
+    const codex = () => makeAgent({ id: "codex", name: "Codex", is_default: false,
+                                    models: ["gpt-a", "gpt-b"], effort: "low" });
+
+    async function open(settings: Settings, agents: Agent[]) {
+      stubFetch(settings, MOCK_STATUS, agents);
+      await renderTab("research");
+      return {
+        agent: (await waitFor(() => screen.getByTestId("select-research-agent"))) as HTMLSelectElement,
+        model: screen.getByTestId("select-research-model") as HTMLSelectElement,
+        effort: screen.getByTestId("select-research-effort") as HTMLSelectElement,
+      };
+    }
+
+    it("names the default agent on the blank option, offers live agents only, and locks the model", async () => {
+      const gone = makeAgent({ id: "old", name: "Old", archived_at: "2026-01-01T00:00:00Z" });
+      const { agent, model, effort } = await open(MOCK_SETTINGS, [claude(), codex(), gone]);
+      await waitFor(() => expect([...agent.options].map((o) => o.value)).toEqual(["", "claude", "codex"]));
+      expect(agent.options[0].textContent).toBe("Default agent (Claude Code)");
+      expect(model.disabled).toBe(true);
+      expect(effort.options[0].textContent).toBe("high (agent default)");
+    });
+
+    it("saves the agent and clears the model in the same request", async () => {
+      const { agent } = await open({ ...MOCK_SETTINGS, research_agent_id: "claude",
+                                     research_agent_model: "sonnet" }, [claude(), codex()]);
+      await waitFor(() => expect(agent.options.length).toBe(3));
+      fireEvent.change(agent, { target: { value: "codex" } });
+      await flushSaves();
+      expect(postedBodies(vi.mocked(fetch))[0]).toEqual({
+        research_agent_id: "codex", research_agent_model: "",
+      });
+    });
+
+    it("lists the chosen agent's models and saves a model and an effort on their own", async () => {
+      const { agent, model, effort } = await open(
+        { ...MOCK_SETTINGS, research_agent_id: "codex" }, [claude(), codex()]);
+      await waitFor(() => expect(model.disabled).toBe(false));
+      expect([...model.options].map((o) => o.value)).toEqual(["", "gpt-a", "gpt-b"]);
+      expect(model.options[0].textContent).toBe("gpt-a (agent default)");
+      expect(effort.options[0].textContent).toBe("low (agent default)");
+      expect(agent.value).toBe("codex");
+      fireEvent.change(model, { target: { value: "gpt-b" } });
+      await flushSaves();
+      fireEvent.change(effort, { target: { value: "max" } });
+      await flushSaves();
+      expect(postedBodies(vi.mocked(fetch))).toEqual([
+        { research_agent_model: "gpt-b" }, { research_agent_effort: "max" },
+      ]);
+    });
+
+    it("keeps an uninstalled research agent selected but disabled", async () => {
+      const gone = makeAgent({ id: "codex", name: "Codex", archived_at: "2026-01-01T00:00:00Z" });
+      const { agent } = await open(
+        { ...MOCK_SETTINGS, research_agent_id: "codex" }, [claude(), gone]);
+      await waitFor(() => expect(agent.value).toBe("codex"));
+      const held = [...agent.options].find((o) => o.value === "codex")!;
+      expect(held.disabled).toBe(true);
+      expect(held.textContent).toContain("uninstalled");
+    });
+  });
+
   it.each([
     ["not_usable", "Tubi (Mascots need a working GPU)"],
     ["unknown", "Tubi (GPU not tested yet)"],

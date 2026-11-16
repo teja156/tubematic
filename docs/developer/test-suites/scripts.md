@@ -31,6 +31,11 @@ one pass.
   used its attempts falls through to the next.
 - A mascot runs on its pinned agent, model and effort, or on the defaults, one mascot per pass. A
   mascot pinned to an agent that is gone is skipped and records no attempt.
+- Research runs on the agent, model and effort the `research_agent_*` settings name. Blank settings
+  give the default agent as before, an agent alone takes its first model and its own effort, and an
+  effort alone applies to the default agent. A named agent that is uninstalled or unknown falls
+  back to the default agent and its model and keeps the effort, a model the agent dropped falls
+  back to its first, and the profile lane keeps the default agent whatever research names.
 - The user preferences reach every prompt, an idle pass reads no settings, a dry run records nothing
   and starts nothing, and an install with no agent stops before the profile and research lanes.
 
@@ -738,8 +743,8 @@ Covers the `tubematic-archive-engraving` skill ([Archive and Engraving](../10-sc
 - The skill and its contract list every card kind, event and emblem, and the limits it states are
   the ones `mcp/archive_engraving.py` enforces.
 - Every still is engraved with `treat_image`, and the skill never pictures a named person.
-- The skill hands inserts to the `tubematic-inserts` skill, and its look step is marked for the
-  frame preview.
+- The skill hands inserts to the `tubematic-inserts` skill, and its look step points at
+  `preview_frames`.
 - The worked example is valid JSON with the one `ArchiveEngraving` scene and carries no `subtitles`.
 
 ### `test_editorial_collage_skill.py`
@@ -751,8 +756,8 @@ Covers the `tubematic-editorial-collage` skill ([Editorial Collage](../10-scene-
 - The skill and its contract list every headline kind, hero kind and event, and the limits it states
   are the ones `mcp/editorial_collage.py` enforces.
 - Every still is baked with `treat_image`, and the skill never pictures a named person.
-- The skill hands inserts to the `tubematic-inserts` skill, its look step is marked for the frame
-  preview, and its text keeps the docs' writing rules.
+- The skill hands inserts to the `tubematic-inserts` skill, its look step points at
+  `preview_frames`, and its text keeps the docs' writing rules.
 - The worked example is valid JSON with the one `EditorialCollage` scene and carries only its
   `emphasis` in `subtitles`.
 
@@ -766,8 +771,8 @@ Covers the `tubematic-storybook-reveal` skill ([Storybook Reveal](../10-scene-au
   `mcp/storybook_reveal.py` enforces.
 - The hero sheet is made once and every page is painted from it, and the skill never pictures a
   real or named person or a brand.
-- The skill hands inserts to the `tubematic-inserts` skill, its look step is marked for the frame
-  preview, and its text keeps the docs' writing rules.
+- The skill hands inserts to the `tubematic-inserts` skill, its look step points at
+  `preview_frames`, and its text keeps the docs' writing rules.
 - The worked example is valid JSON with the one `StorybookReveal` scene and three pictures.
 
 ### `test_puppet_history_skill.py`
@@ -958,6 +963,21 @@ Covers the `tubematic-format-packs` skill ([Format Packs](../10-scene-authoring.
 - It keeps the impersonation line: every thread made up, phone numbers from the fiction ranges, no
   tick, the EXAMPLE tag, and no invented source for a headline. It has one **Check and submit** step,
   and `uninstall.py` removes it.
+
+### `test_look_step.py`
+
+Covers the look step in the skills ([`preview_frames`](../06-mcp-server.md#preview_frames)).
+
+- Every main style's authoring skill, and the two legacy whole-video paths (System Flow and Terminal
+  Doc), name `preview_frames`, the `preview_not_taken` refusal and a numbered **Look before you
+  submit** step that comes before its `submit_render` step. The list is read from the style packs,
+  so a style added later is held to it with no edit here.
+- Cartoon 3D names `cartoon_still` and never `preview_frames`.
+- The operator looks at a new video, and again after a render revision; a re-voice re-enters the same
+  flow.
+
+Trap: `submit_render` refuses a video that nobody looked at, so a skill that omits the step sends its
+agent into a refusal it was not told about.
 
 ### `test_insert_skills.py`
 

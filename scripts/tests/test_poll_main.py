@@ -286,6 +286,96 @@ def test_profile_and_research_runs_use_the_default_agent_and_its_default_model()
         assert c.kwargs["model"] == "opus"
 
 
+OTHER = {"id": "codex", "binary": "codex", "run_path": "/tmp/ws2", "effort": "low",
+         "models": ["gpt-x", "gpt-y"], "is_default": False, "archived_at": None}
+
+
+def _research_call(monkeypatch, settings, agents=(AGENT, OTHER)):
+    """Run one research pass with these settings; return invoke's one call."""
+    monkeypatch.setattr(poll, "_fetch_agents", lambda: list(agents))
+    monkeypatch.setattr(poll, "_fetch_settings", lambda: dict(settings))
+    with patch("poll._fetch_pipeline_status", return_value=_status()), \
+         patch("poll._record_research_run", return_value=True), \
+         patch("poll._fetch_mining_urls", return_value=[]), \
+         patch("poll.invoke_agent") as invoke:
+        poll.main()
+    research = [c for c in invoke.call_args_list if c.kwargs["operation"] == "agent_research"]
+    assert len(research) == 1
+    return research[0]
+
+
+def test_research_uses_the_agent_model_and_effort_the_settings_name(monkeypatch):
+    c = _research_call(monkeypatch, {"research_agent_id": "codex",
+                                     "research_agent_model": "gpt-y",
+                                     "research_agent_effort": "max"})
+    assert c.args[1] is OTHER
+    assert c.kwargs["model"] == "gpt-y"
+    assert c.kwargs["effort"] == "max"
+
+
+def test_research_with_blank_settings_is_the_default_agent_as_before(monkeypatch):
+    c = _research_call(monkeypatch, {"research_agent_id": "", "research_agent_model": "",
+                                     "research_agent_effort": ""})
+    assert c.args[1] is AGENT
+    assert c.kwargs["model"] == "opus"
+    assert c.kwargs["effort"] == ""   # AGENT here has no effort of its own
+
+
+def test_research_agent_alone_takes_its_first_model_and_its_own_effort(monkeypatch):
+    c = _research_call(monkeypatch, {"research_agent_id": "codex"})
+    assert c.args[1] is OTHER
+    assert c.kwargs["model"] == "gpt-x"
+    assert c.kwargs["effort"] == "low"
+
+
+def test_research_effort_alone_applies_to_the_default_agent(monkeypatch):
+    c = _research_call(monkeypatch, {"research_agent_effort": "xhigh"})
+    assert c.args[1] is AGENT
+    assert c.kwargs["effort"] == "xhigh"
+
+
+def test_research_agent_uninstalled_falls_back_to_default_and_keeps_effort(monkeypatch, caplog):
+    gone = dict(OTHER, archived_at="2026-01-01T00:00:00Z")
+    c = _research_call(monkeypatch, {"research_agent_id": "codex",
+                                     "research_agent_model": "gpt-y",
+                                     "research_agent_effort": "max"},
+                       agents=(AGENT, gone))
+    assert c.args[1] is AGENT
+    assert c.kwargs["model"] == "opus"
+    assert c.kwargs["effort"] == "max"
+    assert "codex" in caplog.text
+
+
+def test_research_agent_unknown_falls_back_to_default(monkeypatch):
+    c = _research_call(monkeypatch, {"research_agent_id": "ghost",
+                                     "research_agent_model": "gpt-y"})
+    assert c.args[1] is AGENT
+    assert c.kwargs["model"] == "opus"
+
+
+def test_research_model_the_agent_no_longer_offers_falls_back_to_its_first(monkeypatch):
+    c = _research_call(monkeypatch, {"research_agent_id": "codex",
+                                     "research_agent_model": "gone-model"})
+    assert c.args[1] is OTHER
+    assert c.kwargs["model"] == "gpt-x"
+
+
+def test_the_research_agent_does_not_change_which_agent_builds_profiles(monkeypatch):
+    monkeypatch.setattr(poll, "_fetch_agents", lambda: [AGENT, OTHER])
+    monkeypatch.setattr(poll, "_fetch_settings", lambda: {"research_agent_id": "codex"})
+    with patch("poll._fetch_pipeline_status",
+               return_value=_status(pending_script_profiles=1)), \
+         patch("poll._fetch_pending_script_profiles", side_effect=_once([_profile()])), \
+         patch("poll._record_profile_attempt", return_value="GENERATING"), \
+         patch("poll._record_research_run", return_value=True), \
+         patch("poll._fetch_mining_urls", return_value=[]), \
+         patch("poll.invoke_agent") as invoke:
+        poll.main()
+    by_op = {c.kwargs["operation"]: c.args[1] for c in invoke.call_args_list}
+    assert by_op["agent_research"] is OTHER
+    assert all(a is AGENT for op, a in by_op.items() if op != "agent_research")
+
+
 def test_no_agent_installed_stops_before_profiles_and_research(monkeypatch):
     """A script profile or a research run needs an agent as much as a video."""
     monkeypatch.setattr(poll, "_fetch_agents", lambda: [])

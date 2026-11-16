@@ -151,8 +151,11 @@ Every prompt carries the `user_preferences` setting as a fenced block when it is
 
 ### Which agent runs a session
 
-- The default agent is the live `is_default` row, else the oldest live one. Research and
-  script-profile builds run under it, with its default model (`models[0]`) and its `effort`.
+- The default agent is the live `is_default` row, else the oldest live one. Script-profile builds
+  run under it, with its default model (`models[0]`) and its `effort`.
+- Research runs under the default agent unless the `research_agent_id`, `research_agent_model` and
+  `research_agent_effort` settings name another (`_research_agent`). A named agent that is no
+  longer live falls back to the default agent, and the poll log says so once.
 - A workable video runs under `videos.agent_id`, or the default agent when that is empty. The
   model is `videos.agent_model` or the agent's `models[0]`, and the effort is
   `videos.agent_effort` or the agent's `effort`.
