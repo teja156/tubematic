@@ -34,7 +34,9 @@ def box(tmp_path, monkeypatch):
     spool.mkdir()
     work.mkdir()
     monkeypatch.setenv("TUBEMATIC_SANDBOX_DIR", str(spool))
-    cfg = D.Config(spool=spool, work_root=work, run_as=None, nproc=None)
+    # The interpreter running pytest, not "python3" on the daemon's fixed PATH: that one is the
+    # machine's system Python, which has Pillow on a dev box and not on a CI runner.
+    cfg = D.Config(spool=spool, work_root=work, run_as=None, nproc=None, python=sys.executable)
     D.prepare(cfg)
     server._init_db()
     with server._conn() as con:

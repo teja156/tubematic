@@ -479,6 +479,11 @@ Trap: `test_removed_tools.py` still forbids MCP from importing a code runner. `s
 no fallback, and a test that gave it one would be reversing the reason `write_gif_script` was deleted.
 What the container itself refuses is in [The code sandbox suite](sandbox.md).
 
+Trap: the daemon runs a snippet with `python3` from its own fixed `PATH`, which is the machine's system
+Python. A snippet that imports Pillow passes on a dev box whose system Python has it and fails on a CI
+runner whose system Python does not. The suite's `box` fixture therefore gives the daemon the
+interpreter that runs pytest.
+
 ### `test_treatments.py`
 
 Covers `mcp/treatments.py` and `treat_image`, the looks baked into a style's generated stills
