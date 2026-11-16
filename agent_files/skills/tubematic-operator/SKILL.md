@@ -215,7 +215,8 @@ For the scene styles `visual_style` is a **permission set, not a look**. `motion
 and `stick` are restrictions — on the canvas, and on whether figures may appear at all.
 `cartoon_3d` is a different renderer altogether: one painted 3D world written as code for that video
 by the **tubematic-cartoon3d** skill against the renderer's kit, with no other scene components,
-offered only while a renderer's GPU is working. `bean_explainer` replaces the scene system too: the
+offered only while a renderer's GPU is working. `low_poly_skit` is the same engine with a flat-shaded
+toy-people look, written as code by the **tubematic-lowpoly-skit** skill, and it renders without a GPU. `bean_explainer` replaces the scene system too: the
 whole video is one cartoon bean reacting pose by pose among props, written as data by the
 **tubematic-bean-explainer** skill, with no images.
 `whiteboard` replaces it as well: the whole video is one big board of handwriting and doodles,

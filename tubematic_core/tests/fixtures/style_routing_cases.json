@@ -2591,6 +2591,80 @@
       "future": "",
       "note": "Pair probe for Isometric Infographic: a process carried by people as roles is Stick Explainer, even inside one building; Isometric is acceptable.",
       "inserts_expect": []
+    },
+    {
+      "title": "What happens if everyone on Earth jumps at once",
+      "brief": "A what-if told to you in the second person: you jump in your room, then your street, your city, then all eight billion people at the same moment, with the planet as the final picture and what would actually happen to it.",
+      "expect": [
+        "low_poly_skit"
+      ],
+      "ok": [
+        "cartoon_3d",
+        "bean_explainer",
+        "stick",
+        "scenes"
+      ],
+      "future": "",
+      "note": "A second-person consequence chain whose scale climbs from a room to the whole planet: one small set per sentence, a crowd and a planet as the payoff."
+    },
+    {
+      "title": "What if you dug a hole straight through the Earth",
+      "brief": "You start digging in your garden and keep going: the soil, the rock, the mantle heat, the core, and what would happen to you at each layer on the way to the other side.",
+      "expect": [
+        "low_poly_skit"
+      ],
+      "ok": [
+        "flat_vector_science",
+        "isometric_infographic",
+        "stick",
+        "bean_explainer"
+      ],
+      "future": "",
+      "note": "A chain of consequences that ends in a cross-section, acted out by one person in a series of small sets."
+    },
+    {
+      "title": "What if every car on your street honked at once",
+      "brief": "Playful what-if: one horn at 7 a.m., then the whole street, the neighbourhood, the city, until the noise is a story about the people who would all step outside to see it.",
+      "expect": [
+        "low_poly_skit"
+      ],
+      "ok": [
+        "cartoon_3d",
+        "stick",
+        "bean_explainer"
+      ],
+      "future": "",
+      "note": "A comic everyday situation pushed to an absurd scale, with a crowd as the payoff."
+    },
+    {
+      "title": "What if you tried to eat a whole supermarket",
+      "brief": "You start with one aisle and keep going: the shelves, the freezers, the bakery, the car park, with the staff, the other shoppers and your own stomach reacting at each step.",
+      "expect": [
+        "low_poly_skit"
+      ],
+      "ok": [
+        "cartoon_3d",
+        "stick",
+        "bean_explainer",
+        "case_file_story"
+      ],
+      "future": "",
+      "note": "A playful second-person escalation, one new place or one new reaction per sentence."
+    },
+    {
+      "title": "Why a stadium crowd can make the ground shake",
+      "brief": "Why tens of thousands of people jumping together can move a whole stand: the beat of the crowd, the stand's own wobble, and why engineers design for it.",
+      "expect": [
+        "whiteboard"
+      ],
+      "ok": [
+        "bean_explainer",
+        "stick",
+        "flat_vector_science",
+        "low_poly_skit"
+      ],
+      "future": "",
+      "note": "Pair probe: a crowd is on screen here too, but the topic is a mechanism explained, so Low-Poly Skit is only acceptable (its pick is a story told in places)."
     }
   ]
 }

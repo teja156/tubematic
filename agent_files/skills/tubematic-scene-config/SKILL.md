@@ -266,6 +266,7 @@ Read `visual_style` from `get_video`:
 | `stick` | Light | **Hand-drawn** `StickFigure` line art, line-art diagrams, generated imagery **in panels**. |
 | `illustrated` | **You choose** | Characters are **generated illustrated assets** (`generate_character`) rather than line art. You pick the drawing style *and* the canvas from the topic. |
 | `cartoon_3d` | Dark (never visible) | Nothing here: one 3D world as code, by the tubematic-cartoon3d skill. Needs a working GPU; the API refuses it otherwise. |
+| `low_poly_skit` | Dark (never visible) | Nothing here: one 3D world as code, by the tubematic-lowpoly-skit skill. Needs no GPU. |
 | `system_flow` | Dark | Nothing here: a legacy whole video is the one `SystemFlow` diagram scene, written as data by the tubematic-system-flow skill. |
 | `bean_explainer` | Its own colour field | Nothing here: the whole video is the one `BeanExplainer` scene, written as data by the tubematic-bean-explainer skill. |
 | `whiteboard` | Light | Nothing here: the whole video is the one `Whiteboard` board scene, written as data by the tubematic-whiteboard skill. |

@@ -18,8 +18,9 @@ sys.path.insert(0, str(REPO))
 
 from tubematic_core import visual_styles as tvs  # noqa: E402
 
-# Cartoon 3D draws its world from source and has its own look, cartoon_still, which its beat gate requires.
-OWN_LOOK = {"cartoon_3d"}
+# The 3D worlds (Cartoon 3D, Low-Poly Skit) draw their world from source and have their own look, cartoon_still,
+# which their beat gate requires.
+OWN_LOOK = set(tvs.WORLD_STYLES)
 # Insert styles are scenes inside another style's video and are looked at in that style's step; these two
 # also have a legacy whole-video path (a video voiced before they became insert styles), written by the
 # same skill, which submits it.
@@ -62,9 +63,11 @@ def test_the_look_comes_before_submit_render_in_each_skills_closing_steps():
             assert int(look.group(1)) < int(submit.group(1)), f"{name}: the look step must precede its submit_render step"
 
 
-def test_cartoon_3d_keeps_its_own_look():
-    assert "cartoon_still" in _skill("tubematic-cartoon3d")
-    assert "preview_frames" not in _skill("tubematic-cartoon3d").replace("cartoon_still", "")
+def test_the_3d_worlds_keep_their_own_look():
+    for sid in tvs.WORLD_STYLES:
+        body = _skill(tvs.PACKS[sid]["authoring_skill"])
+        assert "cartoon_still" in body, sid
+        assert "preview_frames" not in body.replace("cartoon_still", ""), sid
 
 
 def test_the_operator_looks_at_a_new_video_and_again_after_a_revision():

@@ -150,9 +150,12 @@ export interface SubtitleConfig {
    * "highlight": the whole phrase on a cream strip from its first frame, and a
    * highlighter bar wiping in under each `emphasis` word as it is spoken. The
    * Editorial Collage style uses it.
+   * "karaoke": the whole phrase is on screen from its first frame with no rise,
+   * in the text colour; each word turns to `accent` (default #FFD221) as it is
+   * spoken and stays there. The Low-Poly Skit style uses it.
    * Absent means the plain look every other style has.
    */
-  look?: "plain" | "selection" | "fill" | "tags" | "highlight";
+  look?: "plain" | "selection" | "fill" | "tags" | "highlight" | "karaoke";
   /** Extra space between letters, in ems (-0.05 to 0.3), for the plain look;
    *  absent keeps each background's own. Night Signal sets its spaced capitals with it. */
   letterSpacing?: number;
@@ -270,6 +273,12 @@ export function visibleChunkIndex(
   const tail = next ? Math.min(next[0].startFrame, held) : held;
   return frame >= tail ? null : index;
 }
+
+/** The "karaoke" look: the colour a word turns to when it is spoken, unless `accent` names another. */
+export const KARAOKE_ACCENT = "#FFD221";
+/** A word's colour under the "karaoke" look: the text colour until its frame, then the accent. */
+export const karaokeWordColor = (frame: number, startFrame: number, ink: string, accent: string | null | undefined) =>
+  frame >= startFrame ? accent || KARAOKE_ACCENT : ink;
 
 /** The "fill" look: the grey of a word not yet spoken, and the frames its turn takes. */
 const FILL_AHEAD = "#979295";
@@ -419,8 +428,9 @@ export default function Subtitles({
   const age = frame - chunk[0].startFrame;
   // A label cross-fades in 2 frames and does not move: it is printed, not spoken.
   const fill = look === "fill";
-  const rise = label || fill ? 0 : interpolate(age, [0, 4], [14, 0], { extrapolateRight: "clamp" });
-  const fade = fill ? 1 : interpolate(age, [0, label ? 2 : 3], [0, 1], { extrapolateRight: "clamp" });
+  const karaoke = look === "karaoke";
+  const rise = label || fill || karaoke ? 0 : interpolate(age, [0, 4], [14, 0], { extrapolateRight: "clamp" });
+  const fade = fill || karaoke ? 1 : interpolate(age, [0, label ? 2 : 3], [0, 1], { extrapolateRight: "clamp" });
 
   const diamond = (
     <span style={{ flex: "none", width: fontSize * 0.2, height: fontSize * 0.2, background: ink, transform: "rotate(45deg)" }} />
@@ -522,6 +532,9 @@ export default function Subtitles({
           }
           if (fill) {
             return <span key={`${i}-${w.word}`} style={{ color: fillWordColor(frame, w.startFrame, ink) }}>{w.word}</span>;
+          }
+          if (karaoke) {
+            return <span key={`${i}-${w.word}`} style={{ color: karaokeWordColor(frame, w.startFrame, ink, accent) }}>{w.word}</span>;
           }
           return (
             <span
