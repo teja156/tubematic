@@ -301,6 +301,8 @@ Covers [the settings page](../15-dashboard.md#the-settings-page) against the rea
 - Every change saves itself with no Save button, and each tab's values persist through a reload.
   A value out of range is not stored and says why beside the field.
 - Turning Publishing on asks first, and Cancel leaves it off.
+- The Research tab's agent picker starts blank with the model locked, and a research effort level
+  persists through a reload. No agent is needed, because the e2e stack has none installed.
 - **Learn from watch figures** switches `learned_routing` off on one click and stays off through a
   reload.
 - A voice's model is stored on that voice only, and the preview endpoint refuses an unknown model

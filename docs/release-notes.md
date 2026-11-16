@@ -39,6 +39,11 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ### Added
 
+- You can now choose the agent, model and effort level that topic research runs on, under
+  **Settings → Research**. Videos, script profiles and mascots keep using their own agent, so
+  research can run on a cheaper model or a lower effort. Left blank, research runs on the default
+  agent as before, and if the agent you chose is uninstalled it falls back to the default agent.
+  [Settings](https://docs.tubematic.ai/user-guide/settings#research) has the details.
 - The video window's details now name the domain of a curriculum video.
 - Every video is now checked by its own agent before it is queued for a render. The agent draws
   chosen frames of the finished scene (the opening, the way in and out of each insert, the turn and

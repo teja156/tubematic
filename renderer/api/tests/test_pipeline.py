@@ -2667,7 +2667,7 @@ def test_user_preferences_with_a_nul_are_rejected(client, db_path):
 
 def test_agent_model_is_no_longer_a_settings_key(client):
     assert "agent_model" not in pipeline.SETTINGS_SPEC
-    assert len(pipeline.SETTINGS_SPEC) == 46
+    assert len(pipeline.SETTINGS_SPEC) == 49
     assert "agent_model" not in json.loads(client.get("/settings").data)
 
 
@@ -5474,7 +5474,10 @@ def test_the_effort_levels_and_default_match_the_other_two_copies():
 
 def test_effort_is_not_a_settings_key(client):
     """TMDEV-90 removed agent_model from SETTINGS_SPEC deliberately; per-agent
-    defaults live on the agents row. Effort must not reintroduce the pattern."""
+    defaults live on the agents row. Effort must not reintroduce the pattern:
+    there is no install-wide effort. The research session's own choice
+    (research_agent_effort, TMDEV-243) is a different key and is not covered
+    by this check."""
     for key in ("effort", "agent_effort"):
         assert key not in pipeline.SETTINGS_SPEC
     assert client.post("/settings", json={"agent_effort": "high"}).status_code == 400

@@ -86,6 +86,9 @@ _INERT_HERE = {
     "max_mining_per_run",
     "max_research_runs_per_day",
     "max_trending_per_run",
+    "research_agent_effort",
+    "research_agent_id",
+    "research_agent_model",
     "research_pending_cap",
     "trending_sources",
 }

@@ -117,6 +117,17 @@ SETTINGS_SPEC = {
     # invariant is enforced on read (_read_all_settings) and on write
     # (post_settings), not by _coerce_setting, which has no database.
     "default_mascot_id":      ("str",       ""),
+    # The agent, model and effort the scheduled topic-research session runs on
+    # (TMDEV-243). All three blank = the install's default agent, its first
+    # model and its own effort, which is what research did before the keys
+    # existed. A pair that goes stale (agent uninstalled, model dropped) is kept,
+    # not blanked on read: scripts/poll.py::_research_agent falls back, and the
+    # dashboard shows it as unavailable. post_settings checks the agent and
+    # model on change only (_domain_agent_error), so a stale pair never blocks
+    # an unrelated save. Keep in sync: scripts/poll.py::_research_agent.
+    "research_agent_id":      ("str",       ""),
+    "research_agent_model":   ("str",       ""),
+    "research_agent_effort":  ("str",       ""),
     "pronunciation_lexicon":  ("lexicon",   "[]"),
     # Scene images; OpenAI is the only provider (TMDEV-165).
     # Keep in sync: mcp/server.py and onboard/config.py DEFAULT_IMAGE_MODEL.
@@ -1047,6 +1058,11 @@ def _coerce_setting(key: str, raw) -> tuple:
         if not isinstance(raw, str):
             raise ValueError(f"Expected string for {key}, got {raw!r}")
         stripped = raw.strip()
+        if key == "research_agent_effort" and stripped and stripped not in AGENT_EFFORTS:
+            raise ValueError(
+                f"research_agent_effort must be empty or one of {AGENT_EFFORTS}, "
+                f"got {stripped!r}"
+            )
         if key == "image_model" and stripped not in OPENAI_IMAGE_MODELS:
             raise ValueError(
                 f"image_model must be one of {OPENAI_IMAGE_MODELS}, got {stripped!r}"
@@ -4583,6 +4599,23 @@ def create_pipeline_blueprint() -> Blueprint:
                        or tmascots.mascot_gpu_error(trenderers.gpu_status(con)["status"]))
                 if err:
                     return jsonify({"error": err.replace("mascot_id", "default_mascot_id")}), 400
+
+            # The research agent and model (TMDEV-243) follow the domain agent's
+            # rules, checked only when the pair changes. A model alone is checked
+            # against the stored agent, and a change of agent that leaves the
+            # stored model in place is checked against the new agent's list.
+            if "research_agent_id" in coerced or "research_agent_model" in coerced:
+                r_agent = coerced.get("research_agent_id", current["research_agent_id"])
+                r_model = coerced.get("research_agent_model", current["research_agent_model"])
+                if (r_agent, r_model) != (current["research_agent_id"],
+                                          current["research_agent_model"]):
+                    err = _domain_agent_error(con, r_agent, r_model,
+                                              current["research_agent_id"])
+                    if err:
+                        return jsonify({"error": (
+                            err.replace("default_agent_model", "research_agent_model")
+                            .replace("default_agent_id", "research_agent_id")
+                            .replace("The domain's agent", "The research agent"))}), 400
 
             webhook = coerced.get("discord_webhook_url")
             if webhook:

@@ -375,8 +375,9 @@ are installed and how videos are assigned to them.
 | `created_at`, `updated_at` | TEXT NOT NULL | | ISO-8601 UTC |
 | `effort` | TEXT NOT NULL | `'high'` | The agent's default effort level, used by every run no video overrides |
 
-The default agent builds script profiles, runs research and runs videos with no `agent_id`. If no
-row is flagged, the oldest live agent is used.
+The default agent builds script profiles, runs research (unless the `research_agent_*`
+[settings](04-settings.md#the-research-agent-is-checked-on-write) name another agent) and runs
+videos with no `agent_id`. If no row is flagged, the oldest live agent is used.
 
 The host-side installer is the only writer of rows, and writes straight into SQLite
 ([Deployment](07-agent-layer.md#deployment)). Over HTTP a human can change `is_default`, `weight`,

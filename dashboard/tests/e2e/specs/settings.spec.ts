@@ -54,6 +54,9 @@ test.describe("Settings page", () => {
       agent_session_timeout_secs: 5400,
       auto_pilot_enabled: false,
       learned_routing: true,
+      research_agent_id: "",
+      research_agent_model: "",
+      research_agent_effort: "",
     });
   });
 
@@ -184,6 +187,20 @@ test.describe("Settings page", () => {
 
   test("research_pending_cap input is visible and editable", async ({ page }) => {
     await gotoTab(page, "research");
+  });
+
+  test("the research agent pickers start blank, and an effort level persists", async ({ page }) => {
+    await gotoTab(page, "research");
+    await expect(page.getByTestId("select-research-agent")).toHaveValue("");
+    // A model belongs to one agent's list, so it stays locked until an agent is picked.
+    await expect(page.getByTestId("select-research-model")).toBeDisabled();
+    await page.getByTestId("select-research-effort").selectOption("max");
+
+    await settled(page);
+    expect((await getSettings()).research_agent_effort).toBe("max");
+    await page.reload();
+    await page.getByTestId("tab-research").click();
+    await expect(page.getByTestId("select-research-effort")).toHaveValue("max");
   });
 
   test("max_research_runs_per_day input is visible and persists after reload", async ({ page }) => {
