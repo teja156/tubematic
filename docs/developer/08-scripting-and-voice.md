@@ -374,7 +374,10 @@ it on the Script tab. A fault inside a check is logged and the script is stored 
 | `beat_unknown` | A segment's `beat` is not a beat name of the recorded formula, so its picture duty is lost |
 | `opening_repeat` | The first sentence opens with the same three words as the first sentence of one of the same domain's 30 newest other scripts |
 | `hook_type_repeat` | The kept opening's type is the type of either of the domain's previous `ROTATION_WINDOW` videos that recorded one |
-| `staged_runup` | A phrase that announces a turn ("Here's the thing") |
+| `staged_runup` | A phrase that announces what comes next instead of saying it ("Here's the thing", "Let's dive in", "Without further ado") |
+| `contrast_staging` | A denial nobody made, set up so the point sounds bigger: "it isn't X. It's Y.", "this doesn't mean X. It means Y.", the "not only ... but" form, and a short denial that names a noun and then its opposite |
+| `stock_phrase` | A saying or stock word with no plain use: "at its core", "stands as a testament", "let that sink in", "delve", "tapestry" |
+| `fragment_row` | `FRAGMENT_ROW` sentences in a row of `FRAGMENT_WORDS` words or fewer where two start with the same word, or `FRAGMENT_LONG_ROW` in a row whatever they start with |
 | `no_turn` | No turn word in the middle of the script |
 | `over_ceiling` | More than `WORD_CEILING` words |
 | `length_band` | A word count outside the formula's band, beyond `BAND_SLACK` |
@@ -394,6 +397,21 @@ text set can still get `length_band`, for the same reason. The skill tells the a
 Every pattern and threshold is a constant in `script_checks.py`. The checks are regular expressions
 and counts, so they catch a script that fell back to a stock shape and do not judge whether a script
 is good.
+
+### AI-sounding patterns
+
+The script-writing skill carries `slop-patterns.md`, a catalog of the habits that make narration
+sound machine-written, written for spoken text. The skill has the agent read it before it drafts
+the openings and screen each opening and the final draft against it. The publish title and
+description follow it too. It leaves greetings, run-ups, recaps, closing asks and em dashes to the
+grammar and the checks above.
+
+Only `contrast_staging`, `stock_phrase`, `fragment_row` and the wider `staged_runup` are checked in
+code, because those patterns can be found without judgment. The rest of the catalog needs a reader
+to tell a habit from a point, so it stays guidance. A contrast the viewer holds as a belief, such as
+the turn of a Broken Expectation script, is the point, and the regex cannot tell the two apart.
+That is why `contrast_staging` can fire on a sound script and the skill lets the agent keep it with
+the belief named in its hand-off comment.
 
 ---
 

@@ -1090,6 +1090,12 @@ Covers the `tubematic-script-writing-skill` skill and `scripts/gen_formula_refer
   older tool server applies only to an unknown argument, never to a refused formula. The domain's
   `learned.openings` break only a tie that the recent types leave.
 - A style that asks for names may name its people.
+- The skill points the steps that write words (Step 4, the openings, the hand-off checks, Step 9) at
+  `slop-patterns.md`. That file carries no ticket id and no em dash, and leaves greetings,
+  recaps, closing asks and run-ups to the grammar and the checks. Step 10 says which warnings may
+  stand and which are habits to rewrite.
+- Every check id `script_checks.py` raises has a row in the docs table, so a warning never ships
+  that a person cannot look up.
 - The user guide's formula table names every formula.
 
 Trap: an instruction that survives beside its replacement is followed whenever the agent reads it
@@ -1103,7 +1109,8 @@ model is called.
 - The topic set is well formed, and each topic's formula is one that is not experimental. The
   prompt carries the video as the skill reads it at `TOPIC_APPROVED`, with no profile, no
   preferences and the topic's formula as the pick.
-- The new side carries every formula file. The old side is read from git at the given ref.
+- The new side carries `slop-patterns.md` and every formula file, because the run has no tool to read
+  them and the agent reads them. The old side is read from git at the given ref.
 - The answer is the last JSON object in the reply that holds a script. A script is scored on its
   spoken words, with its record when it has one.
 - The summary shows both sides for each topic and counts each warning per side.

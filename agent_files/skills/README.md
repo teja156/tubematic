@@ -53,8 +53,9 @@ The table of angle kinds and the angle score in `tubematic-topic-research/SKILL.
 from `tubematic_core/angles.py` by `scripts/gen_angle_reference.py` in the source repository: edit
 the data, then run the script.
 
-`tubematic-script-writing-skill/` owns the scripting rules. Its `formulas/` folder holds one
-reference file per script formula. Those files are generated from
+`tubematic-script-writing-skill/` owns the scripting rules. Its `slop-patterns.md` lists the habits
+that make narration sound machine-written, and the skill has the agent read it before it drafts. Its
+`formulas/` folder holds one reference file per script formula. Those files are generated from
 `tubematic_core/formulas/` by `scripts/gen_formula_references.py` in the source repository: edit the
 data, then run the script. `tubematic-formula-routing/` chooses among the same formulas from the
 candidate list `get_video` returns. The style it writes in comes from a
