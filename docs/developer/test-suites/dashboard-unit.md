@@ -499,6 +499,16 @@ Covers the video window's **Why this style** row and **Switch to …** button
 - The switch is offered only at `SCRIPT_READY` with a runner-up, posts to `/switch-style` after a
   confirm, does nothing when the confirm is declined, and shows the server's refusal.
 
+### `video-modal-domain.test.tsx`
+
+Guards the **Domain** row in the video window's details
+([The video window](../15-dashboard.md#the-video-window)). The video record carries only `project_id`, so
+the modal looks the name up in the projects list.
+
+- A curriculum video shows its domain's name.
+- An unknown domain or a failed lookup shows the id, never a blank row.
+- A video of another strategy, or with no domain, shows no row.
+
 ### `video-modal-script-record.test.tsx`
 
 Covers `components/ScriptRecord.tsx` on the video window's Script tab and `lib/scriptFormulas.ts`

@@ -37,6 +37,7 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ### Added
 
+- The video window's details now name the domain of a curriculum video.
 - Every video is now checked by its own agent before it is queued for a render. The agent draws
   chosen frames of the finished scene (the opening, the way in and out of each insert, the turn and
   the payoff) with the captions, the mascot and the watermark as the render draws them, fixes what

@@ -400,6 +400,9 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
   // list endpoint deliberately omits. Falls back to the raw id so a deleted
   // profile shows something traceable instead of a blank row.
   const [profileName, setProfileName] = useState("");
+  // A curriculum video's domain, by name. GET /videos/<id> carries only the id,
+  // so it is looked up in the projects list; falls back to the id.
+  const [domainName, setDomainName] = useState("");
   const [reviewExpanded, setReviewExpanded] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -514,6 +517,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
     setPickedModel(initialPicks?.model ?? null);
     setPickedEffort(initialPicks?.effort ?? null);
     setProfileName("");
+    setDomainName("");
     // Collapse again for a different video — otherwise opening a long review,
     // closing, and opening another shows the second one pre-expanded.
     setReviewExpanded(false);
@@ -545,6 +549,21 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
       .catch(() => { if (!cancelled) setProfileName(profileId); });
     return () => { cancelled = true; };
   }, [profileId]);
+
+  const domainId = video?.strategy === "curriculum" ? (video.project_id ?? "") : "";
+  useEffect(() => {
+    if (!domainId) { setDomainName(""); return; }
+    let cancelled = false;
+    fetch("/api/proxy/projects")
+      .then((r) => r.json())
+      .then((list: { id: string; name: string }[]) => {
+        if (cancelled) return;
+        const found = Array.isArray(list) ? list.find((p) => p.id === domainId) : undefined;
+        setDomainName(found?.name || domainId);
+      })
+      .catch(() => { if (!cancelled) setDomainName(domainId); });
+    return () => { cancelled = true; };
+  }, [domainId]);
 
   // Only a READY profile can actually be set on a video, but the full list is
   // passed so an already-selected one still resolves to a name below.
@@ -1762,6 +1781,7 @@ export function VideoModal({ video: seed, initialTab, openRevise = false, initia
               {/* Details */}
               <div style={{ padding: "14px 20px" }}>
                 <MetaRow label="Strategy" value={<span style={{ textTransform: "capitalize" }}>{video.strategy}</span>} />
+                {domainId && <MetaRow label="Domain" value={domainName || domainId} />}
                 <MetaRow
                   label="Producibility"
                   value={
