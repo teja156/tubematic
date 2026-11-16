@@ -524,6 +524,8 @@ def test_a_stock_phrase_is_flagged(phrase):
 @pytest.mark.parametrize("sentence", [
     "The key is in the lock.", "The landscape file holds the layout.",
     "You can unlock the door with the second key.", "The core of the tool is a diff.",
+    "The tapestry hangs behind the altar.", "The architecture of the bridge carries the load.",
+    "The language of the web is HTML.",
 ])
 def test_words_with_a_plain_use_are_not_stock_phrases(sentence):
     assert "stock_phrase" not in ids(with_sentence(sentence))
@@ -538,6 +540,14 @@ def test_the_stock_phrase_warning_names_the_phrases_found():
 
 def test_a_row_of_very_short_sentences_is_flagged():
     assert "fragment_row" in ids(with_sentence("No map. No plan. No way back.", at=2))
+
+
+def test_short_sentences_that_each_carry_a_fact_are_narration_not_a_row():
+    assert "fragment_row" not in ids(with_sentence("He ran. She followed. The door closed.", at=2))
+
+
+def test_four_short_sentences_are_a_row_whatever_they_start_with():
+    assert "fragment_row" in ids(with_sentence("Fast. Cheap. Reliable. Done.", at=2))
 
 
 def test_two_short_sentences_or_a_run_of_longer_ones_are_not_a_row():

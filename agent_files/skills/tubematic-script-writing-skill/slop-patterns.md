@@ -7,8 +7,9 @@ not cover `visual` briefs.
 
 A model writes whatever is most likely to come next, so each habit below is the safe choice that
 fits any topic. A good script makes the choice that fits only this one. The patterns are listed
-strongest first. The first six justify a rewrite on a single sighting. The later ones need company:
-act on them when two or more sit in the same passage.
+strongest first. The first six justify a rewrite on a single sighting. From pattern 7 on, rewrite
+one that adds nothing (each entry says when it stays), and rewrite them all when two or more sit in
+the same passage.
 
 **Rules that apply to every pattern.**
 
@@ -54,7 +55,9 @@ skim past it the way a reader can, so each one costs real seconds.
 **After:** The ship left with no chart past the second island and no fuel to return.
 
 **Keep it when** the short sentence carries a new fact, such as the turn sentence of three to ten
-words that Step 4 asks for. A drumroll of three or more is the tell.
+words that Step 4 asks for, or a run of short sentences that each say something new ("He ran. She
+followed. The door closed."). The tell is a row that repeats its opening word, or four or more
+fragments in a row.
 
 ### 3. Sayings that sound deep
 

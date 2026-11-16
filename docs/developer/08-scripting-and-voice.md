@@ -374,10 +374,10 @@ it on the Script tab. A fault inside a check is logged and the script is stored 
 | `beat_unknown` | A segment's `beat` is not a beat name of the recorded formula, so its picture duty is lost |
 | `opening_repeat` | The first sentence opens with the same three words as the first sentence of one of the same domain's 30 newest other scripts |
 | `hook_type_repeat` | The kept opening's type is the type of either of the domain's previous `ROTATION_WINDOW` videos that recorded one |
-| `staged_runup` | A phrase that announces a turn ("Here's the thing", "Let's dive in", "Without further ado") |
+| `staged_runup` | A phrase that announces what comes next instead of saying it ("Here's the thing", "Let's dive in", "Without further ado") |
 | `contrast_staging` | A denial nobody made, set up so the point sounds bigger: "it isn't X. It's Y.", "this doesn't mean X. It means Y.", the "not only ... but" form, and a short denial that names a noun and then its opposite |
 | `stock_phrase` | A saying or stock word with no plain use: "at its core", "stands as a testament", "let that sink in", "delve", "tapestry" |
-| `fragment_row` | `FRAGMENT_ROW` or more sentences in a row of `FRAGMENT_WORDS` words or fewer |
+| `fragment_row` | `FRAGMENT_ROW` sentences in a row of `FRAGMENT_WORDS` words or fewer where two start with the same word, or `FRAGMENT_LONG_ROW` in a row whatever they start with |
 | `no_turn` | No turn word in the middle of the script |
 | `over_ceiling` | More than `WORD_CEILING` words |
 | `length_band` | A word count outside the formula's band, beyond `BAND_SLACK` |

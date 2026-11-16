@@ -101,19 +101,24 @@ _NOT_BUT = re.compile(
     r"|\b(?:a|an|the) \w+(?: \w+)?, not (?:a|an|the) \w+",
     re.I)
 # Sayings and stock words that dress an ordinary point as a deep one. Only
-# phrases with no plain use are listed: "key", "landscape" or "unlock" alone
-# are left to the skill's slop-patterns.md, where a writer can judge them.
+# phrases with no plain use are listed: "key", "landscape", "unlock", "the
+# architecture of" or "the language of" can be literal, so they are left to the
+# skill's slop-patterns.md, where a writer can judge them.
 _STOCK = re.compile(
     r"\bat its core\b|\bthe real question\b|\bstands? as a testament\b"
     r"|\bplays? an? (?:key|crucial|pivotal|vital) role\b|\blet that sink in\b"
-    r"|\bread that again\b|\bmake no mistake\b|\bdelv(?:e|es|ed|ing)\b|\btapestry\b"
-    r"|\bgame[- ]changer\b"
-    rf"|\bin today{_A}?s fast[- ]paced\b|\bthe (?:language|currency|architecture) of\b"
+    r"|\bread that again\b|\bmake no mistake\b|\bdelv(?:e|es|ed|ing)\b"
+    r"|\b(?:a|the) (?:rich )?tapestry of\b|\bgame[- ]changer\b"
+    rf"|\bin today{_A}?s fast[- ]paced\b"
     r"|\bunlock(?:s|ing)? the (?:secret|power|potential|mystery)\b",
     re.I)
 # A row of this many sentences, each this short or shorter, reads as a drumroll
-# ("No map. No plan. No way back.") and not as a sentence with a claim.
+# ("No map. No plan. No way back.") and not as a sentence with a claim. Three
+# short sentences that each carry a fact ("He ran. She followed. The door
+# closed.") are narration, so a row of three counts only when two of its
+# sentences start with the same word; a row of FRAGMENT_LONG_ROW counts always.
 FRAGMENT_ROW = 3
+FRAGMENT_LONG_ROW = 4
 FRAGMENT_WORDS = 3
 _TURN = re.compile(r"\b(?:but|however|yet|until|instead|except|though|in fact|turns out)\b",
                    re.I)
@@ -185,14 +190,17 @@ def opening_words(text: str) -> tuple:
 
 
 def _fragment_row(sents: list[str]) -> list[str]:
-    """The first run of FRAGMENT_ROW or more consecutive sentences of at most
-    FRAGMENT_WORDS words, or [] when there is none."""
+    """The first drumroll: FRAGMENT_ROW or more consecutive sentences of at most
+    FRAGMENT_WORDS words, of which two start with the same word (or
+    FRAGMENT_LONG_ROW or more, whatever they start with). [] when there is none."""
     run: list[str] = []
     for sent in sents + [""]:
         if sent and word_count(sent) <= FRAGMENT_WORDS:
             run.append(sent)
             continue
-        if len(run) >= FRAGMENT_ROW:
+        starts = [(words(r) or [""])[0] for r in run]
+        if len(run) >= FRAGMENT_LONG_ROW or (
+                len(run) >= FRAGMENT_ROW and len(set(starts)) < len(starts)):
             return run
         run = []
     return []
@@ -276,7 +284,7 @@ def check(script: str, *, publish_title: str = "", formula_id: str = "", kept_ho
     if _RUNUP.search(script):
         out.append(_warn("staged_runup",
                          "A staged run-up (\"Here's the thing\", \"Let's dive in\") announces "
-                         "a turn. State the turn itself."))
+                         "what is coming instead of saying it. State it itself."))
     contrasts = [m.group(0) for m in _NOT_BUT.finditer(script)]
     if contrasts:
         out.append(_warn("contrast_staging",
