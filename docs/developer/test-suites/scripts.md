@@ -31,6 +31,11 @@ one pass.
   used its attempts falls through to the next.
 - A mascot runs on its pinned agent, model and effort, or on the defaults, one mascot per pass. A
   mascot pinned to an agent that is gone is skipped and records no attempt.
+- Research runs on the agent, model and effort the `research_agent_*` settings name. Blank settings
+  give the default agent as before, an agent alone takes its first model and its own effort, and an
+  effort alone applies to the default agent. A named agent that is uninstalled or unknown falls
+  back to the default agent and its model and keeps the effort, a model the agent dropped falls
+  back to its first, and the profile lane keeps the default agent whatever research names.
 - The user preferences reach every prompt, an idle pass reads no settings, a dry run records nothing
   and starts nothing, and an install with no agent stops before the profile and research lanes.
 

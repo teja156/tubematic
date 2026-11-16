@@ -370,6 +370,34 @@ def _usable_model(model: str) -> str:
     return model
 
 
+def _research_agent(settings: dict, agents_by_id: dict, default: dict) -> tuple:
+    """(agent, model, effort, ghost) the topic-research session runs on (TMDEV-243).
+
+    The research_agent_* settings name them; all blank is the install's default
+    agent, its first model and its own effort, as before the keys existed. The
+    settings can go stale and nothing refuses here, so research never stops
+    over a choice: an agent uninstalled since (or unknown) falls back to the
+    default agent and its model, and `ghost` carries its id so the caller can
+    say so once. A model the agent no longer offers falls back to the agent's
+    first. Effort is a closed set every agent takes, so it rides along either
+    way. Unreadable settings arrive as {} and mean the defaults.
+    Keep in sync: renderer/api/pipeline.py SETTINGS_SPEC research_agent_*.
+    """
+    wanted = (settings.get("research_agent_id") or "").strip()
+    agent, ghost = default, ""
+    if wanted:
+        named = agents_by_id.get(wanted)
+        if named is not None and not named.get("archived_at"):
+            agent = named
+        else:
+            ghost = wanted
+    model = (settings.get("research_agent_model") or "").strip()
+    if not model or model not in (agent.get("models") or []):
+        model = _default_model(agent)
+    effort = (settings.get("research_agent_effort") or "").strip() or _default_effort(agent)
+    return agent, model, effort, ghost
+
+
 def _usable_effort(adapter, effort: str) -> str:
     """The effort to actually pass on argv, or "" to pass no --effort at all.
 
@@ -1739,7 +1767,7 @@ class _Supervisor:
             return None
         self.said.discard("paused")
         self._pipeline(status, agents_by_id, default, settings, timeout, preferences)
-        self._research(status, default, timeout, preferences)
+        self._research(status, agents_by_id, default, settings, timeout, preferences)
         return None
 
     def _profiles(self, status, default, timeout, preferences) -> None:
@@ -1844,7 +1872,7 @@ class _Supervisor:
             busy.add(vid)
             free -= 1
 
-    def _research(self, status, default, timeout, preferences) -> None:
+    def _research(self, status, agents_by_id, default, settings, timeout, preferences) -> None:
         if self.research_done or self._lane_busy("research"):
             return
         proposed_count = status.get("proposed_count", 0)
@@ -1882,11 +1910,17 @@ class _Supervisor:
         if not _record_research_run(dry_run=self.dry_run):
             return
         log.info("Research run — strategies: %s", ",".join(strategies))
-        session = _Session("research", "research", agent_id=default.get("id", ""),
-                           model=_default_model(default), operation="agent_research")
+        agent, model, effort, ghost = _research_agent(settings(), agents_by_id, default)
+        if ghost:
+            self._once("research-agent", logging.WARNING,
+                       "The research agent %r is not installed (any more) — researching "
+                       "with the default agent %r. Pick another in Settings > Research.",
+                       ghost, default.get("id", ""))
+        session = _Session("research", "research", agent_id=agent.get("id", ""),
+                           model=model, operation="agent_research")
         self._start("research", session,
                     build_research_prompt(strategies, preferences=preferences()),
-                    default, _default_model(default), _default_effort(default), timeout())
+                    agent, model, effort, timeout())
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────

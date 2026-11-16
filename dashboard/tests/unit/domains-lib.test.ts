@@ -122,6 +122,11 @@ describe("domainAgent / domainAgentOptions", () => {
     ]);
   });
 
+  it("takes its own label for the blank option (the research picker names the default agent)", () => {
+    expect(domainAgentOptions(AGENTS, "", "Default agent (Claude Code)")[0])
+      .toEqual({ value: "", label: "Default agent (Claude Code)", disabled: false });
+  });
+
   it("keeps a held agent that is not live listed but unpickable", () => {
     expect(domainAgentOptions(AGENTS, "old")[1])
       .toEqual({ value: "old", label: "Old Agent (uninstalled)", disabled: true });

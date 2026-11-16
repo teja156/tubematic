@@ -141,11 +141,14 @@ function domainAgentLabel(agents: Agent[] | undefined, agentId: string): string 
   return agent.archived_at ? `${agent.name} (uninstalled)` : agent.name;
 }
 
-/** The agent picker: Automatic, then every live agent. An agent the domain
+/** The agent picker: Automatic (or `blankLabel`: the research picker names the
+ *  default agent there), then every live agent. An agent the domain
  *  holds that is not live stays listed and selected, but cannot be picked
  *  again: only a live agent can be handed new work. */
-export function domainAgentOptions(agents: Agent[] | undefined, value: string): DomainOption[] {
-  const out: DomainOption[] = [{ value: "", label: "Automatic (dealt by weight)", disabled: false }];
+export function domainAgentOptions(
+  agents: Agent[] | undefined, value: string, blankLabel = "Automatic (dealt by weight)",
+): DomainOption[] {
+  const out: DomainOption[] = [{ value: "", label: blankLabel, disabled: false }];
   const live = (agents ?? []).filter((a) => !a.archived_at);
   if (value && !live.some((a) => a.id === value)) {
     out.push({ value, label: domainAgentLabel(agents, value), disabled: true });
