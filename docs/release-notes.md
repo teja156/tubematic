@@ -9,6 +9,26 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ---
 
+## v2.3.1
+
+### Upgrade notes
+
+1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode) after you
+   upgrade. A new skill writes Low-Poly Skit videos, and a session started before the upgrade does
+   not have it.
+2. To go back to 2.3.0 after upgrading, first change any video whose style is Low-Poly Skit to another style,
+   or restore the database backup the upgrade took. 2.3.0 does not know the style and cannot render such a video.
+
+### Added
+
+- A new experimental visual style, **Low-Poly Skit**. Toy people made of flat-shaded shapes act out
+  your script in small 3D dioramas, with a new shot about every second, a camera jolt on every footstep
+  and hit, crowds of hundreds, and captions that turn yellow word by word as they are spoken. It suits a
+  what-if told to "you" as a chain of consequences that grows with each step. It makes no images, has no
+  mascot and takes no insert scenes. Unlike Cartoon 3D it does not need a GPU: it renders on any
+  renderer, and a GPU only makes it faster.
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots) describes it.
+
 ## v2.3.0
 
 ### Upgrade notes

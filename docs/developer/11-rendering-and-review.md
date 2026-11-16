@@ -140,7 +140,7 @@ render is not handed out.
   finish. Images are optional and are not checked.
 - A video whose style takes no mascot (Cartoon 3D, Under the Hood, Case File Story, Paper Diorama, Archive and Engraving,
   Editorial Collage, Storybook Reveal, Puppet History, Mid-century How-To, Comic Panels, Process Cast, Flat Vector Science, Isometric Infographic,
-  Night Signal) that also holds a mascot, and a mascot video whose pinned
+  Night Signal, Low-Poly Skit) that also holds a mascot, and a mascot video whose pinned
   code cannot be read, go to `FAILED`
   ([The mascot's code](20-gpu-and-remote-renderers.md#the-mascots-code)).
 

@@ -84,13 +84,14 @@ System Flow or Terminal Doc scene, so both stay in the table below.
 | `isometric_infographic` | `light` | Its own billboard people | No | No |
 | `night_signal` | `dark` | Its own pictograms | No | No |
 | `cartoon_3d` | `dark`, never visible | Its own cast | No | No |
+| `low_poly_skit` | `dark`, never visible | Its own cast | No | No |
 
 The columns are `CANVAS_BY_STYLE`, `figures_allowed`, `line_art_allowed` and `characters_allowed`.
 
 `characters_allowed` gates the `generate_character` tool. `figures_allowed` and `line_art_allowed` go
 into the [AI review prompt](21-ai-review.md#the-prompts-guard-clauses), so the reviewer judges a video
 against the look it was meant to have. `cartoon_3d` replaces the scene system with one 3D world
-([Cartoon 3D](#cartoon-3d)), `system_flow` (on a video voiced before it became an insert style)
+([Cartoon 3D](#cartoon-3d)), `low_poly_skit` does the same with its own kit ([Low-Poly Skit](#low-poly-skit)), `system_flow` (on a video voiced before it became an insert style)
 with one diagram scene ([System Flow](#system-flow)),
 `bean_explainer` with one cartoon-bean scene ([Bean Explainer](#bean-explainer)), `whiteboard`
 with one board scene ([Whiteboard](#whiteboard)), `storybook_atlas` with one picture-book scene
@@ -128,7 +129,9 @@ chosen. Seven styles have a need:
   and pages are generated. The refusal text is each pack's `messages.openai_key`.
 - `cartoon_3d` needs a renderer whose [GPU test](20-gpu-and-remote-renderers.md#the-gpu-test) passed
   (`CARTOON3D_NEEDS_GPU`, `CARTOON3D_GPU_UNKNOWN`). Software WebGL can render the style, at about 50
-  minutes for a 90-second Short, so the rule is a policy.
+  minutes for a 90-second Short, so the rule is a policy. `low_poly_skit` needs no GPU: its pack has
+  `needs.gpu` false, because flat shading with no ink, shadow or lens pass renders at a small multiple of
+  System Flow's cost per frame on a CPU.
 
 `get_video` reports the two conditions to the agent as `illustrated_available` (true when an
 OpenAI key is stored, which Under the Hood, Case File Story, Editorial Collage, Archive and Engraving
@@ -451,7 +454,7 @@ yet voiced, and leaves them alone from voicing on.
 - Its authoring skill has a numbered **Look before you submit** step before its `submit_render` step:
   `preview_frames` at frame 0, the turn and payoff, and each insert, naming `preview_not_taken`.
   `scripts/tests/test_look_step.py` fails for a main style without it. A style that draws its own world
-  from source (Cartoon 3D) names its own look instead.
+  from source (Cartoon 3D, Low-Poly Skit) names its own look instead.
 - A [character style](#character-styles) is one more module in `character_styles.py::STYLES`, and
   `write_scene_config`, `validate_job`, the picture checks and the text-layout audit reach it from
   there.
@@ -668,7 +671,7 @@ the wrong side or an empty board before a render and an AI review find it. The s
 opening, the way in and out of each insert, and the turn and payoff frames, and every revision looks
 again. `submit_render` refuses a video whose current config nobody looked at (`preview_not_taken`), and
 passes one whose look the tool recorded as unavailable, so a renderer that cannot draw never stops the
-pipeline. Cartoon 3D keeps `cartoon_still`, which its beat gate requires
+pipeline. Cartoon 3D and Low-Poly Skit keep `cartoon_still`, which their beat gate requires
 ([`preview_frames`](06-mcp-server.md#preview_frames)).
 
 ### Text-layout warnings
@@ -829,6 +832,44 @@ A judge is a separate subagent whose whole prompt is the gate's prompt, so the a
 its own work. The tools are on [The MCP Server](06-mcp-server.md#cartoon-3d-authoring). The render
 runs [in segments](11-rendering-and-review.md#segmented-cartoon-3d-renders). The text-layout audit
 does not run for a Cartoon 3D video.
+
+## Low-Poly Skit
+
+Low-Poly Skit is a main style: a narrated story acted out by flat-shaded toy people in small 3D
+dioramas, with a new shot about every second, hard cuts only and a camera jolt on every footstep and
+hit. It has its own pack (`low_poly_skit.json`, `dimension: "3d"`, `experimental`, no mascot, no
+inserts) and its own skill, `tubematic-lowpoly-skit`, and it takes the same path through the pipeline
+as [Cartoon 3D](#cartoon-3d): one generated `CartoonShort` scene spanning the video, the beats in
+`props.cartoon3d`, the beat gate, the soundtrack and the frozen source. The pack's `renderer` is
+`cartoon_3d` for that reason, and `visual_styles.WORLD_STYLES` lists every pack that has it.
+The scene-config check, the mascot refusal and the MCP tools (`cartoon_still`, `cartoon_beat_gate`,
+`cartoon_soundtrack`, `cartoon_kit_list`, `cartoon_kit_read`) apply to both styles unchanged.
+
+It is a separate style and not a mode of Cartoon 3D because the two share an engine and almost nothing
+of a look: Cartoon 3D is inked cut-out characters under a lens and grade chain, and this style is
+jointed 3D figures with no outline, shadow or lens pass. The kit and the runner
+([the Low-Poly Skit kit](09-remotion-project.md#the-low-poly-skit-kit)) are new, and `camera.ts` and
+the gate are shared.
+
+| Module | Holds |
+|---|---|
+| `story.ts` | The shots timed to the narration, the camera built from the kit's moves, the jolt and hit frames |
+| `sets.ts` or `sets/*.ts` | The sets, each a `SetPiece` that builds its figures, props and effects once and poses them per frame |
+| `index.ts` | The `LowPolyDef` that ties them together |
+
+The worked example the skill points at is `src/cartoon3d/lowpoly/examples/dig/`.
+
+- The pack sets `needs.gpu` false, so `renderers.py::requires_gpu` reads the pack for a video of this
+  style and any renderer can take it. Cartoon 3D keeps the GPU policy.
+- A video of this style has a mascot refused by `NO_MASCOT_STYLES`, which includes every pack whose
+  renderer is `cartoon_3d`.
+- The captions use the `karaoke` look: the phrase on screen from its first frame, each word turning to
+  the accent colour as it is spoken ([Grouping words](09-remotion-project.md#grouping-words)).
+- Its pack carries a `review` block that tells the AI review the lack of outlines, shadows and mouth
+  movement is the style, in place of the Cartoon 3D block that describes ink and grain
+  ([The prompts](21-ai-review.md)).
+- The script rules are in the pack's `script` text: a second-person chain with one new place or action
+  per sentence. Nothing in the style filters or flags the words a script uses.
 
 ## System Flow
 

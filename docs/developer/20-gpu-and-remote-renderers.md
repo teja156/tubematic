@@ -148,6 +148,11 @@ about a tenth of a second to every frame, which in software turns a 90-second Sh
 scene-config whose scene is a Cartoon 3D world counts as Cartoon 3D, so an `auto` video that
 resolved to the style is GPU-only once its scene-config is written.
 
+A style whose pack has `needs.gpu` false is not GPU-only even when it renders a generated 3D world
+(`renderer: "cartoon_3d"`): Low-Poly Skit draws flat-shaded shapes with no outline, shadow or lens
+pass, so the scheduler hands it to any renderer. `requires_gpu` reads the pack's `needs.gpu` for such
+a video, and keeps the policy for a world with no pack of its own.
+
 The dashboard, the API and the MCP server refuse the choice unless `gpu_status` is `working`. The
 rest of this section applies to a video approved before the GPU stopped working.
 

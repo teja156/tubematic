@@ -512,7 +512,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
   stored value sent again passes, because the approving `PATCH` re-sends it.
 - `insert_mode` must be `auto` or `none` (the video's Inserts setting). `null` is refused.
 - `mascot_id` must be a string. A changed value must be a pickable mascot, needs a GPU `status` of
-  `working`, and is refused on a video that will be `cartoon_3d`, `under_the_hood`, `case_file_story`, `paper_diorama`, `archive_engraving`, `editorial_collage`, `storybook_reveal`, `puppet_history`, `midcentury_howto`, `comic_panels`, `process_cast`, `flat_vector_science`, `isometric_infographic` or `night_signal`. `""` clears
+  `working`, and is refused on a video that will be `cartoon_3d`, `under_the_hood`, `case_file_story`, `paper_diorama`, `archive_engraving`, `editorial_collage`, `storybook_reveal`, `puppet_history`, `midcentury_howto`, `comic_panels`, `process_cast`, `flat_vector_science`, `isometric_infographic`, `night_signal` or `low_poly_skit`. `""` clears
   the mascot.
 - `angle` and `angle_kind` are sent together, both strings. `angle` is at most 300 characters and
   `angle_kind` is a kind from [`GET /angle-kinds`](#get-angle-kinds). `""` for both removes the
@@ -544,7 +544,7 @@ that relies on one learns it at once (see [Database](03-database.md#videos)).
 - A `status` of `VOICING` from `SCRIPT_READY` checks every segment against the voice that speaks it,
   with or without `voice_id` in the body, and answers `409` with `voice_conflict` when one cannot.
 - A `mascot_id` is checked only when it changes, so a client that echoes the stored value is not
-  refused for a GPU that has gone since. A switch to `cartoon_3d`, `under_the_hood`, `case_file_story`, `paper_diorama`, `archive_engraving`, `editorial_collage`, `storybook_reveal`, `puppet_history`, `midcentury_howto`, `comic_panels`, `process_cast`, `flat_vector_science`, `isometric_infographic` or `night_signal` clears the mascot in the same
+  refused for a GPU that has gone since. A switch to `cartoon_3d`, `under_the_hood`, `case_file_story`, `paper_diorama`, `archive_engraving`, `editorial_collage`, `storybook_reveal`, `puppet_history`, `midcentury_howto`, `comic_panels`, `process_cast`, `flat_vector_science`, `isometric_infographic`, `night_signal` or `low_poly_skit` clears the mascot in the same
   `UPDATE`, and a changed mascot resets `mascot_version` to 0.
 - The approving `PATCH` (`TOPIC_PROPOSED` to `TOPIC_APPROVED`) is `409` when the video's mascot has
   been archived, or when the video is Cartoon 3D (by its style or by `resolved_renderer`) and keeps

@@ -267,6 +267,10 @@ strip from its first frame, the words still to come in grey as in `fill`, and a 
 wipes in under each `emphasis` word over 8 frames as it is spoken (`markerReach`). The Editorial
 Collage style uses this look.
 
+With `look` set to `"karaoke"` (`karaokeWordColor` in `Subtitles.tsx`), the whole phrase is on screen from
+its first frame in the text colour with no rise, and each word turns to `accent` (`#FFD221` when absent)
+on its start frame and stays that colour. The Low-Poly Skit style uses this look with the `outline` background.
+
 ### Fonts
 
 The default font is the container-local `system-ui, sans-serif`. The captions are on the path of every
@@ -516,10 +520,10 @@ from the video's visual style or the canvas the agent recorded, and otherwise wi
 | `background` | `"pill"` | `"pill"` (a translucent plate), `"shadow"`, `"outline"` (bold text, thick dark stroke, no plate), `"label"` (an ivory printed label), `"none"`, `"log"` (a terminal log strip), `"chip"` (a cream paper chip) or `"card"` (a cube-chip card); see [Grouping words](#grouping-words) |
 | `position` | `0.78` | 0.05 to 0.95. The vertical centre as a fraction of frame height |
 | `uppercase` | `false` | `true` or `false` |
-| `accent` | `null` | A CSS colour: the word being spoken in the `log` look, an `emphasis` word on a `chip`, the tags in the `tags` look, the marker in the `highlight` look. `null` uses each one's own colour |
+| `accent` | `null` | A CSS colour: the word being spoken in the `log` look, an `emphasis` word on a `chip`, the tags in the `tags` look, the marker in the `highlight` look, the word once spoken in the `karaoke` look. `null` uses each one's own colour |
 | `emphasis` | `[]` | Distinct word indexes into the timeline's words (0 is the first). Each is drawn on a red box once spoken, or in a selection box under the `selection` look. At most one word in 5 (`SUBTITLE_EMPHASIS_EVERY`) |
 | `letterSpacing` | Each background's own | A number, -0.05 to 0.3. Extra space between letters in ems, for the plain look |
-| `look` | `"plain"` | `"plain"`, `"selection"`, `"fill"`, `"tags"` or `"highlight"`; see [Grouping words](#grouping-words) |
+| `look` | `"plain"` | `"plain"`, `"selection"`, `"fill"`, `"tags"`, `"highlight"` or `"karaoke"`; see [Grouping words](#grouping-words) |
 
 `server.py::_validate_subtitles` rejects an unknown key, so a typo is reported at write time.
 `server.py::_emphasis_error` checks `emphasis` against the narration's word count. The
@@ -981,6 +985,28 @@ the style **Cartoon 3D (experimental)**.
 Three things run outside the composition: `cartoon-tools/build.mjs` bundles the `gate/` command lines
 for the MCP server, `cartoon-tools/audio/` is the soundtrack engine (Python), and
 `cartoon-tools/stills-server.mjs` is the renderer's stills server.
+
+## The Low-Poly Skit kit
+
+`renderer/remotion/src/cartoon3d/lowpoly/` is the kit that a Low-Poly Skit video's own code is written
+against, beside the Cartoon 3D kit and sharing its `camera.ts`, `kit/set.ts` and `gate/`
+([Scene Authoring](10-scene-authoring.md#low-poly-skit)).
+
+| Path | Holds |
+|---|---|
+| `def.ts` | The `LowPolyDef` contract and the light rig |
+| `LowPolyShort.tsx` | The runner. It builds the video's sets once, shows the set of the current shot, and draws with a plain light rig and no post chain. A frame the video flags with `blurAt` is drawn as the average of four sub-frames |
+| `figure.ts`, `faces.ts` | The house figure (about eighteen flat-shaded parts, joints at the spine, neck, shoulders, elbows, hips and knees) and its faces, which are flat shapes swapped on a frame |
+| `poses.ts`, `cycles.ts` | The poses as plain numbers, the snap timing, the walk, jig and idle cycles and the frames a foot lands |
+| `crowd.ts` | A crowd as instanced meshes, posed once for each phase bucket, and every member copies its bucket's pose |
+| `fx.ts`, `diorama.ts` | The impact burst, debris, comic word and light cone, and the set builders |
+| `LowPolySheet.tsx` | The model sheet a person approves the look from; no video uses it |
+| `examples/dig/` | The worked example the skill points at. It is typechecked and run by its own test |
+
+`camera.ts` gains `joltAt` and `jolted` (a vertical jolt over six frames on each hit frame) and `whip`
+(a hard-eased move between two framings that also returns how much to blur). The runner has no ink,
+shadow, lens, bloom or grade pass, which is why the style costs a small multiple of System Flow per
+frame on a CPU where Cartoon 3D costs hours.
 
 ## The mascot layer
 

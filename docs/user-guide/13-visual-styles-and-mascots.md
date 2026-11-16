@@ -32,6 +32,7 @@ corner unless you turn it off on **Settings → Rendering**.
 | **Comic Panels (experimental)** | A comic page builds up panel by panel on cream newsprint, with a hero, a villain, speech balloons and sound effects like POW. The camera moves from panel to panel and pulls back to the whole page. No images | Nothing |
 | **Process Cast (experimental)** | Little drawn characters with faces, such as a packet, a cell or a byte made of cubes, act out an invisible process at stations along one ground line. They carry task cards, split and join up, and the camera glides between stations. No images | Nothing |
 | **Cartoon 3D (experimental)** | Inked cartoon characters in a painted 3D world, with a moving camera | A renderer with a working NVIDIA GPU |
+| **Low-Poly Skit (experimental)** | Toy people made of flat-shaded shapes act out a story in small 3D dioramas, with a new shot about every second, a camera jolt on every footstep and hit, and crowds of hundreds. The captions turn yellow word by word. No images | Nothing |
 | **Flat Vector Science (experimental)** | Flat glowing creatures, cells and planets drift on a dark backdrop, named by pills whose words light up as they are spoken. Shots show scale: a dive through the ocean, a ladder of sizes, a zoom by powers of ten. No images | Nothing |
 | **Isometric Infographic (experimental)** | A small isometric world of flat blocks on cream paper. One thing travels a route that draws ahead of it, buildings drop in, pins name places with a number, and a counter keeps the running total. No images | Nothing |
 | **Night Signal (experimental)** | A calm warning told in glowing white pictograms on black, with the one danger in red: a stranger at the door, a doorbell camera, a phone screen, RULE cards and a card of steps. Scenes change through short glitches. No images | Nothing |
@@ -133,6 +134,10 @@ background would flash, and a viewer reads that as a broken render.
   better. The characters are the style's own cast and have nothing to do with mascots. It is
   experimental.
 - Choose **Cartoon 3D** for a story told by characters on a 3D set. It is experimental.
+- Choose **Low-Poly Skit** for a what-if told to "you" as a chain of consequences that grows with each step, such as
+  what happens if everyone jumps at once, or if you dug through the Earth: one small set per sentence, a crowd or a planet as the
+  payoff. It is playful, fast and experimental. It does not suit a real, named person or product, or a diagram of how something
+  works.
 - Choose **Flat Vector Science** for size and scale in nature and space: how deep the ocean goes, how
   big a star is, what happens to your body somewhere extreme, how a virus copies itself. The script
   asks one question and answers it with numbers that carry units, each compared with something
@@ -159,7 +164,7 @@ picks the style that clearly fits. It considers every style this install can mak
 while an OpenAI key is stored, Under the Hood, Case File Story, Editorial Collage, Archive and
 Engraving and Storybook Reveal only while an OpenAI key is stored and the video has no mascot, Paper
 Diorama, Puppet History, Mid-century How-To, Comic Panels and Process Cast only while the video has no
-mascot, Cartoon 3D only while a GPU is working and the video has no mascot.
+mascot, Cartoon 3D only while a GPU is working and the video has no mascot, Low-Poly Skit only while the video has no mascot.
 It may pick a style that generates images, which costs more per video. It does not pick a style for
 variety: the same kind of topic gets the same style every time.
 
@@ -258,7 +263,7 @@ Code Scenes shows what a snippet prints only when the code makes it certain. Not
 so the AI review checks that output against the code and sends the video back when it does not match.
 
 An insert follows the video's canvas, so on a white video it is drawn dark on paper. A Cartoon 3D
-video takes no inserts.
+or Low-Poly Skit video takes no inserts.
 
 The **Inserts** setting decides whether a video may have them. On **Auto** the agent decides, after
 it picks the style and before it writes the script; many videos get none. On **None** the video has
@@ -322,7 +327,7 @@ A mascot is a small character that walks on and off screen and reacts to the nar
 surprised, has an idea, hops, glances at something. It does not narrate and does not lip-sync.
 
 Mascots are experimental and off by default. A video has one only if you pick it. They are drawn on
-the GPU, so you can pick a mascot only while a renderer's GPU test has passed. Cartoon 3D, Under
+the GPU, so you can pick a mascot only while a renderer's GPU test has passed. Cartoon 3D, Low-Poly Skit, Under
 the Hood, Case File Story, Paper Diorama, Editorial Collage, Archive and Engraving, Storybook
 Reveal, Puppet History, Mid-century How-To, Comic Panels, Process Cast, Flat Vector Science, Isometric
 Infographic and Night Signal videos cannot have one: Under
@@ -331,7 +336,7 @@ Diorama its own critter and Storybook Reveal its own hero, Editorial Collage and
 are serious documentary pages a cartoon character would not suit, and Puppet History, Comic Panels and
 Process Cast have a whole cast of drawn characters that a mascot would be confused with. Flat
 Vector Science, Isometric Infographic and Night Signal draw a world a mascot would not fit, at a scale
-or in colours it would break.
+or in colours it would break. Low-Poly Skit is built from one house figure made of 3D shapes, and a flat mascot picture would not sit in its world.
 
 ![The Mascots page under Profiles: a form for a new mascot, and the built-in mascot Tubi marked READY](../images/mascots.png)
 
