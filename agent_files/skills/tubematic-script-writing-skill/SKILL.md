@@ -229,6 +229,15 @@ arranges beats; these rules decide whether the beats work.
 A list is fine where the topic is a list and the formula or the style asks for one. What fails is
 a flat list: items of equal weight with nothing joining one to the next.
 
+### Slop patterns
+
+Read `slop-patterns.md` (in this skill's folder) once before you draft the openings. It lists the
+habits that make narration sound machine-written: staged contrasts ("it's not X, it's Y"),
+drumrolls of fragments, sayings that sound deep, forced triads, inflated claims, stock words. It is
+fixed policy like the grammar above: a script profile sets the voice and cannot license a pattern
+in it. A pattern stays only where the file says it may, and a rewrite never drops or changes a
+fact, a name or a number.
+
 ### Three openings, then one
 
 Before writing the script, draft three openings for the chosen formula, **each from a different
@@ -243,7 +252,9 @@ facts do support and say so in the hand-off comment.
 Then:
 
 1. Mark any opening that claims more than the script will deliver, or that this topic cannot fill
-   with real facts. It is out; give it a `note` saying why.
+   with real facts. It is out; give it a `note` saying why. An opening built on a pattern from
+   `slop-patterns.md` (a staged contrast, a drumroll, a saying that sounds deep) is out too, unless
+   the pattern is the point as that file allows; rewrite it and keep its shape.
 2. Of the rest, keep the one that names something drawable and reaches the subject soonest.
    Between two that do so equally, keep the one whose type is not in
    `formula_routing.recent.hook_types` (the types of opening the domain's previous two videos
@@ -297,6 +308,8 @@ Read the draft once against these. If any answer is no, rewrite once; one pass, 
 - Does the script end the way the formula's Ending section says (or the way `style.script` says,
   where it says), with nothing after it except a closing line the preferences asked for?
 - Can every number, name and claim be traced to the topic brief or a source?
+- Is any of these left: a "not X, it's Y" contrast, a row of very short sentences, a triad where
+  two facts exist, a stock phrase, an idea doing a human verb (`slop-patterns.md`)?
 
 ---
 
@@ -736,6 +749,7 @@ weak pair is what they start from. `update_video` refuses a script without both.
   not the sentence repeating the title, and not a title copying a short first sentence. `update_video`
   returns a `title_repeat` warning for either.
 - No hashtags, no emoji, no markdown, and no pronunciation markup — this is read, not spoken.
+- Both follow `slop-patterns.md` too: no staged contrast, no stock phrase, no inflated claim.
 - A selected script profile does not change these rules; its voice may colour the wording.
 
 On a revision that rewrites the script, write both again from the new script. On a
@@ -784,8 +798,11 @@ the right one and the video has no speed of its own yet.
    bend a sound script to silence one: any warning raised by the closing line the preferences
    asked for stays, a `no_turn` on a script whose turn simply uses none of the listed words stays,
    a `recap_ending` on a closing sentence `style.script` asks for stays, a `length_band` on a
-   script whose length `style.script` set stays, and an `opening_repeat` or `hook_type_repeat` on
-   an opening a person switched to stays.
+   script whose length `style.script` set stays, an `opening_repeat` or `hook_type_repeat` on
+   an opening a person switched to stays, and a `contrast_staging` on a contrast that corrects a
+   belief the viewer holds (the turn of a Broken Expectation or Paradox formula) stays, with the
+   belief named in your hand-off comment. A `stock_phrase`, a `fragment_row` and a
+   `staged_runup` are habits: rewrite them.
 3. If `update_video` fails because it does not know the arguments `formula_id`, `hooks` or
    `voice_speed` (an unexpected-argument error, not a refusal of their values), the tool server is
    older than this skill: send the same call without the ones it names. Any other refusal that names the formula means

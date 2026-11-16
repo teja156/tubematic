@@ -80,8 +80,41 @@ _GREETING = re.compile(
     re.I)
 _RUNUP = re.compile(
     rf"\bhere{_A}?s the (?:\w+ )?(?:thing|catch|trick|part|kicker|twist|problem|deal|truth)\b"
-    rf"|\bhere{_A}?s where it gets\b",
+    rf"|\bhere{_A}?s where it gets\b"
+    rf"|\blet{_A}?s (?:dive|break (?:it|this|that) down|explore)\b"
+    r"|\bwithout further ado\b"
+    r"|\bthe thing is,"
+    rf"|\blet{_A}?s be honest\b"
+    rf"|\bhere{_A}?s what (?:you need to know|happens)\b",
     re.I)
+# A contrast that sets up a point by denying one nobody made: "not just X, but
+# Y", "it's not X, it's Y" (in one sentence or across two), "this doesn't mean
+# X. It means Y", "a feature, not a bug". Where the first half corrects a
+# belief the viewer holds, the contrast is the point and the warning may stand.
+_NOT_BUT = re.compile(
+    r"\bnot (?:just|only|merely|simply)\b[^.?!]{0,80}\bbut\b"
+    rf"|\b(?:\w+(?:{_A}s|{_A}re) not|\w+ (?:is|are|was|were) not"
+    rf"|\w+ (?:isn{_A}t|aren{_A}t|wasn{_A}t|weren{_A}t))\b[^.?!]{{0,60}}[.,;]\s+"
+    rf"(?:it|this|that|they|these|those)(?:{_A}s|{_A}re| is| are| was| were)\b"
+    rf"|\b(?:this|that) (?:doesn{_A}t|does not|don{_A}t|do not) mean\b[^.?!]{{0,80}}[.?!]\s+"
+    r"(?:it|that|this) means\b"
+    r"|\b(?:a|an|the) \w+(?: \w+)?, not (?:a|an|the) \w+",
+    re.I)
+# Sayings and stock words that dress an ordinary point as a deep one. Only
+# phrases with no plain use are listed: "key", "landscape" or "unlock" alone
+# are left to the skill's slop-patterns.md, where a writer can judge them.
+_STOCK = re.compile(
+    r"\bat its core\b|\bthe real question\b|\bstands? as a testament\b"
+    r"|\bplays? an? (?:key|crucial|pivotal|vital) role\b|\blet that sink in\b"
+    r"|\bread that again\b|\bmake no mistake\b|\bdelv(?:e|es|ed|ing)\b|\btapestry\b"
+    r"|\bgame[- ]changer\b"
+    rf"|\bin today{_A}?s fast[- ]paced\b|\bthe (?:language|currency|architecture) of\b"
+    r"|\bunlock(?:s|ing)? the (?:secret|power|potential|mystery)\b",
+    re.I)
+# A row of this many sentences, each this short or shorter, reads as a drumroll
+# ("No map. No plan. No way back.") and not as a sentence with a claim.
+FRAGMENT_ROW = 3
+FRAGMENT_WORDS = 3
 _TURN = re.compile(r"\b(?:but|however|yet|until|instead|except|though|in fact|turns out)\b",
                    re.I)
 _WORD = re.compile(r"[a-z0-9]+(?:'[a-z0-9]+)*")
@@ -149,6 +182,20 @@ def opening_words(text: str) -> tuple:
     sents = sentences(text)
     head = words(sents[0])[:OPENING_WORDS] if sents else []
     return tuple(head) if len(head) == OPENING_WORDS else ()
+
+
+def _fragment_row(sents: list[str]) -> list[str]:
+    """The first run of FRAGMENT_ROW or more consecutive sentences of at most
+    FRAGMENT_WORDS words, or [] when there is none."""
+    run: list[str] = []
+    for sent in sents + [""]:
+        if sent and word_count(sent) <= FRAGMENT_WORDS:
+            run.append(sent)
+            continue
+        if len(run) >= FRAGMENT_ROW:
+            return run
+        run = []
+    return []
 
 
 def _warn(warn_id: str, message: str) -> dict:
@@ -228,8 +275,26 @@ def check(script: str, *, publish_title: str = "", formula_id: str = "", kept_ho
                          "video to video where another type fits the topic honestly."))
     if _RUNUP.search(script):
         out.append(_warn("staged_runup",
-                         "A staged run-up (\"Here's the thing\", \"Here's the catch\") announces "
+                         "A staged run-up (\"Here's the thing\", \"Let's dive in\") announces "
                          "a turn. State the turn itself."))
+    contrasts = [m.group(0) for m in _NOT_BUT.finditer(script)]
+    if contrasts:
+        out.append(_warn("contrast_staging",
+                         f"{len(contrasts)} staged contrast(s), such as \"{contrasts[0]}\": a "
+                         "denial nobody made, set up so the real point sounds bigger. State the "
+                         "point directly. Keep a contrast only where it corrects something the "
+                         "viewer believes."))
+    stock = list(dict.fromkeys(m.group(0).lower() for m in _STOCK.finditer(script)))
+    if stock:
+        out.append(_warn("stock_phrase",
+                         "Stock phrases that sound deep and add no fact: "
+                         + ", ".join(f'"{p}"' for p in stock[:3])
+                         + ". Replace each with the specific claim."))
+    row = _fragment_row(sents)
+    if row:
+        out.append(_warn("fragment_row",
+                         f"A row of {len(row)} very short sentences (\"{' '.join(row)}\") reads "
+                         "as a drumroll. Join them into one sentence that carries the claim."))
     if count >= TURN_MIN_WORDS:
         tokens = script.split()
         middle = " ".join(tokens[int(count * TURN_WINDOW[0]):int(count * TURN_WINDOW[1])])

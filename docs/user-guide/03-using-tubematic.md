@@ -49,7 +49,8 @@ Above the script, the **Script** tab shows what the agent built it on:
   To have the script start with another one, press **Use this opening** under it. The agent
   rewrites the script from that opening, in the same formula.
 - **Script warnings** are automatic checks on the script's words, such as an ending that asks
-  viewers to follow, or a script longer than its formula runs. They are advice for you and the
+  viewers to follow, a "not this, but that" contrast, a stock phrase, or a script longer than its
+  formula runs. They are advice for you and the
   agent, and you can approve a script that has them.
 
 A script with nothing recorded shows none of these.

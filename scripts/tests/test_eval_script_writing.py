@@ -55,12 +55,13 @@ def test_the_prompt_carries_the_video_as_the_skill_reads_it():
     assert '"user_preferences": ""' in prompt
 
 
-def test_the_new_side_carries_every_formula_file_and_the_old_side_none():
+def test_the_new_side_carries_the_slop_file_and_every_formula_file_and_the_old_side_none():
     new = ev.new_skill()
     assert new.startswith("---\nname: tubematic-script-writing-skill")
+    assert "=== slop-patterns.md ===" in new
     for fid in tformulas.FORMULAS:
         assert f"=== formulas/{fid}.md ===" in new
-    assert "Use only the one for this video's formula" in new
+    assert "Use only the formula file for this video's formula" in new
 
 
 def test_the_old_side_is_read_from_git(monkeypatch):

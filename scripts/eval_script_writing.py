@@ -68,8 +68,9 @@ REFERENCES_NOTE = """
 
 ---
 
-The skill tells you to read one file from its `formulas/` folder. You have no tools, so every
-file in that folder follows. Use only the one for this video's formula.
+The skill tells you to read `slop-patterns.md` and one file from its `formulas/` folder. You have
+no tools, so `slop-patterns.md` and every formula file follow.
+Use only the formula file for this video's formula.
 
 """
 
@@ -89,8 +90,10 @@ def old_skill(ref: str) -> str:
 
 
 def new_skill() -> str:
-    """This checkout's SKILL.md with every formula file after it."""
+    """This checkout's SKILL.md, then slop-patterns.md, then every formula file."""
     parts = [(SKILL_DIR / "SKILL.md").read_text(encoding="utf-8"), REFERENCES_NOTE]
+    slop = (SKILL_DIR / "slop-patterns.md").read_text(encoding="utf-8")
+    parts.append(f"=== slop-patterns.md ===\n\n{slop}\n")
     for path in sorted((SKILL_DIR / "formulas").glob("*.md")):
         parts.append(f"=== formulas/{path.name} ===\n\n{path.read_text(encoding='utf-8')}\n")
     return "".join(parts)

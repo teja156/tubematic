@@ -34,8 +34,8 @@ Change the set rarely. A comparison across runs is only as good as the set stayi
 CLI with no tools:
 
 - the old side follows the skill as it was at a git ref (`--old-ref`, the `v2.1.1` tag by default)
-- the new side follows the skill in your checkout, with every formula file appended, since the run
-  has no tool to read one
+- the new side follows the skill in your checkout, with `slop-patterns.md` and every formula file
+  appended, since the run has no tool to read one
 
 It then runs the script warnings over both sides.
 

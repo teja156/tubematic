@@ -156,6 +156,13 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   whole cast is drawn characters and a mascot would be confused with them.
   [The styles](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#the-styles) has the
   details.
+- The script checks on the Script tab now warn about three more habits that make a script sound
+  machine-written: a staged contrast ("it's not X, it's Y"), a stock phrase such as "at its core" or
+  "let that sink in", and a row of very short sentences ("No map. No plan. No way back."). The
+  "here's the thing" check also catches "let's dive in" and "without further ado". Like the other
+  script checks they are advice, and you can approve a script that has them.
+  [Read and approve scripts](https://docs.tubematic.ai/user-guide/using-tubematic#3-read-and-approve-scripts)
+  has the details.
 
 ### Changed
 
@@ -174,6 +181,11 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   their normal pace and speeds the recording up or slows it down, keeping the pitch. A voice
   without a speed sounds as it did before.
   [Voice](https://docs.tubematic.ai/user-guide/settings#voice) has the details.
+- Scripts, and the publish title and description, are now written against a list of habits that make
+  narration sound machine-written: staged contrasts, drumrolls of fragments, sayings that sound
+  deep, triads written by habit, inflated claims and stock words. Before, only greetings, recaps,
+  closing asks and em dashes were avoided. A contrast that corrects something the viewer believes
+  stays, because that is the point of some formulas.
 
 ### Fixed
 

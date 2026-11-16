@@ -234,7 +234,7 @@ def test_the_steps_other_skills_and_tests_point_at_are_still_there():
 
 
 def test_the_skill_files_carry_no_ticket_id():
-    for path in [SKILL / "SKILL.md", *(SKILL / "formulas").glob("*.md")]:
+    for path in [SKILL / "SKILL.md", SKILL / "slop-patterns.md", *(SKILL / "formulas").glob("*.md")]:
         assert not re.search(r"\b(TMDEV|VQA|EXQA)-\d+", path.read_text()), path.name
 
 
@@ -267,3 +267,36 @@ def test_the_older_server_fallback_is_only_for_unknown_arguments():
     step = _text()[_text().index("## Step 10"):]
     assert "unexpected-argument error, not a refusal of their values" in step
     assert "an `opening_repeat` or `hook_type_repeat` on\n   an opening a person switched to stays" in step
+
+
+# --- the slop patterns -----------------------------------------------------
+
+def test_the_slop_file_exists_and_the_steps_that_write_words_point_at_it():
+    assert (SKILL / "slop-patterns.md").is_file()
+    text = _text()
+    assert "### Slop patterns" in text
+    assert text.count("slop-patterns.md") >= 3  # Step 4, the openings, the hand-off checks
+    assert "slop-patterns.md" in _section("## Step 9 ", "## Step 9b")
+
+
+def test_the_slop_file_leaves_what_the_grammar_and_the_checks_already_own_to_them():
+    slop = (SKILL / "slop-patterns.md").read_text(encoding="utf-8")
+    headings = re.findall(r"^#{2,3} .+$", slop, re.M)
+    for owned in ("greeting", "closing ask", "recap", "em dash", "run-up"):
+        assert not any(owned in h.lower() for h in headings), owned
+    assert "\u2014" not in slop  # it models the voice, which has no em dashes
+
+
+def test_every_check_the_server_runs_is_in_the_docs_table():
+    # A check that ships undocumented is a warning a person sees and cannot look up.
+    checks = (REPO / "tubematic_core" / "script_checks.py").read_text(encoding="utf-8")
+    docs = (REPO / "docs" / "developer" / "08-scripting-and-voice.md").read_text(encoding="utf-8")
+    for warn_id in set(re.findall(r'_warn\(\s*"([a-z_]+)"', checks)):
+        assert f"| `{warn_id}` |" in docs, warn_id
+
+
+def test_the_hand_off_says_which_warnings_may_stand():
+    step10 = _section("## Step 10", "A pronunciation-only fix")
+    assert "`contrast_staging`" in step10 and "belief the viewer holds" in step10
+    for habit in ("`stock_phrase`", "`fragment_row`", "`staged_runup`"):
+        assert habit in step10, habit

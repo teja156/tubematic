@@ -248,6 +248,12 @@ Covers `tubematic_core/script_checks.py`
   used.
 - Each check stays quiet on text that only uses its words: "follow" and "subscribe" as ordinary
   verbs about the subject, an ask in the middle of the script, a callback that explains the title.
+- The AI-sounding-pattern checks (`contrast_staging`, `stock_phrase`, `fragment_row` and the wider
+  `staged_runup`) each fire on their pattern and stay quiet on a plain negation ("not one but two"),
+  a word with a plain use ("key", "unlock the door"), two short sentences and "turns out", which is
+  a turn. A contrast the viewer holds as a belief still fires: the checks are advice and the skill
+  lets the agent keep it. Trap: the helper that inserts a sentence must not land next to the clean
+  script's own short sentence, or a row of three is real.
 - The band allows `BAND_SLACK` and no more. A script with no formula, or with a formula this version
   does not know, is not measured against a band.
 - An ellipsis inside a sentence does not end it, a closing quote stays with its sentence, and a

@@ -468,3 +468,90 @@ def test_the_opening_type_warning_names_the_type_by_its_label():
 
 def test_no_recorded_opening_type_is_never_a_repeat():
     assert "hook_type_repeat" not in ids(hook_type="", recent_hook_types=["", "problem"])
+
+
+# --- slop patterns (the checks are advisory; slop-patterns.md is the full list) ----
+
+def with_sentence(sentence: str, at: int = 6) -> str:
+    """CLEAN with one sentence added in the middle (CLEAN's own short sentence,
+    "Nothing is broken.", sits at index 6, so a test of a short row inserts
+    elsewhere)."""
+    sents = sc.sentences(CLEAN)
+    return " ".join(sents[:at] + [sentence] + sents[at:])
+
+
+@pytest.mark.parametrize("sentence", [
+    "It's not a bug, it's a feature.",
+    "This is not just a cache, but a bet.",
+    "It isn't the disk. It's the lock.",
+    "This doesn't mean the tool is safe. It means nobody looked.",
+    "It was a feature, not a bug.",
+    "The screen isn't feeling pressure at all. It's sensing you.",
+    "The computer is not broken. It is doing exactly what you asked.",
+])
+def test_a_staged_contrast_is_flagged(sentence):
+    assert "contrast_staging" in ids(with_sentence(sentence))
+
+
+@pytest.mark.parametrize("sentence", [
+    "Not one but two keys sit in the lock.",
+    "It was not there, and the log said so.",
+    "The file is not in the index.",
+    "He did not look up until the alarm.",
+    "They do not know. It is hidden in the index.",
+])
+def test_a_plain_negation_is_not_a_staged_contrast(sentence):
+    assert "contrast_staging" not in ids(with_sentence(sentence))
+
+
+def test_a_contrast_that_corrects_a_belief_is_still_flagged_and_the_agent_decides():
+    # A Myth Break turn is a real contrast, and a regex cannot tell. The
+    # warning is advice and the skill lets the agent keep it with a reason.
+    assert "contrast_staging" in ids(with_sentence("It isn't the cache. It's the lock."))
+
+
+@pytest.mark.parametrize("phrase", [
+    "At its core, the tool pairs names.", "The real question is the threshold.",
+    "It stands as a testament to the design.", "The threshold plays a pivotal role.",
+    "Let that sink in.", "Make no mistake about the cost.", "We delve into the log.",
+    "The history is a tapestry of renames.", "It is a game-changer for the log.",
+    "Unlock the secret of the threshold.",
+])
+def test_a_stock_phrase_is_flagged(phrase):
+    assert "stock_phrase" in ids(with_sentence(phrase))
+
+
+@pytest.mark.parametrize("sentence", [
+    "The key is in the lock.", "The landscape file holds the layout.",
+    "You can unlock the door with the second key.", "The core of the tool is a diff.",
+])
+def test_words_with_a_plain_use_are_not_stock_phrases(sentence):
+    assert "stock_phrase" not in ids(with_sentence(sentence))
+
+
+def test_the_stock_phrase_warning_names_the_phrases_found():
+    out = sc.check(with_sentence("At its core, let that sink in."), publish_title=TITLE,
+                   formula_id=FORMULA, kept_hook=HOOK)
+    message = next(w["message"] for w in out if w["id"] == "stock_phrase")
+    assert '"at its core"' in message and '"let that sink in"' in message
+
+
+def test_a_row_of_very_short_sentences_is_flagged():
+    assert "fragment_row" in ids(with_sentence("No map. No plan. No way back.", at=2))
+
+
+def test_two_short_sentences_or_a_run_of_longer_ones_are_not_a_row():
+    assert "fragment_row" not in ids(with_sentence("No map. No plan.", at=2))
+    assert "fragment_row" not in ids(with_sentence("No map. No plan. The log stops at today.", at=2))
+
+
+@pytest.mark.parametrize("phrase", [
+    "Let's dive in.", "Without further ado, the rename.", "The thing is, the log lies.",
+    "Let's be honest, the log lies.", "Here's what you need to know.",
+])
+def test_more_staged_run_ups_are_flagged(phrase):
+    assert "staged_runup" in ids(with_sentence(phrase))
+
+
+def test_turns_out_is_a_turn_and_not_a_run_up():
+    assert "staged_runup" not in ids(with_sentence("Turns out the log was never wrong."))
