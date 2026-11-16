@@ -34,6 +34,8 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
    discarded, so approve it before you upgrade if you want to keep it as it is. A video already voiced
    finishes in its old style. A domain whose default style was System Flow or Terminal Doc now
    defaults to Auto. Each video that moved has a comment saying so.
+6. If your voice list still has Teja, swap it in **Settings** >
+   **Voice**, for example for Bill (`iiidtqDt9FBdT1vfBluA`). The upgrade keeps the voice list you have.
 
 ### Added
 
@@ -159,6 +161,8 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ### Changed
 
+- A new install's default voice is Bill on Eleven v4, with Adam second. The old default, Teja, is no
+  longer in the ElevenLabs voice library.
 - System Flow and Terminal Doc are insert styles now, used only inside another style's video. A whole
   video in one of them was plain, and Auto picked them for more than half of its picks. Neither can be
   chosen for a video or as a domain's default. Topics about how a system works now

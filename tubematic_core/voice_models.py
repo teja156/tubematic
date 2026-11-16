@@ -124,7 +124,7 @@ ROSTER_OPTIONAL_KEYS = frozenset({"speed"})
 # in DICTIONARY_COMPATIBLE_MODELS, at most MAX_VOICES entries), or the
 # readers drop the whole list.
 DEFAULT_VOICES = (
-    {"name": "Teja", "voice_id": "w7yaXuKi0bjR3rtgNpVp", "model_id": "eleven_v4"},
+    {"name": "Bill", "voice_id": "iiidtqDt9FBdT1vfBluA", "model_id": "eleven_v4"},
     {"name": "Adam", "voice_id": "bfGb7JTLUnZebZRiFYyq", "model_id": "eleven_v3"},
 )
 DEFAULT_VOICE_ID = DEFAULT_VOICES[0]["voice_id"]

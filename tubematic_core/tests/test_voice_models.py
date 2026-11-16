@@ -144,12 +144,12 @@ def test_an_install_default_off_the_roster_is_no_default():
 
 # ── DEFAULT_VOICES (TMDEV-172) ───────────────────────────────────────────────
 
-def test_the_default_voices_are_teja_then_adam():
+def test_the_default_voices_are_bill_then_adam():
     assert [(v["name"], v["voice_id"], v["model_id"]) for v in vm.DEFAULT_VOICES] == [
-        ("Teja", "w7yaXuKi0bjR3rtgNpVp", "eleven_v4"),
+        ("Bill", "iiidtqDt9FBdT1vfBluA", "eleven_v4"),
         ("Adam", "bfGb7JTLUnZebZRiFYyq", "eleven_v3"),
     ]
-    assert vm.DEFAULT_VOICE_ID == "w7yaXuKi0bjR3rtgNpVp"
+    assert vm.DEFAULT_VOICE_ID == "iiidtqDt9FBdT1vfBluA"
 
 
 def test_every_default_voice_is_on_an_offered_model():
