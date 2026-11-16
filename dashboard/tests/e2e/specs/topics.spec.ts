@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import {
-  BASE, createProject, createVideo, setProjectStatus, setSettings, setStrategies, setMiningSources,
+  API_AUTH, BASE, createProject, createVideo, setProjectStatus, setSettings, setStrategies, setMiningSources,
 } from "../fixtures/seed";
 
 // Paused seeds sit in a collapsed group; open it before reading one of them.
@@ -387,7 +387,7 @@ test.describe("Topics page", () => {
 
     await page.reload();
     await expect(page.getByTestId(`domain-row-${slug}`)).toHaveCount(0);
-    const res = await fetch(`${BASE}/videos/${video.id}`);
+    const res = await fetch(`${BASE}/videos/${video.id}`, { headers: API_AUTH });
     expect(res.status).toBe(404);
   });
 
