@@ -109,3 +109,31 @@ export const dofAtOf = (table: Dof[], f: number) => {
   const k = d.dur ? Math.min(1, (f - d.f) / d.dur) : 1;
   return { cInf: p.cInf + (d.cInf - p.cInf) * k, focus: d.focus };
 };
+
+// ---------------- Low-Poly Skit moves (TMDEV-250) ----------------
+/** a footstep or impact jolt: each hit shakes the frame up and down for 6 frames, a damped swing that starts up.
+ *  `hits` are frames; the result is an amplitude to pass to `jolted`. */
+export const JOLT_FRAMES = 6;
+export const joltAt = (hits: number[], f: number) => {
+  let a = 0;
+  for (const h of hits) {
+    const n = f - h;
+    if (n >= 0 && n < JOLT_FRAMES) a += Math.exp(-n / 2.2) * Math.cos(n * 1.25);
+  }
+  return a;
+};
+/** the camera with a vertical jolt of amplitude a (1 = about 1.2 % of the frame height at the look distance) */
+export const jolted = (c: Cam, a: number): Cam => {
+  if (!a) return c;
+  const L = Math.hypot(c.look[0] - c.pos[0], c.look[1] - c.pos[1], c.look[2] - c.pos[2]);
+  const m = a * 0.012 * 2 * L * Math.tan((c.fov * Math.PI) / 360);
+  return { ...c, pos: [c.pos[0], c.pos[1] + m, c.pos[2]], look: [c.look[0], c.look[1] + m, c.look[2]] };
+};
+/** a whip: from camera a to camera b over `dur` frames from f0 (a hard ease, fast in the middle). `blur` is 0 to 1 and
+ *  peaks at the fastest frame, for the runner to smear the frame by. */
+export const whip = (a: Cam, b: Cam, f: number, f0: number, dur = 12): { cam: Cam; blur: number } => {
+  const u = clamp01((f - f0) / dur);
+  const k = u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2;
+  const speed = u < 0.5 ? 12 * u * u : 12 * (1 - u) ** 2;   // d(k)/du, 0 at both ends, 3 in the middle
+  return { cam: mix(a, b, k), blur: f < f0 || f > f0 + dur ? 0 : clamp01(speed / 3) };
+};
