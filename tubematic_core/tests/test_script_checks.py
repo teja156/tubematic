@@ -524,7 +524,8 @@ def test_a_stock_phrase_is_flagged(phrase):
 @pytest.mark.parametrize("sentence", [
     "The key is in the lock.", "The landscape file holds the layout.",
     "You can unlock the door with the second key.", "The core of the tool is a diff.",
-    "The tapestry hangs behind the altar.", "The architecture of the bridge carries the load.",
+    "The tapestry hangs behind the altar.", "The tapestry of fibers is woven on a loom.",
+    "The architecture of the bridge carries the load.",
     "The language of the web is HTML.",
 ])
 def test_words_with_a_plain_use_are_not_stock_phrases(sentence):

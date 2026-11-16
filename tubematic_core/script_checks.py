@@ -108,7 +108,7 @@ _STOCK = re.compile(
     r"\bat its core\b|\bthe real question\b|\bstands? as a testament\b"
     r"|\bplays? an? (?:key|crucial|pivotal|vital) role\b|\blet that sink in\b"
     r"|\bread that again\b|\bmake no mistake\b|\bdelv(?:e|es|ed|ing)\b"
-    r"|\b(?:a|the) (?:rich )?tapestry of\b|\bgame[- ]changer\b"
+    r"|\ba (?:rich )?tapestry of\b|\bgame[- ]changer\b"
     rf"|\bin today{_A}?s fast[- ]paced\b"
     r"|\bunlock(?:s|ing)? the (?:secret|power|potential|mystery)\b",
     re.I)
