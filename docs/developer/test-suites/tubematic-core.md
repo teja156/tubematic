@@ -94,6 +94,10 @@ Covers `tubematic_core/visual_styles.py` and the style packs it loads
   as the table in the test says.
 - The refusal messages come from the packs, and the GPU gate passes only `working`.
 - `public_list` explains an unavailable style, and `agent_view` names the authoring skill.
+- Low-Poly Skit shares Cartoon 3D's renderer (`WORLD_STYLES` lists both) but its pack sets `needs.gpu` false, so it is available
+  with no GPU at all and Cartoon 3D is not. Its mascot and insert refusals, its `karaoke` captions and its
+  place in the no-mascot set are pinned. `test_every_main_style_hosts_inserts_except_the_3d_worlds` holds both 3D worlds to
+  `host: false` with a refusal text.
 - System Flow, Bean Explainer, Storybook Atlas, Terminal Doc, Under the Hood and Case File Story each have their
   renderer, canvas, skill and permissions pinned; Bean Explainer's bean, Storybook Atlas's people and
   Under the Hood's presenter count as figures but neither line art nor generated characters.
@@ -845,6 +849,9 @@ about the machines that render.
   back.
 - A GPU-only video is skipped by a renderer without a verified GPU even past starvation, and that
   renderer takes the next video.
+- GPU need is read from the style pack: a Low-Poly Skit video is a 3D world (kind `cartoon_3d`) that
+  any renderer may take, a Cartoon 3D video is still GPU-only however it came to be one, and a world with
+  no pack of its own (an `auto` video that resolved to `cartoon_3d`) keeps the policy.
 - The estimate is the median of the last five timings for a kind of video, so one stalled render
   does not make a machine look slow for long.
 - `gpu_status` returns the four values the GPU gates read, and `gpu_unavailable_reason` names every

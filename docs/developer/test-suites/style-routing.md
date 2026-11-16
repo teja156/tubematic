@@ -26,6 +26,9 @@ topic's main expectation; it is expected as an insert in at least three topics, 
 topics expect no inserts, so the eval can see an insert added for variety
 ([Main styles and inserts](../10-scene-authoring.md#main-styles-and-inserts)).
 
+Low-Poly Skit takes four topics, the second-person what-if chains that climb in scale, with a pair probe
+where a crowd is on screen but the topic is a mechanism explained.
+
 Night Signal, Flat Vector Science and Isometric Infographic each take at least three topics, with
 pair probes against the styles they could be confused with (Case File Story and Bean Explainer for
 Night Signal, Photo Explainer, Bean Explainer and Stick Explainer for Flat Vector Science, Under the
