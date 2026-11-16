@@ -74,7 +74,7 @@ uninstall the research agent, research goes back to the default agent until you 
 
 ## Voice
 
-The list of ElevenLabs voices videos can use. A new install starts with two, Teja and Adam.
+The list of ElevenLabs voices videos can use. A new install starts with two, Bill and Adam.
 
 ![Settings, Voice tab: three voices, each with a name, a voice ID, a model, a speed, a default marker and a preview button; Teja on eleven_v4 is at 1.10x, Adam on eleven_v3 at 1.00x and Narrator on eleven_multilingual_v2 at 1.15x](../images/settings-voice.png)
 

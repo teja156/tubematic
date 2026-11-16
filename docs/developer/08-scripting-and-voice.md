@@ -750,7 +750,7 @@ A roster speed of 1.0 is never stored (`voice_models.py::normalize_roster_entry`
 no voice has a speed keeps the shape older versions read, and older versions read a roster with any
 other key as empty. Onboarding does not ask for a speed. It keeps one set on the dashboard.
 
-A fresh install starts with two voices, `tubematic_core/voice_models.py::DEFAULT_VOICES`: Teja on
+A fresh install starts with two voices, `tubematic_core/voice_models.py::DEFAULT_VOICES`: Bill on
 `eleven_v4` as the install default, and Adam on `eleven_v3`. Onboarding offers them as the default
 answers of its voice questions, which it asks under `--full-questionnaire`, and a default answer
 applies when no roster is stored. An existing install keeps its roster, and a deleted voice stays
