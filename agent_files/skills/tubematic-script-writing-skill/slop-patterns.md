@@ -55,9 +55,10 @@ skim past it the way a reader can, so each one costs real seconds.
 **After:** The ship left with no chart past the second island and no fuel to return.
 
 **Keep it when** the short sentence carries a new fact, such as the turn sentence of three to ten
-words that Step 4 asks for, or a run of short sentences that each say something new ("He ran. She
-followed. The door closed."). The tell is a row that repeats its opening word, or four or more
-fragments in a row.
+words that Step 4 asks for, or up to three short sentences that each say something new ("He ran.
+She followed. The door closed."). The server warns on a row that repeats its opening word and on
+four or more fragments in a row, because those are usually drumrolls. If every sentence of a longer
+row really carries a new fact, the row stays; if not, join them.
 
 ### 3. Sayings that sound deep
 

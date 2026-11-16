@@ -801,8 +801,8 @@ the right one and the video has no speed of its own yet.
    script whose length `style.script` set stays, an `opening_repeat` or `hook_type_repeat` on
    an opening a person switched to stays, and a `contrast_staging` on a contrast that corrects a
    belief the viewer holds (the turn of a Broken Expectation or Paradox formula) stays, with the
-   belief named in your hand-off comment. A `stock_phrase`, a `fragment_row` and a
-   `staged_runup` are habits: rewrite them.
+   belief named in your hand-off comment. A `stock_phrase` and a `staged_runup` are habits: rewrite
+   them. A `fragment_row` is a habit too, unless every short sentence in the row says something new.
 3. If `update_video` fails because it does not know the arguments `formula_id`, `hooks` or
    `voice_speed` (an unexpected-argument error, not a refusal of their values), the tool server is
    older than this skill: send the same call without the ones it names. Any other refusal that names the formula means
