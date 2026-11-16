@@ -10,6 +10,7 @@ import { MidcenturySheet, SHEET_PAGES as MIDCENTURY_SHEET_PAGES } from "./scenes
 import { ProcessCastSheet, SHEET_PAGES as PROCESS_CAST_SHEET_PAGES } from "./scenes/installed/processCast/ProcessCastSheet";
 import { ComicPanelsSheet, SHEET_PAGES as COMIC_PANELS_SHEET_PAGES } from "./scenes/installed/comicPanels/ComicPanelsSheet";
 import { PuppetHistorySheet, SHEET_PAGES as PUPPET_HISTORY_SHEET_PAGES } from "./scenes/installed/puppetHistory/PuppetHistorySheet";
+import { LowPolySheet, SHEET_PAGES as LOWPOLY_SHEET_PAGES } from "./cartoon3d/lowpoly/LowPolySheet";
 import { PresenterSheet } from "./scenes/installed/underTheHood/PresenterSheet";
 import { PaperPropSheet, sheetPages as paperSheetPages } from "./scenes/installed/paperDiorama/PaperPropSheet";
 
@@ -123,6 +124,11 @@ export const RemotionRoot: React.FC = () => {
         height={1920}
         defaultProps={{}}
       />
+
+      {/* The Low-Poly Skit figure sheet: one page per frame (the house figure, its
+          colourways, the faces and a crowd), for a person to approve the look. No
+          video uses it. */}
+      <Composition id="LowPolySheet" component={LowPolySheet} durationInFrames={LOWPOLY_SHEET_PAGES} fps={30} width={1080} height={1920} defaultProps={{}} />
 
       {/* The Under the Hood presenter's model sheet: every pose, mouth and
           blink, for a person to approve the fixed presenter. No video uses it. */}
