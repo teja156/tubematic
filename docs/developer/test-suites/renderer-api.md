@@ -202,6 +202,22 @@ Trap: `POST /videos` can be called without the MCP server, so a refusal in the M
 a second way to file into a paused domain. The agent can reach both, so both must give it the same
 message.
 
+### `test_project_delete.py`
+
+Covers [deleting a domain](../02-pipeline.md#deleting-a-domain), `DELETE /projects/<id>`.
+
+- Refused with `404` for an unknown domain and `409` for an active seed, a non-seed and `manual`,
+  and for a video in each status that `DELETE /videos/<id>` also refuses.
+- A delete removes the domain, its videos, comments, publications and metrics, its job and output
+  directories and its Auto Pilot entry. A second domain's rows and files are untouched.
+- `usage_events` and `usage_event_videos` survive.
+- An output directory name that escapes `OUTPUT_DIR` is reported in `file_errors` and never
+  followed.
+
+Trap: the cost ledger staying is the case to keep. The Costs page buckets spend as videos or
+research by the `usage_event_videos` links, so deleting them would move money between buckets.
+Nothing cascades from `projects`, so a new table that holds a video id has to be added to the route.
+
 ### `test_topic_cap.py`
 
 Covers the [topic cap](../02-pipeline.md#topic-cap) over HTTP.

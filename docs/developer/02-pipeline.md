@@ -487,6 +487,23 @@ domain stays paused without a control that can resume it.
 A subject that was never seeded cannot be paused. To stop videos about it, reject the proposals at
 `TOPIC_PROPOSED`, or turn trending or mining off.
 
+### Deleting a domain
+
+A paused curriculum seed can be deleted, and the delete takes every video filed under it:
+`DELETE /projects/<project_id>` ([HTTP API](05-http-api.md#delete-projectsproject_id)). It is the
+one place the API drops video rows, and a person alone can do it: there is no MCP tool, so an agent
+cannot remove a domain.
+
+It is refused unless the domain is a paused seed, and refused while any of its videos is in a
+status `DELETE /videos/<id>` also refuses (rendering, scheduled, publishing and the like), so a
+render or a post is never cut off. The checks run again inside the write transaction, because a
+worker can claim a video between the first read and the delete.
+
+The delete removes the videos with their comments, publication records and metrics, each video's
+job directory and the domain's output directory, and the domain's entry in the Auto Pilot
+configuration. It keeps `usage_events` and `usage_event_videos`: the money was spent, and the Costs
+page buckets spend by those links. Posts already live on a platform stay there.
+
 ### Topic cap
 
 The agent checks each research candidate against the MCP tool `list_project_topics`, which lists

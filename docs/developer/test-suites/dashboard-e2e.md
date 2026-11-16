@@ -246,7 +246,10 @@ collide with the mascot a failed attempt left behind.
 
 Covers [the Topics page](../15-dashboard.md#the-topics-page).
 
-- A curriculum seed can be paused and resumed. A domain that is not a seed offers no pause control.
+- A curriculum seed can be paused and resumed, moving between the active list and the collapsed
+  **Paused** group. A domain that is not a seed offers no pause control.
+- A paused seed is deleted after a confirmation, and its video is gone from the API afterwards.
+  **Cancel** leaves it, and an active seed offers no **Delete**.
 - A default voice picked in a domain's panel is saved, and the next video filed into the domain
   starts with it. The same holds for an effort, which also survives a reload.
 - A domain at its topic cap shows EXPIRED and refuses a curriculum video with `409`. Raising the cap

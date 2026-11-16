@@ -4503,6 +4503,89 @@ def create_pipeline_blueprint() -> Blueprint:
             updated = con.execute(f"{_PROJECT_SELECT} WHERE p.id = ?", (project_id,)).fetchone()
         return jsonify(_project_out(updated))
 
+    @bp.delete("/projects/<project_id>")
+    def delete_project(project_id: str):
+        """Delete a paused curriculum seed and everything filed under it (TMDEV-248).
+
+        The only hard delete of rows in the API, and human-only: there is no MCP
+        tool for it, so an agent cannot remove a domain. Refused for anything but
+        a paused seed, for `manual`, and while any video under the domain is
+        busy (rendering, scheduled, publishing ...) so a render or a post is never
+        cut off. The refusal is re-checked inside the write transaction, since a
+        worker claim can land between the first read and the delete.
+
+        The cost ledger (usage_events and its video links) stays: the money was
+        spent, and the Costs page buckets it by those links. Posts already live
+        on a platform stay there; only our record of them goes. Files go after
+        the commit and a failed removal is reported, never rolled back, as in
+        archive_video.
+        """
+        if project_id == MANUAL_PROJECT_ID:
+            return jsonify({"error": "The manual domain cannot be deleted."}), 409
+        busy_ok = sorted(DELETABLE_STATUSES)
+        with _conn() as con:
+            con.execute("BEGIN IMMEDIATE")
+            row = con.execute("SELECT is_curriculum_seed, status FROM projects WHERE id = ?",
+                              (project_id,)).fetchone()
+            if not row:
+                return jsonify({"error": "Project not found"}), 404
+            if not row["is_curriculum_seed"]:
+                return jsonify({"error": "Only a curriculum seed domain can be deleted."}), 409
+            if row["status"] != "paused":
+                return jsonify({"error": "Pause the domain before deleting it."}), 409
+            busy = con.execute(
+                "SELECT status, COUNT(*) AS n FROM videos WHERE project_id = ?"
+                f" AND status NOT IN ({','.join('?' * len(busy_ok))}) GROUP BY status",
+                [project_id, *busy_ok]).fetchall()
+            if busy:
+                parts = ", ".join(f"{b['n']} {b['status']}" for b in busy)
+                return jsonify({
+                    "error": f"A video in this domain is still in progress ({parts}). "
+                             "Wait for it to finish, or finish or reject it, then delete the domain.",
+                }), 409
+            video_ids = [r["id"] for r in con.execute(
+                "SELECT id FROM videos WHERE project_id = ?", (project_id,)).fetchall()]
+            for vid in video_ids:
+                # Metrics cascade from the publication, comments from the video.
+                con.execute("DELETE FROM video_publications WHERE video_id = ?", (vid,))
+                con.execute("DELETE FROM videos WHERE id = ?", (vid,))
+            con.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+            config = _auto_pilot_config(con)
+            if project_id in config["projects"]:
+                del config["projects"][project_id]
+                con.execute(
+                    "INSERT INTO settings (key, value) VALUES ('auto_pilot_config', ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    (_json.dumps(config),))
+
+        file_errors = []
+        jobs_root = JOBS_DIR.resolve()
+        for vid in video_ids:
+            job_dir = JOBS_DIR / vid
+            # The id came from our own row but is still a path segment: only
+            # ever remove a direct child of JOBS_DIR.
+            if job_dir.resolve().parent != jobs_root:
+                file_errors.append(f"{job_dir}: not a direct child of {JOBS_DIR}, left alone")
+            elif job_dir.is_dir():
+                try:
+                    shutil.rmtree(job_dir)
+                except OSError as e:
+                    file_errors.append(f"{job_dir}: {e}")
+        try:
+            if not tids.is_component(project_id):
+                raise tjobs.UnsafePath(f"project id {project_id!r} cannot be used as a directory name")
+            out_dir = tjobs.join_below(OUTPUT_DIR, project_id)
+            if out_dir.resolve().parent != OUTPUT_DIR.resolve():
+                file_errors.append(f"{out_dir}: not a direct child of {OUTPUT_DIR}, left alone")
+            elif out_dir.is_dir():
+                shutil.rmtree(out_dir)
+        except (tjobs.UnsafePath, OSError) as e:
+            file_errors.append(f"{OUTPUT_DIR / project_id}: {e}")
+        for err in file_errors:
+            log.warning("delete project %s: could not remove %s", project_id, err)
+        return jsonify({"ok": True, "deleted_videos": len(video_ids),
+                        "file_errors": file_errors})
+
     @bp.get("/research/strategies")
     def get_research_strategies():
         with _conn() as con:

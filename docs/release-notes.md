@@ -187,6 +187,12 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   script checks they are advice, and you can approve a script that has them.
   [Read and approve scripts](https://docs.tubematic.ai/user-guide/using-tubematic#3-read-and-approve-scripts)
   has the details.
+- A curriculum domain can now be deleted. Paused domains are listed under a closed **Paused** group on
+  the **Topics** page, each with a **Delete** button. Deleting asks you first, then removes the domain
+  and every topic and video filed under it, with their rendered files, comments and publishing
+  records. Your spending history stays. It is refused while a video in the domain is still being
+  worked on. [Deleting a domain](https://docs.tubematic.ai/user-guide/using-tubematic#deleting-a-domain)
+  has the details.
 
 ### Changed
 

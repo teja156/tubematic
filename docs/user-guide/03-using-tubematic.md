@@ -201,7 +201,8 @@ Five controls bound what research produces, and so what it costs.
 | Control | Where | Default | What it does |
 |---|---|---|---|
 | Research modes | Toggles on the **Topics** page | All on | Turns curriculum, trending or mining off |
-| Pause a domain | **Pause topic generation** on a seed's row on the **Topics** page | Not paused | Stops research filing topics in that domain |
+| Pause a domain | **Pause topic generation** on a seed's row on the **Topics** page | Not paused | Stops research filing topics in that domain. A paused domain moves to the **Paused** group |
+| Delete a domain | **Delete** on a paused seed's row, under **Paused** | Not deleted | Removes the domain and every topic and video filed under it |
 | Topic cap | **Topic cap**, under **Edit defaults** on a domain's row | 100 | The most topics a domain may hold over its lifetime, from 25 to 750 |
 | Pending-topic limit | **Research pending cap** on **Settings → Research** | 15 | Research does not run while this many topics are waiting for your decision |
 | Research runs per day | **Max research runs per day** on **Settings → Research** | 8 | The most research runs in any 24 hours |
@@ -214,6 +215,21 @@ Videos already in it carry on, and you can still create a video in it yourself.
 You can pause a curriculum seed only. Other domains receive topics that research found elsewhere,
 so a pause on them would stop nothing. To stop those topics, reject them or turn the research mode
 off.
+
+A paused seed moves from the list of active domains to a **Paused** group under it. The group is
+closed until you open it.
+
+### Deleting a domain
+
+A paused curriculum seed has a **Delete** button. Open the **Paused** group on the **Topics** page
+and select it. Tubematic asks you to confirm, and says how many topics and videos go with the
+domain: their rendered files, comments and publishing records. Posts already live on YouTube,
+Instagram, TikTok or Facebook stay up there, and your spending history is kept. Deleting cannot be
+undone.
+
+Tubematic refuses while a video in the domain is still being worked on (rendering, scheduled or
+publishing). Wait for it to finish, then try again. Pausing first is required, so you cannot delete
+a domain with one click. An agent cannot delete a domain.
 
 ### The topic cap
 
