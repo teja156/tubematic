@@ -10,6 +10,7 @@ for the suite that covers your change, and find the file by its subject heading.
 |---|---|---|---|
 | `tubematic_core/tests` | The package every process shares: migrations, the database helpers, backups, logging, auth, the usage ledger and prices, ids and job paths, and the voice, renderer and mascot rules | [tubematic-core.md](tubematic-core.md) | `python -m pytest tubematic_core/tests` |
 | `mcp/tests` | The MCP server: the agent's tools, the scene-work claim, `validate_job` and the text-layout audit | [mcp.md](mcp.md) | `python -m pytest mcp/tests` |
+| `sandbox/tests` | The code sandbox's daemon, and its isolation against a real container | [sandbox.md](sandbox.md) | `python -m pytest sandbox/tests` |
 | `renderer/api/tests` | The Flask API, the render gateway, the renderer, the worker, AI review and the publishing client | [renderer-api.md](renderer-api.md) | `python -m pytest renderer/api/tests` |
 | `onboard/tests` | The onboarding wizard, agent install, the Compose overrides, stack control and `upgrade.py` | [onboard.md](onboard.md) | `python -m pytest onboard/tests` |
 | `scripts/tests` | The poller and the agent adapters, the release tooling and the CI workflows, the service scripts and the Kasm images | [scripts.md](scripts.md) | `python -m pytest scripts/tests` |
@@ -28,7 +29,7 @@ Playwright suite) and the two typecheck commands.
 [Where verification belongs](../17-development.md#where-verification-belongs) says which checks
 are valid on your machine and which need a container.
 
-CI runs the seven Python suites as one matrix job per directory, and the dashboard unit suite in
+CI runs the eight Python suites as one matrix job per directory, and the dashboard unit suite in
 its `dashboard` job. The Playwright suite runs on a version tag or a manual dispatch. The
 `remotion` job runs the typecheck and does not run that project's vitest suite
 ([Releases: `ci.yml`](../18-releases.md#ciyml-pull-requests-and-pushes)).

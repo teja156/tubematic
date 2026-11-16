@@ -132,11 +132,14 @@ Step 1 already shows the code and, when the first sentence is about one line, it
 
 ## Step 3: output only when it is certain
 
-The output pane shows what the code on screen prints, and nothing runs it for you. Show output only
-when it follows directly and certainly from the code itself: a value the code prints, a row count
-it leads to, or the language's own error message for the line at fault, word for word. When you are
-not certain what the code prints, leave `output` out and let the narration describe the result. The
-AI review checks the pane against the code, and a wrong pane sends the video back.
+The output pane shows what the code on screen prints. For Python, JavaScript and TypeScript,
+`write_scene_config` runs the code in the code sandbox and refuses a pane that differs, telling you
+what the code printed; copy that. For every other language, and whenever the sandbox is down, nothing
+runs it for you: show output only when it follows directly and certainly from the code itself, a
+value the code prints, a row count it leads to, or the language's own error message for the line at
+fault, word for word. When you are not certain what the code prints, leave `output` out and let the
+narration describe the result. The AI review checks the pane against the code, and a wrong pane
+sends the video back.
 
 ## Worked example
 

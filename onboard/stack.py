@@ -36,7 +36,7 @@ LOCK_PATH = POLL_LOG_DIR.parent / "poll.lock"
 SESSIONS_REGISTRY = POLL_LOG_DIR.parent / "poll-sessions.json"
 
 SERVICES = ("tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer",
-            "tubematic-dashboard")
+            "tubematic-sandbox", "tubematic-dashboard")
 
 
 # ── In-flight work ───────────────────────────────────────────────────────────
@@ -269,7 +269,7 @@ def start(ex: Executor, rep: Reporter, services=(), *, confirm_down) -> None:
                       ("tubematic-dashboard", "http://localhost:3000")):
         if name in wanted and not _await_health(name, url, rep):
             rep.fail(f"{name} did not become healthy", f"Run: docker compose logs {name}")
-    for name in ("tubematic-worker", "tubematic-renderer"):
+    for name in ("tubematic-worker", "tubematic-renderer", "tubematic-sandbox"):
         if name not in wanted:
             continue
         status, _ = _container_state(name)

@@ -123,9 +123,9 @@ STEP_DEFS = [
         "`up` carries it; re-run on its own, it recreates the renderer.",
     ),
     Step(
-        "renderer", "API, MCP, worker + renderer containers",
+        "renderer", "API, MCP, worker, renderer + sandbox containers",
         "docker compose build tubematic-api (shared image) + up tubematic-api tubematic-mcp "
-        "tubematic-worker tubematic-renderer. Waits for the API and MCP health checks.",
+        "tubematic-worker tubematic-renderer tubematic-sandbox. Waits for the API and MCP health checks.",
         builds_or_starts=True,
     ),
     Step(

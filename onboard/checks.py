@@ -563,6 +563,11 @@ def check_installation() -> dict:
     services.append(CheckItem("Renderer container running", r_renderer.stdout.strip() == "running",
                                hint="python3 scripts/service.py start tubematic-renderer"))
 
+    r_sandbox = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-sandbox"],
+                               capture_output=True, text=True)
+    services.append(CheckItem("Code sandbox container running", r_sandbox.stdout.strip() == "running",
+                               hint="python3 scripts/service.py start tubematic-sandbox"))
+
     r2 = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-dashboard"],
                          capture_output=True, text=True)
     services.append(CheckItem("Dashboard container running", r2.stdout.strip() == "running",

@@ -126,6 +126,7 @@ import bean_preview  # renders a Bean Explainer video's own props for the agent 
 import terminal_doc  # the Terminal Doc checks (TMDEV-199), the same way
 import terminal_preview  # renders a Terminal Doc video's own moves for the agent to look at
 import code_scenes  # the Code Scenes insert checks (TMDEV-239), the same way
+import sandbox_client  # hands code to the tubematic-sandbox container through a spool folder (TMDEV-242); never runs it here
 import format_packs  # the Format Packs insert checks (TMDEV-240), the same way
 import inserts as inserts_mod  # the insert-scene checks (TMDEV-224)
 import picture_checks  # the first-frame and beat-change warnings (TMDEV-215), pure like text_audit
@@ -8067,6 +8068,89 @@ def read_image(video_id: str, image_name: str, grid: bool = True):
     return [summary_text, MCPImage(data=buf.getvalue(), format="png")]
 
 
+_RUN_CODE_INLINE_IMAGES = 4
+_RUN_CODE_INLINE_EDGE = 1024
+
+
+@mcp.tool
+def run_code(video_id: str, language: str, code: str, inputs: list[str] | None = None, timeout_s: int = 20):
+    """Run a short program in the code sandbox and read what it printed and wrote.
+
+    For work that needs real arithmetic or pixels, not for anything a scene
+    needs to be rendered: compute positions or chart values from real numbers,
+    crop or measure a picture, check timings, check what a snippet prints.
+    The sandbox is a separate container with NO network, no keys, no database
+    and nothing of this video except the files you list in `inputs`.
+
+    language:  python (3, with Pillow and numpy), javascript or typescript
+               (Node 20).
+    code:      the whole program, up to 64 KB. It runs from an empty work
+               folder: read inputs from ./in/<name>, write results to
+               ./out/<name>, print to stdout.
+    inputs:    up to 8 of this video's files, by job-relative name:
+               "timeline.json", "scene-config.json", "images/<file>",
+               "images/treated/<file>" or "runs/<run_id>/<file>" (a file an
+               earlier run wrote). Each appears in ./in/ under its base name.
+    timeout_s: wall-clock limit, 1 to 60 (default 20). The run is killed at
+               the limit; memory, CPU time, processes and output size are
+               limited too.
+
+    Files in ./out/ (at most 8, 8 MB each, names of letters, digits, . _ -,
+    extensions png jpg jpeg webp json txt csv svg) are kept under
+    runs/<run_id>/ for this video and listed in the result; up to 4 pictures
+    come back inline. Nothing a run writes goes into the video by itself: a
+    scene still gets its pictures and numbers from you.
+
+    This does NOT take the scene-work claim: it changes no scene source.
+
+    Returns exit_code (None when the run was killed; `signal` then says which),
+    timed_out, stdout and stderr (long output is cut in the middle,
+    output_truncated says so), duration_ms, files and run_id. When the
+    sandbox is not answering the result is {"error": "sandbox_unavailable"}:
+    carry on without it and do not retry in a loop.
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT id FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    try:
+        result = sandbox_client.run(sandbox_client.spool_dir(), JOBS_DIR, video_id, language, code, timeout_s, inputs)
+    except sandbox_client.SandboxError as e:
+        return e.as_dict()
+    except tjobs.UnsafePath as e:
+        return {"error": str(e)}
+
+    from PIL import Image as PILImage
+    from fastmcp.utilities.types import Image as MCPImage
+
+    images = []
+    for f in result["files"]:
+        if len(images) >= _RUN_CODE_INLINE_IMAGES or Path(f["name"]).suffix.lower() not in _IMAGE_EXTS:
+            continue
+        try:
+            with PILImage.open(tjobs.run_file(JOBS_DIR, video_id, result["run_id"], f["name"])) as src:
+                src.load()
+                img = src.convert("RGB")
+        except Exception:
+            continue
+        longest = max(img.size)
+        if longest > _RUN_CODE_INLINE_EDGE:
+            ratio = _RUN_CODE_INLINE_EDGE / longest
+            img = img.resize((max(1, round(img.size[0] * ratio)), max(1, round(img.size[1] * ratio))),
+                             PILImage.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        images.append(MCPImage(data=buf.getvalue(), format="png"))
+    result["video_id"] = video_id
+    if not images:
+        return result
+    return [json.dumps(result, indent=2), *images]
+
+
 # The shipped Whiteboard doodles: /app/remotion in the image, renderer/remotion
 # in a checkout. The preview draws two of them beside the agent's for scale.
 _WHITEBOARD_LIBRARY_PATHS = (
@@ -9005,6 +9089,12 @@ def _timeline_words(video_id: str) -> list[str]:
         return []
 
 
+def _snippet_runner(language: str, code: str):
+    """A short sandbox run for a check (the Code Scenes output panes), or None
+    when the sandbox cannot take it now: the check then refuses nothing."""
+    return sandbox_client.run_snippet(sandbox_client.spool_dir(), language, code)
+
+
 # Each insert style's own check over one insert of a config (TMDEV-224), by
 # style id: fps, the narration's word starts and words, then the entry. A new
 # insert style adds its module's check_insert here.
@@ -9012,7 +9102,7 @@ _INSERT_CHECKS = {
     system_flow.STYLE_ID: lambda fps, starts, words, e: system_flow.check_insert(
         e, fps, starts, tvs.pack(system_flow.STYLE_ID)["extra"]["icons"]),
     terminal_doc.STYLE_ID: lambda fps, starts, words, e: terminal_doc.check_insert(e, fps, starts, words),
-    code_scenes.STYLE_ID: lambda fps, starts, words, e: code_scenes.check_insert(e, fps, starts, words),
+    code_scenes.STYLE_ID: lambda fps, starts, words, e: code_scenes.check_insert(e, fps, starts, words, _snippet_runner),
     format_packs.STYLE_ID: lambda fps, starts, words, e: format_packs.check_insert(e, fps, starts, words),
 }
 

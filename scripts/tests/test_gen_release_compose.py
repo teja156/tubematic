@@ -76,7 +76,7 @@ def test_services_reusing_the_local_image_are_repointed_too(services):
     tubematic-renderer-image` and no build section -- they reuse what
     tubematic-api builds. A release install builds nothing, so that local tag
     would never resolve."""
-    for name in ("tubematic-mcp", "tubematic-worker", "tubematic-renderer"):
+    for name in ("tubematic-mcp", "tubematic-worker", "tubematic-renderer", "tubematic-sandbox"):
         assert "build" not in services[name], name
         assert services[name]["image"] == (
             f"ghcr.io/{OWNER}/tubematic-backend:{VERSION}"
@@ -178,7 +178,7 @@ def test_the_output_names_itself_as_generated(rendered):
 def test_the_generated_yaml_parses(parsed):
     assert "services" in parsed
     assert set(parsed["services"]) == {
-        "tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer",
+        "tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer", "tubematic-sandbox",
         "tubematic-dashboard",
     }
 
@@ -267,3 +267,12 @@ def test_missing_pyyaml_exits_cleanly(monkeypatch):
     monkeypatch.setattr(builtins, "__import__", real_import)
     monkeypatch.delitem(sys.modules, "gen_release_compose", raising=False)
     importlib.import_module("gen_release_compose")
+
+
+def test_the_sandbox_keeps_its_isolation_settings_in_the_release_compose(parsed):
+    """TMDEV-242: the generator passes network_mode, cap_drop and the rest
+    through untouched; the release file must carry every one of them."""
+    box = parsed["services"]["tubematic-sandbox"]
+    assert box["network_mode"] == "none" and box["read_only"] is True and box["cap_drop"] == ["ALL"]
+    assert box["volumes"] == ["sandbox-spool:/spool"]
+    assert box["image"] == f"ghcr.io/{OWNER}/tubematic-backend:{VERSION}"

@@ -1,6 +1,6 @@
 # Architecture
 
-Tubematic runs as five Docker containers and one cron job on one machine. Three of the containers
+Tubematic runs as six Docker containers and one cron job on one machine. Three of the containers
 (the API, the MCP server and the worker) open one SQLite file and coordinate through it. The
 dashboard reaches the data through the API. A renderer works through the **render gateway**, an HTTPS
 endpoint the API container serves for renderers. A **remote renderer** is the same renderer in a
@@ -68,12 +68,14 @@ flowchart TB
 | `tubematic-mcp` | the same image | 4100 | The MCP server, the agent's only interface to the pipeline |
 | `tubematic-worker` | the same image | none | Publishing, Auto Pilot, analytics, price sync, retention, notifications, the stalled-voicing check, the AI review of uploaded renders, and the render-lease and GPU-wait sweeps ([The Worker](12-the-worker.md)) |
 | `tubematic-renderer` | the same image | 4455, Compose network only | The built-in renderer. It renders what the gateway hands it, tests its GPU and runs the Cartoon 3D stills server ([Rendering and Review](11-rendering-and-review.md)) |
+| `tubematic-sandbox` | the same image | none | Runs the code the agent hands `run_code`, with no network, no secrets and one shared spool folder ([Infrastructure](16-infrastructure.md#tubematic-sandbox)) |
 | `tubematic-dashboard` | built from `dashboard/Dockerfile` | 3000 | The Next.js dashboard |
 
-The first four run one image with a different `command:`. Only the API service declares `build:`
-and the other three reuse its tag, so one build covers all four
-([Infrastructure](16-infrastructure.md#services)). Those four mount a shared logs directory at
-`/logs` and each appends a daily JSONL file there. The dashboard mounts neither the logs nor a
+The first five run one image with a different `command:`. Only the API service declares `build:`
+and the other four reuse its tag, so one build covers all five
+([Infrastructure](16-infrastructure.md#services)). The API, the MCP server, the worker and the
+renderer mount a shared logs directory at `/logs` and each appends a daily JSONL file there. The
+sandbox has no logs mount and no network. The dashboard mounts neither the logs nor a
 Docker socket, and reads the logs through the API's `GET /logs`.
 
 The reasons behind the split:

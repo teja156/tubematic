@@ -1,6 +1,6 @@
 # Infrastructure
 
-Tubematic runs from `docker-compose.yml`: five services, six volumes and one network. One cron
+Tubematic runs from `docker-compose.yml`: six services, seven volumes and one network. One cron
 entry on the host starts the poller. [Architecture](01-architecture.md) shows how the processes
 talk to each other.
 
@@ -20,27 +20,29 @@ mounts the old path, because Compose asks about the change and answers "no" with
 | `tubematic-mcp` | `/app/entrypoint.sh python3 /app/mcp/server.py` | `127.0.0.1:4100` | `curl -fs http://127.0.0.1:4100/health` |
 | `tubematic-worker` | `python3 /app/api/worker.py` | none | none |
 | `tubematic-renderer` | `python3 /app/api/render_agent.py` | none | none |
+| `tubematic-sandbox` | `python3 /app/sandbox/daemon.py` | none (no network at all) | none (a heartbeat file in its spool) |
 | `tubematic-dashboard` | the image's own `node server.js` | `3000` | `wget -q -T 5 --spider http://127.0.0.1:3000/login` |
 
 Every service has `restart: unless-stopped` and a fixed `container_name` equal to its service
 name. A healthcheck runs every 15 seconds with a 10-second timeout and 5 retries. Its
 `start_period` is 30 seconds on the API and the MCP server and 45 seconds on the dashboard.
-`tubematic-api` depends on nothing. The other four declare
-`depends_on: tubematic-api: service_healthy`.
+`tubematic-api` depends on nothing. The dashboard, the MCP server, the worker and the renderer
+declare `depends_on: tubematic-api: service_healthy`. The sandbox depends on nothing.
 
-Four containers run one image. Only `tubematic-api` declares `build:`. The MCP server, the worker
-and the renderer reuse its tag with a different `command:`, so a rebuild of `tubematic-api`
-rebuilds all four.
+Five containers run one image. Only `tubematic-api` declares `build:`. The MCP server, the worker,
+the renderer and the sandbox reuse its tag with a different `command:`, so a rebuild of
+`tubematic-api` rebuilds all five.
 
-| Mount (container path) | api | mcp | worker | renderer | dashboard |
-|---|---|---|---|---|---|
-| `output-videos` (`/output_videos`) | read-write | | read-write | | read-only |
-| `jobs-data` (`/jobs`) | read-write | read-write | read-write | read-write | |
-| `db-data` (`/data`) | read-write | read-write | read-write | | |
-| `scenes-generated` (`/app/remotion/src/scenes/generated`) | read-write | read-write | | read-write | |
-| `logs-data` (`/logs`) | read-write | read-write | read-write | read-write | |
-| `backups-data` (`/backups`) | read-write | read-write | read-write | | |
-| `/etc/localtime`, `/etc/timezone` (host files) | read-only | | read-only | read-only | |
+| Mount (container path) | api | mcp | worker | renderer | sandbox | dashboard |
+|---|---|---|---|---|---|---|
+| `output-videos` (`/output_videos`) | read-write | | read-write | | | read-only |
+| `jobs-data` (`/jobs`) | read-write | read-write | read-write | read-write | | |
+| `db-data` (`/data`) | read-write | read-write | read-write | | | |
+| `scenes-generated` (`/app/remotion/src/scenes/generated`) | read-write | read-write | | read-write | | |
+| `logs-data` (`/logs`) | read-write | read-write | read-write | read-write | | |
+| `backups-data` (`/backups`) | read-write | read-write | read-write | | | |
+| `sandbox-spool` (`/sandbox` in MCP, `/spool` in the sandbox) | | read-write | | | read-write | |
+| `/etc/localtime`, `/etc/timezone` (host files) | read-only | | read-only | read-only | | |
 
 The secret files each service mounts are listed under
 [The secrets directory](#the-secrets-directory).
@@ -142,6 +144,82 @@ GPU.
 Like the worker, it does not run `entrypoint.sh` and applies its own umask at startup. It is the
 only service that can get a GPU, and only through the override below. Its GPU test travels to the
 API in its heartbeats, because the API has no GPU to test.
+
+### `tubematic-sandbox`
+
+The code sandbox. It runs the programs the agent hands the MCP tool `run_code`
+([MCP Server](06-mcp-server.md#run_code)) and nothing else. It uses the backend image with
+`python3 /app/sandbox/daemon.py`, which is stdlib Python (`sandbox/daemon.py`), so it needs no build of
+its own and does not run `entrypoint.sh`.
+
+The agent has no shell and no file writes, and the MCP container holds the credential database, so the
+code runs in a container of its own:
+
+| Setting | Effect |
+|---|---|
+| `network_mode: none` | The container has a loopback interface and nothing else. It cannot reach the internet, the Compose network or the MCP container |
+| One mount, `sandbox-spool` at `/spool` | The only thing it shares with MCP. No database, no `jobs-data`, no secrets directory, no `env_file`, no environment key |
+| `read_only: true`, `tmpfs: /tmp:size=512m` | The only writable place is a size-capped memory filesystem that is wiped after each run |
+| `cap_drop: [ALL]`, then `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `KILL`, `SETUID`, `SETGID` | What the daemon needs to hand a work folder to uid 65534, drop to that uid, read and delete what it wrote and kill what it started. The code itself runs with no capabilities |
+| `no-new-privileges` | A program cannot gain privileges through a setuid binary |
+| `cpus: 1`, `mem_limit: 1g`, `pids_limit: 256` | A runaway program takes at most this much of the host |
+| No Docker socket | Nothing in the stack mounts it, and a test pins that |
+
+MCP and the sandbox talk through the spool folder, `~/.tubematic-data/sandbox` on the host. MCP writes
+`req/<id>/` (a `request.json` and the input files it copied in) by writing a temporary name and
+renaming it. The daemon takes the oldest request, runs it, and writes `done/<id>/result.json` and the
+files the code left in `./out` the same way. `req` and `done` belong to root with mode 0700, so the code,
+which runs as uid 65534, cannot list, read or forge a request or a result. The daemon rewrites a
+`heartbeat` file in the spool every second, and MCP answers `sandbox_unavailable` when it is older than 10
+seconds. There is no network URL to probe, so the heartbeat is also the health signal.
+
+Each run happens in a fresh work folder on the tmpfs, owned by uid 65534, with an empty environment (a
+`PATH`, `HOME` and `TMPDIR` pointing at the work folder), no standard input and these limits:
+
+| Limit | Value |
+|---|---|
+| Wall clock | the request's `timeout_s`, up to 60 seconds, shared by the transpile and the run of a TypeScript request, then the whole process group is killed |
+| CPU time | `timeout_s` plus 2 seconds |
+| Address space (Python) | 1.5 GB. Node is held by `--max-old-space-size=384` and the container's memory limit instead, because V8 reserves address space it does not use |
+| Processes | 128 for the uid |
+| Size of any file or stream | 16 MB |
+| Output files | at most 8, 8 MB each, 16 MB in total, regular files only, names of letters, digits and `. _ -` with an extension the list in `sandbox_protocol.OUT_EXTENSIONS` allows |
+| `stdout` and `stderr` | cut to their first and last 4000 characters each |
+
+After a run the daemon kills every process the uid still owns, reaps the orphans (it is PID 1, so
+nothing else would, and unreaped zombies would fill the process limit), deletes what the uid left in
+`/tmp` and in `/dev/shm` (Docker mounts it writable under a read-only root) and removes the work folder. It runs one request at a time. MCP refuses a new request with
+`sandbox_busy` when two are already waiting.
+
+#### Threat model
+
+The code is written by an agent that reads untrusted web pages and videos while it researches, on
+models of very different strength, often unattended from cron. Assume the code is hostile or wrong.
+
+| What it might try | What stops it |
+|---|---|
+| Read API keys, the database or the service tokens | They are not mounted and not in the environment. A test lists the paths and expects each to fail or be an empty folder |
+| Send data out or call a paid API | No network interface. A test connects to an address, a hostname and the MCP port from Python and Node |
+| Write to the image, the spool or the host | A read-only root, no writable mount but the spool (which the code cannot enter), and a tmpfs wiped after each run |
+| Forge a result or read another run's files | `req` and `done` are root-only, and each run's work folder is removed |
+| Escape to the host through Docker | No socket, no `--privileged`, no added capability beyond the six, no privilege gain |
+| Exhaust the host | The limits above, per run and per container |
+| Return something that harms MCP | MCP re-checks every returned file (name, size, count, that a picture starts like its extension, that text is UTF-8) and caps the text |
+| Make MCP run code itself | `run_code` has no fallback. With the sandbox down it answers `sandbox_unavailable`, and `mcp/tests/test_removed_tools.py` pins that MCP imports no code runner |
+
+`sandbox/tests/test_container.py` runs every one of these against a real container built from the
+`tubematic-sandbox` service definition ([Test suites](test-suites/sandbox.md)).
+
+`run_code` and the Code Scenes output check share the one queue. The check uses a 5-second limit,
+takes no input and keeps no files, and it refuses nothing when the sandbox cannot take it.
+
+#### Upgrading to a release with the sandbox
+
+The upgrade creates `~/.tubematic-data/sandbox` (the directories step creates every folder in
+`DATA_SUBDIRS`) and then runs `docker compose up -d`, which starts the new service and recreates
+`tubematic-mcp` with the new mount. The service uses the backend image, so no extra image is pulled. An
+install that rolls back to an earlier release leaves `tubematic-sandbox` running with no network and
+nothing to do. Remove it with `docker rm -f tubematic-sandbox`.
 
 #### GPU override
 
@@ -431,7 +509,7 @@ against the address it used. The dashboard therefore sets no `trustHostHeader` a
 
 ## Volumes
 
-All six are named volumes with `o=bind` device paths under `${HOME}`:
+All seven are named volumes with `o=bind` device paths under `${HOME}`:
 
 | Volume | Device | Holds |
 |---|---|---|
@@ -441,6 +519,7 @@ All six are named volumes with `o=bind` device paths under `${HOME}`:
 | `scenes-generated` | `~/.tubematic-data/scenes/generated` | Agent-authored scene TSX |
 | `logs-data` | `~/.tubematic-data/logs` | JSONL logs. See [The log files](#the-log-files) |
 | `backups-data` | `~/.tubematic-data/backups` | Pre-migration database snapshots. See [Backups](#backups) |
+| `sandbox-spool` | `~/.tubematic-data/sandbox` | The code sandbox's requests and results, shared by `tubematic-mcp` and `tubematic-sandbox`. See [`tubematic-sandbox`](#tubematic-sandbox) |
 
 The data folder also holds `secrets/` and the two override files, `compose.gpu.json` and
 `compose.renderers.json`. None of those is a volume.
