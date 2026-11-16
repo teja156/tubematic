@@ -237,6 +237,22 @@ Covers a domain's default script profile.
   changes. The type check runs on the raw value, so `false`, `0` and `[]` are refused and are not
   read as "no default".
 
+### `test_research_agent_settings.py`
+
+Covers the three `research_agent_*` settings and their checks in `POST /settings`
+([The research agent is checked on write](../04-settings.md#the-research-agent-is-checked-on-write)).
+
+- The keys default to blank, and a live agent with one of its models and a valid effort is stored.
+- An agent that is unknown or uninstalled, a model with no agent, a model the agent does not offer
+  and an effort outside the levels are each refused, with the `research_agent_*` name in the reason
+  and not the domain's.
+- A model alone is checked against the stored agent. Changing the agent while the stored model
+  stays is refused, which is why the dashboard clears the model in the same request.
+- A pair that went stale never blocks an unrelated save, and can be cleared back to blank.
+
+Trap: The check runs only when the pair changes. A check on every save would lock the whole
+settings page for an install whose research agent was uninstalled.
+
 ### `test_domain_agent.py`
 
 Covers a domain's agent, model and effort: `_domain_agent`, `_domain_agent_error`, and their use in

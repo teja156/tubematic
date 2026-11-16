@@ -99,6 +99,9 @@ back to being shared.
 To change one video's agent, model or effort, use the pickers on the video at Topic Proposed, Script
 Ready or Video Ready. Picking a different agent resets the model to that agent's default.
 
+Topic research can run on a different agent, model and effort from your videos. Choose them under
+**Settings → Research**. Blank uses the default agent.
+
 `python3 onboard.py --list-agents` prints the supported agents and the installed ones, with their
 shares and models.
 
@@ -116,7 +119,8 @@ agent. It keeps:
 - the Remotion skill, which other projects may use.
 
 A video assigned to an uninstalled agent waits. Tubematic does not hand it to another agent. Install
-the agent again, or pick another agent on the video.
+the agent again, or pick another agent on the video. Research is the exception: if the agent you
+chose for research is uninstalled, research runs on the default agent.
 
 You cannot uninstall the default agent while another agent is installed. Make another one the
 default on **Settings → Agents** first.

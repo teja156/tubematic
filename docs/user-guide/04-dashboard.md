@@ -136,7 +136,7 @@ The panel on the right holds:
 
 - the buttons and pickers for the video's current status,
 - links to the live posts, under **Published to**,
-- the video's details: how the topic was found, its score, its angle score, its script profile,
+- the video's details: how the topic was found (for a curriculum video, with its domain), its score, its angle score, its script profile,
   visual style, voice, any other voices its script uses, and agent,
 - the **Cost** panel,
 - the AI review's findings, if AI review ran.

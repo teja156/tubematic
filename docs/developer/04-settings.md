@@ -48,6 +48,22 @@ database connection. The two checks live elsewhere:
 `post_settings` checks the value only when it changes. Refusing a re-sent stored value would block
 every unrelated save once the mascot is archived or the GPU is gone. `""` passes.
 
+### The research agent is checked on write
+
+`research_agent_id` and `research_agent_model` name rows and lists that `_coerce_setting` cannot
+see, so `post_settings` checks them with `_domain_agent_error`, the check a domain's default agent
+uses: the agent must be installed and live, and the model must be one of its models. Only a key
+that changes is checked, and a model alone is checked against the stored agent. A pair that went
+stale (the agent was uninstalled) is therefore never refused again, and `_read_all_settings`
+returns it as stored, so no unrelated save is blocked by it. `research_agent_effort` has no
+database dependency, so `_coerce_setting` checks it against `AGENT_EFFORTS`.
+
+The poller does the falling back. `_research_agent` runs the session on the default agent, with
+that agent's first model, when the named agent is not live. A model the agent does not offer
+becomes the agent's first. The effort carries over, because every agent takes the same levels.
+The dashboard clears the model in the same request that changes the agent, because the stored
+model belongs to the other agent's list.
+
 ### Derived: `pronunciation_mode`
 
 `pronunciation_mode` is not stored, and posting it is an unknown-key error. It belongs to a voice's
@@ -162,6 +178,9 @@ See [The Worker](12-the-worker.md).
 | `max_mining_per_run` | int | `2` | | `scripts/poll.py`, and the MCP `mine_youtube_topics` tool, which enforces it. `0` turns mining off |
 | `research_pending_cap` | int | `15` | | `scripts/poll.py`. No research starts once this many videos sit at `TOPIC_PROPOSED` |
 | `max_research_runs_per_day` | int | `8` | | `scripts/poll.py`. A rolling 24-hour cap on research sessions |
+| `research_agent_id` | str | `""` | `""` or a live agent's id. Checked on change, see [below](#the-research-agent-is-checked-on-write) | `scripts/poll.py::_research_agent`. `""` is the default agent |
+| `research_agent_model` | str | `""` | `""` or a model of the research agent. Needs `research_agent_id` | `scripts/poll.py::_research_agent`. `""` is the research agent's first model |
+| `research_agent_effort` | str | `""` | `""` or one of `AGENT_EFFORTS` | `scripts/poll.py::_research_agent`. `""` is the research agent's own `effort` |
 | `trending_sources` | json_list | `["GitHub Trending", "Hacker News"]` | A list of strings. The contents are not checked | `scripts/poll.py`, in the research prompt |
 
 The API reports `research_pending_cap` and `max_research_runs_per_day`, and `scripts/poll.py`
@@ -215,12 +234,15 @@ OpenAI is the only image provider, so both tools need `openai_api_key`.
 
 ### Agent
 
-No settings key selects an agent, a model or an effort level. Installed agents, the default agent
-and each agent's models and `effort` are rows in the [`agents` table](03-database.md#agents),
-written by `python3 onboard.py --install-agent <name>`. A video's own choices are
-`videos.agent_model` and `videos.agent_effort`. Model names are probed against the installed CLI
-at install time and are not kept in a catalog in the repo. See
+No settings key sets an install-wide agent, model or effort level for videos. Installed agents,
+the default agent and each agent's models and `effort` are rows in the
+[`agents` table](03-database.md#agents), written by `python3 onboard.py --install-agent <name>`. A
+video's own choices are `videos.agent_model` and `videos.agent_effort`. Model names are probed
+against the installed CLI at install time and are not kept in a catalog in the repo. See
 [The Agent Layer](07-agent-layer.md#agents).
+
+The one exception is topic research, which has its own three keys (see
+[The research agent is checked on write](#the-research-agent-is-checked-on-write)).
 
 ### Script formulas
 

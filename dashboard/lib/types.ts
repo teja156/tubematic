@@ -436,6 +436,12 @@ export interface Settings {
   /** The mascot new videos start with unless their domain says otherwise;
    *  '' = none. Optional: an older API does not send it. */
   default_mascot_id?: string;
+  /** The agent, model and effort the topic-research session runs on; ''
+   *  everywhere = the default agent, its first model and its own effort.
+   *  Optional: an older API does not send them. */
+  research_agent_id?: string;
+  research_agent_model?: string;
+  research_agent_effort?: string;
   /** Pipeline sessions the cron supervisor runs at once (TMDEV-129); research
    *  and script profiles run beside them, outside this cap. 1..10. */
   max_concurrent_agent_sessions: number;

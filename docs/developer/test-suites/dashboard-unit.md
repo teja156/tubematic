@@ -192,6 +192,10 @@ Covers `app/settings/page.tsx`, [the settings page](../15-dashboard.md#the-setti
 - A text field typed back to its stored value clears its refusal, and a focus and blur does not
   send the refused value again, while Enter does. A refused agent weight can be sent again, and its
   refusal survives a change to the agent's effort.
+- The Research tab's agent, model and effort pickers: the blank agent option names the default
+  agent, uninstalled agents are not offered, and the model is locked until an agent is picked.
+  Changing the agent sends the agent and a cleared model in one request, and a model or an effort
+  sends only its own key. An uninstalled research agent stays selected but cannot be picked again.
 - The Publishing confirmation reads Auto Pilot fresh, so its warning shows after Auto Pilot was
   turned on in the same visit.
 - Turning Publishing on asks first, and Cancel saves nothing; turning it off does not ask.
@@ -498,6 +502,16 @@ Covers the video window's **Why this style** row and **Switch to …** button
 - An Auto pick shows its reason and runner-up. A style a person chose shows neither.
 - The switch is offered only at `SCRIPT_READY` with a runner-up, posts to `/switch-style` after a
   confirm, does nothing when the confirm is declined, and shows the server's refusal.
+
+### `video-modal-domain.test.tsx`
+
+Guards the **Domain** row in the video window's details
+([The video window](../15-dashboard.md#the-video-window)). The video record carries only `project_id`, so
+the modal looks the name up in the projects list.
+
+- A curriculum video shows its domain's name.
+- An unknown domain or a failed lookup shows the id, never a blank row.
+- A video of another strategy, or with no domain, shows no row.
 
 ### `video-modal-script-record.test.tsx`
 
@@ -846,7 +860,8 @@ Covers `lib/domains.ts`, the Topics page's helpers for a domain's defaults
 
 - `domainChips` returns a chip for each default the domain sets and none for one it leaves blank.
   An effort with no agent reads as Automatic with that effort.
-- `domainAgentOptions` offers Automatic and the live agents. `domainModelOptions` names the model a
+- `domainAgentOptions` offers Automatic (or the label the caller gives the blank option, as the
+  research picker does) and the live agents. `domainModelOptions` names the model a
   blank choice resolves to.
 - `domainDefaults` reads a missing `default_insert_mode` as Auto, and `domainChips` gives the
   Inserts setting a chip only when it is None.

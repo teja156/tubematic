@@ -62,13 +62,19 @@ explains how they work together.
 | **Research pending cap** | 15 | Research does not run while this many topics are waiting for your decision |
 | **Max research runs per day** | 8 | The most research runs in any 24 hours. 0 stops research |
 | **Trending Sources** | GitHub Trending, Hacker News | The sites trending research reads. Lobsters and Dev.to are also offered |
+| **Research agent** | Default agent | The agent that runs topic research. Videos, script profiles and mascots keep their own agent |
+| **Research model** | The agent's first model | A model of the research agent. Pick an agent first |
+| **Research effort** | The agent's own effort | `low`, `medium`, `high`, `xhigh` or `max` for research runs only |
 
 Lower the per-run numbers if topics arrive faster than you review them. Raise the pending cap if
 research stops before you have enough to choose from.
 
+Research is a good job for a cheaper model or a lower effort than the one your videos use. If you
+uninstall the research agent, research goes back to the default agent until you pick another.
+
 ## Voice
 
-The list of ElevenLabs voices videos can use. A new install starts with two, Teja and Adam.
+The list of ElevenLabs voices videos can use. A new install starts with two, Bill and Adam.
 
 ![Settings, Voice tab: three voices, each with a name, a voice ID, a model, a speed, a default marker and a preview button; Teja on eleven_v4 is at 1.10x, Adam on eleven_v3 at 1.00x and Narrator on eleven_multilingual_v2 at 1.15x](../images/settings-voice.png)
 
@@ -255,7 +261,7 @@ One card for each installed agent. Changes here apply as you make them.
 
 | Setting | What it does |
 |---|---|
-| **Default agent** | The agent that runs research and builds script profiles. It also takes new videos when every weight is 0 |
+| **Default agent** | The agent that builds script profiles and runs research unless **Research agent** on the Research tab names another. It also takes new videos when every weight is 0 |
 | **weight** | The agent's share of new videos. With weights 3 and 1, three of every four new videos go to the first agent. 0 gives it none. A domain with an agent of its own gives all its videos to that agent ([Agents](12-agents.md#choose-which-agent-makes-a-video)) |
 | **default model** | The model the agent uses unless a video names another |
 | **effort** | How hard the agent thinks on each run: `low`, `medium`, `high`, `xhigh` or `max`. Higher levels cost more and take longer. The default is `high` |
