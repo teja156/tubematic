@@ -876,6 +876,7 @@ _VOLUME_DEVICES = {
     "tubematic_scenes-generated": "scenes/generated",
     "tubematic_logs-data":        "logs",
     "tubematic_backups-data":     "backups",
+    "tubematic_sandbox-spool":    "sandbox",
 }
 
 
@@ -1396,10 +1397,11 @@ def apply_renderer(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> None:
         rep.ok("Image built")
 
     ex.ensure_secrets()  # Compose refuses to start a service whose token file is missing
-    rep.info("Starting tubematic-api, tubematic-mcp, tubematic-worker and tubematic-renderer "
-             "containers…")
+    rep.info("Starting tubematic-api, tubematic-mcp, tubematic-worker, tubematic-renderer and "
+             "tubematic-sandbox containers…")
     r = ex.run([*_compose(), "up", "-d",
-                "tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer"],
+                "tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer",
+                "tubematic-sandbox"],
                cwd=REPO_ROOT)
     if r.returncode != 0:
         rep.fail("docker compose up failed")
@@ -1442,6 +1444,14 @@ def apply_renderer(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> None:
                      "dashboard, or run: python3 upgrade.py --check")
     else:
         rep.warn("tubematic-renderer container is not running. Check: docker compose logs tubematic-renderer")
+
+    r_sandbox = subprocess.run(["docker", "inspect", "--format", "{{.State.Status}}", "tubematic-sandbox"],
+                               capture_output=True, text=True)
+    if r_sandbox.stdout.strip() == "running":
+        rep.ok("tubematic-sandbox (runs the agent's code with no network) running")
+    else:
+        rep.warn("tubematic-sandbox container is not running; run_code will say sandbox_unavailable. "
+                 "Check: docker compose logs tubematic-sandbox")
 
 
 def apply_dashboard(cfg: OnboardConfig, ex: Executor, rep: Reporter) -> None:

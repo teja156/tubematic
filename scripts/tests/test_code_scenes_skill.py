@@ -58,7 +58,7 @@ def test_the_worked_example_passes_the_validator():
 def test_the_skill_keeps_the_terminal_doc_boundary_and_the_output_rule():
     text = _text()
     assert "A command typed at a shell and what it prints" in text and "| Terminal Doc |" in text
-    assert "nothing runs it for you" in text
+    assert "nothing runs it for you" in text and "code sandbox" in text
     assert "never a shell prompt" in text
 
 
@@ -68,3 +68,13 @@ def test_the_skill_has_one_check_and_submit_step():
 
 def test_uninstall_removes_the_skill():
     assert '"tubematic-code-scenes"' in (REPO / "uninstall.py").read_text()
+
+
+def test_a_skill_for_run_code_ships_and_is_listed():
+    run_code = REPO / "agent_files" / "skills" / "tubematic-run-code" / "SKILL.md"
+    head = run_code.read_text().split("---")[1]
+    assert re.search(r"^name: tubematic-run-code$", head, re.M)
+    text = run_code.read_text()
+    assert "sandbox_unavailable" in text and "no network" in text.lower()
+    assert '"tubematic-run-code"' in (REPO / "uninstall.py").read_text()
+    assert "`tubematic-run-code/`" in (REPO / "agent_files" / "skills" / "README.md").read_text()

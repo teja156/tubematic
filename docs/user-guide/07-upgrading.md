@@ -55,7 +55,7 @@ It asks no questions, so you can run it over SSH or from a script.
 1. Checks that the upgrade can go ahead. See [When it stops](#when-it-stops).
 2. Pulls the new images, or builds them on a source install. The old version keeps running
    meanwhile.
-3. Checks again that no work is running, then stops all five containers.
+3. Checks again that no work is running, then stops all six containers.
 4. Starts the new version. As the containers start, they back up the database and then update it.
 5. Points your scheduled job at this directory.
 6. Copies this version's skills and commands to each installed agent.

@@ -122,7 +122,7 @@ pipeline data) cannot enter an image.
 ### `kasm_workspace_testing/`: full-install testing
 
 A disposable desktop with Docker-in-Docker. You run `python3 onboard.py` by hand, answer each
-prompt as a first-time installer would, and bring up all five containers. Use it to test the
+prompt as a first-time installer would, and bring up all six containers. Use it to test the
 installation itself.
 
 ```bash

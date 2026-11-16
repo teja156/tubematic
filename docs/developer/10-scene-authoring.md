@@ -930,11 +930,19 @@ the font's advance. `mcp/code_scenes.py::check_insert` refuses an insert when:
 - A typed first step holds more than 120 characters or is still typing when step 2 starts.
 - Nothing changes for more than 3 seconds.
 
-No code runs anywhere: the pipeline agent has no shell, and nothing runs code inside the MCP
-container, which holds the credential database. So an output pane must be what the code on screen
-prints, which the skill keeps to output that is certain from the code, and the pack's
-`insert.review` tells the AI review to report a pane that does not match the code.
-`code_scenes.output_check` is the one place a check against a real run would go.
+An output pane must be what the code on screen prints. The pipeline agent has no shell and nothing
+runs code inside the MCP container, which holds the credential database, so the check goes through
+the code sandbox ([Infrastructure](16-infrastructure.md#tubematic-sandbox)).
+`code_scenes.output_check(entry, run)` takes the runner as an argument and stays free of I/O;
+`mcp/server.py::_snippet_runner` supplies it through `sandbox_client.run_snippet`. For a Python,
+JavaScript or TypeScript insert it runs the code on screen at every step that has an output pane
+with lines, with a 5-second limit and no input. A pane is refused when the code exits 0 and its
+printed lines are not the pane's lines: the pane must equal the printed lines when the code prints at
+most 3 lines, and must be their start when it prints more. The refusal quotes what the code printed.
+A run that fails, is killed, takes too long or cannot start, a language that cannot run, a pane that
+has only a label and a sandbox that is down or busy refuse nothing. The pack's `insert.review` still
+tells the AI review to report a pane that does not match the code, and it is the only check for
+those cases.
 `mcp/tests/fixtures/code_scenes_contract.json` holds the limits, the timings, the band, font-size
 cases and which output pane each step shows; `mcp/tests/test_code_scenes.py` runs it against
 `code_scenes.py` and `codeScenes/codeScenes.test.ts` against `contract.ts`. The text-layout audit

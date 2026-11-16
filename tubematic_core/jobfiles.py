@@ -52,6 +52,10 @@ IMAGES = "images"
 # Kept apart from images/ so a treated copy never counts against a style's picture cap.
 TREATED = "treated"
 JOB_FILES = (AUDIO, TIMELINE, SCENE_CONFIG)
+# Files the code sandbox's runs left behind (TMDEV-242): runs/<run_id>/<file>.
+# Kept apart from images/ so a run's output never counts against a style's
+# picture cap and is never staged into a render.
+RUNS = "runs"
 
 
 class UnsafePath(ValueError):
@@ -95,6 +99,21 @@ def voice_original_file(jobs_dir, video_id, name) -> Path:
         raise UnsafePath(f"{name!r} is not a kept voice file")
     _check_video_id(video_id)
     return join_below(jobs_dir, video_id, VOICE_ORIGINAL, name)
+
+
+def runs_dir(jobs_dir, video_id) -> Path:
+    """`<jobs_dir>/<video_id>/runs`, refusing a symlink on the way."""
+    _check_video_id(video_id)
+    return join_below(jobs_dir, video_id, RUNS)
+
+
+def run_file(jobs_dir, video_id, run_id, filename) -> Path:
+    """`<jobs_dir>/<video_id>/runs/<run_id>/<filename>`, refusing a symlink on the way."""
+    for part in (run_id, filename):
+        if not ids.is_component(part):
+            raise UnsafePath(f"{part!r} cannot be used as a file name")
+    _check_video_id(video_id)
+    return join_below(jobs_dir, video_id, RUNS, run_id, filename)
 
 
 def images_dir(jobs_dir, video_id) -> Path:

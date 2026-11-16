@@ -173,8 +173,72 @@ def test_props_must_hold_the_data():
     assert "props must hold" in _check({"startFrame": 0, "durationInFrames": 90, "props": {}})[0]
 
 
-def test_the_output_check_hook_is_empty_until_code_can_run():
+def test_the_output_check_asks_for_nothing_without_a_runner():
     assert cs.output_check(_entry()) == []
+
+
+def _py_entry(lines, code="print('a')\nprint('b')", **pane):
+    return {"style": "code_scenes", "startFrame": 0, "durationInFrames": 240, "props": {"codeScenes": {
+        "lang": "python", "steps": [{"at": 0, "code": code, "output": {"lines": lines, **pane}}]}}}
+
+
+def _result(stdout="", exit_code=0, **over):
+    return {"exit_code": exit_code, "stdout": stdout, "timed_out": False, "error": None, **over}
+
+
+def test_a_pane_that_matches_what_the_code_prints_passes():
+    seen = []
+    run = lambda lang, code: seen.append((lang, code)) or _result("a\nb\n")
+    assert cs.output_check(_py_entry(["a", "b"]), run) == []
+    assert seen == [("python", "print('a')\nprint('b')")]
+
+
+def test_a_pane_that_differs_is_refused_with_the_real_lines():
+    out = cs.output_check(_py_entry(["a", "c"]), lambda l, c: _result("a\nb\n"))
+    assert len(out) == 1 and "['a', 'c']" in out[0] and "['a', 'b']" in out[0] and "Step 1" in out[0]
+
+
+def test_a_pane_may_show_the_first_lines_of_longer_output():
+    run = lambda l, c: _result("1\n2\n3\n4\n5\n")
+    assert cs.output_check(_py_entry(["1", "2", "3"]), run) == []
+    assert cs.output_check(_py_entry(["2", "3"]), run) != []
+
+
+def test_a_pane_shorter_than_short_output_is_refused():
+    assert cs.output_check(_py_entry(["a"]), lambda l, c: _result("a\nb\n")) != []
+
+
+@pytest.mark.parametrize("result", [None, _result("zzz", exit_code=1), _result("zzz", exit_code=None),
+                                     _result("zzz", timed_out=True), _result("zzz", error="sandbox error")])
+def test_an_unrunnable_snippet_is_never_refused(result):
+    assert cs.output_check(_py_entry(["a"]), lambda l, c: result) == []
+
+
+def test_languages_that_cannot_run_and_label_only_panes_are_left_to_the_review():
+    called = []
+    run = lambda l, c: called.append(1) or _result("x")
+    e = _py_entry(["a"])
+    e["props"]["codeScenes"]["lang"] = "sql"
+    assert cs.output_check(e, run) == []
+    assert cs.output_check(_py_entry([], label="0 rows"), run) == []
+    assert called == []
+
+
+def test_the_code_run_is_the_code_on_screen_at_that_step():
+    e = {"props": {"codeScenes": {"lang": "python", "steps": [
+        {"at": 0, "code": "print(1)"},
+        {"at": 90, "focus": [1], "output": {"lines": ["1"]}}]}}}
+    seen = []
+    cs.output_check(e, lambda l, c: seen.append(c) or _result("1\n"))
+    assert seen == ["print(1)"]
+
+
+def test_check_insert_passes_the_runner_through():
+    e = _entry()
+    e["props"]["codeScenes"]["steps"][2]["output"] = {"lines": ["nope"]}
+    assert not any("output pane" in m for m in _check(e))
+    out = cs.check_insert(e, FPS, WORDS, [], lambda l, c: _result("yes\n"))
+    assert any("output pane" in m for m in out)
 
 
 def test_step_windows_cover_the_insert():
