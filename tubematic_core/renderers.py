@@ -23,6 +23,8 @@ import secrets
 import statistics
 from datetime import datetime, timedelta, timezone
 
+from . import visual_styles as tvs
+
 BUILTIN_ID = "builtin"
 BUILTIN_NAME = "Built-in renderer"
 
@@ -229,13 +231,21 @@ def ensure_builtin(con, now=None) -> None:
 
 # ── videos ────────────────────────────────────────────────────────────────────
 
+def _style_pack(video) -> dict | None:
+    """The video's chosen style pack, or None for auto or an unknown id."""
+    return tvs.pack(_get(video, "visual_style", "") or "")
+
+
 def video_kind(video) -> str:
     """'cartoon_3d', 'mascot' or 'dom'. Cartoon 3D wins over a mascot (the pair
-    is refused before render anyway). A video dict may carry `scene_cartoon`
-    truthy when its written scene-config is a Cartoon 3D world — the gateway
-    sets it at claim time, as the renderer's scene-config check did before."""
+    is refused before render anyway). 'cartoon_3d' is the kind of every video
+    whose style pack renders as a generated three.js world (Cartoon 3D and
+    Low-Poly Skit). A video dict may carry `scene_cartoon` truthy when its
+    written scene-config is such a world — the gateway sets it at claim time,
+    as the renderer's scene-config check did before."""
+    pack = _style_pack(video)
     if (_get(video, "scene_cartoon")
-            or _get(video, "visual_style", "") == "cartoon_3d"
+            or (pack is not None and pack["renderer"] == "cartoon_3d")
             or _get(video, "resolved_renderer", "") == "cartoon_3d"):
         return "cartoon_3d"
     if _get(video, "mascot_id", ""):
@@ -245,8 +255,15 @@ def video_kind(video) -> str:
 
 def requires_gpu(video) -> bool:
     """Cartoon 3D and mascots render on the GPU only (policy: on the CPU they
-    take hours). Every other video renders anywhere."""
-    return video_kind(video) != "dom"
+    take hours). A 3D style whose pack says needs.gpu is false (Low-Poly Skit:
+    flat shading, no ink or lens passes) renders anywhere, as does every other
+    video. A world with no chosen pack (auto that resolved to cartoon_3d)
+    keeps the policy."""
+    kind = video_kind(video)
+    if kind == "cartoon_3d":
+        pack = _style_pack(video)
+        return True if pack is None or pack["renderer"] != "cartoon_3d" else bool(pack["needs"]["gpu"])
+    return kind != "dom"
 
 
 # ── renderer state ────────────────────────────────────────────────────────────

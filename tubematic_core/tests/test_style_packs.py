@@ -163,7 +163,7 @@ def test_under_the_hood():
     assert set(tvs.NO_MASCOT_STYLES) == {"cartoon_3d", "under_the_hood", "case_file_story", "paper_diorama",
                                          "archive_engraving", "editorial_collage", "storybook_reveal",
                                          "midcentury_howto", "comic_panels", "process_cast", "puppet_history",
-                                         "night_signal", "flat_vector_science", "isometric_infographic"}
+                                         "night_signal", "flat_vector_science", "isometric_infographic", "low_poly_skit"}
     rows = {r["id"]: r for r in tvs.public_list(openai_key_set=True, gpu_status="working")}
     assert rows["under_the_hood"]["mascot"] is False and rows["cartoon_3d"]["mascot"] is False
     assert rows["auto"]["mascot"] is True and rows["stick"]["mascot"] is True
@@ -318,6 +318,28 @@ def test_night_signal():
     assert p["captions"]["uppercase"] is True and p["captions"]["letterSpacing"] > 0
     rows = {r["id"]: r for r in tvs.public_list(openai_key_set=False, gpu_status="unknown")}
     assert rows["night_signal"]["available"] and rows["night_signal"]["mascot"] is False
+
+
+def test_low_poly_skit():
+    p = tvs.pack("low_poly_skit")
+    # it shares Cartoon 3D's engine (the generated world, the beat gate), and has its own authoring skill
+    assert p["renderer"] == "cartoon_3d" and p["canvas"] == "dark" and p["role"] == "main"
+    assert p["authoring_skill"] == "tubematic-lowpoly-skit"
+    assert p["experimental"] is True and p["order"] == 240 and p["dimension"] == "3d"
+    assert tvs.WORLD_STYLES == ("cartoon_3d", "low_poly_skit")
+    # flat shading and no ink, shadow or lens passes make it cheap enough for a CPU: it is not GPU only
+    assert tvs.needs_gpu("low_poly_skit") is False and tvs.needs_gpu("cartoon_3d") is True
+    assert tvs.needs_openai_key("low_poly_skit") is False and p["routing"]["images"] == 0
+    assert tvs.figures_allowed("low_poly_skit") is True and tvs.characters_allowed("low_poly_skit") is False
+    assert p["mascot"] is False and "house figure" in p["messages"]["mascot"]
+    assert p["inserts"] == {"host": False} and "insert" in p["messages"]["inserts"]
+    # word-by-word captions: white turning yellow, centred 65 % down
+    assert p["captions"]["look"] == "karaoke" and p["captions"]["accent"] == "#FFD221" and p["captions"]["position"] == 0.65
+    assert "karaoke" in __import__("pathlib").Path(__file__).resolve().parents[2].joinpath("mcp", "server.py").read_text(encoding="utf-8")
+    # available with no GPU at all, unlike Cartoon 3D
+    rows = {r["id"]: r for r in tvs.public_list(openai_key_set=False, gpu_status="none")}
+    assert rows["low_poly_skit"]["available"] and rows["low_poly_skit"]["mascot"] is False
+    assert not rows["cartoon_3d"]["available"]
 
 
 def test_case_file_story():
@@ -533,15 +555,15 @@ def test_the_insert_styles_are_the_insert_only_styles_and_the_rest_are_main():
     assert {"system_flow", "terminal_doc"} <= set(tvs.VISUAL_STYLES)
 
 
-def test_every_main_style_hosts_inserts_except_cartoon_3d():
+def test_every_main_style_hosts_inserts_except_the_3d_worlds():
     hosts = {sid: tvs.hosts_inserts(sid)["host"] for sid in tvs.MAIN_PACKS}
-    assert {sid for sid, host in hosts.items() if not host} == {"cartoon_3d"}
+    assert {sid for sid, host in hosts.items() if not host} == set(tvs.WORLD_STYLES)
     assert tvs.hosts_inserts("auto") == tvs.SCENES_INSERTS
     assert tvs.hosts_inserts("system_flow") == {"host": False}  # a legacy whole-video video
     for sid, p in tvs.MAIN_PACKS.items():
         if p["inserts"]["host"]:
             assert p["inserts"]["transition"] in tinserts.TRANSITIONS, sid
-    assert tvs.PACKS["cartoon_3d"]["messages"]["inserts"]
+    assert all(tvs.PACKS[sid]["messages"]["inserts"] for sid in tvs.WORLD_STYLES)
 
 
 def test_an_insert_style_is_refused_as_a_video_style_with_a_reason():

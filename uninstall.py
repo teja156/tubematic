@@ -34,6 +34,7 @@ _TUBEMATIC_SKILLS = [
     "tubematic-script-writing-skill",
     "tubematic-troubleshooting",
     "tubematic-cartoon3d",
+    "tubematic-lowpoly-skit",
     "tubematic-system-flow",
     "tubematic-whiteboard",
     "tubematic-bean-explainer",

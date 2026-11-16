@@ -1,0 +1,80 @@
+{
+  "id": "low_poly_skit",
+  "label": "Low-Poly Skit",
+  "order": 240,
+  "experimental": true,
+  "role": "main",
+  "inserts": {
+    "host": false
+  },
+  "dimension": "3d",
+  "preview": "low_poly_skit",
+  "tagline": "Faceted toy people act out a fast story in small 3D dioramas, a new shot every second.",
+  "renderer": "cartoon_3d",
+  "canvas": "dark",
+  "authoring_skill": "tubematic-lowpoly-skit",
+  "allows": {
+    "figures": true,
+    "line_art": false,
+    "generated_characters": false
+  },
+  "needs": {
+    "openai_key": false,
+    "gpu": false
+  },
+  "mascot": false,
+  "messages": {
+    "mascot": "Mascots are not available in the Low-Poly Skit style: its cast is one house figure built from basic 3D shapes, and a flat mascot picture would not sit in its world. Choose another visual style, or no mascot.",
+    "inserts": "A Low-Poly Skit video takes no insert scenes: it is one continuous 3D world cut every second or so, and an insert would break it apart. Set Inserts to None, or choose another visual style."
+  },
+  "review": "- This video is a Low-Poly Skit, and the following are its intended, approved look: flat-shaded toy people about four heads tall with faceted heads, blank dot eyes and a mouth that never moves with the speech; small diorama sets (a room with its front wall off, a stage, a street, a planet, a cross-section) standing on a plain grey or dark void; flat colours with visible facets, NO outlines and NO cast shadows; hard cuts about every second; a slow push-in on most shots; a sharp camera jolt on every footstep and impact; a yellow star burst, flying white chips and a red comic word on a hit; crowds of hundreds of the same figure in different colours; a smeared frame during a quick whip move; white captions that turn yellow word by word. Do NOT report any of these as defects, and do not suggest outlines, shading, shadows, realistic faces or lip sync: their absence is the style. A figure that falls or snaps between two poses in two or three frames is intended.\n- Do report: a figure or prop passing through a wall or floor so that part of it is hidden, a figure cut off by the frame edge or standing under the caption band, a picture that shows something different from what the narration says at that moment, the same shot held for more than about three seconds with nothing changing, a crowd that is a flat colour block with no variety, and text drawn in the world (a sign, a clock) that is unreadable or cut off.\n",
+  "captions": {
+    "look": "karaoke",
+    "background": "outline",
+    "uppercase": true,
+    "position": 0.65,
+    "color": "#FFFFFF",
+    "accent": "#FFD221",
+    "fontFamily": "Montserrat, system-ui, sans-serif",
+    "fontSize": 70,
+    "maxWords": 4
+  },
+  "script": "Every beat's `visual` is a **shot** brief: the one small set it is in (a bedroom, a stage, a street, the planet from space, a cutaway of the ground), who is in it and what they are doing, and the single thing that changes. A beat is about one second of narration, so a sentence is one shot or two.\n\nThe narration speaks to \"you\" and follows what happens next: a situation, then a consequence, then a bigger consequence. Write it as a chain, each sentence one new place or one new action, and let the scale climb (a room, a street, a city, the planet) until the last link is the answer or the twist. Keep sentences short, about six to ten words, so a new picture can start on most of them, and say the thing that is on screen by name (\"the broom\", \"the whole stadium\"). A question the video asks (\"what happens if...\") is answered by the chain, never by a lecture. Never write a beat that needs a photograph, a real person's face or a chart: this style has toy people and simple sets only.",
+  "picture": {
+    "opening": "Shot 1 is already in motion at frame 0: a figure mid-action in the set the first sentence names, the camera already pushing in. Never a title or an empty set.",
+    "turn": "A hard cut to a new shot on the first word of a turn or a re-opening, with a jolt or an impact burst at that moment.",
+    "payoff": "The shot with the answer, at the biggest scale of the video or on the strongest hit, held a little longer than the others.",
+    "ending": "Hold on the payoff picture to the last frame. No closing card, logo, recap or sign-off after it."
+  },
+  "routing": {
+    "best_for": [
+      "what happens if you do X: a chain of consequences that grows bigger with every step",
+      "an everyday situation pushed to an absurd scale (a room, then a stadium, then the planet)",
+      "a thought experiment or a scale comparison told as one person's story",
+      "a process or an event acted out by people moving through places",
+      "a physics or biology chain that ends in a cutaway or a cross-section"
+    ],
+    "avoid_for": [
+      "a real, named person, brand or product that must look like itself",
+      "abstract or text-heavy topics, numbers worked out, or a diagram of a mechanism (System Flow shows a mechanism)",
+      "a calm, atmospheric or sombre story where the place matters more than the action (Cartoon 3D fits it)",
+      "sensitive or tragic subjects",
+      "a video with a mascot"
+    ],
+    "cannot_show": "photographs, or a real, named person or product as it really looks: everything is a toy figure and prop built from basic 3D shapes, so a real place is staged as a small invented set",
+    "signals": [
+      "the script addresses the viewer as you and follows what happens next",
+      "each sentence names a new place or a bigger scale",
+      "the topic is a what-if or a why-doesn't-it-just question",
+      "a crowd, a planet or a cross-section is the payoff",
+      "the tone is playful, comic or energetic"
+    ],
+    "moods": [
+      "comedic",
+      "playful",
+      "energetic"
+    ],
+    "images_per_video": "0",
+    "images": 0
+  }
+}

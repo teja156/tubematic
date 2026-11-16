@@ -1,7 +1,7 @@
 // The paper styles' caption looks (TMDEV-228/229/230): the "tags" look's seeded tags and their pop,
-// and the "highlight" look's marker wipe.
+// the "highlight" look's marker wipe, and the "karaoke" look's word colour (TMDEV-250).
 import { describe, expect, it } from "vitest";
-import { markerReach, tagScale, tagSeed, tornPolygon } from "./Subtitles";
+import { KARAOKE_ACCENT, karaokeWordColor, markerReach, tagScale, tagSeed, tornPolygon } from "./Subtitles";
 
 describe("tags", () => {
   it("gives a word the same tilt and torn edge on every frame and render", () => {
@@ -41,5 +41,17 @@ describe("highlight", () => {
     expect(markerReach(14, 10)).toBeLessThan(1);
     expect(markerReach(18, 10)).toBe(1);
     expect(markerReach(300, 10)).toBe(1);
+  });
+});
+
+describe("karaoke", () => {
+  it("keeps the text colour until the word's frame, then turns to the accent for good", () => {
+    expect(karaokeWordColor(9, 10, "#ffffff", null)).toBe("#ffffff");
+    expect(karaokeWordColor(10, 10, "#ffffff", null)).toBe(KARAOKE_ACCENT);
+    expect(karaokeWordColor(500, 10, "#ffffff", null)).toBe(KARAOKE_ACCENT);
+  });
+  it("takes the accent a config names", () => {
+    expect(karaokeWordColor(20, 10, "#ffffff", "#ff0000")).toBe("#ff0000");
+    expect(KARAOKE_ACCENT).toBe("#FFD221");
   });
 });
