@@ -35,10 +35,10 @@ function renderModal(video: Video, projects: Response | Error) {
       if (projects instanceof Error) throw projects;
       return projects;
     }
-    if (u.includes("/videos/")) return { ok: true, json: async () => video } as Response;
+    if (u.includes("/videos/")) return { ok: true, json: async () => ({ ...video, id: u.split("/videos/")[1].split("/")[0] }) } as Response;
     return { ok: true, json: async () => [] } as Response;
   }));
-  render(<VideoModal video={video} onClose={vi.fn()} onAction={vi.fn()} />);
+  return render(<VideoModal video={video} onClose={vi.fn()} onAction={vi.fn()} />);
 }
 
 const LIST = { ok: true, json: async () => [{ id: "proj_a", name: "Operating Systems" }] } as Response;
@@ -72,5 +72,13 @@ describe("VideoModal domain row", () => {
     renderModal(makeVideo({ project_id: null }), LIST);
     await screen.findByText("Strategy");
     await waitFor(() => expect(screen.queryByText("Domain")).toBeNull());
+  });
+
+  it("keeps the name when the window moves to another video in the same domain", async () => {
+    const { rerender } = renderModal(makeVideo(), LIST);
+    await screen.findByText("Operating Systems");
+    rerender(<VideoModal video={makeVideo({ id: "vid-2" })} onClose={vi.fn()} onAction={vi.fn()} />);
+    expect(await screen.findByText("Operating Systems")).toBeTruthy();
+    expect(screen.queryByText("proj_a")).toBeNull();
   });
 });
