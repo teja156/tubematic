@@ -196,3 +196,32 @@ def test_a_project_id_that_escapes_the_output_dir_is_reported_not_followed(clien
     assert (victim / "f").exists()
     if r.status_code == 200:
         assert r.get_json()["file_errors"]
+
+
+def test_a_video_id_that_names_another_videos_job_dir_is_not_followed(client, db_path, dirs):
+    _, jobs = dirs
+    _project(db_path, "dom")
+    _video(db_path, "other-keep", "dom")
+    # A legacy id with a separator resolves to a sibling's folder.
+    _video(db_path, "x/../neighbour", "dom")
+    (jobs / "neighbour").mkdir()
+    (jobs / "neighbour" / "timeline.json").write_text("{}")
+    r = client.delete("/projects/dom")
+    assert r.status_code == 200
+    assert (jobs / "neighbour" / "timeline.json").exists()
+    assert any("x/../neighbour" in e for e in r.get_json()["file_errors"])
+    assert _count(db_path, "videos") == 0
+
+
+def test_a_renderer_naming_a_deleted_video_is_cleared(client, db_path):
+    _project(db_path, "dom")
+    _video(db_path, "v1", "dom")
+    _video(db_path, "v-other", "dom")
+    cols = [r[1] for r in _sql(db_path, "PRAGMA table_info(renderers)")]
+    assert "current_video_id" in cols
+    _sql(db_path, "INSERT INTO renderers (id, name, current_video_id, created_at) "
+                  "VALUES ('r1', 'one', 'v1', '2026-01-01T00:00:00Z'), "
+                  "('r2', 'two', 'elsewhere', '2026-01-01T00:00:00Z')")
+    assert client.delete("/projects/dom").status_code == 200
+    got = dict(_sql(db_path, "SELECT id, current_video_id FROM renderers WHERE id IN ('r1', 'r2')"))
+    assert got == {"r1": "", "r2": "elsewhere"}

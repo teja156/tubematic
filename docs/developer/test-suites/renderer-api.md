@@ -211,8 +211,10 @@ Covers [deleting a domain](../02-pipeline.md#deleting-a-domain), `DELETE /projec
 - A delete removes the domain, its videos, comments, publications and metrics, its job and output
   directories and its Auto Pilot entry. A second domain's rows and files are untouched.
 - `usage_events` and `usage_event_videos` survive.
-- An output directory name that escapes `OUTPUT_DIR` is reported in `file_errors` and never
+- An output directory name or a video id that would resolve outside its own folder (a legacy id
+  with a separator that lands on a neighbour's job directory) is reported in `file_errors` and never
   followed.
+- A renderer whose `current_video_id` names a deleted video is cleared.
 
 Trap: the cost ledger staying is the case to keep. The Costs page buckets spend as videos or
 research by the `usage_event_videos` links, so deleting them would move money between buckets.

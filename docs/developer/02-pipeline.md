@@ -500,8 +500,8 @@ render or a post is never cut off. The checks run again inside the write transac
 worker can claim a video between the first read and the delete.
 
 The delete removes the videos with their comments, publication records and metrics, each video's
-job directory and the domain's output directory, and the domain's entry in the Auto Pilot
-configuration. It keeps `usage_events` and `usage_event_videos`: the money was spent, and the Costs
+job directory and the domain's output directory, the domain's entry in the Auto Pilot
+configuration, and any renderer's `current_video_id` that named one of the videos. It keeps `usage_events` and `usage_event_videos`: the money was spent, and the Costs
 page buckets spend by those links. Posts already live on a platform stay there.
 
 ### Topic cap

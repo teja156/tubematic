@@ -4550,6 +4550,11 @@ def create_pipeline_blueprint() -> Blueprint:
                 con.execute("DELETE FROM video_publications WHERE video_id = ?", (vid,))
                 con.execute("DELETE FROM videos WHERE id = ?", (vid,))
             con.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+            # renderers.current_video_id names a video without a foreign key, so
+            # a renderer that last reported one of these would keep naming it.
+            for vid in video_ids:
+                con.execute("UPDATE renderers SET current_video_id = '' WHERE current_video_id = ?",
+                            (vid,))
             config = _auto_pilot_config(con)
             if project_id in config["projects"]:
                 del config["projects"][project_id]
@@ -4562,9 +4567,12 @@ def create_pipeline_blueprint() -> Blueprint:
         jobs_root = JOBS_DIR.resolve()
         for vid in video_ids:
             job_dir = JOBS_DIR / vid
-            # The id came from our own row but is still a path segment: only
-            # ever remove a direct child of JOBS_DIR.
-            if job_dir.resolve().parent != jobs_root:
+            # The id came from our own row but is still a path segment. A legacy
+            # id with a separator ("a/../b") resolves to another video's folder
+            # and would pass a parent check, so it must be a single component too.
+            if not tids.is_component(vid):
+                file_errors.append(f"{vid!r}: not usable as a directory name, left alone")
+            elif job_dir.resolve().parent != jobs_root:
                 file_errors.append(f"{job_dir}: not a direct child of {JOBS_DIR}, left alone")
             elif job_dir.is_dir():
                 try:
