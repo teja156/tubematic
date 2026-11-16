@@ -1135,7 +1135,7 @@ It checks:
   pack's caption settings fill every `subtitles` key the config leaves out. The rules are in
   [Process Cast](10-scene-authoring.md#process-cast).
 - `subtitles.emphasis`, on any style, names word indexes the narration has, at most one word in 5.
-  `subtitles.look` is `plain`, `selection`, `fill`, `tags` or `highlight`.
+  `subtitles.look` is `plain`, `selection`, `fill`, `tags`, `highlight` or `karaoke`.
 - A `night_signal` video holds the one installed `NightSignal` scene, and its scenes pass
   `mcp/night_signal.py` (scenes and items on word starts, one red threat per scene, library or own
   pictograms, connectors and bubbles between occupied slots, cards that stay long enough to read, no

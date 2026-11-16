@@ -119,6 +119,21 @@ def test_video_kind_and_gpu_need(v, kind):
     assert R.requires_gpu(v) is (kind != "dom")
 
 
+def test_a_3d_style_with_no_gpu_need_renders_anywhere():
+    # Low-Poly Skit shares Cartoon 3D's engine (kind cartoon_3d) but its pack says needs.gpu is false
+    for v in (video("a", style="low_poly_skit"), video("a", style="low_poly_skit", scene_cartoon=True)):
+        assert R.video_kind(v) == "cartoon_3d"
+        assert R.requires_gpu(v) is False
+    # Cartoon 3D keeps the policy, however the video came to be one
+    assert R.requires_gpu(video("a", style="cartoon_3d")) is True
+    assert R.requires_gpu(video("a", style="cartoon_3d", scene_cartoon=True)) is True
+    # a video with no chosen pack whose scene is a 3D world (auto that resolved to cartoon_3d, or an unknown style)
+    assert R.requires_gpu(video("a", style="auto", renderer_kind="cartoon_3d")) is True
+    assert R.requires_gpu(video("a", style="auto", scene_cartoon=True)) is True
+    # a mascot is still GPU only
+    assert R.requires_gpu(video("a", style="stick", mascot="tubi")) is True
+
+
 def test_video_kind_reads_sqlite_rows(con):
     con.execute("INSERT INTO videos (id, topic, status, created_at, updated_at, mascot_id) "
                 "VALUES ('v', 't', 'RENDER_QUEUED', 'x', 'x', 'tubi')")

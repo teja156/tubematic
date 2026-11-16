@@ -845,6 +845,18 @@ Covers the `tubematic-process-cast` skill ([Process Cast](../10-scene-authoring.
 Trap: skill text that calls the cast mascots, or lets a character talk, leads the agent to the wrong
 video for this style. The test pins the wording that keeps them apart.
 
+### `test_lowpoly_skit_skill.py`
+
+Covers the `tubematic-lowpoly-skit` skill ([Low-Poly Skit](../10-scene-authoring.md#low-poly-skit)).
+
+- The pack names the skill, and every kit file the skill tells the agent to read exists. Every name the
+  kit reference teaches is exported by the file it comes from, and every named pose and face exists.
+- The skill writes the scene the 3D worlds share (`CartoonShort.tsx` with the beats under
+  `cartoon3d`) and takes it through `cartoon_still`, the beat gate and the soundtrack.
+- Nothing in the skill, the references, the pack's script text or its review text mentions a rule about
+  profanity or the cleanliness of a script. A person decides the register of a script, and no style
+  filters, flags or discourages a word.
+
 ### `test_night_signal_skill.py`
 
 Covers the `tubematic-night-signal` skill ([Night Signal](../10-scene-authoring.md#night-signal)).
@@ -972,7 +984,7 @@ Covers the look step in the skills ([`preview_frames`](../06-mcp-server.md#previ
   Doc), name `preview_frames`, the `preview_not_taken` refusal and a numbered **Look before you
   submit** step that comes before its `submit_render` step. The list is read from the style packs,
   so a style added later is held to it with no edit here.
-- Cartoon 3D names `cartoon_still` and never `preview_frames`.
+- The 3D worlds (Cartoon 3D and Low-Poly Skit) name `cartoon_still` and never `preview_frames`.
 - The operator looks at a new video, and again after a render revision; a re-voice re-enters the same
   flow.
 

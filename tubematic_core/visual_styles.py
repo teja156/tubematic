@@ -453,6 +453,11 @@ def needs_openai_key(visual_style: str) -> bool:
     return bool(p and p["needs"]["openai_key"])
 
 
+# The styles whose videos are a generated three.js world (renderer "cartoon_3d"): one scene, the beat gate,
+# the frozen source. Cartoon 3D and Low-Poly Skit.
+WORLD_STYLES = tuple(sorted(i for i, p in PACKS.items() if p["renderer"] == "cartoon_3d"))
+
+
 def needs_gpu(visual_style: str) -> bool:
     p = pack(visual_style)
     return bool(p and p["needs"]["gpu"])

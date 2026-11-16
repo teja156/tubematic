@@ -535,6 +535,25 @@ def test_a_cartoon_scene_must_agree_with_the_video_renderer(db):
     assert "error" not in server.write_scene_config("vid_c4", _cartoon_config("vid_c4"))
 
 
+def test_a_low_poly_skit_video_shares_the_3d_scene_and_needs_no_gpu(db):
+    """Low-Poly Skit renders the same generated world as Cartoon 3D (one scene with beats) but its pack
+    needs no GPU: no probe has run, and the style is chosen and its scene written all the same (TMDEV-250)."""
+    _video("vid_lp1", style="low_poly_skit")
+    # it takes the 3D scene...
+    assert "error" not in server.write_scene_config("vid_lp1", _cartoon_config("vid_lp1"))
+    # ...and never DOM scenes
+    _video("vid_lp2", style="low_poly_skit")
+    err = server.write_scene_config("vid_lp2", _config())["error"]
+    assert "3D world" in err and "'low_poly_skit'" in err
+    # a DOM style names the 3D styles in its refusal
+    _video("vid_lp3", style="motion_graphics")
+    err = server.write_scene_config("vid_lp3", _cartoon_config("vid_lp3"))["error"]
+    assert "cartoon_3d" in err and "low_poly_skit" in err
+    # choosing the style on an existing video needs no GPU either
+    _video("vid_lp4")
+    assert "error" not in server.update_video("vid_lp4", visual_style="low_poly_skit")
+
+
 def test_an_unresolved_auto_video_is_resolved_by_its_cartoon_scene_under_the_gpu_gate(db):
     _video("vid_c5")
     assert server.write_scene_config("vid_c5", _cartoon_config("vid_c5")) == {"error": server.CARTOON3D_GPU_UNKNOWN}

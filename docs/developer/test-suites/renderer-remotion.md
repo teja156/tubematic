@@ -36,7 +36,7 @@ The soundtrack tools under `cartoon-tools/audio/` have a pytest suite of their o
 
 ### `src/scenes/installed/subtitleLooks.test.ts`
 
-Covers the `tags` and `highlight` looks of `Subtitles.tsx`
+Covers the `tags`, `highlight` and `karaoke` looks of `Subtitles.tsx`
 ([Grouping words](../09-remotion-project.md#grouping-words)).
 
 - A word's tag has the same tilt and torn edge on every frame and every render, and two words get
@@ -45,6 +45,54 @@ Covers the `tags` and `highlight` looks of `Subtitles.tsx`
   repaint.
 - The marker under an emphasis word starts at the word's first frame, wipes in over 8 frames and
   holds.
+- A word keeps the text colour until its start frame, then turns to the accent for good: the
+  default `#FFD221`, or the one the config names. The look has no pop and no dimming of the words
+  still to come.
+
+## Low-Poly Skit
+
+The tests sit beside the kit in `src/cartoon3d/lowpoly/`. They run under node, with no browser: a
+test that needs a canvas stands in a stub that accepts every call.
+
+### `lowpoly/poses.test.ts`
+
+Covers `poses.ts` and `cycles.ts`.
+
+- A pose is applied by meaning (forward, out, bend), so the left and right arms mirror and a hand
+  goes where its name says. Lying lays the figure on its back above the floor; sitting puts the feet
+  on it. A pose leaves what it does not name at rest.
+- A snap lands in the frames given with no anticipation, a track holds and then snaps on its key.
+- A step lands every 11 frames, the legs swing in opposition, the jig alternates its lifts every
+  5 frames, and a crowd's idles differ by seed.
+
+Trap: the left shoulder's out is positive z and the right's is negative, and a swing forward is a
+negative x rotation. A pose written the other way round passes its own look and breaks every mirror.
+
+### `lowpoly/kit.test.ts`
+
+Covers `figure.ts`, `faces.ts`, `crowd.ts`, `fx.ts` and `diorama.ts`.
+
+- The figure stands one unit tall on the floor with about two dozen parts at most, and a seeded
+  outfit is the same on every render.
+- A face swap replaces the previous face, and every face merges into one geometry for the crowd.
+- A crowd is a few dozen instanced meshes however many people it holds, hides the optional parts
+  (hair variants, stubble) a member lacks, and members of different phase buckets are posed
+  differently.
+- A burst pops on its frame, holds and goes; debris falls and is gone after its life.
+
+### `lowpoly/camera-moves.test.ts`
+
+Covers `joltAt`, `jolted` and `whip` in `camera.ts`: a jolt starts on its hit frame, rings and is gone
+after six frames, hits add, and the camera and its look point move together so the view does not
+tilt. A whip holds before and lands after, and its blur peaks in the middle. The shared
+`camera.test.ts` keeps covering the moves Cartoon 3D uses.
+
+### `lowpoly/examples/dig/dig.test.ts`
+
+Covers the worked example the skill points at: its shots tile the video with about one shot a second,
+every set builds and poses on every frame of its shots, every camera is finite, and only the one
+shot that says so is blurred. A skill example that stops running sends an agent into a copy of the
+fault.
 
 ## Insert scenes
 

@@ -917,7 +917,7 @@ Covers `lib/visualStyles.ts` ([Visual-style picker](../15-dashboard.md#visual-st
 - `styleGroups` lists Auto, then the 2D, 3D and insert styles, each group in pack order, from the
   pack fields `dimension`, `role` and `needs.gpu`. A style whose pack needs an OpenAI key or a GPU,
   and every insert style, cannot be picked, with the reason. A style an older API sends without a
-  dimension or role counts as a 2D main style. `previewableRows` is the order the preview window
+  dimension or role counts as a 2D main style. Low-Poly Skit, a 3D style with `needs.gpu` false, carries no GPU tag and can be picked with no GPU. `previewableRows` is the order the preview window
   steps through, and `previewUrls` names the served files.
 - `videoStyleId` names the style a frozen video's preview plays: the chosen one, Auto's pick or
   Cartoon 3D, and none before Auto has picked or under mixed scenes.

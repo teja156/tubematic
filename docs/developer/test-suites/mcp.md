@@ -635,7 +635,9 @@ renderer checks ([Visual styles](../10-scene-authoring.md#visual-styles),
 - A domain's default style reaches curriculum videos only. `upsert_project` is a partial update:
   an omitted field is kept and `""` clears.
 - `write_scene_config` refuses a canvas that contradicts the style, fills in an absent one, and
-  refuses a scene kind that disagrees with the video's renderer.
+  refuses a scene kind that disagrees with the video's renderer. Both 3D worlds (Cartoon 3D and
+  Low-Poly Skit) take the one generated scene and never DOM scenes, and a Low-Poly Skit video is chosen and
+  its scene written with no GPU tested.
 - The first config resolves an unresolved `auto` video's renderer as a compare-and-set, and a
   failed write or commit leaves the file and the row agreeing.
 - The server's style names are the objects in `tubematic_core.visual_styles`, `get_video` returns the

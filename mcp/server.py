@@ -374,8 +374,10 @@ SUBTITLE_KEYS = ("enabled", "maxWords", "fontFamily", "fontSize", "color",
 # at once with the words still to come in grey (the Case File Story style);
 # "tags" pops one torn paper tag per word (Paper Diorama); "highlight" puts the
 # phrase on a cream strip with a marker under each emphasis word (Editorial
-# Collage); "plain", or absent, is the look every other style has.
-SUBTITLE_LOOKS = ("plain", "selection", "fill", "tags", "highlight")
+# Collage); "karaoke" shows the phrase at once and turns each word to the accent
+# colour as it is spoken (Low-Poly Skit); "plain", or absent, is the look every
+# other style has.
+SUBTITLE_LOOKS = ("plain", "selection", "fill", "tags", "highlight", "karaoke")
 # emphasis: indexes into the narration's words drawn on a red box (the key word
 # of a line). One in SUBTITLE_EMPHASIS_EVERY words at most: emphasis on every
 # other word is no emphasis. write_scene_config checks the indexes against the
@@ -10166,7 +10168,7 @@ class _RendererContradiction(Exception):
 
 def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
     """The scene kind must agree with the video's renderer: a Cartoon 3D scene
-    only on a cartoon_3d video or an auto video that resolved to cartoon_3d,
+    only on a 3D-world style's video (cartoon_3d, low_poly_skit) or an auto video that resolved to cartoon_3d,
     and never a DOM scene on a video whose renderer is cartoon_3d. Otherwise
     the worker and the AI review would read the video one way and the scenes
     another, and a revision could discard a half-built world.
@@ -10184,10 +10186,12 @@ def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
     style = row["visual_style"] or ""
     resolved = row["resolved_renderer"] or ""
     unresolved_auto = style == "auto" and not resolved
+    world_style = style in tvs.WORLD_STYLES   # Cartoon 3D and every other pack that renders a generated 3D world
     if is_cartoon:
-        if style not in ("auto", "cartoon_3d"):
+        if style != "auto" and not world_style:
             return (f"this video's visual_style is {style!r}, which renders DOM scenes; a Cartoon 3D scene "
-                    f"needs visual_style 'cartoon_3d', or 'auto' resolved to cartoon_3d"), ""
+                    f"needs visual_style 'cartoon_3d' (or another 3D style: {', '.join(tvs.WORLD_STYLES)}), "
+                    f"or 'auto' resolved to cartoon_3d"), ""
         if style == "auto" and resolved and resolved != "cartoon_3d":
             return (f"this video's 'auto' resolved to the {resolved!r} renderer, which is written once; a "
                     f"Cartoon 3D scene cannot follow (a revision renders with the renderer the video already uses)"), ""
@@ -10200,9 +10204,9 @@ def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
                 return gpu_err, ""
             return "", "cartoon_3d"
         return "", ""
-    if style == "cartoon_3d" or resolved == "cartoon_3d":
-        return (f"this video renders as Cartoon 3D ({'visual_style' if style == 'cartoon_3d' else 'auto resolved to'} "
-                f"cartoon_3d), so its scene-config must be the single Cartoon 3D scene (its props carry "
+    if world_style or resolved == "cartoon_3d":
+        return (f"this video renders as a 3D world ({'visual_style ' + repr(style) if world_style else 'auto resolved to cartoon_3d'}), "
+                f"so its scene-config must be the single Cartoon 3D scene (its props carry "
                 f"{cartoon.CARTOON_PROPS}), not DOM scenes"), ""
     return "", ("dom" if unresolved_auto else "")
 
