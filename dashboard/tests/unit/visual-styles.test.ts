@@ -45,9 +45,15 @@ describe("styleGroups", () => {
 
   it("takes the group and the GPU tag from the pack fields, never a list here", () => {
     const gs = styleGroups(PACK_STYLES, true, { status: "working" });
-    expect(gs.find((g) => g.key === "3d")!.rows.map((r) => r.value)).toEqual(["cartoon_3d"]);
+    expect(gs.find((g) => g.key === "3d")!.rows.map((r) => r.value))
+      .toEqual(PACK_STYLES.filter((s) => s.dimension === "3d").map((s) => s.id));
     expect(gs.flatMap((g) => g.rows).filter((r) => r.gpu).map((r) => r.value))
       .toEqual(PACK_STYLES.filter((s) => s.needs.gpu).map((s) => s.id));
+    // Low-Poly Skit is a 3D style that needs no GPU, so it carries no GPU tag and is choosable with none
+    expect(row(gs, "cartoon_3d").gpu).toBe(true);
+    expect(row(gs, "low_poly_skit").gpu).toBe(false);
+    expect(row(styleGroups(PACK_STYLES, true, { status: "none" }), "low_poly_skit").choosable).toBe(true);
+    expect(row(styleGroups(PACK_STYLES, true, { status: "none" }), "cartoon_3d").choosable).toBe(false);
     expect(row(gs, "cartoon_3d").experimental).toBe(true);
     expect(row(gs, "system_flow").experimental).toBe(false);
     expect(row(gs, "storybook_atlas").preview).toBe("storybook_atlas");
