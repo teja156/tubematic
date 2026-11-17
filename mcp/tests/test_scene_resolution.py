@@ -27,6 +27,11 @@ def scene_dirs(tmp_path, monkeypatch):
     installed.mkdir()
     monkeypatch.setattr(server, "SCENES_DIR", generated)
     monkeypatch.setattr(server, "INSTALLED_DIR", installed)
+    # No npx: validate_job skips its typecheck. These tests are about where a
+    # scene is found, and a real `npx tsc` in a checkout with no node_modules
+    # fails with npm's own text ("... was not found and will be installed").
+    real_which = server.shutil.which
+    monkeypatch.setattr(server.shutil, "which", lambda name: None if name == "npx" else real_which(name))
     return generated, installed
 
 
