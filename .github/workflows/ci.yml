@@ -41,6 +41,12 @@ permissions:
   contents: read
 
 jobs:
+  # Every job names its runner image. `ubuntu-latest` is moving to Ubuntu
+  # 26.04, where the e2e job cannot install Playwright's browsers ("Playwright
+  # does not support chromium on ubuntu26.04-x64"), and a run can land on either
+  # image while the label moves. Move the pin, in release.yml too, when the
+  # dashboard's Playwright version supports the newer image.
+
   # Six suite directories, run one at a time. A single combined `pytest`
   # invocation across them fails collection on a pre-existing
   # conftest.py/sys.path collision -- this matrix is the fix for that, not a
@@ -49,7 +55,7 @@ jobs:
   # disk rather than restating it here.
   python-tests:
     name: python-tests (${{ matrix.suite }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -87,7 +93,7 @@ jobs:
         run: python -m pytest ${{ matrix.suite }} -q
 
   dashboard:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 
@@ -111,7 +117,7 @@ jobs:
         run: npm run build
 
   remotion:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 
@@ -135,7 +141,7 @@ jobs:
         run: npx tsc --noEmit
 
   compose-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 
@@ -170,7 +176,7 @@ jobs:
   e2e:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
     needs: [python-tests, dashboard, remotion, compose-check]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 

@@ -17,6 +17,9 @@ permissions:
   packages: write
 
 jobs:
+  # Every job names its runner image, the same one ci.yml pins (the reason is
+  # written there), so a release run cannot change image part-way through.
+
   # 1. Assert the tag matches VERSION; run scripts/check_release.py.
   #
   # check_release.py's own "VERSION matches the requested version" check
@@ -24,7 +27,7 @@ jobs:
   # comes straight from the tag, so a mismatch fails loudly inside that
   # script rather than needing a second, separate comparison here.
   preflight:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
       owner: ${{ steps.version.outputs.owner }}
@@ -102,7 +105,7 @@ jobs:
   # than by the registry itself.
   push-images:
     needs: [preflight, ci]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 
@@ -144,7 +147,7 @@ jobs:
   # a different question from "was the staged tree tampered with".
   build-tarball:
     needs: [preflight, push-images]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 
@@ -239,7 +242,7 @@ jobs:
   # would test the source tree, which job `ci` already did.
   smoke-test:
     needs: [preflight, build-tarball]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -410,7 +413,7 @@ jobs:
   # is not the documented install target.
   release:
     needs: [preflight, smoke-test]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -443,7 +446,7 @@ jobs:
   # with this version.
   publish-docs:
     needs: [preflight, release]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # TUBEMATIC_DOCS_TOKEN is an environment secret: only a job naming this environment can read it.
     environment: TubeMatic
     permissions:
@@ -469,7 +472,7 @@ jobs:
   publish-kasm-registry:
     needs: [preflight, release]
     if: ${{ !contains(needs.preflight.outputs.version, '-') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # TUBEMATIC_KASM_REGISTRY_TOKEN is an environment secret: only a job naming this environment can read it.
     environment: TubeMatic
     permissions:
