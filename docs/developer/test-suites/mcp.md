@@ -522,6 +522,11 @@ Needs: a `validate_job` fixture here, in `test_scene_subfolders.py` and in
 `test_validate_job_segments.py` must copy each job file to `JOBS_DIR/<video_id>/` after inserting
 the row. `validate_job` derives the files from the id and ignores the stored path columns.
 
+Trap: the `scene_dirs` fixture here and in `test_scene_subfolders.py` hides `npx`, so `validate_job`
+skips its typecheck. A real `npx tsc` on a machine with no `node_modules` fails with npm's text about
+a package that "was not found", which the "not found" assertions in these files would read as a
+missing scene.
+
 ### `test_scene_subfolders.py`
 
 Covers per-video scene directories, `generated/<video_id>/<scene>.tsx`.
