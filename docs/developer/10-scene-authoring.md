@@ -590,7 +590,8 @@ before it upgrades.
 
 An install has two halves, in `tubematic_core/style_install.py`. Staging fetches a package, checks
 it like the registry does, scans it and leaves it in `~/.tubematic-data/styles-pending/<id>/` for 24
-hours. Confirming copies it into `styles/` and records its approval. Anything with the API or MCP
+hours. Staging the same style from the same source again replaces the older staged copy.
+Confirming copies it into `styles/` and records its approval. Anything with the API or MCP
 token can stage; only a person can confirm.
 
 | Source | Staged by | What staging does |

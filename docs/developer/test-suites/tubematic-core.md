@@ -261,7 +261,8 @@ Covers `tubematic_core/style_install.py`, staging and installing packages.
   repository is refused by default, and an address with credentials, plain http or a missing or
   unsafe ref is refused before git runs.
 - Audits, discards, expiry, the cap on waiting installs, reading one text file of a staged package and
-  removal.
+  removal. Staging the same style from the same source again replaces the older pending install,
+  and the same style from another source is kept as a separate one.
 
 Trap: confirming is the human half. These tests stop at `confirm`; the API test checks that it
 needs the dashboard password.

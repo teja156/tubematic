@@ -285,3 +285,17 @@ def test_remove_deletes_the_package_and_its_approval(dirs):
         si.remove("ext_test")
     with pytest.raises(si.InstallError):
         si.remove("../x")
+
+
+def test_staging_the_same_style_from_the_same_source_replaces_the_older_pending_install(dirs):
+    """The creation skill stages after every edit; its earlier stages must not
+    pile up against MAX_PENDING."""
+    make_package(dirs.incoming, sid="ext_test", approve=False)
+    first = si.stage({"kind": "incoming", "name": "ext_test"})
+    second = si.stage({"kind": "incoming", "name": "ext_test"})
+    assert [r["id"] for r in si.list_pending()] == [second["id"]]
+    assert not (dirs.pending / first["id"]).exists()
+    # another source of the same style is a different install to review, kept
+    pkg = make_package(dirs.src, approve=False)
+    third = si.stage({"kind": "zip", "data": _zip(pkg)})
+    assert {r["id"] for r in si.list_pending()} == {second["id"], third["id"]}

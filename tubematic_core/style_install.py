@@ -338,7 +338,25 @@ def _stage_into(work: pathlib.Path, pid: str, kind: str, source: dict, index_url
     }
     _write_record(work, record)
     _owned_like(work, PENDING_DIR)
+    _drop_superseded(record)
     return record
+
+
+def _origin_key(source: dict) -> tuple:
+    return tuple(sorted((k, v) for k, v in source.items() if k not in ("commit", "sha256")))
+
+
+def _drop_superseded(record: dict) -> None:
+    """A new stage of the same style from the same source replaces the older one:
+    the creation skill stages after every edit."""
+    for entry in PENDING_DIR.iterdir():
+        if not PID_RE.fullmatch(entry.name) or entry.name == record["id"]:
+            continue
+        with contextlib.suppress(OSError, ValueError):
+            old = json.loads((entry / PENDING_FILE).read_text(encoding="utf-8"))
+            if old.get("style_id") == record["style_id"] and \
+                    _origin_key(old.get("source") or {}) == _origin_key(record["source"]):
+                shutil.rmtree(entry, ignore_errors=True)
 
 
 def _copy_tree(src: pathlib.Path, dest: pathlib.Path) -> None:
