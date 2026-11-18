@@ -312,3 +312,12 @@ def test_a_video_no_longer_in_an_external_style_drops_the_old_record(env, monkey
         con.execute("UPDATE videos SET status = 'VOICE_READY', visual_style = 'whiteboard' WHERE id = ?", (vid,))
     assert server._external_block(vid) is None
     assert not record.exists()
+
+
+def test_choosing_a_broken_or_missing_package_names_why(env):
+    """The refusal carries the package's reason, never a list of built-in ids."""
+    vid = env["video"]("vid_pick", style="night_signal")
+    (env["styles"] / "ext_other" / "guide" / "guide.md").write_text("changed")
+    broken = server.update_video(vid, visual_style="ext_other")["error"]
+    assert "ext_other" in broken and "MANIFEST.json" in broken and "Must be one of" not in broken
+    assert "not installed" in server.update_video(vid, visual_style="ext_absent")["error"]

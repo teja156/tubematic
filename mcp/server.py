@@ -3317,6 +3317,8 @@ def update_video(
                              "script profile"}
     if visual_style is not None:
         visual_style = visual_style.strip()
+        if tvs.external_style_error(visual_style):
+            return {"error": tvs.external_style_error(visual_style)}
         if not tvs.is_known_style(visual_style):
             return {"error": f"Invalid visual_style '{visual_style}'. "
                              f"Must be one of: {sorted(tvs.MAIN_STYLES)}"}

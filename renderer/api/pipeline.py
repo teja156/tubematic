@@ -3303,6 +3303,8 @@ def create_pipeline_blueprint() -> Blueprint:
             # agent settled on at scene-config time, and the dashboard has no
             # business overwriting that.
             if "visual_style" in fields:
+                if tvs.external_style_error(fields["visual_style"]):
+                    return jsonify({"error": tvs.external_style_error(fields["visual_style"])}), 400
                 if not tvs.is_known_style(fields["visual_style"]):
                     return jsonify({
                         "error": f"Invalid visual_style '{fields['visual_style']}'. "
@@ -4015,6 +4017,8 @@ def create_pipeline_blueprint() -> Blueprint:
             # one strategy that produces a series. Keep in sync: mcp/server.py's
             # create_video. An explicit visual_style in the body still wins.
             visual_style = (body.get("visual_style") or "").strip()
+            if tvs.external_style_error(visual_style):
+                return jsonify({"error": tvs.external_style_error(visual_style)}), 400
             if visual_style and not tvs.is_known_style(visual_style):
                 return jsonify({
                     "error": f"Invalid visual_style '{visual_style}'. "
@@ -4179,6 +4183,8 @@ def create_pipeline_blueprint() -> Blueprint:
 
         visual_style = picks["visual_style"] or DEFAULT_VISUAL_STYLE
         if not tvs.is_main_style(visual_style):
+            if tvs.external_style_error(visual_style):
+                return jsonify({"error": tvs.external_style_error(visual_style)}), 400
             if tvs.is_insert_style(visual_style):
                 return jsonify({"error": tvs.insert_style_error(visual_style)}), 400
             return jsonify({
@@ -4301,6 +4307,8 @@ def create_pipeline_blueprint() -> Blueprint:
         # absence of a domain-level one. Keep in sync: mcp/server.py's
         # upsert_project.
         default_style = (body.get("default_visual_style") or "").strip()
+        if tvs.external_style_error(default_style):
+            return jsonify({"error": "default_visual_style: " + tvs.external_style_error(default_style)}), 400
         if default_style and not tvs.is_known_style(default_style):
             return jsonify({
                 "error": f"Invalid default_visual_style '{default_style}'. Must be one of: "

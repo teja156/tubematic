@@ -303,7 +303,8 @@ Covers external styles over HTTP:
 
 - An installed external style with a valid package can be chosen for a video and as a domain
   default, and a domain default seeds curriculum videos. A broken package is refused on `PATCH`, on
-  `POST /videos` and as a domain default.
+  `POST /videos`, on `POST /videos/manual` and as a domain default, with the package's reason, and a
+  style that is not installed is refused as not installed.
 - `GET /visual-styles` lists installed styles with `external` set, and a broken one as unavailable.
 - `external_styles_in_auto` accepts only installed external styles with a valid package, and is
   checked on change only, so a list whose style broke since still saves with an unrelated key.

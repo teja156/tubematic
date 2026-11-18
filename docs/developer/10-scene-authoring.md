@@ -528,6 +528,7 @@ a new package needs no restart, and a file edited after install shows the packag
 
 `visual_styles.pack`, `is_main_style`, `is_world_style` and `fixed_canvas` read installed packages,
 so a valid external style can be chosen for a video or as a domain's default like a built-in one.
+Choosing a broken or missing one is refused with the reason (`visual_styles.external_style_error`).
 `GET /visual-styles` lists them after the built-in styles with `external: true`, and the picker
 tags them EXTERNAL. A `needs.gpu` pack is gated like Cartoon 3D. External styles take no mascot and
 host no inserts. While a video's package is broken or gone, `get_video`'s `style` stays external

@@ -68,11 +68,22 @@ def test_an_installed_style_can_be_chosen_for_a_video(client):
 
 
 def test_a_broken_package_cannot_be_chosen(client):
+    """Refused with the package's reason, never a list of built-in ids that
+    leaves a person wondering why an installed style is invalid (found in the
+    TMDEV-252 live test)."""
     vid = _video(client)
-    r = client.patch(f"/videos/{vid}", json={"visual_style": "ext_broken"})
-    assert r.status_code == 400 and "Invalid visual_style" in r.get_json()["error"]
-    assert client.post("/videos", json={"topic": "t", "strategy": "manual", "producibility_score": 7,
-                                        "visual_style": "ext_broken"}).status_code == 400
+    refusals = [
+        client.patch(f"/videos/{vid}", json={"visual_style": "ext_broken"}),
+        client.post("/videos", json={"topic": "t", "strategy": "manual", "producibility_score": 7,
+                                     "visual_style": "ext_broken"}),
+        client.post("/videos/manual", json={"title": "t", "topic": "t", "visual_style": "ext_broken"}),
+    ]
+    for r in refusals:
+        err = r.get_json()["error"]
+        assert r.status_code == 400 and "ext_broken" in err and "MANIFEST.json" in err, err
+        assert "Must be one of" not in err, err
+    r = client.post("/videos/manual", json={"title": "t", "topic": "t", "visual_style": "ext_absent"})
+    assert r.status_code == 400 and "not installed" in r.get_json()["error"]
 
 
 def test_an_installed_style_can_be_a_domain_default_and_seeds_curriculum(client):

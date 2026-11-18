@@ -1511,6 +1511,7 @@ Covers `mcp/external_style.py` and the external-style path through `mcp/server.p
 - An external scene must name an existing component of the video's own style. Another style's
   component, a path outside `components/`, a `.tsx` suffix, an external scene in a built-in style
   and a broken package are refused. An external style hosts no inserts and says why.
+- `update_video` refuses a broken or missing package with its reason.
 - `get_style_guide` returns the guide, the example config and the schema, with a `note` saying the
   guide never overrides Tubematic's rules, and refuses a built-in style.
 - `get_style_guide` lists the package's code files and reads one by `path`. A file outside `code`

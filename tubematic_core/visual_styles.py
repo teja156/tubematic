@@ -409,6 +409,20 @@ def is_external(visual_style: str) -> bool:
     return bool(external_styles.ID_RE.fullmatch((visual_style or "").strip()))
 
 
+def external_style_error(visual_style: str) -> str:
+    """Why an external style id cannot be chosen (its package is broken or not
+    installed), or "" for a usable one or any id outside the namespace."""
+    from . import external_styles
+    sid = (visual_style or "").strip()
+    if not is_external(sid):
+        return ""
+    found = external_styles.get(sid)
+    if found and found.ok:
+        return ""
+    return (f"The external style {sid!r} cannot be used: "
+            + (found.reason if found else "its package is not installed") + ".")
+
+
 def is_known_style(visual_style: str) -> bool:
     """A value a stored visual_style may hold: a built-in style, "auto", or an
     installed external style whose package is valid."""
