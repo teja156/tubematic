@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -171,3 +172,10 @@ def test_no_pull_request_controlled_value_is_expanded_inside_a_shell_command():
             assert "${{ steps." not in run and "${{ needs." not in run, step.get("name")
     changed = next(s for s in pr["jobs"]["scan"]["steps"] if s.get("id") == "changed")["run"]
     assert "ext_[a-z0-9_]{1,40}" in changed and "exit 1" in changed
+
+
+def test_the_pr_workflow_renders_with_a_released_image_tag():
+    """`tubematic-backend:latest` does not exist: a release pushes only its version tag (release.yml),
+    so every review render failed with "manifest unknown" (found on the gallery's first pull request)."""
+    pr = yaml.safe_load((SKELETON / ".github" / "workflows" / "pr.yml").read_text())
+    assert re.fullmatch(r"ghcr\.io/teja156/tubematic-backend:\d+\.\d+\.\d+", pr["env"]["TUBEMATIC_IMAGE"])

@@ -859,7 +859,8 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
 - The official gallery address is the one the skeleton's publish workflow builds for, and the
   skeleton's PR workflow calls `scan` and `render` on `ubuntu-24.04`, diffs against the event's base
   commit (a fork has no `origin/<base>`), refuses a changed path that is not a style id's folder or
-  pointer, never expands a pull request's values inside a shell command, and fails on a failed render. `render` names Chromium with
+  pointer, never expands a pull request's values inside a shell command, fails on a failed render,
+  and renders with a backend image named by its version tag (a release publishes no `latest`). `render` names Chromium with
   `--browser-executable` and exits 3 for a 3D world style. The review checklist covers what the
   design asks a reviewer to check.
 - Opt-in (`TUBEMATIC_GALLERY_RENDER_IMAGE` set to a backend image): `render` makes a video of a scene

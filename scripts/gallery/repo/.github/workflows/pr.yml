@@ -10,9 +10,11 @@ permissions:
 
 env:
   # The Tubematic version whose check, scan and renderer review submissions. Move it when Tubematic
-  # releases a version with a new scene API.
+  # releases a version with a new scene API. A release publishes only its version tag (there is no
+  # `latest`), and 2.4.0 is the first that renders external styles: until it ships, the render job
+  # fails and the reviewer renders the example on their own install.
   TUBEMATIC_REF: develop
-  TUBEMATIC_IMAGE: ghcr.io/teja156/tubematic-backend:latest
+  TUBEMATIC_IMAGE: ghcr.io/teja156/tubematic-backend:2.4.0
 
 jobs:
   scan:
