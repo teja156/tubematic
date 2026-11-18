@@ -100,9 +100,18 @@ def create_styles_blueprint(db_path: str, throttle) -> Blueprint:
     @bp.post("/external-styles/pending")
     def stage():
         # refused before the body is read: a huge one would be parsed and decoded first
+        too_big = _err(f"the upload is larger than {tinstall.MAX_ZIP_BYTES // 1_000_000} MB", 413)
         if (request.content_length or 0) > MAX_BODY_BYTES:
-            return _err(f"the upload is larger than {tinstall.MAX_ZIP_BYTES // 1_000_000} MB", 413)
-        body = request.get_json(silent=True) or {}
+            return too_big
+        # a chunked body has no Content-Length: read at most one byte past the cap
+        raw = request.stream.read(MAX_BODY_BYTES + 1)
+        if len(raw) > MAX_BODY_BYTES:
+            return too_big
+        try:
+            body = json.loads(raw or b"{}")
+        except ValueError:
+            return _err("the body must be JSON")
+        body = body if isinstance(body, dict) else {}
         kind = body.get("kind")
         source = {k: body.get(k) for k in ("kind", "url", "ref", "id", "name", "filename")}
         if kind == "zip":

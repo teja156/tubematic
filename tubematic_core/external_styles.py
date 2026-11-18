@@ -199,9 +199,10 @@ def _write_approvals(root: pathlib.Path, data: dict) -> None:
     os.replace(tmp, path)
 
 
-def approve(root: pathlib.Path, sid: str, **meta) -> str:
-    """Record the package under root/sid as approved as it is now; returns its fingerprint."""
-    fp = jobfiles.source_fingerprint(pathlib.Path(root) / sid)
+def approve(root: pathlib.Path, sid: str, fingerprint: str = "", **meta) -> str:
+    """Record the package under root/sid as approved; returns the fingerprint recorded.
+    An installer passes the fingerprint it checked; otherwise it is the package as it is now."""
+    fp = fingerprint or jobfiles.source_fingerprint(pathlib.Path(root) / sid)
     data = approvals(root)
     data[sid] = {**meta, "fingerprint": fp}
     _write_approvals(root, data)

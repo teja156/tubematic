@@ -552,7 +552,8 @@ Covers `gate/sourceKey.ts`, what the beat gate's verdict is keyed by.
 - A built-in video's key material is the shape it had before external styles, so verdicts
   already recorded stay valid.
 - The external packages a world video imports are found from its source.
-- The key changes when a package the video imports changes, and not when another package does.
+- The key changes when a package the video imports changes, a binary asset included, and not when
+  another package does.
 
 Trap: without the package in the key, an updated package kept the judges' verdict on frames it no
 longer draws.

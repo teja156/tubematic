@@ -198,3 +198,13 @@ def test_an_oversized_upload_is_refused_before_it_is_read(env):
     r = env.client.post("/external-styles/pending", data="x" * 10, content_type="application/json",
                         environ_overrides={"CONTENT_LENGTH": str(styles_api.MAX_BODY_BYTES + 1)})
     assert r.status_code == 413
+
+
+def test_a_chunked_upload_over_the_cap_is_refused(env, monkeypatch):
+    """A chunked body has no Content-Length, so the length check alone let it
+    through to be parsed whole."""
+    monkeypatch.setattr(styles_api, "MAX_BODY_BYTES", 100)
+    body = json.dumps({"kind": "zip", "data": "A" * 400})
+    r = env.client.post("/external-styles/pending", data=body, content_type="application/json",
+                        environ_overrides={"CONTENT_LENGTH": "", "wsgi.input_terminated": True})
+    assert r.status_code == 413

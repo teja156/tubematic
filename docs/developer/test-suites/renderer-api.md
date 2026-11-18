@@ -319,7 +319,7 @@ Covers `renderer/api/styles_api.py`, installing and removing external styles.
   installs and approves the package, which `GET /visual-styles` then lists as available. The confirm
   shares the login's throttle.
 - A bad upload, an `incoming` source (an MCP-only source) and an unknown kind are refused, and an
-  upload over the cap is `413` before its body is read; a pending install can be discarded.
+  upload over the cap is `413` before its body is read, chunked or not; a pending install can be discarded.
 - A package copied in by hand is listed as waiting for review and is approved through the same
   screen.
 - Removal is refused while an unfinished video or a domain default uses the style, and takes the

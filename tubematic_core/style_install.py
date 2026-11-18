@@ -362,8 +362,10 @@ def _stage_into(work: pathlib.Path, pid: str, kind: str, source: dict, index_url
     return record
 
 
-def _origin_key(source: dict) -> tuple:
-    return tuple(sorted((k, v) for k, v in source.items() if k not in ("commit", "sha256")))
+def _origin_key(source) -> tuple | None:
+    if not isinstance(source, dict):
+        return None
+    return tuple(sorted((k, str(v)) for k, v in source.items() if k not in ("commit", "sha256")))
 
 
 def _drop_superseded(record: dict) -> None:
@@ -374,8 +376,8 @@ def _drop_superseded(record: dict) -> None:
             continue
         with contextlib.suppress(OSError, ValueError):
             old = json.loads((entry / PENDING_FILE).read_text(encoding="utf-8"))
-            if old.get("style_id") == record["style_id"] and \
-                    _origin_key(old.get("source") or {}) == _origin_key(record["source"]):
+            if isinstance(old, dict) and old.get("style_id") == record["style_id"] and \
+                    _origin_key(old.get("source")) == _origin_key(record["source"]):
                 shutil.rmtree(entry, ignore_errors=True)
 
 
@@ -484,8 +486,10 @@ def confirm(pid: str) -> dict:
         os.replace(incoming, dest)
         shutil.rmtree(old, ignore_errors=True)
         source = dict(record["source"])
-        ext.approve(styles, sid, version=record["version"], source=source, reviewed=record["reviewed"],
-                    installed_at=_iso(_now()), label=record["label"])
+        # the fingerprint checked above, never one taken now: a file edited since
+        # leaves the package waiting for review instead of approving the edit
+        ext.approve(styles, sid, fingerprint=fp, version=record["version"], source=source,
+                    reviewed=record["reviewed"], installed_at=_iso(_now()), label=record["label"])
         with contextlib.suppress(OSError):
             os.chmod(styles / ext.INSTALLED, 0o644)
         _owned_like(styles / ext.INSTALLED, styles)

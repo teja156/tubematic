@@ -164,7 +164,7 @@ def test_an_incoming_folder_and_zip_stage(dirs):
 
 def test_an_installed_package_waiting_for_review_stages_and_confirms(dirs):
     make_package(dirs.styles, approve=False)
-    assert ext.load(dirs.styles)["ext_test"].needs_review
+    assert not ext.load(dirs.styles)["ext_test"].ok
     rec = si.stage({"kind": "installed", "id": "ext_test"})
     si.confirm(rec["id"])
     assert ext.load(dirs.styles)["ext_test"].ok
@@ -358,3 +358,32 @@ def test_only_the_official_gallery_marks_a_package_reviewed(dirs, monkeypatch):
     assert rec["reviewed"] is False
     rec = si.stage({"kind": "gallery", "id": "ext_test"}, index_url="https://official.invalid/index.json")
     assert rec["reviewed"] is True
+
+
+# ── review round 2 ───────────────────────────────────────────────────────────
+
+def test_bytes_changed_after_the_copy_is_checked_are_not_approved(dirs, monkeypatch):
+    """The approval recorded a fingerprint taken after the swap, so a file
+    edited between the check and the swap was approved. The record now holds
+    the checked fingerprint, and the edited package waits for review."""
+    pkg = make_package(dirs.src, approve=False)
+    rec = si.stage({"kind": "zip", "data": _zip(pkg)})
+    real = si._owned_like
+
+    def tamper(path, ref):
+        if pathlib.Path(path).name.startswith(".incoming-"):
+            (pathlib.Path(path) / "guide" / "guide.md").write_text("# edited after the check\n")
+        return real(path, ref)
+
+    monkeypatch.setattr(si, "_owned_like", tamper)
+    si.confirm(rec["id"])
+    assert ext.approvals(dirs.styles)["ext_test"]["fingerprint"] == rec["fingerprint"]
+    assert not ext.load(dirs.styles)["ext_test"].ok
+
+
+def test_a_malformed_pending_record_does_not_break_staging(dirs):
+    bad = dirs.pending / ("0" * 16)
+    bad.mkdir()
+    (bad / si.PENDING_FILE).write_text(json.dumps({"style_id": "ext_test", "source": "x", "expires_at": "2999-01-01T00:00:00Z"}))
+    pkg = make_package(dirs.src, approve=False)
+    assert si.stage({"kind": "zip", "data": _zip(pkg)})["check"]["ok"]
