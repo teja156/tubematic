@@ -27,12 +27,11 @@ it("type-checks the skill's template package with the renderer's tsconfig", () =
   const anchor = path.join(ROOT, "src/scenes/external/x.tsx");
   host.resolveModuleNames = (names, containing) =>
     names.map((n) => ts.resolveModuleName(n, n.startsWith(".") ? containing : anchor, options, host).resolvedModule);
-  const files = sources(path.join(TEMPLATE, "components"));
+  const files = sources(TEMPLATE);
   expect(files.length).toBeGreaterThan(0);
   const program = ts.createProgram(files, options, host);
   const errors = ts
     .getPreEmitDiagnostics(program)
-    .filter((d) => d.file && d.file.fileName.startsWith(TEMPLATE))
-    .map((d) => `${path.relative(TEMPLATE, d.file!.fileName)}: TS${d.code} ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`);
+    .map((d) => `${d.file ? path.relative(ROOT, d.file.fileName) : "(global)"}: TS${d.code} ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`);
   expect(errors).toEqual([]);
 }, 60_000);
