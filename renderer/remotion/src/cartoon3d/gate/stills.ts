@@ -10,13 +10,18 @@
 // /public/ (the shared jobs volume in the MCP container; default the project's public/).
 import { bundle } from "@remotion/bundler";
 import { openBrowser, renderStill, selectComposition } from "@remotion/renderer";
-import { enableTailwind } from "@remotion/tailwind-v4";
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 // @ts-expect-error a plain .mjs module beside the stills server, bundled into the command lines by esbuild
 import { syncMergedPublic } from "../../../cartoon-tools/merged-public.mjs";
+// @ts-expect-error a plain .mjs module shared with the Node scripts
+import { overrideFromEnv } from "../../../webpack-override.mjs";
+
+// The external style a still's video is drawn in (TMDEV-252), "" for a built-in style: the server and
+// the bundle here compile that one package only.
+const externalStyle = () => process.env.TUBEMATIC_EXTERNAL_STYLE || "";
 
 export interface StillJob {
   composition: string;
@@ -49,7 +54,8 @@ const viaServer = (jobs: StillJob[], scale: number): boolean => {
   // as they are written, and the project source does not change while an install runs
   for (const j of jobs) {
     fs.mkdirSync(path.dirname(j.out), { recursive: true });
-    const r = curl("/still", JSON.stringify({ composition: j.composition, props: j.props, frame: j.frame, out: j.out, scale }));
+    const r = curl("/still", JSON.stringify({ composition: j.composition, props: j.props, frame: j.frame, out: j.out, scale,
+      externalStyle: externalStyle() }));
     // a server that could not bundle or open its browser cannot draw: render every still here instead
     if (/"startFailed":true/.test(r.stdout)) return false;
     // no answer at all, and no server any more (it died mid-request, say while bundling): the same
@@ -85,7 +91,7 @@ export const renderStills = async (root: string, jobs: StillJob[], scale = 0.5):
     }
     const serveUrl = await bundle({
       entryPoint: path.join(root, "src/index.ts"), outDir, publicDir,
-      webpackOverride: enableTailwind, symlinkPublicDir: true, onProgress: () => {},
+      webpackOverride: overrideFromEnv(), symlinkPublicDir: true, onProgress: () => {},
     });
     browser = await openBrowser("chrome", { chromiumOptions, chromeMode, browserExecutable, logLevel: "error" });
     // one selectComposition per distinct (composition, props)

@@ -10,7 +10,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "noUnusedLocals": true
+    "noUnusedLocals": true,
+    "paths": { "@tubematic/scene-api": ["./src/sceneApi/v1.ts"] }
   },
   "exclude": ["remotion.config.ts"]
 }

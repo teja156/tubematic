@@ -6,7 +6,8 @@
  */
 
 import { Config } from "@remotion/cli/config";
-import { enableTailwind } from '@remotion/tailwind-v4';
+// @ts-expect-error a plain .mjs module shared with the Node scripts
+import { overrideFromEnv } from "./webpack-override.mjs";
 
 // PNG frames eliminate JPEG compression artifacts on gradients and flat colors.
 Config.setVideoImageFormat("png");
@@ -25,5 +26,6 @@ Config.setOverwriteOutput(true);
 // there, not here.
 Config.setChromiumOpenGlRenderer("swangle");
 
-// Tailwind v4 webpack integration.
-Config.overrideWebpackConfig(enableTailwind);
+// Tailwind v4, the scene-API alias, and at most one external style per bundle:
+// the render worker names the video's style in TUBEMATIC_EXTERNAL_STYLE.
+Config.overrideWebpackConfig(overrideFromEnv());
