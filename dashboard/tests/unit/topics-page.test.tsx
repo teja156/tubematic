@@ -1394,6 +1394,27 @@ describe("TopicsPage — domain summary and agent defaults", () => {
       .toBe("A correction");
   });
 
+  it("a draft whose save is refused in the click that pauses the domain is there under Paused", async () => {
+    const spy = mockDomains([DOMAIN, PLAIN], AGENTS, "refused for the test");
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "A correction" } });
+    // Pressing Pause blurs the box first; the refused save and the pause run
+    // in turn, and the pause moves the row into the Paused group.
+    fireEvent.blur(field);
+    fireEvent.click(screen.getByTestId("toggle-domain-seed-1"));
+    await waitFor(() => expect(spy.mock.calls.some(([u]) => u.toString().endsWith("/projects/seed-1/status")))
+      .toBe(true));
+    await openPaused();
+    await waitFor(() => expect(screen.getByTestId("domain-status-seed-1").textContent).toBe("PAUSED"));
+    await openDefaults();
+    expect((screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement).value)
+      .toBe("A correction");
+  });
+
   it("a newer save that is refused after an older one lands keeps the newer text", async () => {
     const releases: Array<() => void> = [];
     const spy = mockDomains();

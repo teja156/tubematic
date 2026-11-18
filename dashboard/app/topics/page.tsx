@@ -273,22 +273,42 @@ function DomainDescriptionField({ testId, countTestId, value, onChange, onFocus,
 // saved: an older save that lands after you typed again must not put the older
 // text back, nor leave it there if the newer save is then refused.
 //
-// The draft lives on the row, which stays mounted while its panel is closed:
-// Close blurs the box, which starts a save, and then unmounts the panel. Held
-// in the panel, a draft whose save was then refused would be gone on reopen.
+// The draft is kept on the page, by domain id, because the box and its row
+// can both unmount while a save is in flight: Close blurs the box (starting a
+// save) and unmounts the panel in one click, and Pause or Resume moves the row
+// between the active and paused lists, which mounts it anew. A draft whose
+// save was then refused must be in the box when it shows again.
+type DraftEntry = { local: string; pending: string | null };
+type DraftStore = Map<string, DraftEntry>;
+
 type DescriptionDraft = {
   local: string; setLocal: (next: string) => void; focus: () => void; commit: () => void;
 };
 
-function useDescriptionDraft(value: string, onCommit: (next: string) => Promise<boolean>): DescriptionDraft {
-  const [local, setLocal] = useState(value);
+function useDescriptionDraft(id: string, value: string, store: DraftStore,
+                             onCommit: (next: string) => Promise<boolean>): DescriptionDraft {
+  // One entry per domain for the page's life; a remounted row picks it up.
+  const [entry] = useState<DraftEntry>(() => {
+    const kept = store.get(id) ?? { local: value, pending: null };
+    store.set(id, kept);
+    return kept;
+  });
+  const [local, setLocalState] = useState(entry.local);
   const editing = useRef(false);
-  // The last text sent, until its save answers.
-  const pending = useRef<string | null>(null);
+  const lastValue = useRef(value);
+  function setLocal(next: string) {
+    entry.local = next;
+    setLocalState(next);
+  }
+  // Runs when the stored text changes, never on mount: on mount the entry
+  // already holds what the box should show, a refused draft included.
   useEffect(() => {
+    if (value === lastValue.current) return;
+    lastValue.current = value;
     if (editing.current) return;
-    if (pending.current !== null && value !== pending.current) return;
-    pending.current = null;
+    // The last text sent, until its save answers.
+    if (entry.pending !== null && value !== entry.pending) return;
+    entry.pending = null;
     setLocal(value);
   }, [value]);
   function commit() {
@@ -297,11 +317,12 @@ function useDescriptionDraft(value: string, onCommit: (next: string) => Promise<
     if (next === value) {
       // A save landing while the box was focused was not copied in: show it
       // now that nothing is left to send.
-      if (pending.current === null) setLocal(value);
+      if (entry.pending === null) setLocal(value);
       return;
     }
-    pending.current = next;
-    const settle = () => { if (pending.current === next) pending.current = null; };
+    entry.pending = next;
+    // Settles the entry even after the row unmounted: the closure holds it.
+    const settle = () => { if (entry.pending === next) entry.pending = null; };
     onCommit(next).then(settle, settle);
   }
   return { local, setLocal, focus: () => { editing.current = true; }, commit };
@@ -530,8 +551,10 @@ const badgeStyle = {
 // status. The description and the defaults sit in a panel under the line,
 // opened by "Edit domain". Seven pickers and a cap on the line itself left no room
 // for the name, and nowhere to say which videos each default applies to.
-function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, onInvalid, lists, canIllustrate, gpu }: {
+function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, onInvalid, lists, canIllustrate, gpu, drafts }: {
   project: Project;
+  /** The page's description drafts, by domain id (see useDescriptionDraft). */
+  drafts: DraftStore;
   videoCounts: Record<string, number>;
   /** How the last change to this domain went: shown on the line itself, so a
    *  refusal is seen with the panel closed too. */
@@ -549,7 +572,7 @@ function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, o
 }) {
   // Each row keeps its own state, so two domains can be open side by side.
   const [open, setOpen] = useState(false);
-  const description = useDescriptionDraft(project.description ?? "",
+  const description = useDescriptionDraft(project.id, project.description ?? "", drafts,
                                           (next) => onSave(project.id, { description: next }));
   const isPaused = project.status === "paused";
   const isExpired = project.expired === true;
@@ -1043,6 +1066,7 @@ export default function TopicsPage() {
   // before it finishes. State alone is too late for that: it reaches a closure
   // only on the next render. Every write to the list goes through setProjects.
   const projectsRef = useRef<Project[]>([]);
+  const descriptionDrafts = useRef<DraftStore>(new Map());
   function setProjects(next: (prev: Project[]) => Project[]) {
     projectsRef.current = next(projectsRef.current);
     setProjectsState(projectsRef.current);
@@ -1400,7 +1424,7 @@ export default function TopicsPage() {
         <>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 24 }}>
             {activeSeeds.map((p) => (
-              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
+              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} drafts={descriptionDrafts.current} />
             ))}
           </div>
 
@@ -1425,7 +1449,7 @@ export default function TopicsPage() {
               {pausedOpen && (
                 <div id="paused-domains-list" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {pausedSeeds.map((p) => (
-                    <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
+                    <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} drafts={descriptionDrafts.current} />
                   ))}
                 </div>
               )}
@@ -1442,7 +1466,7 @@ export default function TopicsPage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {otherDomains.map((p) => (
-              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
+              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} drafts={descriptionDrafts.current} />
             ))}
           </div>
         </section>
