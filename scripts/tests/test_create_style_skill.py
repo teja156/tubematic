@@ -204,7 +204,7 @@ def test_the_cut_detection_command_keeps_showinfos_output():
 
 
 def test_the_rules_say_how_scenes_join():
-    # Each non-final generated scene fades out and the next fades in (CompositionBuilder's DEFAULT_FADE),
+    # Each non-final generated scene fades out and a following generated scene fades in (CompositionBuilder's DEFAULT_FADE),
     # a dip through the canvas at each cut. A hard-cut style that never says so in its guide gets
     # fades on every video (found in the e2e Kasm test).
     rules = (SKILL_DIR / "reference" / "package-rules.md").read_text(encoding="utf-8")
