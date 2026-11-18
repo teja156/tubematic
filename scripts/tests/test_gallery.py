@@ -252,3 +252,80 @@ def test_the_resolver_reads_every_page_of_releases(tmp_path):
         assert "ref=v2.5.3" in out.read_text()
     finally:
         server.shutdown()
+
+
+def _set_pack(styles, sid, **fields):
+    """Rewrites a test package's style.json fields (top level, or `external.<key>`) and its manifest."""
+    p = styles / sid / "style.json"
+    pack = json.loads(p.read_text())
+    for key, value in fields.items():
+        if key.startswith("external_"):
+            pack["external"][key[len("external_"):]] = value
+        else:
+            pack[key] = value
+    p.write_text(json.dumps(pack, indent=1))
+    ext.write_manifest(styles / sid)
+
+
+def test_build_writes_a_page_people_can_browse(tmp_path):
+    """gallery.tubematic.ai showed raw JSON: the build also writes index.html from the same entries."""
+    styles = _styles(tmp_path, "ext_good")
+    site = tmp_path / "site"
+    assert gallery.main(["build", str(styles), str(site), "--base-url", BASE,
+                         "--repo-url", "https://github.com/teja156/tubematic-styles"]) == 0
+    page = (site / "index.html").read_text()
+    entry = json.loads((site / "index.json").read_text())["styles"][0]
+    assert page.startswith("<!doctype html>") and "<script" not in page
+    for value in (entry["name"], entry["id"], entry["version"], entry["author"], entry["sha256"]):
+        assert value in page
+    # its own files by relative path, so the page works at any address
+    assert 'href="archives/ext_good-1.0.0.zip"' in page
+    assert 'src="previews/ext_good.mp4"' in page and 'poster="previews/ext_good.webp"' in page
+    assert 'href="https://github.com/teja156/tubematic-styles/blob/main/SUBMITTING.md"' in page
+    assert "Profiles" in page and "Install from file" in page
+
+
+def test_the_page_escapes_what_a_submitter_wrote(tmp_path):
+    styles = _styles(tmp_path, "ext_good", "ext_link")
+    _set_pack(styles, "ext_good", label='Evil "Style"', tagline="<script>alert(1)</script> & more",
+              external_author="<img src=x onerror=alert(1)>", external_source="javascript:alert(1)")
+    _set_pack(styles, "ext_link", external_source="https://example.com/style")
+    site = tmp_path / "site"
+    assert gallery.main(["build", str(styles), str(site), "--base-url", BASE]) == 0
+    page = (site / "index.html").read_text()
+    assert "<script" not in page and "<img" not in page and "javascript:" not in page
+    assert "&lt;script&gt;alert(1)&lt;/script&gt; &amp; more" in page and "Evil &quot;Style&quot;" in page
+    # only an https homepage becomes a link
+    assert 'href="https://example.com/style"' in page
+
+
+def test_an_empty_gallery_says_so(tmp_path):
+    styles = tmp_path / "styles"
+    styles.mkdir()
+    assert gallery.main(["build", str(styles), str(tmp_path / "site"), "--base-url", BASE]) == 0
+    assert "No styles yet" in (tmp_path / "site" / "index.html").read_text()
+
+
+def test_the_page_is_the_same_on_every_build(tmp_path):
+    styles = _styles(tmp_path, "ext_good")
+    a, b = tmp_path / "a", tmp_path / "b"
+    for site in (a, b):
+        assert gallery.main(["build", str(styles), str(site), "--base-url", BASE]) == 0
+    assert (a / "index.html").read_bytes() == (b / "index.html").read_bytes()
+
+
+def test_the_publish_workflow_links_the_page_to_its_repository():
+    publish = yaml.safe_load((SKELETON / ".github" / "workflows" / "publish.yml").read_text())
+    build_step = next(s for s in publish["jobs"]["build"]["steps"] if s.get("name", "").startswith("Build"))
+    assert '--repo-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"' in build_step["run"]
+
+
+@pytest.mark.parametrize("version", ["../../escape", "1.0/x", "1.0?x", "1.0#x", " 1.0", ""])
+def test_a_version_that_is_not_a_safe_file_name_fails_scan_and_build(tmp_path, capsys, version):
+    """The version names the published archive: a slash or dot-dot wrote outside the site, ? or #
+    broke the download link."""
+    styles = _styles(tmp_path, "ext_good")
+    _set_pack(styles, "ext_good", external_version=version)
+    assert gallery.main(["scan", str(styles)]) == 1
+    assert gallery.main(["build", str(styles), str(tmp_path / "site"), "--base-url", BASE]) == 1
+    assert not list(tmp_path.glob("**/escape*")) and not (tmp_path / "site" / "index.json").exists()

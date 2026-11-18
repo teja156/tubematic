@@ -35,7 +35,8 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   describes it.
 - The Tubematic style gallery, a reviewed collection of styles you install from the **Gallery** tab of
   **Profiles → Styles**. Styles are submitted to it by pull request and reviewed before they are
-  published, and their install screen marks them **REVIEWED**.
+  published, and their install screen marks them **REVIEWED**. You can also browse it at
+  https://gallery.tubematic.ai/.
 - `/tubematic-create-style` in Claude Code and OpenCode makes a new visual style from YouTube or
   Instagram videos you name: it studies their look and motion, builds the style, has you install it,
   renders voiced samples through your install and writes a report. It tells you the cost and the risks
