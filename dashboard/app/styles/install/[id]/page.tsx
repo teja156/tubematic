@@ -112,12 +112,18 @@ export default function InstallScreen() {
         {warning.text}
       </div>
 
-      {rec.replaces && (
-        <p data-testid="install-replaces" style={{ fontSize: 13 }}>
+      {rec.replaces && (rec.replaces.fingerprint && rec.replaces.fingerprint === rec.fingerprint ? (
+        // the same bytes from another source (a gallery copy of a zip install): nothing that renders changes
+        <p data-testid="install-replaces" data-identical="true" style={{ fontSize: 13 }}>
+          This is identical to the installed version {rec.replaces.version || "(no version)"} (the same
+          fingerprint). Installing it changes only where Tubematic records the style came from.
+        </p>
+      ) : (
+        <p data-testid="install-replaces" data-identical="false" style={{ fontSize: 13 }}>
           This replaces the installed version {rec.replaces.version || "(no version)"}
           {inUse ? `, which ${inUse} unfinished video${inUse === 1 ? " uses" : "s use"}: each one is looked at again before it renders` : ""}.
         </p>
-      )}
+      ))}
 
       <SectionLabel label="Checks" />
       <p data-testid="install-check" style={{ fontSize: 13, color: rec.check.ok ? "var(--green)" : "var(--red)" }}>
@@ -181,9 +187,11 @@ export default function InstallScreen() {
       </p>
 
       <SectionLabel label="Guide the agent reads" />
+      {/* A bordered scroll box with room under it: its clipped last line ran into the note below. */}
       <pre data-testid="install-guide" style={{ ...mono, fontSize: 12, whiteSpace: "pre-wrap", maxHeight: 360,
-        overflow: "auto", background: "var(--panel)", padding: 10 }}>{rec.scan.guide}</pre>
-      <p style={{ fontSize: 12, color: "var(--dim)" }}>
+        overflow: "auto", background: "var(--panel)", padding: 10, border: "1px solid var(--border-2)",
+        margin: "0 0 10px" }}>{rec.scan.guide}</pre>
+      <p data-testid="install-guide-note" style={{ fontSize: 12, color: "var(--dim)", margin: 0 }}>
         Your agent reads this as reference material. Tubematic&apos;s rules and checkpoints stay above it, but a guide
         can still try to mislead an agent: read it.
       </p>

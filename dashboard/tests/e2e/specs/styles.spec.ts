@@ -21,6 +21,11 @@ test.describe("External styles", () => {
     await expect(page.getByTestId("install-warning")).toHaveAttribute("data-level", "unreviewed");
     await expect(page.getByTestId("install-check")).toContainText("passes");
     await expect(page.getByTestId("install-guide")).toBeVisible();
+    // the guide's scroll box has an edge and clears the note under it (its clipped last line ran into the note)
+    const guide = await page.getByTestId("install-guide").boundingBox();
+    const note = await page.getByTestId("install-guide-note").boundingBox();
+    expect(guide && note && guide.y + guide.height + 6 <= note.y).toBe(true);
+    expect(await page.getByTestId("install-guide").evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("1px");
 
     await page.getByTestId("install-password").fill("not the password");
     await page.getByTestId("install-confirm").click();
@@ -35,6 +40,16 @@ test.describe("External styles", () => {
 
     const styles = await (await page.request.get("/api/proxy/visual-styles")).json();
     expect(styles.styles.some((s: { id: string; available: boolean }) => s.id === "ext_e2e_cards" && s.available)).toBe(true);
+
+    // the same zip again is the same bytes: the screen says identical, not "replaces"
+    await page.getByTestId("styles-tab-file").click();
+    await page.getByTestId("zip-input").setInputFiles(ZIP);
+    await page.waitForURL(/\/styles\/install\/[0-9a-f]{16}$/);
+    const replaces = page.getByTestId("install-replaces");
+    await expect(replaces).toHaveAttribute("data-identical", "true");
+    await expect(replaces).toContainText("identical to the installed version");
+    await page.getByTestId("install-discard").click();
+    await page.waitForURL(/\/styles$/);
 
     page.once("dialog", (d) => d.accept());
     await row.getByTestId("remove-style").click();

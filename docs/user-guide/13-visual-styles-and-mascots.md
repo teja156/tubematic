@@ -393,7 +393,10 @@ again and approve it with your password. A package you copy into `~/.tubematic-d
 waits for the same review.
 
 Installing a newer version of a style replaces the old one. Videos already queued with the old
-version are not rendered with the new one: they go back for a fresh look first.
+version are not rendered with the new one: they go back for a fresh look first. A package identical to the
+one installed (for example the gallery's copy of a version you installed from a zip) is marked as
+identical on the install screen: installing it changes only where Tubematic records the style came
+from.
 
 ### Removing an external style
 

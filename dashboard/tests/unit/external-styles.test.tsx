@@ -122,6 +122,28 @@ describe("the install screen", () => {
     expect(screen.getByTestId("install-warning").getAttribute("data-level")).toBe("reviewed");
   });
 
+  it("says a package identical to the installed one is identical, and names what a different one replaces", async () => {
+    // the same bytes from another source (a gallery copy of a zip install) used to read "replaces the installed version"
+    mockFetch({ "/external-styles/pending/0123456789abcdef": { body: {
+      ...PENDING, replaces: { version: "1.0.0", fingerprint: "abc" },
+      in_use: { videos: [{ id: "v1" }, { id: "v2" }], domains: [] } } } });
+    const { unmount } = render(<InstallScreen />);
+    await act(async () => {});
+    const same = screen.getByTestId("install-replaces");
+    expect(same.getAttribute("data-identical")).toBe("true");
+    expect(same.textContent).toMatch(/identical to the installed version 1\.0\.0/);
+    expect(same.textContent).not.toMatch(/replaces/);
+    unmount();
+
+    mockFetch({ "/external-styles/pending/0123456789abcdef": { body: {
+      ...PENDING, replaces: { version: "0.9.0", fingerprint: "old" } } } });
+    render(<InstallScreen />);
+    await act(async () => {});
+    const other = screen.getByTestId("install-replaces");
+    expect(other.getAttribute("data-identical")).toBe("false");
+    expect(other.textContent).toMatch(/replaces the installed version 0\.9\.0/);
+  });
+
   it("says when the install no longer waits", async () => {
     mockFetch({ "/external-styles/pending/": { status: 404, body: { error: "no such pending install (it may have expired)" } } });
     render(<InstallScreen />);

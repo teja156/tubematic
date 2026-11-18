@@ -244,9 +244,12 @@ Covers external styles against the real API, with `fixtures/ext_e2e_cards.zip`, 
 package.
 
 - **Install from file** stages the zip and opens the install screen, which shows the unreviewed
-  warning, a passing check and the guide.
+  warning, a passing check and the guide. The guide's scroll box has a border and ends clear of the
+  note under it, measured in the browser (its clipped last line once ran into the note).
 - A wrong password is refused on the screen; the dashboard password installs the style, which the
   Styles page lists with the EXTERNAL tag and `GET /visual-styles` lists as available.
+- The same zip staged again shows as identical to the installed version, not as replacing it, and
+  **Discard** returns to the Styles page.
 - **Remove** deletes it.
 - An install that is not waiting says so.
 
