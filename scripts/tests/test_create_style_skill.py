@@ -201,3 +201,16 @@ def test_the_cut_detection_command_keeps_showinfos_output():
             if ln.startswith("ffmpeg ") and "select='gt(scene," in ln and "showinfo" in ln and "pts_time" in ln]
     assert len(cmds) == 1, cmds
     assert not re.search(r"-(v|loglevel)\s+(quiet|panic|fatal|error|warning)\b", cmds[0]), cmds[0]
+
+
+def test_the_rules_say_how_scenes_join():
+    # Each non-final generated scene fades out and a following generated scene fades in (CompositionBuilder's DEFAULT_FADE),
+    # a dip through the canvas at each cut. A hard-cut style that never says so in its guide gets
+    # fades on every video (found in the e2e Kasm test).
+    rules = (SKILL_DIR / "reference" / "package-rules.md").read_text(encoding="utf-8")
+    src = (REPO / "renderer" / "remotion" / "src" / "CompositionBuilder.tsx").read_text(encoding="utf-8")
+    fade = re.search(r"const DEFAULT_FADE = (\d+);", src).group(1)
+    assert '"transitionToNext": {"durationInFrames": 0}' in rules
+    assert f"{fade} frames" in rules
+    # the fade shows the canvas, which is not always black
+    assert "canvas colour" in rules
