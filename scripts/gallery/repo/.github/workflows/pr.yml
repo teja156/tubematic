@@ -33,8 +33,11 @@ jobs:
           python-version: "3.12"
       - name: The submissions this pull request touches
         id: changed
+        env:
+          # the event's own commits: a fork's checkout has no origin/<base> branch to diff against
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          ids=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- styles/ \
+          ids=$(git diff --name-only "$BASE_SHA" HEAD -- styles/ \
                 | sed -E 's#^styles/([^/]+).*#\1#; s#\.json$##' | sort -u | paste -sd, -)
           echo "ids=$ids" >> "$GITHUB_OUTPUT"
       - name: Check and scan them as an install does

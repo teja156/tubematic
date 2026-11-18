@@ -197,7 +197,7 @@ def render(args) -> int:
         script = (f"ffmpeg -v error -y -f lavfi -i anullsrc=r=44100:cl=mono -t {seconds:.2f} -q:a 9 "
                   f"/app/remotion/public/{vid}/audio.mp3 && cd /app/remotion && "
                   f"npx remotion render Composition /out/{out.name} --props '{props}' "
-                  f"--browser-executable-path /usr/bin/chromium")
+                  f"--browser-executable /usr/bin/chromium")
         cmd = ["docker", "run", "--rm",
                "-e", f"TUBEMATIC_EXTERNAL_STYLE={sid}", "-e", f"TUBEMATIC_RENDER_VIDEO={vid}",
                "-v", f"{pkg}:/app/remotion/src/scenes/external/{sid}:ro",

@@ -110,6 +110,8 @@ def test_the_skeletons_workflows_call_the_tools_that_exist():
     pr = yaml.safe_load((SKELETON / ".github" / "workflows" / "pr.yml").read_text())
     runs = " ".join(s.get("run", "") for job in pr["jobs"].values() for s in job["steps"])
     assert "gallery.py scan styles --only" in runs and "gallery.py render" in runs
+    # a fork has no origin/<base> branch: the diff is against the event's base commit
+    assert '"$BASE_SHA" HEAD' in runs and "origin/" not in runs
     for job in pr["jobs"].values():
         assert job["runs-on"] == "ubuntu-24.04"
 
@@ -139,3 +141,9 @@ def test_render_makes_a_video_of_a_scene_styles_example(tmp_path):
                            "--image", os.environ["TUBEMATIC_GALLERY_RENDER_IMAGE"]], capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr[-2000:]
     assert out.stat().st_size > 1000
+
+
+def test_render_names_the_browser_with_the_flag_remotion_reads():
+    """--browser-executable-path is ignored by the Remotion CLI (renderer/api/tests/test_gpu_rendering.py)."""
+    src = (REPO / "scripts" / "gallery.py").read_text()
+    assert "--browser-executable /usr/bin/chromium" in src and "--browser-executable-path" not in src
