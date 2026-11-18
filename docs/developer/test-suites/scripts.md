@@ -868,6 +868,30 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
 Trap: an install trusts the index's checksum. A build that wrote different bytes each time would
 publish an index whose checksums a reviewer never saw.
 
+### `test_create_style_skill.py`
+
+Covers `agent_files/skills/tubematic-create-style/`, the style creation skill, its template, scripts
+and command.
+
+- The disclaimer is Step 0, comes before any command or tool, names the cost, scraping, a throwaway
+  account, what never ships and who installs, and stops without a yes.
+- No command in the skill installs anything, and it warns that `pip install agent-reach` installs a
+  different project.
+- Every tool it names exists. Downloads are capped at 12, one at a time, paced and untrusted, and a
+  cookie store is never read. The sample's cost is said before `create_video`, and the person
+  installs on the dashboard without giving the password.
+- The template, with placeholder previews and the skill's `manifest.py`, passes the loader's check
+  with a clean scan; its example config matches its schema; `manifest.py` writes what the loader
+  expects and refuses a symlink; `zip_package.py`'s zip stages on another install.
+- `reference/package-rules.md` names every allowed import and every scene API v1 export.
+- It stages only a copy it just made: a missing package stops it before the old copy is staged.
+- Every palette the template's schema allows is dark, since its captions are white with no
+  background.
+- The command starts the skill with its disclaimer, for both agents.
+
+Trap: the skill runs on a person's machine with their accounts. The order (disclaimer, check, study,
+build, stage, install, samples) is what keeps it from spending or downloading before they agreed.
+
 ### `test_install_style_command.py`
 
 Covers `/tubematic-install-style`, the agent command that stages an external style.

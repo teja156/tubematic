@@ -363,6 +363,25 @@ request there with the package folder, or with a pointer to your own repository 
 checklist, and merging publishes it to every Tubematic's **Gallery** tab. The **Gallery** tab reads
 the address in its **Gallery address** field; clear it to turn the gallery off.
 
+### Making your own style
+
+In Claude Code or OpenCode, run `/tubematic-create-style` followed by the videos, channels or accounts
+whose look you want (YouTube or Instagram). The agent first tells you what it costs and the risks of
+downloading from those sites, and does nothing until you agree. Then it:
+
+1. checks that `yt-dlp`, `ffmpeg` and `ffprobe` (which comes with ffmpeg) are installed (it never installs anything; install them yourself
+   if it asks);
+2. downloads a few of the videos, one at a time, and studies their look and motion;
+3. builds a style package and stages it, so you get an install screen link like any other install;
+4. after you install it, files one or two sample videos in a **Style samples** domain. You approve
+   their topic and script as usual, and the voicing is charged to your ElevenLabs account;
+5. writes a report at `~/tubematic-style-studio/<style id>/report/index.html` with what it studied,
+   what it built and the samples, and changes the style on your feedback.
+
+Instagram usually needs a login: the agent asks you for a cookies file from a throwaway account and
+never reads your browser. The reference videos stay in `~/tubematic-style-studio/` on your machine and
+are never part of the style. Ask the agent for a zip when you want to share the style.
+
 ### Using an external style
 
 Pick it like any style for a video or as a domain's default. **Auto** never picks an external style

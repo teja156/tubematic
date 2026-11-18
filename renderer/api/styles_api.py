@@ -160,7 +160,7 @@ def create_styles_blueprint(db_path: str, throttle) -> Blueprint:
         """The human yes. Needs the dashboard password; see the module docstring."""
         password = (request.get_json(silent=True) or {}).get("password")
         if not isinstance(password, str) or not password or len(password) > 1024:
-            return _err("Enter your dashboard password to install a style.", 401)
+            return _err("Enter your dashboard password to install a style.", 400)
         wait = throttle.begin()
         if wait:
             return (jsonify({"error": f"too many password attempts; try again in {wait}s"}),
@@ -172,7 +172,8 @@ def create_styles_blueprint(db_path: str, throttle) -> Blueprint:
         finally:
             throttle.finish(ok)
         if not ok:
-            return _err("wrong password", 401)
+            # 403, never 401: the dashboard's proxy reads a 401 as its own token being refused
+            return _err("wrong password", 403)
         try:
             result = tinstall.confirm(pid)
         except tinstall.InstallError as exc:

@@ -85,8 +85,11 @@ def test_staging_a_zip_shows_the_scan_and_installs_nothing(env):
 def test_confirm_needs_the_dashboard_password_and_the_token_alone_cannot_install(env):
     rec = _stage(env)
     url = f"/external-styles/pending/{rec['id']}/confirm"
-    assert env.client.post(url, json={}).status_code == 401
-    assert env.client.post(url, json={"password": "wrong"}).status_code == 401
+    # never 401: the dashboard's proxy reads a 401 as "the API refused my token" and
+    # would hide "wrong password" behind that (found by styles.spec.ts)
+    assert env.client.post(url, json={}).status_code == 400
+    r = env.client.post(url, json={"password": "wrong"})
+    assert r.status_code == 403 and r.get_json()["error"] == "wrong password"
     assert not (env.styles / "ext_test").exists()
     r = env.client.post(url, json={"password": PASSWORD})
     assert r.status_code == 200, r.get_json()

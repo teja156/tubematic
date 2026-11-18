@@ -14,8 +14,8 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 ### Upgrade notes
 
 1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode) after you
-   upgrade. The agent gets a new command, `/tubematic-install-style`, and new tools, and a session
-   started before the upgrade does not have them.
+   upgrade. The agent gets new commands, `/tubematic-create-style` and `/tubematic-install-style`, a
+   new skill and new tools, and a session started before the upgrade does not have them.
 2. Going back to 2.3.x after this upgrade needs the database backup the upgrade took: 2.3.x refuses
    to start on this version's database. Follow the
    [rollback policy](https://docs.tubematic.ai/user-guide/upgrading#rollback-policy). Videos in an
@@ -32,6 +32,12 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   every style list with an **EXTERNAL** tag. Auto never picks one until you allow it on the Styles
   page. A package changed after you installed it stops being used until you review it again.
   [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#external-styles)
+  describes it.
+- `/tubematic-create-style` in Claude Code and OpenCode makes a new visual style from YouTube or
+  Instagram videos you name: it studies their look and motion, builds the style, has you install it,
+  renders voiced samples through your install and writes a report. It tells you the cost and the risks
+  of downloading first, and installs nothing on your machine.
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#making-your-own-style)
   describes it.
 - `/tubematic-install-style` in Claude Code and OpenCode stages a style from a folder, a zip, a git
   repository or the gallery, reads its code, writes its opinion onto the install screen and gives you

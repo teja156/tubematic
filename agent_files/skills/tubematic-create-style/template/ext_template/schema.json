@@ -1,0 +1,27 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "Template card props (props.card of every ext_template scene)",
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["title", "lines", "lineAt", "palette"],
+ "properties": {
+  "title": {
+   "description": "The beat's headline: the one idea of the beat in at most 5 words. Fits 900 px at 64-132 px.",
+   "type": "string", "minLength": 1, "maxLength": 32
+  },
+  "lines": {
+   "description": "Up to three short lines that land on their words; each fits one line at 58 px.",
+   "type": "array", "minItems": 0, "maxItems": 3,
+   "items": {"type": "string", "minLength": 1, "maxLength": 26}
+  },
+  "lineAt": {
+   "description": "Frame of the scene (from its start) on which each line appears: one per line, rising.",
+   "type": "array", "maxItems": 3,
+   "items": {"type": "integer", "minimum": 0}
+  },
+  "palette": {
+   "description": "The card's colours: ink (charcoal), ember (dark red-brown) or signal (navy), all dark under the white captions. Keep one palette per video.",
+   "enum": ["ink", "ember", "signal"]
+  }
+ }
+}
