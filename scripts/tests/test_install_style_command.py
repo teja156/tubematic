@@ -23,7 +23,8 @@ def test_both_agents_get_the_same_command():
 def test_it_stages_audits_and_hands_over_the_link():
     body = CLAUDE.read_text()
     named = set(re.findall(r"tubematic:(\w+)\(", body))
-    assert named == {"stage_style_install", "audit_style_install"} and named <= _tools()
+    # the staged copy is read through MCP: the agent workspace denies Read on ~/.tubematic-data
+    assert named == {"stage_style_install", "read_style_install_file", "audit_style_install"} and named <= _tools()
     for form in ('"incoming:<name>"', '"git:<https url>@<commit or tag>"', '"gallery:<id>"', "dashboard_link",
                  "~/.tubematic-data/styles-incoming/"):
         assert form in body, form

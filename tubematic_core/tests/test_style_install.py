@@ -398,3 +398,14 @@ def test_an_incoming_folder_with_too_many_directories_is_refused(dirs, monkeypat
         (d / f"d{i}").mkdir(parents=True)
     with pytest.raises(si.InstallError, match="over 5 files and folders"):
         si.stage({"kind": "incoming", "name": "many"})
+
+
+def test_read_file_takes_an_extensionless_file_only_when_it_is_a_licence(dirs):
+    pkg = make_package(dirs.src, approve=False)
+    (pkg / "LICENSE").write_text("MIT License\n")
+    (pkg / "blob").write_bytes(b"\x00\xff")
+    ext.write_manifest(pkg)
+    rec = si.stage({"kind": "zip", "data": _zip(pkg)})
+    assert si.read_file(rec["id"], "LICENSE").startswith("MIT")
+    with pytest.raises(si.InstallError):
+        si.read_file(rec["id"], "blob")

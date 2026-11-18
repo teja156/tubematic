@@ -898,7 +898,8 @@ Covers `/tubematic-install-style`, the agent command that stages an external sty
 
 - The Claude Code and OpenCode copies are the same file, and `tubematic.md` lists the command for
   both.
-- It names `stage_style_install` and `audit_style_install` only, both real tools, with the three
+- It names `stage_style_install`, `read_style_install_file` and `audit_style_install` only, all real
+  tools, with the three
   source forms, the incoming folder and the dashboard link.
 - It never asks for the dashboard password, never picks a branch for the person, and never runs
   anything from the package.

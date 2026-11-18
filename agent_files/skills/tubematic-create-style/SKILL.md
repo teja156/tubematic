@@ -176,9 +176,10 @@ copy in `styles-incoming/` is an old one, so fix the package path first. Read `c
   stage replaces the older one of the same style).
 - Each flag: fix it, or note in the log why it is harmless (the person sees every flag).
 
-When it stages clean, audit your own package as `/tubematic-install-style` does (read every file at
-`host_path`) and record it with `tubematic:audit_style_install(pending_id, verdict, notes)`; say in
-the notes that you wrote this package. Remove your copy in `styles-incoming/`.
+When it stages clean, audit your own package as `/tubematic-install-style` does (read the staged files
+with `tubematic:read_style_install_file(pending_id, path)`; your file tools cannot read the data folder)
+and record it with `tubematic:audit_style_install(pending_id, verdict, notes)`; say in the notes that
+you wrote this package. Remove your copy in `styles-incoming/`.
 
 ## Step 7: the person installs it
 
