@@ -204,7 +204,9 @@ data folder:
   with no licence file.
 - One broken package leaves the others available.
 - The registry sees a package added or rewritten without a restart, and the fingerprint changes with
-  any file.
+  any file. `check_now` sees a file edited in place, which the registry's cache does not.
+- `config_style` reads the external style a scene-config draws from its first external scene, and
+  returns `""` for a config with none or with a malformed id.
 - The style lookups see installed styles: `pack`, `is_known_style`, `is_main_style`,
   `is_world_style`, `fixed_canvas`, `hosts_inserts`, `public_list` (with `external` set and a broken
   package unavailable with its reason) and `agent_view` (the generic authoring skill and the

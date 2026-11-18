@@ -265,9 +265,16 @@ videos.
 | `illustrated_available` | `true` when an OpenAI key is stored, which Illustrated, Under the Hood, Case File Story, Archive and Engraving, Editorial Collage and Storybook Reveal need. The key is not returned |
 | `cartoon_3d_available`, `mascots_available` | `true` while some renderer's GPU test passed (`renderers.py::gpu_status` says `working`) |
 | `mascot` | `{id, name, version}` or `null` |
-| `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows, script, picture, role, inserts, external}`, plus `props_key` for an [external style](10-scene-authoring.md#external-styles). Under `auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config`, `script` is `""` and `picture` is the mixed scenes' block |
+| `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it. See [below](#the-style-field) |
 | `style_routing` | The style decision `auto` makes before the script: `{decided, pick, runner_up, reason, candidates, domain}`. See [How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style) |
 | `formula_routing` | The formula decision made before the script: `{decided, pick, runner_up, reason, choice, candidates, recent, learned}`. See [How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked) |
+
+#### The `style` field
+
+`style` is `{id, label, renderer, canvas, authoring_skill, allows, script, picture, role, inserts,
+external}`, plus `props_key` for an [external style](10-scene-authoring.md#external-styles). Under
+`auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config`, `script`
+is `""` and `picture` is the mixed scenes' block.
 
 At `VOICE_READY` the operator skill invokes the skill named in `style.authoring_skill`.
 
