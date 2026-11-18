@@ -24,6 +24,7 @@ gallery's CI checks out Tubematic and runs:
         rendered by hand: exit code 3. Any other failure exits 1.
 """
 import argparse
+import base64
 import hashlib
 import html
 import io
@@ -145,33 +146,81 @@ def deterministic_zip(pkg: pathlib.Path, sid: str) -> bytes:
     return buf.getvalue()
 
 
+# The dashboard's look (dashboard/app/globals.css: its CRT tokens, Space Mono and Inter, square
+# corners, amber section marks). Copied, since the page ships without the dashboard; the tokens are
+# pinned to globals.css by scripts/tests/test_gallery.py.
 _PAGE_CSS = """
-:root { --bg: #f6f5f1; --card: #fff; --ink: #1d1c19; --muted: #66625a; --rule: #dcd8ce; --accent: #b86a00; }
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #12110f; --card: #1b1a17; --ink: #ece8df; --muted: #a39d90; --rule: #34312b; --accent: #f0a23a; color-scheme: dark; }
+:root {
+  --bg: #08090d; --panel: #0c1018; --panel-2: #11151f; --border: #1c2330; --border-2: #2a3344;
+  --ink: #e6e8ec; --ink-2: #b6bdca; --dim: #939cae; --mute: #7d869a; --amber: #f5a623;
+  --amber-soft: rgba(245, 166, 35, 0.16);
+  --mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
-main { max-width: 1120px; margin: 0 auto; padding: 40px max(16px, env(safe-area-inset-left)) 64px; }
-h1 { font-size: 2rem; margin: 0 0 8px; }
-.lede, .how { max-width: 70ch; color: var(--muted); }
-a { color: var(--accent); }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; margin-top: 28px; }
-.card { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; display: grid; min-width: 0; }
-.card video { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; background: #000; display: block; }
-.body { padding: 14px 16px 16px; display: grid; gap: 6px; min-width: 0; }
-.body h2 { font-size: 1.1rem; margin: 0; }
-.meta, .sum { font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); overflow-wrap: anywhere; }
-.body p { margin: 0; }
-.empty { margin-top: 28px; color: var(--muted); }
-footer { margin-top: 40px; color: var(--muted); font-size: 14px; }
+::selection { background: var(--amber); color: #000; }
+body {
+  margin: 0; color: var(--ink); font: 15px/1.6 var(--sans); -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(1400px 800px at 80% -10%, rgba(245, 166, 35, 0.04), transparent 60%),
+    radial-gradient(1100px 700px at -10% 110%, rgba(95, 163, 255, 0.03), transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9999; opacity: 0.6;
+  background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.012) 0, rgba(255, 255, 255, 0.012) 1px, transparent 1px, transparent 3px);
+}
+a { color: var(--amber); }
+a:focus-visible { outline: 1px solid var(--amber); outline-offset: 2px; }
+header {
+  display: flex; align-items: center; gap: 14px; height: 56px; border-bottom: 1px solid var(--border);
+  padding: 0 max(16px, env(safe-area-inset-left)); background: rgba(8, 9, 13, 0.85);
+}
+.brand { display: flex; align-items: center; gap: 12px; font: 700 17px var(--mono); letter-spacing: 0.02em; }
+.brand img { width: 36px; height: 36px; display: block; }
+.divider { width: 1px; height: 18px; background: var(--border-2); }
+.crumb { font: 12px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber); }
+main { max-width: 1240px; margin: 0 auto; padding: 32px max(16px, env(safe-area-inset-left)) 64px; }
+h1 { font: 400 18px var(--mono); margin: 0 0 10px; letter-spacing: 0.02em; }
+.lede { max-width: 78ch; color: var(--dim); margin: 0 0 10px; }
+.how { max-width: 78ch; color: var(--ink-2); margin: 0; padding: 12px 14px; border: 1px solid var(--border); background: var(--panel); }
+.how b { color: var(--ink); font-weight: 600; }
+.label { display: flex; align-items: center; gap: 14px; margin: 32px 0 16px; font: 10.5px var(--mono);
+  letter-spacing: 0.22em; text-transform: uppercase; color: var(--mute); }
+.label .mark { color: var(--amber); margin-right: -8px; }
+.label .rule { flex: 1; height: 1px; background: linear-gradient(to right, var(--border) 0, var(--border) 60%, transparent); }
+.label .count { color: var(--ink-2); letter-spacing: 0.18em; padding: 2px 8px; border: 1px solid var(--border-2); background: var(--panel); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--border); display: grid; align-content: start; min-width: 0; }
+.card:hover { border-color: var(--border-2); }
+.card video { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; background: #000; display: block; border-bottom: 1px solid var(--border); }
+.body { padding: 12px 12px 14px; display: grid; gap: 6px; min-width: 0; }
+.body h2 { font: 600 15px var(--sans); margin: 0; }
+.meta, .sum { font: 11.5px/1.55 var(--mono); color: var(--dim); overflow-wrap: anywhere; }
+.sum { color: var(--mute); }
+.body p { margin: 0; font-size: 14px; color: var(--ink-2); }
+.btn { justify-self: start; margin-top: 4px; font: 11px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--amber); border: 1px solid var(--amber); padding: 6px 12px; text-decoration: none; }
+.btn:hover { background: var(--amber-soft); }
+.empty { color: var(--dim); font-family: var(--mono); }
+footer { margin-top: 40px; color: var(--mute); font: 12px var(--mono); }
 """
 
 
+def _logo_uri() -> str:
+    """The dashboard's logo mark, as an image (its own SVG ids stay inside it). Empty when this
+    checkout has no dashboard."""
+    path = REPO_ROOT / "dashboard" / "public" / "logo-mark.svg"
+    return ("data:image/svg+xml;base64," + base64.b64encode(path.read_bytes()).decode()) if path.is_file() else ""
+
+
 def render_page(entries: list[dict], repo_url: str = "") -> str:
-    """The gallery's browsable page (index.html), from the same entries as index.json. Static and
-    script-free. Every package field is a submitter's text, so all of it is escaped, and a homepage
-    is linked only when it is an https address. Paths are relative, so the page works at any address."""
+    """The gallery's browsable page (index.html), from the same entries as index.json, in the
+    dashboard's look. Static and script-free. Every package field is a submitter's text, so all of
+    it is escaped, and a homepage is linked only when it is an https address. Paths are relative,
+    so the page works at any address."""
     e = lambda s: html.escape(str(s), quote=True)  # noqa: E731
     cards = []
     for s in entries:
@@ -183,29 +232,38 @@ def render_page(entries: list[dict], repo_url: str = "") -> str:
         cards.append(
             f'<article class="card" id="{e(s["id"])}">'
             f'<video src="previews/{e(s["id"])}.mp4" poster="previews/{e(s["id"])}.webp" '
-            f'muted loop autoplay playsinline preload="none"></video>'
+            f'muted loop autoplay playsinline preload="none" aria-label="Preview of {e(s["name"])}"></video>'
             f'<div class="body"><h2>{e(s["name"])}</h2>'
-            f'<div class="meta">{e(s["id"])} · {e(s["version"])} · by {e(s["author"])} · licence {e(s["licence"])}</div>'
+            f'<div class="meta">{e(s["id"])} · {e(s["version"])} · {e(s["author"])} · {e(s["licence"])}</div>'
             f'<p>{e(s["tagline"])}</p>'
             f'<div class="meta">{e(needs)}{home}</div>'
-            f'<div class="meta"><a href="archives/{e(archive)}" download>Download the zip</a></div>'
+            f'<a class="btn" href="archives/{e(archive)}" download>Download zip</a>'
             f'<div class="sum">sha256 {e(s["sha256"])}</div></div></article>')
     listing = (f'<div class="grid">{"".join(cards)}</div>' if cards
                else '<p class="empty">No styles yet.</p>')
     submit = (f' To add a style, read <a href="{e(repo_url.rstrip("/"))}/blob/main/SUBMITTING.md">the submission guide</a>.'
               if re.fullmatch(r"https://[^\s\"'<>]+", repo_url or "") else "")
+    logo = _logo_uri()
+    mark = f'<img src="{logo}" alt="">' if logo else ""
     return (
         "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
         "<title>Tubematic style gallery</title>"
-        f"<style>{_PAGE_CSS}</style></head><body><main>"
-        "<h1>Tubematic style gallery</h1>"
+        + (f'<link rel="icon" href="{logo}">' if logo else "")
+        + "<link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700"
+        "&amp;family=Inter:wght@400;500;600&amp;display=swap\">"
+        f"<style>{_PAGE_CSS}</style></head><body>"
+        f'<header><div class="brand">{mark}<span>TUBEMATIC</span></div><div class="divider"></div>'
+        '<div class="crumb">Style gallery</div></header><main>'
+        "<h1>External styles</h1>"
         "<p class=\"lede\">Visual styles for Tubematic, each reviewed by a maintainer before it was published. "
         "A style is code that runs in Tubematic's renderer: a review lowers the risk of installing one, "
         "it does not remove it.</p>"
         "<p class=\"how\">To install one, open your Tubematic dashboard and go to <b>Profiles</b> → <b>Styles</b> "
         "→ <b>Gallery</b>. Or download its zip and use <b>Install from file</b> there. Either way, Tubematic "
         f"checks the download against its sha256 and shows you the package before it installs.{submit}</p>"
+        f'<div class="label"><span class="mark">▌</span><span>Styles</span><div class="rule"></div>'
+        f'<span class="count">{len(entries)}</span></div>'
         f"{listing}"
         "<footer>The machine-readable list is <a href=\"index.json\">index.json</a>.</footer>"
         "</main></body></html>\n")

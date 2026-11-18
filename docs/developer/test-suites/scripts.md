@@ -861,6 +861,9 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
   relative path, the same bytes on every build, "No styles yet" when empty, no script, every field a
   submitter wrote escaped, and a homepage linked only when it is an https address. The publish
   workflow passes the repository, so the page links its submission guide.
+- The page wears the dashboard's look: its colour tokens equal `dashboard/app/globals.css`'s (they
+  are copied into `scripts/gallery.py`, since the page ships without the dashboard), with the same
+  fonts and the dashboard's logo mark.
 - The official gallery address is the one the skeleton's publish workflow builds for, and the
   skeleton's PR workflow calls `scan` and `render` on `ubuntu-24.04`, diffs against the event's base
   commit (a fork has no `origin/<base>`), refuses a changed path that is not a style id's folder or
