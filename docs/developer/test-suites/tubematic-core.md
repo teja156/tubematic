@@ -190,6 +190,25 @@ Trap: the preview caps are part of every install's download, since the dashboard
 files. Raise one only after weighing that cost; `scripts/make_style_preview.py` encodes a loop
 again at a lower quality until it fits.
 
+### `test_external_styles.py`
+
+Covers `tubematic_core/external_styles.py`, the loader for style packages installed in the styles
+data folder:
+
+- A valid scene package and a valid world package that needs a GPU both load.
+- Every broken package loads as unavailable with a reason: an id outside the `ext_` namespace or
+  different from its folder, invalid JSON, a pack the built-in check refuses, a pack that hosts
+  inserts, takes a mascot, names another authoring skill or another `scene_api`, a file that differs
+  from `MANIFEST.json` or is missing from it, a symlink inside the package or as the package folder, a
+  missing required file or code folder, a schema that is not an object, an oversize preview, and fonts
+  with no licence file.
+- One broken package leaves the others available.
+- The registry sees a package added or rewritten without a restart, and the fingerprint changes with
+  any file.
+
+Trap: a package comes from outside the release, so the loader never raises. A broken built-in pack
+stops the process at start-up; a broken package must leave every other style working.
+
 ### `test_angles.py`
 
 Covers `tubematic_core/angles.py`, the kinds and score of a
