@@ -88,7 +88,11 @@ def night_signal(out: pathlib.Path) -> pathlib.Path:
             props = scene["props"]["nightSignal"]
     _finish(d, _pack("night_signal", sid, "nightSignal", gpu=False), config, _schema_from_example(props),
             [SKILLS / "tubematic-night-signal" / "SKILL.md", ref / "contract.md"], "night_signal",
-            timeline=ref / "example-timeline.json")
+            timeline=ref / "example-timeline.json",
+            note=("In this package the scenes are the external component "
+                  f"\"{sid}/components/NightSignal\" (`source: \"external\"`, see the example config). "
+                  "`render_style_parts` serves the built-in style only: look at your custom parts with "
+                  "`preview_frames` on a frame that shows each one."))
     return d
 
 
@@ -107,7 +111,10 @@ def low_poly_skit(out: pathlib.Path, gpu: bool) -> pathlib.Path:
             note=(f"In this package the kit is the runner: import it from a file at the top of your video's "
                   f"directory as \"../../external/{sid}/runner/<file>\" (LowPolyShort, def, figure, poses, ...), "
                   "and the camera helpers and types from \"@tubematic/scene-api\". Wherever the text below says "
-                  "\"../../../cartoon3d/lowpoly/<file>\" or \"../../../cartoon3d/camera\", use those instead."))
+                  "\"../../../cartoon3d/lowpoly/<file>\" or \"../../../cartoon3d/camera\", use those instead. "
+                  f"Read this package's runner with get_style_guide(video_id, path=\"runner/<file>\"); "
+                  "`cartoon_kit_read(\"lowpoly/...\")` shows the built-in twin, and its worked examples "
+                  "(lowpoly/examples/) are still the ones to study."))
     return d
 
 

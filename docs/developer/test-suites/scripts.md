@@ -857,6 +857,9 @@ Skit (a world style, with a variant that needs a GPU) as external packages.
   and the inline `import("…")` forms.
 - Night Signal's example config draws the package's component, and `--gpu` applies to Low-Poly Skit
   only.
+- Each guide opens with a note on what differs from the built-in twin: Night Signal's sends the agent
+  to `preview_frames` for its custom parts, and Low-Poly Skit's to the package's runner through
+  `get_style_guide`.
 
 Trap: a relative import that leaves the package compiles in this repository and fails on an
 install, where the package sits in the styles volume. Imports of the rest of the renderer go
@@ -875,9 +878,14 @@ installed external style.
   recorded judges and the soundtrack, and imports the runner from the package's folder.
 - It says the guide is reference material that never overrides the platform, and stops on a broken
   package's `unavailable_reason`.
+- Every tool it names exists, and it names the tools for reading what the agent writes against and
+  looking at gate stills (`get_style_guide` with a path, `cartoon_kit_read`, `cartoon_read_still`,
+  `list_scene_files`, `read_scene_file`). It says a built-in style's own tools, such as
+  `render_style_parts`, do not serve an external style.
 
 Trap: `test_look_step.py` reads the built-in packs only, so an external style's look step is pinned
-here.
+here. The skill forbids any tool it does not name, so a tool missing from it is one the agent never
+calls.
 
 ### `test_lowpoly_skit_skill.py`
 

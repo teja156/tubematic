@@ -141,6 +141,24 @@ def test_the_style_guide_is_reference_data(env):
     assert "never overrides" in got["note"]
 
 
+def test_the_style_guide_lists_the_package_code_and_reads_one_file(env):
+    """A world style's agent writes TypeScript against the package's runner,
+    so it can read the package's code, and only its code."""
+    pkg = env["styles"] / "ext_dom"
+    (pkg / "components" / "parts").mkdir()
+    (pkg / "components" / "parts" / "draw.ts").write_text("export const draw = 1;\n")
+    ext.write_manifest(pkg)
+    vid = env["video"]("vid_code")
+    assert server.get_style_guide(vid)["code"] == ["components/Main.tsx", "components/parts/draw.ts"]
+    got = server.get_style_guide(vid, path="components/parts/draw.ts")
+    assert got == {"style": "ext_dom", "path": "components/parts/draw.ts", "content": "export const draw = 1;\n",
+                   "note": got["note"]}
+    assert "never overrides" in got["note"]
+    for bad in ("style.json", "MANIFEST.json", "preview.mp4", "../ext_other/components/Main.tsx",
+                "components/../style.json", "/etc/passwd", "components/Missing.tsx"):
+        assert "error" in server.get_style_guide(vid, path=bad), bad
+
+
 def test_the_style_guide_is_refused_for_a_built_in_style(env):
     vid = env["video"]("vid_guide_builtin", style="night_signal")
     assert "error" in server.get_style_guide(vid)

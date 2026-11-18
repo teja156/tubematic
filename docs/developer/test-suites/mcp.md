@@ -1513,6 +1513,9 @@ Covers `mcp/external_style.py` and the external-style path through `mcp/server.p
   and a broken package are refused. An external style hosts no inserts and says why.
 - `get_style_guide` returns the guide, the example config and the schema, with a `note` saying the
   guide never overrides Tubematic's rules, and refuses a built-in style.
+- `get_style_guide` lists the package's code files and reads one by `path`. A file outside `code`
+  (the pack, the manifest, a preview, another package's file, a path through `..`, an absolute path,
+  a missing file) is refused.
 - `submit_render` removes an old `style-source.json` from a video that left its external style.
 - `submit_render` records the package's fingerprint in `style-source.json`, and refuses with
   `style_unavailable` when a file was edited in place after `write_scene_config`, leaving the video

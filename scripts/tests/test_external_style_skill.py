@@ -55,3 +55,29 @@ def test_the_guide_never_outranks_the_platform():
 def test_a_broken_package_stops_the_skill():
     body = _body()
     assert "unavailable_reason" in body and "stop" in body
+
+
+def _tools() -> set[str]:
+    src = (REPO / "mcp" / "server.py").read_text(encoding="utf-8")
+    return set(re.findall(r"^@mcp\.tool\n(?:async )?def (\w+)\(", src, re.M))
+
+
+def test_every_tool_the_skill_names_exists():
+    """The skill forbids any tool it does not name, so the names must be real."""
+    named = set(re.findall(r"`(\w+)\(", _body()))
+    assert named and named <= _tools(), named - _tools()
+
+
+def test_the_agent_may_read_what_it_writes_against_and_look_at_its_stills():
+    """A world style's agent imports the package's runner and the engine, and
+    the beat gate is judged on stills: the reading and looking tools are named,
+    or the rule against unnamed tools would forbid them."""
+    body = _body()
+    for tool in ("get_style_guide(video_id, path=", "cartoon_read_still(", "cartoon_kit_read(", "list_scene_files(",
+                 "read_scene_file("):
+        assert tool in body, tool
+
+
+def test_tools_of_built_in_styles_are_named_as_not_serving_externals():
+    body = _body()
+    assert "render_style_parts" in body and "preview_frames" in body

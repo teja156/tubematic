@@ -540,7 +540,9 @@ because a package's routing text is its author's claim and Auto has never been m
 
 Every external pack names the one skill `tubematic-external-style`. The agent reads the package's
 guide with `get_style_guide`, which hands it over as reference material that never overrides
-Tubematic's rules.
+Tubematic's rules, and reads the package's code files through the same tool. Tools made for one
+built-in style, such as `render_style_parts`, refuse an external style's video; the agent looks with
+`preview_frames` or `cartoon_still`.
 
 - A scene style's scenes are `{"type": "generated", "source": "external", "src":
   "<style id>/components/<Name>", "props": {"<props_key>": {…}}}`. `write_scene_config` refuses a

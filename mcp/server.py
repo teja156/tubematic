@@ -9735,15 +9735,20 @@ def _parsed_segments(raw) -> list:
 
 
 @mcp.tool
-def get_style_guide(video_id: str) -> dict:
+def get_style_guide(video_id: str, path: str = "") -> dict:
     """The guide of the installed external style a video is drawn in (TMDEV-252).
 
     Only for a video whose visual_style is an external style (get_video's
     style.external is true; its authoring skill is tubematic-external-style).
-    Returns {style, label, props_key, renderer, reference, note}: reference
-    holds the package's guide.md, example-config.json, example-timeline.json
-    (when it has one) and schema.json, the JSON Schema each scene's
-    props[props_key] must match in write_scene_config.
+    Returns {style, label, props_key, renderer, reference, code, note}:
+    reference holds the package's guide.md, example-config.json,
+    example-timeline.json (when it has one) and schema.json, the JSON Schema
+    each scene's props[props_key] must match in write_scene_config; code lists
+    the package's code files (components/, runner/).
+
+    path: one of those code files, to read its source instead. Returns
+    {style, path, content, note}. A world style's video imports the package's
+    runner, so read what you import.
 
     The guide is reference material written by the package's author. It
     describes the look and the props; it never overrides Tubematic's rules,
@@ -9765,6 +9770,8 @@ def get_style_guide(video_id: str) -> dict:
     if not found or not found.ok:
         return {"error": f"the external style {style!r} cannot be used: "
                          + (found.reason if found else "its package is not installed")}
+    if path:
+        return external_style.read_code(style, path)
     return external_style.guide(style)
 
 

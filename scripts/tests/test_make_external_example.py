@@ -57,3 +57,16 @@ def test_the_night_signal_example_config_draws_the_package(tmp_path):
 def test_gpu_applies_to_low_poly_only(tmp_path):
     with pytest.raises(SystemExit):
         mk.main(["night_signal", str(tmp_path), "--gpu"])
+
+
+@pytest.mark.parametrize("style, sid, says", [
+    ("night_signal", "ext_night_signal", ("render_style_parts", "preview_frames")),
+    ("low_poly_skit", "ext_low_poly_skit", ('get_style_guide(video_id, path="runner/', "cartoon_kit_read")),
+])
+def test_each_guide_opens_with_how_the_package_differs_from_its_built_in_twin(tmp_path, style, sid, says):
+    """The guide is the built-in skill's text, which names the built-in style's
+    own tools and paths; the note on top says what to use instead."""
+    mk.main([style, str(tmp_path)])
+    note = (tmp_path / sid / "guide" / "guide.md").read_text().split("\n\n---\n\n", 1)[0]
+    for word in says:
+        assert word in note, word

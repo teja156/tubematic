@@ -1203,12 +1203,18 @@ video has no formula on record. See
 
 ### `get_style_guide`
 
-`get_style_guide(video_id)` returns the guide of the installed
+`get_style_guide(video_id, path="")` returns the guide of the installed
 [external style](10-scene-authoring.md#external-styles) a video is drawn in: `{style, label,
-props_key, renderer, reference, note}`. `reference` holds the package's `guide.md`,
+props_key, renderer, reference, code, note}`. `reference` holds the package's `guide.md`,
 `example-config.json`, `example-timeline.json` when it has one, and `schema.json`, the JSON Schema each
-external scene's `props[props_key]` must match. `note` tells the agent that the guide is reference
-material from the package's author and never overrides Tubematic's rules, checkpoints or refusals.
+external scene's `props[props_key]` must match. `code` lists the package's `.ts` and `.tsx` files under
+`components/` and `runner/`. `note` tells the agent that the guide is reference material from the
+package's author and never overrides Tubematic's rules, checkpoints or refusals.
+
+With `path` set to one of the files `code` lists, it returns `{style, path, content, note}`, that
+file's source. A world style's video imports the package's runner, and the agent reads what it
+imports. Any other path is refused, so nothing outside the package's code can be read.
+
 It refuses a video in a built-in style, and a video whose package is broken or gone.
 
 ---
