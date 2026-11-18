@@ -164,11 +164,12 @@ before you build.
 Tubematic's own check is the one that counts:
 
 ```bash
-test -f "$W/package/<id>/style.json" && rm -rf ~/.tubematic-data/styles-incoming/<id> \
-  && cp -r "$W/package/<id>" ~/.tubematic-data/styles-incoming/<id>
+test -f "$W/package/<id>/style.json" || { echo "no package at $W/package/<id>: stop"; exit 1; }
+rm -rf ~/.tubematic-data/styles-incoming/<id> && cp -r "$W/package/<id>" ~/.tubematic-data/styles-incoming/<id> && echo copied
 ```
 
-Then call `tubematic:stage_style_install("incoming:<id>")`. Read `check`, `refusals` and `flags`:
+Only when that printed `copied`, call `tubematic:stage_style_install("incoming:<id>")`; otherwise the
+copy in `styles-incoming/` is an old one, so fix the package path first. Read `check`, `refusals` and `flags`:
 
 - `check.ok` false or a refusal: fix the package, run the manifest again, copy and stage again (a new
   stage replaces the older one of the same style).

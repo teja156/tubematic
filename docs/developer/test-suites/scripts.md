@@ -863,6 +863,7 @@ and command.
   with a clean scan; its example config matches its schema; `manifest.py` writes what the loader
   expects and refuses a symlink; `zip_package.py`'s zip stages on another install.
 - `reference/package-rules.md` names every allowed import and every scene API v1 export.
+- It stages only a copy it just made: a missing package stops it before the old copy is staged.
 - Every palette the template's schema allows is dark, since its captions are white with no
   background.
 - The command starts the skill with its disclaimer, for both agents.

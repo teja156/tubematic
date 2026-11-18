@@ -186,3 +186,9 @@ def test_every_template_palette_is_dark_under_its_white_captions():
     for hexv in grounds:
         r, g, b = (int(hexv[i:i + 2], 16) for i in (0, 2, 4))
         assert 0.2126 * r + 0.7152 * g + 0.0722 * b < 80, hexv
+
+
+def test_it_stages_only_a_copy_it_just_made():
+    """A failed copy left an older package in styles-incoming/, which the next step staged."""
+    body = _flat()
+    assert 'exit 1; }' in body and "Only when that printed `copied`" in body
