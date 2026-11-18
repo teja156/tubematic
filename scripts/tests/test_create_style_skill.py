@@ -197,7 +197,7 @@ def test_it_stages_only_a_copy_it_just_made():
 def test_the_cut_detection_command_keeps_showinfos_output():
     # showinfo logs at ffmpeg's info level: `-v error` hid every cut, so the shot-length
     # measurement came back empty (found in the e2e Kasm test).
-    lines = [ln for ln in _body().splitlines() if "showinfo" in ln]
-    assert lines
-    for ln in lines:
-        assert not re.search(r"-(v|loglevel)\s+(quiet|panic|fatal|error|warning)\b", ln), ln
+    cmds = [ln for ln in _body().splitlines()
+            if ln.startswith("ffmpeg ") and "select='gt(scene," in ln and "showinfo" in ln and "pts_time" in ln]
+    assert len(cmds) == 1, cmds
+    assert not re.search(r"-(v|loglevel)\s+(quiet|panic|fatal|error|warning)\b", cmds[0]), cmds[0]
