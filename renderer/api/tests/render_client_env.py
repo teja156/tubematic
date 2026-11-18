@@ -120,10 +120,11 @@ def make_env(tmp_path, monkeypatch, builtin=True) -> Env:
     e.jobs, e.out, e.secrets = tmp_path / "jobs", tmp_path / "out", tmp_path / "secrets"
     e.srv_remotion = tmp_path / "srv_remotion"
     e.generated = e.srv_remotion / "src" / "scenes" / "generated"
+    e.external = e.srv_remotion / "src" / "scenes" / "external"   # the installed style packages (TMDEV-252)
     e.remotion = tmp_path / "remotion"
     e.public = e.remotion / "public"
     e.render_tmp = tmp_path / "render"
-    for d in (e.jobs, e.out, e.secrets, e.generated, e.public):
+    for d in (e.jobs, e.out, e.secrets, e.generated, e.external, e.public):
         d.mkdir(parents=True, exist_ok=True)
     (e.secrets / "builtin_renderer_token").write_text(BUILTIN_TOKEN)
     monkeypatch.setattr(render_results, "DB_PATH", e.db)
@@ -149,6 +150,9 @@ def make_env(tmp_path, monkeypatch, builtin=True) -> Env:
     e.client_generated = e.generated if builtin else tmp_path / "remote_generated"
     e.client_generated.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(render_agent, "GENERATED_DIR", e.client_generated)
+    e.client_external = e.external if builtin else tmp_path / "remote_external"
+    e.client_external.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(render_agent, "EXTERNAL_DIR", e.client_external)
     monkeypatch.setattr(render_agent, "RENDER_TMP", e.render_tmp)
     monkeypatch.setattr(render_agent, "RETRY_PAUSE_SECS", 0)
     monkeypatch.setattr(render_agent, "STILLS_SERVER_PORT", 0)

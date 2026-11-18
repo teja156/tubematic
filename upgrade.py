@@ -752,6 +752,18 @@ def _has_openai_key(db_path) -> bool:
     return bool(row and row[0] and row[0].strip())
 
 
+def _report_external_styles(data_root: Path, rep) -> None:
+    """Name each installed external style (TMDEV-252) this version cannot use,
+    with the reason: a package that targets another scene API, or one that
+    broke. Never a refusal: the style is listed unavailable in the pickers, and
+    every other style keeps working."""
+    from tubematic_core import external_styles
+    bad = [s for s in external_styles.load(data_root / "styles").values() if not s.ok]
+    for s in bad:
+        rep.warn(f"The installed external style {s.id} cannot be used with this version: {s.reason}. "
+                 "It shows as unavailable until its package is updated or removed.")
+
+
 def _check_removed_giffx(data_root: Path, rep, *, configs: bool = True) -> bool:
     """False when a generated scene still imports the removed GifFX component,
     or one cannot be read or decoded to tell.
@@ -853,6 +865,7 @@ def run_upgrade(*, dry_run: bool, force: bool, no_stop: bool, install_mode: str 
         return 1
     if not _check_removed_giffx(data_root, rep):
         return 1
+    _report_external_styles(data_root, rep)
     # A GPU override (onboard/gpu.py) whose runtime or GPU has gone makes the
     # `up` in "Start" fail after everything is already stopped. Checked here,
     # before the lock, so a refusal leaves the running install untouched.

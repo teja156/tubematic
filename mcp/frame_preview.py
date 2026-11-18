@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import cartoon
+from tubematic_core import external_styles
 from tubematic_core import jobfiles as tjobs
 
 PREVIEW_DIR = "preview"
@@ -62,10 +63,22 @@ def _check_frames(frames, total: int) -> list[int]:
 
 
 def _content_hash(config_path: Path, timeline_path: Path) -> str:
+    """What a look was taken of: the scene-config and the timeline, and for a
+    video in an external style (TMDEV-252) the package's fingerprint, since an
+    updated package draws a different picture from the same config."""
     h = hashlib.sha256()
     for p in (config_path, timeline_path):
         h.update(p.read_bytes())
         h.update(b"\0")
+    try:
+        style = external_styles.config_style(json.loads(config_path.read_text(encoding="utf-8")))
+    except ValueError:
+        style = ""
+    if style:
+        try:
+            h.update(external_styles.fingerprint(style).encode())
+        except (OSError, tjobs.UnsafePath):
+            h.update(b"no package")
     return h.hexdigest()
 
 
@@ -192,7 +205,8 @@ def preview(jobs_dir, video_id: str, remotion_dir: Path, frames, *, watermark: b
         try:
             try:
                 proc = cartoon.run_cli(remotion_dir, "still", [str(tjobs.job_dir(jobs_dir, video_id)), str(folder), *map(str, clean)],
-                                       timeout=TIMEOUT_SECS, props=props, public_dir=Path(jobs_dir))
+                                       timeout=TIMEOUT_SECS, props=props, public_dir=Path(jobs_dir),
+                                       external_style=external_styles.config_style(config), video_id=video_id)
             except (cartoon.CartoonError, OSError, subprocess.SubprocessError) as e:
                 why = str(e) or e.__class__.__name__
                 raise PreviewError(why)

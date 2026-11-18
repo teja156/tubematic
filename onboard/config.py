@@ -50,7 +50,8 @@ DB_PATH = DATA_ROOT / "data" / "tubematic.db"
 # The subdirectories the directories step creates under DATA_ROOT, one per
 # bind-mounted volume. checks.py probes the same list for host-user write
 # access (TMDEV-94), so the two cannot disagree about what exists.
-DATA_SUBDIRS = ("jobs", "data", "output_videos", "scenes/generated", "logs", "backups", "sandbox")
+DATA_SUBDIRS = ("jobs", "data", "output_videos", "scenes/generated", "logs", "backups", "sandbox",
+                "styles")
 
 # Where poll.py writes poll.log, and where cron's own output goes. Fixed: the
 # cron line names no agent (TMDEV-90), and poll.py starts logging before it can

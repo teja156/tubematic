@@ -45,6 +45,7 @@ import tempfile
 import threading
 from pathlib import Path
 
+from tubematic_core import external_styles
 from tubematic_core import inserts as tinserts
 from tubematic_core import jobfiles as tjobs
 from tubematic_core import mascots as tmascots
@@ -865,7 +866,7 @@ def _stage(video_id: str, remotion_dir: Path, scene_config_path: Path,
     return public_dir
 
 
-def _run_driver(remotion_dir: Path, config: dict) -> dict:
+def _run_driver(remotion_dir: Path, config: dict, external_style: str = "", video_id: str = "") -> dict:
     """Run the Node driver and parse its JSON. Raises RuntimeError on failure.
 
     The driver writes its result to a file rather than stdout. Remotion forwards
@@ -900,6 +901,9 @@ def _run_driver(remotion_dir: Path, config: dict) -> dict:
     proc = subprocess.Popen(
         [node_bin, str(_DRIVER_REL), json.dumps(config)],
         cwd=str(remotion_dir),
+        # what the audit bundle compiles (TMDEV-252): one external style package (none when ""),
+        # and this video's generated scenes only
+        env={**os.environ, "TUBEMATIC_EXTERNAL_STYLE": external_style, "TUBEMATIC_RENDER_VIDEO": video_id},
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -975,7 +979,7 @@ def audit_text_layout(video_id: str, scene_config: dict, scene_config_path: Path
             "passes": passes,
             "visualFrames": [0, FRAME0_MOTION_FRAME] if extra else [],
             "browserExecutable": os.getenv("PUPPETEER_EXECUTABLE_PATH") or None,
-        })
+        }, external_styles.config_style(scene_config), video_id)
         return notes + summarise(output, scene_config, mascot_cues)
     except Exception as e:
         return [f"Text-layout audit could not run ({e}) — text layout was not checked"]

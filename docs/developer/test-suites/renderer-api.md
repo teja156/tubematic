@@ -297,6 +297,18 @@ without testing the race.
 
 ## Style, voice and mascot choices
 
+### `test_external_style_routes.py`
+
+Covers external styles over HTTP:
+
+- An installed external style with a valid package can be chosen for a video and as a domain
+  default, and a domain default seeds curriculum videos. A broken package is refused on `PATCH`, on
+  `POST /videos`, on `POST /videos/manual` and as a domain default, with the package's reason, and a
+  style that is not installed is refused as not installed.
+- `GET /visual-styles` lists installed styles with `external` set, and a broken one as unavailable.
+- `external_styles_in_auto` accepts only installed external styles with a valid package, and is
+  checked on change only, so a list whose style broke since still saves with an unrelated key.
+
 ### `test_visual_style.py`
 
 Covers the visual style over HTTP and the style contract of the AI review prompt
@@ -712,7 +724,10 @@ one certificate test serve the app over real TLS on 127.0.0.1 and talk to it ove
   lost gets the same video and claim id again, and two claims racing from one renderer cannot both
   win.
 - The bundle is one uncompressed tar streamed in chunks. It holds no symlink, the Cartoon 3D mix
-  only when it is not older than the voice, and `mascot.js` for a mascot video only.
+  only when it is not older than the voice, and `mascot.js` for a mascot video only. An
+  external-style video's bundle holds its `style-source.json` and the one package that record
+  names, a record that names no external style makes the bundle unavailable, and a built-in style's
+  bundle holds no package.
 - The upload streams into a temporary file in the gateway's own directory and is renamed into place.
   The tests cover the size, concurrency and free-space [limits](../19-render-gateway.md#limits), a
   claim lost while its upload streamed, and the sweep of temporary files older than
@@ -784,6 +799,11 @@ path. One test runs enrollment and a heartbeat over real TLS.
   script watches for (`enrolled`, `first heartbeat`, `enrollment_invalid`). The built-in renderer
   compiles the shared scene tree the agent writes, so only a remote renderer stages and clears
   scenes.
+- An external style: a remote renderer stages the video's one package and clears it, and the built-in
+  renderer compiles the mounted package. The render's environment names the style, and a built-in
+  style's render names none, and every render names its video. A package changed after queueing,
+  changed while the video rendered, or an external scene with no record, is not uploaded and the
+  agent is told why.
 
 Trap: after a hung render is killed, the reaper drains orphans without blocking and stops when the
 stills server is the only child left. A blocking wait sits on that long-lived child and the render

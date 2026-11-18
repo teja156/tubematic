@@ -874,7 +874,8 @@ def remove_data_root() -> None:
     # Declined: prune what is provably empty so the leftovers are only the
     # things actually worth keeping, and say where they are.
     pruned = []
-    for sub in ("data", "jobs", "output_videos", "logs", "sandbox", "scenes/generated", "scenes"):
+    for sub in ("data", "jobs", "output_videos", "logs", "sandbox", "styles", "scenes/generated",
+                "scenes"):
         d = DATA_ROOT / sub
         try:
             if d.is_dir() and not any(d.iterdir()):
@@ -889,6 +890,13 @@ def remove_data_root() -> None:
         # content". A reinstall makes new ones, so they are safe to delete.
         info(f"The service tokens are still in {DATA_ROOT / 'secrets'} — a reinstall creates "
              f"new ones, so they can go: rm -rf {DATA_ROOT / 'secrets'}")
+    styles = DATA_ROOT / "styles"  # installed external visual styles (TMDEV-252)
+    if styles.is_dir():
+        names = sorted(p.name for p in styles.iterdir() if not p.name.startswith("."))
+        if names:
+            # A reinstall over this data root lists them again, so say they are here.
+            info(f"The installed visual styles are still in {styles} ({', '.join(names)}) — a "
+                 f"reinstall lists them again; delete them with: rm -rf {styles}")
     gpu_override = DATA_ROOT / "compose.gpu.json"  # keep in sync with onboard/gpu.py
     if gpu_override.is_file():
         # A reinstall that keeps the data root would hand the GPU to the new

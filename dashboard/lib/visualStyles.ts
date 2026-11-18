@@ -49,6 +49,10 @@ function unavailableReason(
   canUseOpenAI: boolean,
   gpu: Pick<GpuStatus, "status"> | null | undefined,
 ): string {
+  // An installed external style's package problems are known to the API alone (TMDEV-252).
+  if (s.external && s.available === false && !s.needs.openai_key && !s.needs.gpu) {
+    return s.unavailable_reason || "unavailable";
+  }
   if (s.needs.openai_key && !canUseOpenAI) return "needs an OpenAI key";
   if (s.needs.gpu && !cartoon3dAvailable(gpu)) {
     return gpu?.status === "unknown" ? "GPU not tested yet" : "needs a working GPU";
@@ -71,6 +75,8 @@ export interface StyleRow {
   dimension: "2d" | "3d" | null;
   tagline: string;
   insert: boolean;
+  /** An installed external style: its preview is served from its package. */
+  external?: boolean;
 }
 
 export interface StyleGroup {
@@ -81,7 +87,13 @@ export interface StyleGroup {
 }
 
 /** URL of a style's preview loop and poster, served from dashboard/public. */
-export function previewUrls(stem: string): { video: string; poster: string } {
+export function previewUrls(stem: string, external = false): { video: string; poster: string } {
+  // A built-in style's previews are static files of the dashboard image; an
+  // installed external style's live in its package, behind the API (TMDEV-252).
+  if (external) {
+    return { video: `/external-style-previews/${stem}/preview.mp4`,
+             poster: `/external-style-previews/${stem}/preview.webp` };
+  }
   return { video: `/style-previews/${stem}.mp4`, poster: `/style-previews/${stem}.webp` };
 }
 
@@ -91,7 +103,7 @@ function rowOf(s: VisualStyleInfo, canUseOpenAI: boolean, gpu: Pick<GpuStatus, "
   return {
     value: s.id, label: s.label, experimental: s.experimental, gpu: s.needs.gpu, why,
     choosable: !insert && why === "", preview: s.preview ?? null,
-    dimension: s.dimension ?? null, tagline: s.tagline ?? "", insert,
+    dimension: s.dimension ?? null, tagline: s.tagline ?? "", insert, external: s.external === true,
   };
 }
 

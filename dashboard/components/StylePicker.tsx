@@ -30,9 +30,14 @@ const TAG_BASE: CSSProperties = {
   lineHeight: "14px", flex: "none",
 };
 
-export function StyleTags({ row, testId }: { row: Pick<StyleRow, "experimental" | "gpu">; testId?: string }) {
+export function StyleTags({ row, testId }: { row: Pick<StyleRow, "experimental" | "gpu" | "external">; testId?: string }) {
   return (
     <>
+      {row.external && (
+        <span data-testid={testId ? `${testId}-ext` : undefined}
+              title="An installed external style: its drawing code comes from outside Tubematic"
+              style={{ ...TAG_BASE, color: "var(--amber)", borderColor: "var(--amber-glow)" }}>EXTERNAL</span>
+      )}
       {row.experimental && (
         <span data-testid={testId ? `${testId}-exp` : undefined}
               style={{ ...TAG_BASE, color: "var(--purple)", borderColor: "rgba(183,148,246,0.4)" }}>EXP</span>
@@ -107,8 +112,8 @@ export function StylePreviewDialog({ rows, index, onIndex, onClose, onUse }: {
               <video
                 key={row.preview}
                 data-testid="style-preview-video"
-                src={previewUrls(row.preview).video}
-                poster={previewUrls(row.preview).poster}
+                src={previewUrls(row.preview, row.external).video}
+                poster={previewUrls(row.preview, row.external).poster}
                 autoPlay={!reduced}
                 controls={reduced}
                 muted

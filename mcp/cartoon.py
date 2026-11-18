@@ -241,9 +241,14 @@ def ensure_built(remotion_dir: Path) -> None:
         _built.add(key)
 
 
-def _env(remotion_dir: Path, props: dict | None = None, public_dir: Path | None = None) -> dict:
+def _env(remotion_dir: Path, props: dict | None = None, public_dir: Path | None = None,
+         external_style: str = "", video_id: str = "") -> dict:
     env = dict(os.environ)
     env["REMOTION_ROOT"] = str(remotion_dir)
+    # what the bundle compiles (TMDEV-252; webpack-override.mjs): one external style package
+    # (none when ""), and the generated scenes of this video only
+    env["TUBEMATIC_EXTERNAL_STYLE"] = external_style
+    env["TUBEMATIC_RENDER_VIDEO"] = video_id
     if public_dir is not None:
         env["CARTOON_PUBLIC_DIR"] = str(public_dir)
         server = os.getenv("TUBEMATIC_STILLS_SERVER", "").strip()
@@ -260,11 +265,11 @@ def _env(remotion_dir: Path, props: dict | None = None, public_dir: Path | None 
 
 
 def run_cli(remotion_dir: Path, name: str, args: list[str], *, timeout: int, props: dict | None = None,
-            public_dir: Path | None = None) -> subprocess.CompletedProcess:
+            public_dir: Path | None = None, external_style: str = "", video_id: str = "") -> subprocess.CompletedProcess:
     ensure_built(remotion_dir)
     cli = remotion_dir / "cartoon-tools" / "dist" / f"{name}.mjs"
     try:
-        return subprocess.run([_node(), str(cli), *args], cwd=str(remotion_dir), env=_env(remotion_dir, props, public_dir),
+        return subprocess.run([_node(), str(cli), *args], cwd=str(remotion_dir), env=_env(remotion_dir, props, public_dir, external_style, video_id),
                               capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         raise CartoonError(f"the {name} tool did not finish within {timeout} s")
@@ -388,7 +393,7 @@ def stills(jobs_dir, video_id: str, remotion_dir: Path, frames: list[int]) -> li
         clean.append(f)
     outdir = _below(jobs_dir, video_id, CARTOON_DIR, STILLS_DIR)
     with _Staged(jobs_dir, video_id, remotion_dir) as staged:
-        proc = run_cli(remotion_dir, "still", [str(staged), str(outdir), *map(str, clean)],
+        proc = run_cli(remotion_dir, video_id=video_id, name="still", args=[str(staged), str(outdir), *map(str, clean)],
                        timeout=CLI_TIMEOUT_SECS, props=_props(video_id), public_dir=Path(jobs_dir))
     if proc.returncode != 0:
         raise CartoonError(f"the stills could not be rendered: {_fail_text(proc)}")
@@ -414,7 +419,7 @@ def _beat_args(jobs_dir, video_id: str, staged: Path, srcdir: Path, *extra: str)
 
 
 def _beat_status(jobs_dir, video_id: str, remotion_dir: Path, staged: Path, srcdir: Path) -> dict:
-    proc = run_cli(remotion_dir, "beatgate", _beat_args(jobs_dir, video_id, staged, srcdir, "--status"),
+    proc = run_cli(remotion_dir, video_id=video_id, name="beatgate", args=_beat_args(jobs_dir, video_id, staged, srcdir, "--status"),
                    timeout=CHECK_TIMEOUT_SECS, props=_props(video_id), public_dir=Path(jobs_dir))
     if proc.returncode not in (0, 2):
         raise CartoonError(f"the beat gate's status could not be read: {_fail_text(proc)}")
@@ -436,7 +441,7 @@ def beat_gate(jobs_dir, video_id: str, remotion_dir: Path, scenes_dir) -> dict:
     outdir = _beatgate_outdir(jobs_dir, video_id)
     outdir.mkdir(parents=True, exist_ok=True)
     with _Staged(jobs_dir, video_id, remotion_dir) as staged:
-        proc = run_cli(remotion_dir, "beatgate", _beat_args(jobs_dir, video_id, staged, srcdir), timeout=CLI_TIMEOUT_SECS,
+        proc = run_cli(remotion_dir, video_id=video_id, name="beatgate", args=_beat_args(jobs_dir, video_id, staged, srcdir), timeout=CLI_TIMEOUT_SECS,
                        props=_props(video_id), public_dir=Path(jobs_dir))
         if proc.returncode not in (0, 2):
             raise CartoonError(f"the beat gate could not run: {_fail_text(proc)}")
@@ -455,7 +460,7 @@ def beat_gate_record(jobs_dir, video_id: str, remotion_dir: Path, scenes_dir, an
         with _Recording(video_id):
             _job_files(jobs_dir, video_id)
             staged = tjobs.job_dir(jobs_dir, video_id)
-            proc = run_cli(remotion_dir, "beatgate", _beat_args(jobs_dir, video_id, staged, srcdir, "--record", answers_file),
+            proc = run_cli(remotion_dir, video_id=video_id, name="beatgate", args=_beat_args(jobs_dir, video_id, staged, srcdir, "--record", answers_file),
                            timeout=CHECK_TIMEOUT_SECS, props=_props(video_id), public_dir=Path(jobs_dir))
             if proc.returncode not in (0, 2):
                 raise CartoonError(_fail_text(proc))

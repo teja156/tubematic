@@ -87,20 +87,32 @@ list. It wraps each `generated` entry in a `<Sequence>` at the entry's `startFra
 5. the captions
 6. the watermark
 
-### Dynamic import, and why there are two branches
+### Dynamic import, and why there are three branches
 
 `GeneratedScene` resolves the component with a template-literal dynamic `import()`:
 
 ```tsx
 source === "installed"
   ? import(`./scenes/installed/${src}.tsx`)
-  : import(`./scenes/generated/${src}.tsx`);
+  : source === "external"
+    ? import(`./scenes/external/${src}.tsx`)
+    : import(`./scenes/generated/${src}.tsx`);
 ```
 
 Webpack resolves each dynamic import to a fixed directory prefix at build time, so one `import()`
-with a variable directory would bundle neither tree. Each branch bundles every `.tsx` under its own
+with a variable directory would bundle no tree. Each branch bundles every `.tsx` under its own
 tree, recursively, which is why the namespaced `"{video_id}/{scene_name}"` form resolves through the
 same call.
+
+The `external` tree holds the installed [external style](10-scene-authoring.md#external-styles)
+packages. Every bundle that compiles the whole project passes through `webpack-override.mjs`, whose
+`ContextReplacementPlugin` narrows that tree to the one package named in `TUBEMATIC_EXTERNAL_STYLE`,
+and to nothing when it is empty, because one package that fails to compile would otherwise fail
+every render on the install. It narrows the `generated` tree the same way, to the video named in
+`TUBEMATIC_RENDER_VIDEO` and the legacy flat files, so another video's scene (a world video that
+imports a package since removed) cannot fail this one's bundle. The same override adds Tailwind and the `@tubematic/scene-api` alias
+(`src/sceneApi/v1.ts`). `remotion.config.ts`, the stills server, the stills fallback and the
+text-layout audit all use it.
 
 The component is `mod.default ?? Object.values(mod)[0]`. A default export is the documented shape,
 and a single named export also works.

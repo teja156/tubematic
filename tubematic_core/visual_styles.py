@@ -391,15 +391,75 @@ def hosts_inserts(visual_style: str) -> dict:
 
 
 def pack(visual_style: str) -> dict | None:
-    """The pack for a style id, or None for "auto", blank or an unknown value."""
-    return PACKS.get((visual_style or "").strip())
+    """The pack for a style id, or None for "auto", blank or an unknown value.
+    An installed external style (TMDEV-252) has its pack here while its
+    package is valid, and None while it is not."""
+    sid = (visual_style or "").strip()
+    p = PACKS.get(sid)
+    if p is not None or not is_external(sid):
+        return p
+    from . import external_styles  # it reads this module's pack check; import late
+    found = external_styles.get(sid)
+    return found.pack if found and found.ok else None
+
+
+def is_external(visual_style: str) -> bool:
+    """Whether a style id is in the external namespace (ext_...), installed or not."""
+    from . import external_styles
+    return bool(external_styles.ID_RE.fullmatch((visual_style or "").strip()))
+
+
+def external_style_error(visual_style: str) -> str:
+    """Why an external style id cannot be chosen (its package is broken or not
+    installed), or "" for a usable one or any id outside the namespace."""
+    from . import external_styles
+    sid = (visual_style or "").strip()
+    if not is_external(sid):
+        return ""
+    found = external_styles.get(sid)
+    if found and found.ok:
+        return ""
+    return (f"The external style {sid!r} cannot be used: "
+            + (found.reason if found else "its package is not installed") + ".")
+
+
+def is_known_style(visual_style: str) -> bool:
+    """A value a stored visual_style may hold: a built-in style, "auto", or an
+    installed external style whose package is valid."""
+    sid = (visual_style or "").strip()
+    return sid in VISUAL_STYLES or (is_external(sid) and pack(sid) is not None)
+
+
+def is_main_style(visual_style: str) -> bool:
+    """What a person, a domain default or Auto may choose as a video's style:
+    "auto", a built-in main style, or a valid installed external style."""
+    sid = (visual_style or "").strip()
+    return sid in MAIN_STYLES or (is_external(sid) and pack(sid) is not None)
+
+
+def is_world_style(visual_style: str) -> bool:
+    """Whether a style's videos are a generated three.js world (renderer "cartoon_3d")."""
+    sid = (visual_style or "").strip()
+    if sid in WORLD_STYLES:
+        return True
+    p = pack(sid) if is_external(sid) else None
+    return bool(p and p["renderer"] == "cartoon_3d")
+
+
+def fixed_canvas(visual_style: str) -> str | None:
+    """The canvas a style fixes, or None when it leaves the canvas to the agent."""
+    sid = (visual_style or "").strip()
+    if sid in CANVAS_BY_STYLE:
+        return CANVAS_BY_STYLE[sid]
+    p = pack(sid) if is_external(sid) else None
+    return (p or {}).get("canvas") or None
 
 
 def _allows(visual_style: str, what: str, unknown: bool) -> bool:
     chosen = (visual_style or "").strip()
     if chosen == AUTO:
         return True
-    p = PACKS.get(chosen)
+    p = pack(chosen)
     return p["allows"][what] if p else unknown
 
 
@@ -412,10 +472,7 @@ def effective_canvas(visual_style: str, resolved_visual_style: str) -> str:
     answer is whatever the agent recorded, and "" until it has recorded
     anything, which callers must handle rather than guessing.
     """
-    chosen = (visual_style or "").strip()
-    if chosen in CANVAS_BY_STYLE:
-        return CANVAS_BY_STYLE[chosen]
-    return (resolved_visual_style or "").strip()
+    return fixed_canvas(visual_style) or (resolved_visual_style or "").strip()
 
 
 def figures_allowed(visual_style: str) -> bool:
@@ -537,8 +594,35 @@ def public_list(openai_key_set: bool, gpu_status: str) -> list[dict]:
                     "canvas": p["canvas"], "needs": dict(p["needs"]), "mascot": sid not in NO_MASCOT_STYLES,
                     "role": p["role"], "inserts": dict(p.get("inserts") or {"host": False}),
                     "available": not reason, "unavailable_reason": reason,
-                    "dimension": p["dimension"], "preview": p["preview"], "tagline": p["tagline"]})
-    return out
+                    "dimension": p["dimension"], "preview": p["preview"], "tagline": p["tagline"],
+                    "external": False})
+    return out + _external_public_rows(openai_key_set, gpu_status)
+
+
+def _external_public_rows(openai_key_set: bool, gpu_status: str) -> list[dict]:
+    """The installed external styles for the picker, after the built-in ones and
+    sorted by label. A package that fails its checks is listed unavailable with
+    the reason, so the person sees why their style is missing."""
+    from . import external_styles
+    rows = []
+    for sid, found in external_styles.registry().items():
+        p = found.pack
+        if not found.ok:
+            rows.append({"id": sid, "label": sid, "experimental": True, "canvas": None,
+                         "needs": {k: False for k in _NEEDS}, "mascot": False, "role": "main",
+                         "inserts": {"host": False}, "available": False,
+                         "unavailable_reason": f"the style package has a problem: {found.reason}",
+                         "dimension": None, "preview": None, "tagline": "", "external": True})
+            continue
+        reason = _unavailable_reason(p, openai_key_set, gpu_status)
+        rows.append({"id": sid, "label": p["label"], "experimental": p["experimental"],
+                     "canvas": p["canvas"], "needs": dict(p["needs"]), "mascot": False,
+                     "role": "main", "inserts": {"host": False},
+                     "available": not reason, "unavailable_reason": reason,
+                     # the dashboard asks the API for a package's previews by the style id
+                     "dimension": p["dimension"], "preview": sid, "tagline": p["tagline"],
+                     "external": True})
+    return sorted(rows, key=lambda r: r["label"].lower())
 
 
 def agent_view(visual_style: str) -> dict:
@@ -548,6 +632,17 @@ def agent_view(visual_style: str) -> dict:
     (or an unknown value) authors through the scene-config skill, which
     settles the renderer and the canvas itself."""
     p = pack(visual_style)
+    if not p and is_external(visual_style):
+        # an installed style whose package is broken or gone: still external, so the agent takes the
+        # external skill, which stops on unavailable_reason, and never a mixed-scenes video
+        from . import external_styles
+        sid = visual_style.strip()
+        found = external_styles.get(sid)
+        return {"id": sid, "label": sid, "renderer": None, "canvas": None,
+                "authoring_skill": external_styles.AUTHORING_SKILL,
+                "allows": {k: False for k in _ALLOWS}, "script": "", "picture": dict(SCENES_PICTURE),
+                "role": "main", "inserts": {"host": False}, "external": True,
+                "unavailable_reason": found.reason if found else "the style's package is not installed"}
     if not p:
         chosen = (visual_style or "").strip() or AUTO
         return {"id": chosen, "label": "Auto" if chosen == AUTO else chosen,
@@ -555,11 +650,14 @@ def agent_view(visual_style: str) -> dict:
                 "authoring_skill": "tubematic-scene-config",
                 "allows": {k: True for k in _ALLOWS}, "script": "",
                 "picture": dict(SCENES_PICTURE), "role": "main",
-                "inserts": dict(SCENES_INSERTS)}
-    return {"id": p["id"], "label": p["label"], "renderer": p["renderer"], "canvas": p["canvas"],
+                "inserts": dict(SCENES_INSERTS), "external": False}
+    view = {"id": p["id"], "label": p["label"], "renderer": p["renderer"], "canvas": p["canvas"],
             "authoring_skill": p["authoring_skill"], "allows": dict(p["allows"]),
             "script": p.get("script", ""), "picture": dict(p["picture"]),
-            "role": p["role"], "inserts": hosts_inserts(p["id"])}
+            "role": p["role"], "inserts": hosts_inserts(p["id"]), "external": "external" in p}
+    if "external" in p:
+        view["props_key"] = p["external"]["props_key"]
+    return view
 
 
 # ── Auto's routing (TMDEV-203) ───────────────────────────────────────────────
@@ -578,7 +676,24 @@ def route_label(choice: str) -> str:
     return p["label"] if p else choice
 
 
-def routing_candidates(openai_key_set: bool, gpu_status: str, has_mascot: bool) -> list[dict]:
+def _auto_externals(auto_externals) -> dict:
+    """The valid installed external styles a person has opted into Auto, in their order."""
+    out = {}
+    for sid in auto_externals or ():
+        p = pack(sid) if is_external(sid) else None
+        if p is not None:
+            out[sid] = p
+    return out
+
+
+def route_choices(auto_externals=()) -> tuple:
+    """Every outcome Auto may pick: the main packs, the external styles opted
+    into Auto (settings key external_styles_in_auto), then mixed scenes."""
+    return tuple(MAIN_PACKS) + tuple(_auto_externals(auto_externals)) + (SCENES,)
+
+
+def routing_candidates(openai_key_set: bool, gpu_status: str, has_mascot: bool,
+                       auto_externals=()) -> list[dict]:
     """Every outcome Auto may route a video to, for get_video's style_routing:
     each pack in pack order, then mixed scenes. Each entry carries the pack's
     routing block verbatim, its generated-image count and whether this install
@@ -589,9 +704,11 @@ def routing_candidates(openai_key_set: bool, gpu_status: str, has_mascot: bool) 
     mascot cannot take a 3D-world style (the mascot is a flat overlay), nor a
     style whose pack takes no mascot."""
     out = []
-    for sid, p in MAIN_PACKS.items():
+    # An external style joins Auto only once a person opts it in: until then it
+    # has never been routed, and a package's routing text is its author's claim.
+    for sid, p in {**MAIN_PACKS, **_auto_externals(auto_externals)}.items():
         reason = _unavailable_reason(p, openai_key_set, gpu_status)
-        if not reason and has_mascot and sid in NO_MASCOT_STYLES:
+        if not reason and has_mascot and (sid in NO_MASCOT_STYLES or is_external(sid)):
             reason = MASCOT_EXCLUDES_3D if p["renderer"] == "cartoon_3d" else MASCOT_EXCLUDED
         routing = {k: (list(v) if isinstance(v, list) else v) for k, v in p["routing"].items()}
         routing.setdefault("moods", [])

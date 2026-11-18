@@ -67,6 +67,15 @@ volumes:
       type: none
       o: bind
       device: ${HOME}/.tubematic-data/sandbox
+  # Installed external visual styles (TMDEV-252), one package folder each.
+  # Mounted read-only where a style pack is read; webpack compiles a package
+  # from here, which is why the path sits beside scenes/generated.
+  styles:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/.tubematic-data/styles
 
 # Service tokens (TMDEV-152), one file each under ~/.tubematic-data/secrets/,
 # written by onboarding and upgrade.py (tubematic_core/auth.py). Compose mounts
@@ -127,6 +136,7 @@ services:
       - jobs-data:/jobs
       - db-data:/data
       - scenes-generated:/app/remotion/src/scenes/generated
+      - styles:/app/remotion/src/scenes/external:ro,nocopy
       - logs-data:/logs
       - backups-data:/backups
       - /etc/localtime:/etc/localtime:ro
@@ -191,6 +201,7 @@ services:
       - jobs-data:/jobs
       - db-data:/data
       - scenes-generated:/app/remotion/src/scenes/generated
+      - styles:/app/remotion/src/scenes/external:ro,nocopy
       - logs-data:/logs
       - backups-data:/backups
       - sandbox-spool:/sandbox
@@ -243,7 +254,7 @@ services:
   # /output_videos and /jobs because retention deletes a video's mp4 and job
   # directory; /etc/localtime because Auto Pilot's daily limits and a
   # scheduled post's wall time are host-zone days. No scenes-generated: it
-  # never reads or writes a scene.
+  # never reads or writes a scene. styles: it reads installed style packs.
   tubematic-worker:
     image: tubematic-renderer-image
     container_name: tubematic-worker
@@ -257,6 +268,8 @@ services:
       - backups-data:/backups
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
+      # The AI review is told an installed external style's look (its pack).
+      - styles:/app/remotion/src/scenes/external:ro,nocopy
     networks:
       - tubematic-net
     # No env_file — same reason as tubematic-api above.
@@ -297,6 +310,7 @@ services:
     volumes:
       - jobs-data:/jobs
       - scenes-generated:/app/remotion/src/scenes/generated
+      - styles:/app/remotion/src/scenes/external:ro,nocopy
       - logs-data:/logs
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro

@@ -57,8 +57,11 @@ interface GeneratedSceneConfig {
    * Which scenes/ subdirectory `src` resolves against.
    * "generated" (default) — agent-authored, bind-mounted, per-video.
    * "installed" — curated, committed library, baked into the image.
+   * "external" — an installed external style package (TMDEV-252), `src` is
+   *   `<style id>/components/<Name>`. A bundle compiles only its video's style
+   *   (webpack-override.mjs).
    */
-  source?: "generated" | "installed";
+  source?: "generated" | "installed" | "external";
   /**
    * Crossfade transition OUT of this scene into the next.
    * Omit for the default 8-frame fade. Set durationInFrames: 0 to hard-cut.
@@ -231,7 +234,7 @@ const SceneWithFades: React.FC<{
 
 const GeneratedScene: React.FC<{
   src: string;
-  source?: "generated" | "installed";
+  source?: "generated" | "installed" | "external";
   durationInFrames: number;
   props?: Record<string, unknown>;
   words: TimelineWord[];
@@ -240,13 +243,15 @@ const GeneratedScene: React.FC<{
   const [handle] = useState(() => delayRender(`Loading ${source} scene: ${src}`));
 
   useEffect(() => {
-    // Two explicit import() calls, one per source directory — webpack requires a
+    // One explicit import() per source directory — webpack requires a
     // statically analyzable path per context; a single `${dir}/${src}` template
-    // does not bundle both directories.
+    // does not bundle every directory.
     const load =
       source === "installed"
         ? import(`./scenes/installed/${src}.tsx`)
-        : import(`./scenes/generated/${src}.tsx`);
+        : source === "external"
+          ? import(`./scenes/external/${src}.tsx`)
+          : import(`./scenes/generated/${src}.tsx`);
 
     load
       .then((mod) => {

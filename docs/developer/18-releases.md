@@ -392,7 +392,7 @@ a later step compares the Release asset with the tarball's copy.
 The smoke test does not check out the repository. It tests the artifact a user downloads:
 
 1. It extracts the tarball into a new temporary directory.
-2. It creates the six data directories, then the service tokens and the render gateway's TLS
+2. It creates the data directories, then the service tokens and the render gateway's TLS
    pair with `python3 -m tubematic_core.auth ensure`, as onboarding would. It installs
    `cryptography` first, because the runner's Python does not ship it.
 3. It runs `docker compose pull` and `docker compose up -d --wait` on the tarball's own

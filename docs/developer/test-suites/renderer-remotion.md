@@ -32,6 +32,39 @@ does not run `npm test`, so run the suite yourself after you change either modul
 The soundtrack tools under `cartoon-tools/audio/` have a pytest suite of their own, described on
 [`cartoon-audio.md`](cartoon-audio.md).
 
+## External styles
+
+### `webpack-override.test.ts`
+
+Covers `webpack-override.mjs`, the bundler override of every bundle that compiles the whole project.
+
+- The external scene context matches only the named style's files, and nothing when no style is
+  named. An id outside the `ext_` namespace is refused before it reaches a regular expression.
+- The override adds the `@tubematic/scene-api` alias and the context rule.
+- A real webpack compile with two packages, one of which does not parse: the broken package's own
+  bundle fails, and a bundle for the other style or for no external style still builds.
+- The generated-scene context matches the named video's scenes and the legacy flat files, treats a
+  legacy id's dots and spaces as plain characters, and stays whole when no video is named. A real
+  compile where another video's scene imports a missing package still builds this video's bundle.
+- `remotion.config.ts` compiles to CommonJS and runs the way the Remotion CLI loads it.
+
+Trap: the Remotion CLI compiles the config, and this module with it, to CommonJS, where
+`import.meta` is empty. The other bundles load the module as ESM, so only this test and a real
+`remotion render` see the difference.
+
+Trap: the composition's `import()` of `./scenes/external/${src}.tsx` is a webpack context, which
+compiles every matching file into every bundle. Without the context rule, one installed package that
+fails to compile breaks every render on the install.
+
+### `src/sceneApi/v1.test.ts`
+
+Pins the names `src/sceneApi/v1.ts` exports, the scene API v1 that installed packages import as
+`@tubematic/scene-api`.
+
+Trap: an installed package compiles against these names. Removing or renaming one breaks packages
+already installed, so a breaking change is a new `v2.ts` and a new `SCENE_API` in
+`tubematic_core/external_styles.py`, never an edit to this list.
+
 ## Caption looks
 
 ### `src/scenes/installed/subtitleLooks.test.ts`

@@ -355,7 +355,9 @@ step.
 - The install scope and the agent workspace are read once, before anything is deleted, and the
   values survive the deletion of the database. `--force` never stops at the scope prompt.
 - A kept data root names the GPU choice and the remote-renderers override in it, since a reinstall
-  over it would hand the GPU to the new renderer and publish the render gateway's port again.
+  over it would hand the GPU to the new renderer and publish the render gateway's port again. It
+  names the installed visual styles too, which a reinstall lists again, and an empty styles folder
+  is pruned.
 - The agent sweep goes through one adapter-keyed entry point. It removes each deployed and each
   retired skill, the commands and the MCP registration, sweeps a project-scope install from its
   workspace, and ignores a config-root override on every path. A config document that cannot be
@@ -844,6 +846,46 @@ Covers the `tubematic-process-cast` skill ([Process Cast](../10-scene-authoring.
 
 Trap: skill text that calls the cast mascots, or lets a character talk, leads the agent to the wrong
 video for this style. The test pins the wording that keeps them apart.
+
+### `test_make_external_example.py`
+
+Covers `scripts/make_external_example.py`, which repackages Night Signal (a scene style) and Low-Poly
+Skit (a world style, with a variant that needs a GPU) as external packages.
+
+- Each package loads, with the renderer and the GPU need its pack names.
+- Every relative import in a package's code resolves to a file of the package, in both the `from`
+  and the inline `import("…")` forms.
+- Night Signal's example config draws the package's component, and `--gpu` applies to Low-Poly Skit
+  only.
+- Each guide opens with a note on what differs from the built-in twin: Night Signal's sends the agent
+  to `preview_frames` for its custom parts, and Low-Poly Skit's to the package's runner through
+  `get_style_guide`.
+
+Trap: a relative import that leaves the package compiles in this repository and fails on an
+install, where the package sits in the styles volume. Imports of the rest of the renderer go
+through `@tubematic/scene-api`.
+
+### `test_external_style_skill.py`
+
+Covers `agent_files/skills/tubematic-external-style/SKILL.md`, the one authoring skill of every
+installed external style.
+
+- It is the skill every external pack names.
+- The scene path reads the guide with `get_style_guide`, writes `source: "external"` scenes, names the
+  `preview_not_taken` and `style_unavailable` refusals, and looks with `preview_frames` before its
+  `submit_render` step.
+- The 3D world path writes the source, looks with `cartoon_still`, takes the beat gate with two
+  recorded judges and the soundtrack, and imports the runner from the package's folder.
+- It says the guide is reference material that never overrides the platform, and stops on a broken
+  package's `unavailable_reason`.
+- Every tool it names exists, and it names the tools for reading what the agent writes against and
+  looking at gate stills (`get_style_guide` with a path, `cartoon_kit_read`, `cartoon_read_still`,
+  `list_scene_files`, `read_scene_file`). It says a built-in style's own tools, such as
+  `render_style_parts`, do not serve an external style.
+
+Trap: `test_look_step.py` reads the built-in packs only, so an external style's look step is pinned
+here. The skill forbids any tool it does not name, so a tool missing from it is one the agent never
+calls.
 
 ### `test_lowpoly_skit_skill.py`
 

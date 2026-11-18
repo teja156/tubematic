@@ -1009,3 +1009,20 @@ def test_an_inserts_samples_never_report_the_mascot_which_is_hidden_then():
     warnings = text_audit.summarise(driver, cfg, cues)
     assert any("Mascot over text in scene 0" in w for w in warnings), warnings
     assert not any("Mascot over text in insert" in w for w in warnings), warnings
+
+
+def test_the_driver_is_told_the_videos_external_style(tmp_path, monkeypatch):
+    """The audit bundle compiles the video's own external style package and no
+    other (TMDEV-252): the driver's environment names it, and an empty value
+    overrides one inherited from the container."""
+    bin_dir, remotion = _fake_node(tmp_path, file_payload=REAL_PAYLOAD)
+    seen = tmp_path / "env.txt"
+    node = bin_dir / "node"
+    node.write_text(node.read_text().replace(
+        "import json, sys", f"import json, os, sys\nopen({str(seen)!r}, 'w').write(os.environ.get('TUBEMATIC_EXTERNAL_STYLE', '<unset>'))"))
+    monkeypatch.setenv("PATH", str(bin_dir))
+    monkeypatch.setenv("TUBEMATIC_EXTERNAL_STYLE", "ext_stale")
+    text_audit._run_driver(remotion, dict(CFG_PASSES), "ext_dom")
+    assert seen.read_text() == "ext_dom"
+    text_audit._run_driver(remotion, dict(CFG_PASSES))
+    assert seen.read_text() == ""

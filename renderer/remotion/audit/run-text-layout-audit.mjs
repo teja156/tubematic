@@ -36,7 +36,7 @@
 
 import { bundle } from "@remotion/bundler";
 import { openBrowser, renderFrames, selectComposition } from "@remotion/renderer";
-import { enableTailwind } from "@remotion/tailwind-v4";
+import { overrideFromEnv } from "../webpack-override.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -117,7 +117,8 @@ const main = async () => {
     const serveUrl = await bundle({
       entryPoint: ENTRY_POINT,
       outDir,
-      webpackOverride: enableTailwind,
+      // at most the video's own external style, named in TUBEMATIC_EXTERNAL_STYLE
+      webpackOverride: overrideFromEnv(),
       symlinkPublicDir: true,
       onProgress: () => {},
     });

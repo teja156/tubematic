@@ -59,7 +59,7 @@ STEP_DEFS = [
     Step(
         "directories", "Directories",
         "Creates the data directories under ~/.tubematic-data: jobs, data, output_videos, "
-        "scenes/generated, logs and backups. Must precede container start.",
+        "scenes/generated, logs, backups, sandbox and styles. Must precede container start.",
     ),
     Step(
         "database", "Database",

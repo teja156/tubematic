@@ -19,3 +19,6 @@ paper-tools/.tmp/
 terminal-tools/.tmp/
 # character-tools/render-props.mjs writes a private entry per call here; it removes it when done
 character-tools/.tmp/
+# Installed external style packages (TMDEV-252): the styles volume is mounted here
+src/scenes/external/*
+!src/scenes/external/.gitkeep

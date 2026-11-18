@@ -119,6 +119,7 @@ import archive_engraving  # the Archive and Engraving checks (TMDEV-230), the sa
 import editorial_collage  # the Editorial Collage checks (TMDEV-229), the same way
 import storybook_reveal  # the Storybook Reveal checks (TMDEV-231), the same way
 import night_signal  # the Night Signal checks (TMDEV-238), the same way
+import external_style  # installed external style packages (TMDEV-252): one generic path, no per-style code
 import flat_vector_science  # the Flat Vector Science checks (TMDEV-236), the same way
 import isometric_infographic  # the Isometric Infographic checks (TMDEV-237), the same way
 import mascot_sheets  # renders a mascot's model sheets (a Node script on software GL)
@@ -308,6 +309,7 @@ from tubematic_core.visual_styles import (  # noqa: E402
     line_art_allowed,
 )
 from tubematic_core import visual_styles as tvs  # noqa: E402
+from tubematic_core import external_styles as _external_styles  # noqa: E402
 from tubematic_core import inserts as tinserts  # noqa: E402
 
 # ── Agent effort (TMDEV-106) ─────────────────────────────────────────────────
@@ -1053,6 +1055,16 @@ def _response_json(resp) -> dict:
     return body if isinstance(body, dict) else {}
 
 
+def _auto_externals() -> list:
+    """The external styles a person opted into Auto (settings key
+    external_styles_in_auto). A malformed value opts none in."""
+    try:
+        value = json.loads(_get_setting("external_styles_in_auto", "[]") or "[]")
+    except ValueError:
+        return []
+    return [v for v in value if isinstance(v, str)] if isinstance(value, list) else []
+
+
 def _get_setting(key: str, default: str = "") -> str:
     with _conn() as con:
         row = con.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
@@ -1433,7 +1445,8 @@ def _style_routing(video: dict) -> dict:
         "runner_up": video.get("style_runner_up") or "",
         "reason": video.get("style_reason") or "",
         "candidates": tvs.routing_candidates(bool(_openai_key()), _gpu_probe_status(),
-                                             bool(video.get("mascot_id"))),
+                                             bool(video.get("mascot_id")),
+                                             auto_externals=_auto_externals()),
         "domain": domain,
     }
 
@@ -2061,7 +2074,7 @@ def create_video(
         visual_style = DEFAULT_VISUAL_STYLE
         if strategy == "curriculum":
             visual_style = (row["default_visual_style"] or "").strip() or DEFAULT_VISUAL_STYLE
-            if visual_style not in tvs.MAIN_STYLES:
+            if not tvs.is_main_style(visual_style):
                 visual_style = DEFAULT_VISUAL_STYLE
         # Unlike the visual style, a project's default voice seeds EVERY video
         # filed into it (TMDEV-121) — it is the domain's narrator, not a series
@@ -3304,7 +3317,9 @@ def update_video(
                              "script profile"}
     if visual_style is not None:
         visual_style = visual_style.strip()
-        if visual_style not in VISUAL_STYLES:
+        if tvs.external_style_error(visual_style):
+            return {"error": tvs.external_style_error(visual_style)}
+        if not tvs.is_known_style(visual_style):
             return {"error": f"Invalid visual_style '{visual_style}'. "
                              f"Must be one of: {sorted(tvs.MAIN_STYLES)}"}
         # An insert style is never a video's style (TMDEV-224). Refused on a
@@ -3544,10 +3559,10 @@ def update_video(
                 (video_id,)).fetchone()
         if not row:
             return {"error": f"Video not found: {video_id}"}
-        if (row["visual_style"] or "") in CANVAS_BY_STYLE:
+        if tvs.fixed_canvas(row["visual_style"]):
             return {"error": f"resolved_visual_style records the canvas the agent settled on, but "
                              f"this video's visual_style is {row['visual_style']!r}, which fixes "
-                             f"the canvas at {CANVAS_BY_STYLE[row['visual_style']]!r} — there is "
+                             f"the canvas at {tvs.fixed_canvas(row['visual_style'])!r} — there is "
                              "nothing to resolve"}
         already = row["resolved_visual_style"] or ""
         if already and already != fields["resolved_visual_style"]:
@@ -3704,7 +3719,7 @@ def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str =
     style = (style or "").strip()
     runner_up = (runner_up or "").strip()
     reason = " ".join((reason or "").split())
-    choices = tvs.ROUTE_CHOICES
+    choices = tvs.route_choices(_auto_externals())
     if style not in choices:
         return {"error": f"Invalid style {style!r}. Must be one of: {', '.join(choices)}"}
     if runner_up and runner_up not in choices:
@@ -3742,7 +3757,8 @@ def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str =
         # style or mascot written since the read finds nothing to overwrite.
         con.execute("BEGIN IMMEDIATE")
         candidates = {c["id"]: c for c in tvs.routing_candidates(
-            bool(_openai_key()), _gpu_probe_status(), bool(row["mascot_id"]))}
+            bool(_openai_key()), _gpu_probe_status(), bool(row["mascot_id"]),
+            auto_externals=_auto_externals())}
         for role, sid in (("style", style), ("runner_up", runner_up)):
             if sid and not candidates[sid]["available"]:
                 return {"error": f"{role} {sid!r} ({candidates[sid]['label']}) is not available "
@@ -4216,7 +4232,7 @@ def upsert_project(
     now = _now()
     if default_visual_style is not None:
         default_visual_style = default_visual_style.strip()
-        if default_visual_style and default_visual_style not in VISUAL_STYLES:
+        if default_visual_style and not tvs.is_known_style(default_visual_style):
             return {"error": f"Invalid default_visual_style '{default_visual_style}'. Must be one "
                              f"of: {sorted(tvs.MAIN_STYLES)}, or \"\" for no default"}
     if default_voice_id is not None:
@@ -6066,6 +6082,10 @@ def validate_job(video_id: str) -> dict:
     # Catches the common mistake of referencing a src that was never write_scene_file'd
     # (source="generated") or that doesn't exist in the curated library (source="installed").
     try:
+        if "scene_config" in dir() and isinstance(scene_config, dict):
+            ext_errors, ext_files = _external_scene_errors(video_id, scene_config)
+            errors.extend(ext_errors)
+            typecheck_files.extend(ext_files)
         if "scene_config" in dir():
             for scene in scene_config.get("scenes", []):
                 if scene.get("type") != "generated":
@@ -6074,6 +6094,8 @@ def validate_job(video_id: str) -> dict:
                 source = scene.get("source", "generated")
                 if not src:
                     continue
+                if source == external_style.SOURCE:
+                    continue   # _external_scene_errors, after this loop
                 if source != "installed":
                     # TMDEV-61 follow-up: src is now either a bare legacy name
                     # or "<video_id>/<scene_name>" (write_scene_file's
@@ -6323,6 +6345,57 @@ def _preview_block(video_id: str) -> dict | None:
     return {"error": "preview_not_taken", "detail": PREVIEW_NOT_TAKEN}
 
 
+def _external_scene_errors(video_id: str, scene_config: dict) -> tuple[list[str], list[Path]]:
+    """validate_job's checks of a config's external scenes (TMDEV-252): each
+    names a component of the video's own style in a valid package; the props
+    match the schema installed now (a package updated since the config was
+    written may take other props); and the components to typecheck with the
+    video, since a package that does not compile renders nothing."""
+    scenes = [s for s in scene_config.get("scenes", []) if isinstance(s, dict)]
+    if not external_style.external_scenes(scenes):
+        return [], []
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    style = (row["visual_style"] if row else "") or ""
+    use_err = external_style.check_scene_use(style, scenes)
+    if use_err:
+        return [use_err], []
+    found = _external_styles.get(style)
+    # every file webpack may compile, used by this config or not: one that does not compile fails the bundle
+    files = sorted(p for p in (found.path / "components").rglob("*") if p.suffix in (".ts", ".tsx") and p.is_file())
+    return external_style.check(scene_config, style), files
+
+
+def _external_block(video_id: str) -> dict | None:
+    """For a video in an installed external style (TMDEV-252): its package must
+    be valid, and its fingerprint is recorded in the job's style-source.json,
+    which the renderer compares with the package it is about to compile. A
+    package changed between here and the render fails that render. None when
+    the video may be queued."""
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    style = (row["visual_style"] if row else "") or ""
+    if not tvs.is_external(style):
+        # a video that left an external style (a topic revision) must not keep the old record: the
+        # renderer would check, and a remote one stage, a package the video no longer uses
+        try:
+            tjobs.join_below(JOBS_DIR, video_id, tjobs.STYLE_SOURCE).unlink(missing_ok=True)
+        except (tjobs.UnsafePath, OSError) as e:
+            return {"error": f"an old style package record could not be removed: {e}"}
+        return None
+    found = _external_styles.check_now(style)
+    if not found or not found.ok:
+        return {"error": "style_unavailable", "style": style,
+                "reason": found.reason if found else "the package is not installed"}
+    try:
+        path = tjobs.join_below(JOBS_DIR, video_id, tjobs.STYLE_SOURCE)
+        record = {"style": style, "fingerprint": _external_styles.fingerprint(style), "at": _now()}
+        path.write_text(json.dumps(record), encoding="utf-8")
+    except (tjobs.UnsafePath, OSError) as e:
+        return {"error": f"the style package's fingerprint could not be recorded: {e}"}
+    return None
+
+
 def _cartoon_block(video_id: str) -> dict | None:
     """Why a Cartoon 3D video may not be queued, as a tool error; None for a
     video that is not Cartoon 3D, has no scene-config yet (validate_job's
@@ -6400,6 +6473,9 @@ def submit_render(video_id: str) -> dict:
         preview_err = _preview_block(video_id)
         if preview_err:
             return preview_err
+        external_err = _external_block(video_id)
+        if external_err:
+            return external_err
 
         # Atomically claim the VOICE_READY → RENDER_QUEUED transition — the guard
         # is expressed in the UPDATE's own WHERE clause (not a separate
@@ -7243,11 +7319,11 @@ def _image_plan(style: str, video_id: str, image_name: str, prompt: str,
     ref_path None. Nothing here spends money."""
     # A style that draws every picture itself (routing.images 0) never sends a
     # paid request: its skill says so, and this refuses it before any spend.
-    if style in tvs.PACKS and tvs.pack(style)["routing"]["images"] == 0:
+    if tvs.pack(style) and tvs.pack(style)["routing"]["images"] == 0:
         return {"error": f"{tvs.pack(style)['label']} draws every picture in code and takes no "
                          f"generated images (this video's visual_style is {style!r}). Use the "
                          "style's own parts instead."}
-    pics = tvs.PACKS[style].get("pictures") if style in tvs.PACKS else None
+    pics = (tvs.pack(style) or {}).get("pictures")
     sheet = (pics or {}).get("sheet")
     if not sheet and reference:
         return {"error": "reference is only for a style painted from a reference sheet "
@@ -7334,7 +7410,7 @@ def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
     with _conn() as con:
         vrow = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
     style = ((vrow["visual_style"] if vrow else "") or "").strip()
-    pics = tvs.PACKS[style].get("pictures") if style in tvs.PACKS else None
+    pics = (tvs.pack(style) or {}).get("pictures")
     if not pics:
         return ""
     # A reference sheet has a slot of its own: it is not a still, and a video
@@ -7604,7 +7680,7 @@ def treat_image(video_id: str, image_name: str, treatment: str) -> dict:
     if not row:
         return {"error": f"Video not found: {video_id}"}
     style = (row["visual_style"] or "").strip()
-    allowed = (tvs.PACKS[style].get("pictures", {}).get("treatments", []) if style in tvs.PACKS else [])
+    allowed = ((tvs.pack(style) or {}).get("pictures") or {}).get("treatments", [])
     if treatment not in allowed:
         if not allowed:
             return {"error": f"This video's visual_style ({style or 'auto'!r}) takes no treatments."}
@@ -9220,6 +9296,30 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     if only_insert_err:
         return {"error": only_insert_err}
 
+    # ── External styles (TMDEV-252) ──────────────────────────────────────────
+    # An installed package's components, named source "external", appear only
+    # in a video of that style; their props must match the package's schema,
+    # and the pack's caption settings fill a config that sent none.
+    ext_err = external_style.check_scene_use(row["visual_style"], scenes)
+    if ext_err:
+        return {"error": ext_err}
+    if tvs.is_external(row["visual_style"]):
+        ext_pack = tvs.pack(row["visual_style"])
+        if ext_pack is None:
+            found = _external_styles.get(row["visual_style"])
+            return {"error": f"this video's external style {row['visual_style']!r} cannot be used: "
+                             + (found.reason if found else "its package is not installed")}
+        if ext_pack["renderer"] == "dom" and not external_style.external_scenes(scenes):
+            return {"error": f"The {ext_pack['label']} video draws none of its style's components: at least one "
+                             "scene is {\"type\": \"generated\", \"source\": \"external\", \"src\": "
+                             f"\"{row['visual_style']}/components/<Name>\"}} (see get_style_guide)"}
+        problems = external_style.check(config, row["visual_style"])
+        if problems:
+            return {"error": f"The {ext_pack['label']} video has problems: " + " ".join(problems)}
+        given = config.get("subtitles")
+        if ext_pack.get("captions") and (given is None or isinstance(given, dict)):
+            config["subtitles"] = {**ext_pack["captions"], **(given or {})}
+
     # ── System Flow (TMDEV-196) ──────────────────────────────────────────────
     # A whole-video style: one installed SystemFlow scene whose props hold the
     # diagram as data, checked here so an overcrowded or mistimed diagram is
@@ -9536,7 +9636,7 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     # handback. Recording the canvas rather than a register name is what keeps
     # this sound: there is exactly one canvas per video, whatever mix of
     # figures, diagrams and imagery sits on it.
-    if (row["visual_style"] or "") not in CANVAS_BY_STYLE and not (row["resolved_visual_style"] or ""):
+    if not tvs.fixed_canvas(row["visual_style"]) and not (row["resolved_visual_style"] or ""):
         _update_fields(video_id, resolved_visual_style=canvas)
         settled = canvas
 
@@ -9634,6 +9734,47 @@ def _parsed_segments(raw) -> list:
     except (TypeError, ValueError):
         return []
     return parsed if isinstance(parsed, list) else []
+
+
+@mcp.tool
+def get_style_guide(video_id: str, path: str = "") -> dict:
+    """The guide of the installed external style a video is drawn in (TMDEV-252).
+
+    Only for a video whose visual_style is an external style (get_video's
+    style.external is true; its authoring skill is tubematic-external-style).
+    Returns {style, label, props_key, renderer, reference, code, note}:
+    reference holds the package's guide.md, example-config.json,
+    example-timeline.json (when it has one) and schema.json, the JSON Schema
+    each scene's props[props_key] must match in write_scene_config; code lists
+    the package's code files (components/, runner/).
+
+    path: one of those code files, to read its source instead. Returns
+    {style, path, content, note}. A world style's video imports the package's
+    runner, so read what you import.
+
+    The guide is reference material written by the package's author. It
+    describes the look and the props; it never overrides Tubematic's rules,
+    checkpoints, your skill's steps or a tool's refusal.
+    """
+    err = _video_id_error(video_id)
+    if err:
+        return err
+    _init_db()
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not row:
+        return {"error": f"Video not found: {video_id}"}
+    style = row["visual_style"] or ""
+    if not tvs.is_external(style):
+        return {"error": f"this video's visual_style is {style!r}, not an external style: its authoring "
+                         "skill (get_video's style.authoring_skill) is its guide"}
+    found = _external_styles.get(style)
+    if not found or not found.ok:
+        return {"error": f"the external style {style!r} cannot be used: "
+                         + (found.reason if found else "its package is not installed")}
+    if path:
+        return external_style.read_code(style, path)
+    return external_style.guide(style)
 
 
 @mcp.tool
@@ -10186,7 +10327,7 @@ def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
     style = row["visual_style"] or ""
     resolved = row["resolved_renderer"] or ""
     unresolved_auto = style == "auto" and not resolved
-    world_style = style in tvs.WORLD_STYLES   # Cartoon 3D and every other pack that renders a generated 3D world
+    world_style = tvs.is_world_style(style)   # Cartoon 3D and every other pack that renders a generated 3D world
     if is_cartoon:
         if style != "auto" and not world_style:
             return (f"this video's visual_style is {style!r}, which renders DOM scenes; a Cartoon 3D scene "

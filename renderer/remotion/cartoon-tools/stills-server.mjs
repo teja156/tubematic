@@ -37,7 +37,7 @@ import { planRequest } from "./out-path.mjs";
 import { syncMergedPublic } from "./merged-public.mjs";
 import { bundle } from "@remotion/bundler";
 import { openBrowser, renderStill, selectComposition } from "@remotion/renderer";
-import { enableTailwind } from "@remotion/tailwind-v4";
+import { externalContextRegExp, overrideFor } from "../webpack-override.mjs";
 
 const arg = (name, def) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -58,6 +58,8 @@ const chromiumOptions = { gl: GL, enableMultiProcessOnLinux: MULTI, disableWebSe
 const browserOptions = { chromiumOptions, chromeMode: CHROME_MODE, browserExecutable: BROWSER, logLevel: "error" };
 
 const GENERATED = path.join(ROOT, "src/scenes/generated");
+// installed external style packages (TMDEV-252): a bundle compiles only the one its video uses
+const EXTERNAL = path.join(ROOT, "src/scenes/external");
 // what a render serves as /public/: the jobs volume plus the project's fonts, watermark and mascots (merged-public.mjs)
 const MERGED_PUBLIC = fs.mkdtempSync(path.join(os.tmpdir(), "stills-public-"));
 const syncPublic = () => syncMergedPublic(MERGED_PUBLIC, PUBLIC, path.join(ROOT, "public"));
@@ -86,27 +88,37 @@ export const treeStamp = (dir) => {
   return rows.join("\n");
 };
 
-const rebundle = async () => {
+/** what a bundle for `style` and `video` compiled: the generated tree and the installed packages (a world
+ * video's generated scene imports its package statically, with no style named) */
+const sourceStamp = (style, video) => `${style}\n${video}\n${treeStamp(GENERATED)}\n${treeStamp(EXTERNAL)}`;
+
+let bundledStyle = "";
+let bundledVideo = "";
+
+const rebundle = async (style = bundledStyle, video = bundledVideo) => {
   const t = Date.now();
   syncPublic();
-  const stamp = treeStamp(GENERATED);
-  // remotion.config.ts does not apply to the Node API: the Tailwind override and the public dir are passed here,
+  const stamp = sourceStamp(style, video);
+  // remotion.config.ts does not apply to the Node API: the override and the public dir are passed here,
   // and the public dir is symlinked so files added under it later are served without another bundle
   const previous = serveUrl;
-  serveUrl = await bundle({ entryPoint: ENTRY, publicDir: MERGED_PUBLIC, webpackOverride: enableTailwind, symlinkPublicDir: true, onProgress: () => {} });
+  serveUrl = await bundle({ entryPoint: ENTRY, publicDir: MERGED_PUBLIC, webpackOverride: overrideFor(style, video), symlinkPublicDir: true, onProgress: () => {} });
   bundledStamp = stamp;
+  bundledStyle = style;
+  bundledVideo = video;
   if (previous && previous !== serveUrl) fs.rmSync(previous, { recursive: true, force: true });
   console.log(`[stills] bundled in ${Date.now() - t} ms: ${serveUrl} (public ${PUBLIC})`);
 };
 
-/** bundle when there is none, or re-bundle when the generated source tree changed since the current bundle */
-const freshen = async () => {
+/** bundle when there is none, or re-bundle when the source the request's style compiles changed since the
+ * current bundle (the generated tree, or the request names another external style or its package changed) */
+const freshen = async (style = "", video = "") => {
   syncPublic();   // a video filed since the last request is served too
   if (!serveUrl) {
-    await rebundle();
-  } else if (treeStamp(GENERATED) !== bundledStamp) {
-    console.log("[stills] generated source changed: re-bundling");
-    await rebundle();
+    await rebundle(style, video);
+  } else if (sourceStamp(style, video) !== bundledStamp) {
+    console.log("[stills] source changed: re-bundling");
+    await rebundle(style, video);
   }
 };
 
@@ -180,13 +192,18 @@ const server = http.createServer(async (req, res) => {
       // writes exactly the targets checked here
       const plan = planRequest(PUBLIC, req.url, b);
       if (plan.error) return json(res, 400, { ok: false, error: plan.error });
+      const style = typeof b.externalStyle === "string" ? b.externalStyle : "";
+      try { externalContextRegExp(style); } catch (e) { return json(res, 400, { ok: false, error: String(e.message ?? e) }); }
+      // the video whose generated scenes the bundle compiles (the others cannot break it); "" compiles them all
+      const video = typeof b.renderVideo === "string" ? b.renderVideo : "";
+      if (video.includes("/") || video.length > 128) return json(res, 400, { ok: false, error: "renderVideo is not a video id" });
       const t = Date.now();
       const scale = b.scale ?? 1;
       const comp = b.composition ?? "Composition";
       const props = b.props ?? {};
       const work = async () => {
         try {
-          await freshen();
+          await freshen(style, video);
           await ensureBrowser();
         } catch (e) {
           // With no bundle or no browser to fall back on, this server cannot draw anything: say so, and exit so the

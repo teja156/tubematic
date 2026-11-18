@@ -270,14 +270,14 @@ jobs:
             -C "${RUNNER_TEMP}/release-smoke"
           echo "SMOKE_DIR=${RUNNER_TEMP}/release-smoke/tubematic-v${{ needs.preflight.outputs.version }}" >> "$GITHUB_ENV"
 
-      # A real install gets these six directories from onboarding's
+      # A real install gets these directories from onboarding's
       # directories step (onboard/actions.py::apply_directories) before any
       # container starts. This job deliberately skips onboarding -- it is
       # testing the published artifact, not the install flow -- so nothing
       # else creates them here.
       #
       # Without this, `docker compose up` fails outright. The compose
-      # file's six volumes are `local`-driver, `o: bind` volumes with a
+      # file's volumes are `local`-driver, `o: bind` volumes with a
       # `device:` under here, and -- verified directly against Docker, not
       # inferred -- that kind of volume does NOT get its device path
       # auto-created on a missing path; the mount fails with "no such file
@@ -294,7 +294,8 @@ jobs:
             "$HOME/.tubematic-data/scenes/generated" \
             "$HOME/.tubematic-data/logs" \
             "$HOME/.tubematic-data/backups" \
-            "$HOME/.tubematic-data/sandbox"
+            "$HOME/.tubematic-data/sandbox" \
+            "$HOME/.tubematic-data/styles"
 
       # The compose file mounts each service token from ~/.tubematic-data/secrets/ and, on purpose,
       # refuses to start a service whose file is missing ("bind source path does not exist"). A real

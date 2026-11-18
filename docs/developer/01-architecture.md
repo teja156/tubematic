@@ -149,6 +149,8 @@ Pipeline data lives at a fixed absolute path outside the checkout:
 ├── output_videos/<project_id>/    # rendered mp4s, and voice-previews/
 ├── logs/<service>.<date>.jsonl    # structured logs, one file per service per day
 ├── backups/                       # pre-migration database snapshots
+├── sandbox/                       # the code sandbox's requests and results
+├── styles/<style id>/             # installed external style packages
 └── secrets/                       # the four service tokens (API, MCP, dashboard session, built-in
                                    # renderer) and the render gateway's TLS key and certificate
 ```
@@ -157,7 +159,7 @@ The location is not configurable. Because it is outside the repository, deleting
 checkout leaves the database and the video library in place, and Compose finds the same data tree
 from any directory.
 
-Compose exposes the first six as named volumes with `o=bind` device paths under `${HOME}`
+Compose exposes every folder above but `secrets/` as a named volume with an `o=bind` device path under `${HOME}`
 ([Infrastructure: Volumes](16-infrastructure.md#volumes)). `secrets/` is not a volume: each secret
 file is mounted read-only into the services that need it, as a Compose secret
 ([Infrastructure: Authentication](16-infrastructure.md#authentication)).
@@ -172,10 +174,12 @@ columns. Each derives it from the video's ids, and the dashboard plays a render 
 | | |
 |---|---|
 | Baked into the image | `renderer/api/`, `mcp/`, the dashboard, the Remotion project's `src/` including `scenes/installed/` |
-| Bind-mounted | The six data directories above that are volumes, including `scenes/generated/` |
+| Bind-mounted | The data directories above that are volumes, including `scenes/generated/` and `styles/` (read-only, at `src/scenes/external/`) |
 
 Editing the repository changes nothing in a running container until you rebuild the image.
-`scenes/generated/` is a volume, so agent-written scenes appear without a rebuild.
+`scenes/generated/` is a volume, so agent-written scenes appear without a rebuild, and so is
+`styles/`, so an installed [external style](10-scene-authoring.md#external-styles) needs none
+either.
 
 ---
 
@@ -234,6 +238,7 @@ would be dangerous. Everything else that two processes share stays a copy.
 | `ids.py`, `jobfiles.py` | The rules for ids that become paths, and where a video's files live | A path traversal in one of the programs that build those paths |
 | `renderers.py` | Which renderer may take which video, whether the install's GPU works, credentials and enrollment tokens | The dashboard offering a style that no renderer is handed |
 | `visual_styles.py`, `style_packs/` | The visual styles and each style's rules, as one data file per style | The agent and the dashboard disagreeing about what a style allows, or offering a style the other refuses ([Style packs](10-scene-authoring.md#style-packs)) |
+| `external_styles.py` | The loader of installed external style packages, and their fingerprint | A broken package stopping every other style, or a package changed after a video was queued reaching its render ([External styles](10-scene-authoring.md#external-styles)) |
 | `mascots.py` | The mascot statuses, the attempt cap and the cue checks | The API, the MCP server, the worker, the renderer and the poller applying different rules |
 
 `renderer/api/pipeline.py::_init_db` and `mcp/server.py::_init_db` define no schema. Both call

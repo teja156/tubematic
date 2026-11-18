@@ -190,6 +190,39 @@ Trap: the preview caps are part of every install's download, since the dashboard
 files. Raise one only after weighing that cost; `scripts/make_style_preview.py` encodes a loop
 again at a lower quality until it fits.
 
+### `test_external_styles.py`
+
+Covers `tubematic_core/external_styles.py`, the loader for style packages installed in the styles
+data folder:
+
+- A valid scene package and a valid world package that needs a GPU both load.
+- Every broken package loads as unavailable with a reason: an id outside the `ext_` namespace or
+  different from its folder, invalid JSON, a pack the built-in check refuses, a pack that hosts
+  inserts, takes a mascot, names another authoring skill or another `scene_api`, a file that differs
+  from `MANIFEST.json` or is missing from it, a symlink inside the package or as the package folder, a
+  missing required file or code folder, a schema that is not an object, an oversize preview, and fonts
+  with no licence file.
+- One broken package leaves the others available.
+- The registry sees a package added or rewritten without a restart, and the fingerprint changes with
+  any file. The registry and `check_now` both see a file edited in place with the manifest untouched.
+  A package folder removed while the registry lists it does not raise.
+- A package whose code imports outside its folder (a relative path that leaves it, an absolute path,
+  in the `from`, side-effect, `export … from` and `import()` forms) is unavailable; imports inside
+  it, the scene-API alias and npm packages are fine. The agent view of a broken package stays
+  external, with the reason and no permissions.
+- `config_style` reads the external style a scene-config draws from its first external scene, and
+  returns `""` for a config with none or with a malformed id.
+- The style lookups see installed styles: `pack`, `is_known_style`, `is_main_style`,
+  `is_world_style`, `fixed_canvas`, `hosts_inserts`, `public_list` (with `external` set and a broken
+  package unavailable with its reason) and `agent_view` (the generic authoring skill and the
+  `props_key`).
+- Auto routes to an installed style only once it is opted in, and never to a broken one.
+- A world style that needs a GPU is gated like Cartoon 3D, and every external style takes no
+  mascot, including in the SQL clash condition.
+
+Trap: a package comes from outside the release, so the loader never raises. A broken built-in pack
+stops the process at start-up; a broken package must leave every other style working.
+
 ### `test_angles.py`
 
 Covers `tubematic_core/angles.py`, the kinds and score of a
@@ -211,6 +244,16 @@ Covers `tubematic_core/angles.py`, the kinds and score of a
 
 Trap: a kind points at a formula by id. A kind left pointing at a formula that was removed would
 send the script writer to a reference file that is not there, so the test reads the formula files.
+
+### `test_external_styles_fence_migration.py`
+
+Covers migration `0031`, the rollback fence for external styles. The migration sits above `0030`, the
+newest one 2.3.x ships. Applying it to a 2.3.x database takes a backup and leaves every row as it was,
+and a second run changes nothing.
+
+Trap: 2.3.x renders a video in an external style blank. The fence is what makes its `upgrade.py`
+refuse the newer database until the backup is restored, so the test fails if the migration is removed
+or renumbered below the line.
 
 ### `test_formulas.py`
 

@@ -29,7 +29,7 @@ import zoneinfo
 from contextlib import contextmanager
 from pathlib import Path
 
-from flask import Blueprint, Response, g, jsonify, request
+from flask import Blueprint, Response, g, jsonify, request, send_file
 
 import discord_notify
 import hosttz
@@ -126,6 +126,13 @@ SETTINGS_SPEC = {
     # model on change only (_domain_agent_error), so a stale pair never blocks
     # an unrelated save. Keep in sync: scripts/poll.py::_research_agent.
     "research_agent_id":      ("str",       ""),
+    # The installed external styles Auto may pick (TMDEV-252), by id. Empty by
+    # default: an external style is routed only once a person opts it in, since
+    # its routing text is its author's claim. Checked on change only, so a
+    # package that breaks later never blocks an unrelated save; Auto skips an
+    # id whose package is gone or broken. Keep in sync: mcp/server.py's
+    # _auto_externals.
+    "external_styles_in_auto": ("json_list", "[]"),
     "research_agent_model":   ("str",       ""),
     "research_agent_effort":  ("str",       ""),
     "pronunciation_lexicon":  ("lexicon",   "[]"),
@@ -499,6 +506,7 @@ from tubematic_core.visual_styles import (  # noqa: E402
     line_art_allowed,
 )
 from tubematic_core import visual_styles as tvs  # noqa: E402
+from tubematic_core import external_styles as texternal  # noqa: E402
 
 # Mining is the one strategy that needs a key: it sends YouTube URLs to Gemini.
 # With no Gemini key it is off — derived at every read, never stored — so a
@@ -3295,7 +3303,9 @@ def create_pipeline_blueprint() -> Blueprint:
             # agent settled on at scene-config time, and the dashboard has no
             # business overwriting that.
             if "visual_style" in fields:
-                if fields["visual_style"] not in VISUAL_STYLES:
+                if tvs.external_style_error(fields["visual_style"]):
+                    return jsonify({"error": tvs.external_style_error(fields["visual_style"])}), 400
+                if not tvs.is_known_style(fields["visual_style"]):
                     return jsonify({
                         "error": f"Invalid visual_style '{fields['visual_style']}'. "
                                  f"Must be one of: {sorted(VISUAL_STYLES)}"
@@ -4007,7 +4017,9 @@ def create_pipeline_blueprint() -> Blueprint:
             # one strategy that produces a series. Keep in sync: mcp/server.py's
             # create_video. An explicit visual_style in the body still wins.
             visual_style = (body.get("visual_style") or "").strip()
-            if visual_style and visual_style not in VISUAL_STYLES:
+            if tvs.external_style_error(visual_style):
+                return jsonify({"error": tvs.external_style_error(visual_style)}), 400
+            if visual_style and not tvs.is_known_style(visual_style):
                 return jsonify({
                     "error": f"Invalid visual_style '{visual_style}'. "
                              f"Must be one of: {sorted(tvs.MAIN_STYLES)}"
@@ -4037,7 +4049,7 @@ def create_pipeline_blueprint() -> Blueprint:
                         "SELECT default_visual_style FROM projects WHERE id = ?",
                         (body["project_id"],)).fetchone()
                     seeded = ((prow["default_visual_style"] if prow else "") or "").strip()
-                    if seeded in tvs.MAIN_STYLES:
+                    if tvs.is_main_style(seeded):
                         visual_style = seeded
             # The default script profile seeds curriculum videos only, like the
             # visual style (TMDEV-145). A profile no longer READY seeds nothing:
@@ -4170,7 +4182,9 @@ def create_pipeline_blueprint() -> Blueprint:
             }), 400
 
         visual_style = picks["visual_style"] or DEFAULT_VISUAL_STYLE
-        if visual_style not in tvs.MAIN_STYLES:
+        if not tvs.is_main_style(visual_style):
+            if tvs.external_style_error(visual_style):
+                return jsonify({"error": tvs.external_style_error(visual_style)}), 400
             if tvs.is_insert_style(visual_style):
                 return jsonify({"error": tvs.insert_style_error(visual_style)}), 400
             return jsonify({
@@ -4293,7 +4307,9 @@ def create_pipeline_blueprint() -> Blueprint:
         # absence of a domain-level one. Keep in sync: mcp/server.py's
         # upsert_project.
         default_style = (body.get("default_visual_style") or "").strip()
-        if default_style and default_style not in VISUAL_STYLES:
+        if tvs.external_style_error(default_style):
+            return jsonify({"error": "default_visual_style: " + tvs.external_style_error(default_style)}), 400
+        if default_style and not tvs.is_known_style(default_style):
             return jsonify({
                 "error": f"Invalid default_visual_style '{default_style}'. Must be one of: "
                          f"{sorted(VISUAL_STYLES)}, or \"\" for no default"
@@ -4707,6 +4723,14 @@ def create_pipeline_blueprint() -> Blueprint:
                             err.replace("default_agent_model", "research_agent_model")
                             .replace("default_agent_id", "research_agent_id")
                             .replace("The domain's agent", "The research agent"))}), 400
+
+            if "external_styles_in_auto" in coerced and \
+                    _json.loads(coerced["external_styles_in_auto"]) != current["external_styles_in_auto"]:
+                for sid in _json.loads(coerced["external_styles_in_auto"]):
+                    if not (tvs.is_external(sid) and tvs.pack(sid)):
+                        return jsonify({"error": (
+                            f"external_styles_in_auto: {sid!r} is not an installed external style "
+                            "whose package is valid")}), 400
 
             webhook = coerced.get("discord_webhook_url")
             if webhook:
@@ -5828,6 +5852,19 @@ def create_pipeline_blueprint() -> Blueprint:
         with _conn() as con:
             key_set = bool(_secret(_read_all_settings(con), "openai_api_key", "OPENAI_API_KEY"))
             return jsonify({"styles": tvs.public_list(key_set, trenderers.gpu_status(con)["status"])})
+
+    # An installed external style's preview loop and poster (TMDEV-252). Built-in
+    # previews ship inside the dashboard image; an external one lives in its
+    # package, so the dashboard asks for it here. Only a valid package's two
+    # fixed files: nothing else in a package is served.
+    _PREVIEW_TYPES = {"mp4": "video/mp4", "webp": "image/webp"}
+
+    @bp.get("/visual-styles/<style_id>/preview.<ext>")
+    def external_style_preview(style_id, ext):
+        found = texternal.get(style_id) if tvs.is_external(style_id) else None
+        if not found or not found.ok or ext not in _PREVIEW_TYPES:
+            return jsonify({"error": "not_found"}), 404
+        return send_file(found.path / f"preview.{ext}", mimetype=_PREVIEW_TYPES[ext], max_age=300)
 
     @bp.get("/script-formulas")
     def list_script_formulas():

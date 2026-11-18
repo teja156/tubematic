@@ -1201,3 +1201,42 @@ def test_a_failed_upgrade_never_reaches_the_image_step(upgrade, env, monkeypatch
     code, _, _ = _run(upgrade, env)
     assert code == 1
     assert seen == []
+
+
+# ── Installed external styles (TMDEV-252) ────────────────────────────────────
+# A package targets one scene API. After an upgrade that moves it, or with a
+# package that broke, the style is unavailable in the pickers with its reason;
+# the upgrade says which ones, and never refuses for them.
+
+def _external_package(env, sid, scene_api=None):
+    import importlib
+    ext = importlib.import_module("tubematic_core.external_styles")
+    d = env.data_root / "styles" / sid
+    (d / "guide").mkdir(parents=True)
+    (d / "components").mkdir()
+    pack = json.loads((REPO_ROOT / "tubematic_core" / "style_packs" / "night_signal.json").read_text())
+    pack.update(id=sid, order=9000, inserts={"host": False}, mascot=False, preview=sid,
+                authoring_skill=ext.AUTHORING_SKILL,
+                external={"version": "1", "author": "a", "source": "s", "licence": "MIT",
+                          "scene_api": scene_api or ext.SCENE_API, "props_key": "k"})
+    pack["messages"] = dict(pack["messages"], inserts="No inserts.")
+    (d / "style.json").write_text(json.dumps(pack))
+    for name, body in (("schema.json", "{}"), ("guide/guide.md", "#"), ("guide/example-config.json", "{}"),
+                       ("components/Main.tsx", "x"), ("preview.mp4", "x"), ("preview.webp", "x")):
+        (d / name).write_text(body)
+    ext.write_manifest(d)
+
+
+def test_an_external_style_this_version_cannot_draw_is_named_and_the_upgrade_goes_on(upgrade, env):
+    _external_package(env, "ext_good")
+    _external_package(env, "ext_old", scene_api=99)
+    code, _, rep = _run(upgrade, env)
+    assert code == 0
+    warned = [m for kind, m in rep.lines if kind == "warn" and "ext_old" in m]
+    assert warned and "scene_api" in warned[0]
+    assert not any("ext_good" in m for kind, m in rep.lines if kind == "warn")
+
+
+def test_no_styles_folder_says_nothing_about_external_styles(upgrade, env):
+    code, _, rep = _run(upgrade, env)
+    assert code == 0 and "external style" not in rep.text().lower()

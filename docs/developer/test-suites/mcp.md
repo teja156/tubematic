@@ -1501,6 +1501,40 @@ Trap: `npx` runs `tsc` as a child of its own, so killing `npx` alone leaves `tsc
 call `validate_job` again after a timeout, and those leftover processes once filled a host's memory.
 The timeout test fails if the kill reaches `npx` only.
 
+### `test_external_style.py`
+
+Covers `mcp/external_style.py` and the external-style path through `mcp/server.py`.
+
+- A valid external config is written with the pack's captions and canvas. Props that break the
+  package's `schema.json` are refused with the failing path, and so is a scene without the
+  `props_key`.
+- An external scene must name an existing component of the video's own style. Another style's
+  component, a path outside `components/`, a `.tsx` suffix, an external scene in a built-in style
+  and a broken package are refused. An external style hosts no inserts and says why.
+- `update_video` refuses a broken or missing package with its reason.
+- `get_style_guide` returns the guide, the example config and the schema, with a `note` saying the
+  guide never overrides Tubematic's rules, and refuses a built-in style.
+- `get_style_guide` lists the package's code files and reads one by `path`. A file outside `code`
+  (the pack, the manifest, a preview, another package's file, a path through `..`, an absolute path,
+  a missing file) is refused.
+- `submit_render` removes an old `style-source.json` from a video that left its external style.
+- `submit_render` records the package's fingerprint in `style-source.json`, and refuses with
+  `style_unavailable` when a file was edited in place after `write_scene_config`, leaving the video
+  at `VOICE_READY`.
+- Auto routes to an external style only once `external_styles_in_auto` names it, and a malformed
+  value opts none in. The stills CLI's environment names the video's external style and the video.
+- A schema's `$ref` to a URL or a file is refused and never fetched, and a reference inside the schema
+  still works.
+- `validate_job`'s external checks (`_external_scene_errors`) check the props against the schema
+  installed now and list the package's components for the typecheck.
+- The look's content hash changes when the package changes.
+- A scene-style video draws at least one of its package's components, an external scene of another
+  type is refused, every file of the package's `components/` is typechecked, and a pack with
+  `routing.images` 0 refuses generated images for an external style as for a built-in one.
+
+Trap: the registry cache only notices a new manifest or folder, so `submit_render` checks the
+package from disk. A file edited in place would otherwise reach the render as an approved package.
+
 ### `test_night_signal.py`
 
 Covers `mcp/night_signal.py`, the checks `write_scene_config` runs on a Night Signal config, the text
@@ -1634,6 +1668,8 @@ Covers `mcp/text_audit.py`, the decision layer of the text-layout audit
   own stdout.
 - Every failure of the subprocess returns a warning and does not raise. A timeout kills the
   process group, and staged files are removed.
+- The driver's environment names the video's external style, and an empty value replaces one
+  inherited from the container, so the audit bundle compiles that package only.
 - The frame-0 pass is added for a mixed-scenes video only, outside the pinned sampling plan. It warns
   when frame 0 shows only text or a backdrop (a full-frame fill or SVG rect, a faint or tiny
   picture) and when nothing moves by frame 6. A picture already moving, something arriving or

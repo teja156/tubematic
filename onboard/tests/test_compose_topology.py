@@ -172,9 +172,10 @@ def _mounts(service):
     return {v.split(":")[1] for v in service["volumes"]}
 
 
-def test_mcp_mounts_exactly_the_six_it_needs(services):
+def test_mcp_mounts_exactly_the_seven_it_needs(services):
     """TUBEMATIC_DB, TUBEMATIC_JOBS_DIR, the generated scene tree, /logs, /backups,
-    and /sandbox (the spool run_code hands code to the sandbox through, TMDEV-242).
+    /sandbox (the spool run_code hands code to the sandbox through, TMDEV-242),
+    and the installed external styles (TMDEV-252).
 
     Deliberately an exact set: the standing instruction is that MCP gets no
     volume it does not use, and an exact assertion is what forces a yes/no
@@ -185,6 +186,7 @@ def test_mcp_mounts_exactly_the_six_it_needs(services):
     """
     assert _mounts(services["tubematic-mcp"]) == {
         "/data", "/jobs", "/app/remotion/src/scenes/generated", "/logs", "/backups", "/sandbox",
+        "/app/remotion/src/scenes/external",
     }
 
 
@@ -206,7 +208,7 @@ def test_renderer_mounts(services):
     uploaded mp4; nothing here migrates). The scene tree stays because its
     renders compile it; /jobs stays for the stills server; /logs for its trail."""
     assert _mounts(services["tubematic-renderer"]) == {
-        "/jobs", "/logs", "/app/remotion/src/scenes/generated",
+        "/jobs", "/logs", "/app/remotion/src/scenes/generated", "/app/remotion/src/scenes/external",
         "/etc/localtime", "/etc/timezone",
     }
 
@@ -223,10 +225,11 @@ def test_the_renderer_can_write_the_stills_the_mcp_tools_ask_for(services):
 def test_worker_mounts(services):
     """Exact, like MCP's: retention deletes mp4s (/output_videos) and job
     directories (/jobs); Auto Pilot and scheduling count host-zone days
-    (/etc/localtime). It never touches a scene, so no scenes-generated."""
+    (/etc/localtime). It never touches a scene, so no scenes-generated. It reads
+    the external styles' packs: the AI review is told an installed style's look."""
     assert _mounts(services["tubematic-worker"]) == {
         "/output_videos", "/jobs", "/data", "/logs", "/backups",
-        "/etc/localtime", "/etc/timezone",
+        "/etc/localtime", "/etc/timezone", "/app/remotion/src/scenes/external",
     }
 
 
@@ -398,6 +401,31 @@ def test_no_service_mounts_the_docker_socket(services):
     for name, service in services.items():
         for v in service.get("volumes", []):
             assert "docker.sock" not in v and "/var/run" not in v.split(":")[0], name
+
+
+def test_the_installed_styles_are_read_only_where_the_style_lookups_run(services):
+    """Every image-based service that reads a style pack mounts the styles folder
+    at the path external_styles.STYLES_DIR defaults to, read-only (TMDEV-252):
+    installing a package is not something a render or an agent tool does. The
+    dashboard reads styles through the API and the sandbox runs agent code, so
+    neither mounts it.
+
+    nocopy: the image has src/scenes/external/.gitkeep, and Docker copies an
+    image folder into an empty volume on first mount, root owner included. The
+    styles folder then turned root-owned and a person could not copy a package
+    into it without sudo (found in the TMDEV-252 live test)."""
+    holders = {}
+    for name, service in services.items():
+        for v in service.get("volumes", []):
+            if v.startswith("styles:"):
+                holders[name] = v
+    assert holders == {n: "styles:/app/remotion/src/scenes/external:ro,nocopy" for n in
+                       ("tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer")}
+
+
+def test_the_styles_volume_binds_the_data_root_styles_folder():
+    volumes = yaml.safe_load(COMPOSE.read_text())["volumes"]
+    assert volumes["styles"]["driver_opts"]["device"] == "${HOME}/.tubematic-data/styles"
 
 
 def test_the_sandbox_volume_binds_the_data_root_sandbox_folder():

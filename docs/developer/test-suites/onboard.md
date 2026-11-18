@@ -275,7 +275,10 @@ Covers the three lists that name a data folder: the bind volumes in `docker-comp
 
 - Every bind volume of the Compose file has its folder in `DATA_SUBDIRS` and its device in the
   reconcile map.
-- The directories step creates the sandbox folder on a data root from a release that has none.
+- The directories step creates the sandbox and styles folders on a data root from a release that
+  has none.
+- The release workflow's smoke job, which skips onboarding, creates every folder in `DATA_SUBDIRS`
+  itself.
 
 Trap: Docker does not create the device folder of a `local` bind volume, so an upgrade from a release
 without the folder fails to start unless the directories step runs first. `upgrade.py` reaches it through
@@ -400,6 +403,10 @@ Covers `docker-compose.yml` and the test stack's renderer, parsed as YAML
   only the six it needs added, `no-new-privileges`, CPU, memory and process ceilings, the daemon
   command with no entrypoint, and the spool shared with the MCP server and nobody else. No service
   mounts the Docker socket.
+- The styles folder is bound from the data root and mounted read-only at
+  `/app/remotion/src/scenes/external` in the API, the MCP server, the worker and the renderer, and
+  nowhere else, each with `nocopy`. Without it Docker copies the image's folder into the empty
+  volume with its root owner, and a person can no longer copy a package into the folder.
 
 Trap: the mounts of the MCP server, the worker and the renderer are each asserted as an exact
 set, so a new mount is a decision. The sandbox's capability list is an exact set for the same
@@ -499,6 +506,9 @@ list proves the order ([`upgrade.py` in detail](../18-releases.md#upgradepy-in-d
 - Live agents are redeployed, and an agent left without a working MCP registration fails the
   exit code after the upgrade finishes. A successful upgrade removes the old images one at a time
   without forcing, and one that needs attention removes none.
+- An installed external style the new version cannot use (another `scene_api`, a broken package) is
+  named with its reason, and the upgrade goes on. A valid one and a missing styles folder say
+  nothing.
 
 Trap: the removed-component check is a lexer and fails closed
 ([The removed-component check](../18-releases.md#the-removed-component-check)). Do not replace

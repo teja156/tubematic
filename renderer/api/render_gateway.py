@@ -85,6 +85,7 @@ from werkzeug.exceptions import ClientDisconnected
 import db
 import pipeline
 import render_results
+from tubematic_core import external_styles as texternal
 from tubematic_core import jobfiles as tjobs
 from tubematic_core import mascots as tmascots
 from tubematic_core import renderers
@@ -401,6 +402,20 @@ def _stream_tar(members):
     yield end + b"\0" * (-total % _TAR_RECORD)
 
 
+STYLES_MEMBER = "styles"   # keep in sync: render_agent.py::_stage
+
+
+def _record_style(record: Path) -> str:
+    """The style id a job's style-source.json names; BundleUnavailable when it names none."""
+    try:
+        style = json.loads(record.read_text(encoding="utf-8")).get("style")
+    except (OSError, ValueError, AttributeError) as e:
+        raise BundleUnavailable(f"{tjobs.STYLE_SOURCE} cannot be read: {e}") from None
+    if not isinstance(style, str) or not texternal.ID_RE.fullmatch(style):
+        raise BundleUnavailable(f"{tjobs.STYLE_SOURCE} names no external style")
+    return style
+
+
 def _plain_files(root: Path, prefix: str) -> list:
     """Every regular file under `root` as (prefix/relpath, path), sorted;
     symlinks — to files or directories — are skipped, never followed."""
@@ -497,6 +512,7 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
     output_dir = Path(output_dir)
     remotion = Path(remotion_dir) if remotion_dir is not None else _remotion_dir()
     generated = remotion / "src" / "scenes" / "generated"
+    external = remotion / "src" / "scenes" / "external"   # installed style packages (TMDEV-252)
     # Before any request: nothing is uploading yet, so every temp upload
     # left in the directory is a crash's leftover.
     _sweep_uploads(output_dir)
@@ -977,6 +993,13 @@ def create_gateway_app(db_path, jobs_dir, output_dir, secrets_dir=None, remotion
                     continue
                 if _is_plain_file(flat):
                     members.append((f"scenes/{FLAT_SCENES}/{name}.tsx", flat))
+            # An external-style video (TMDEV-252): the record submit_render wrote and the one
+            # package it names, which a remote renderer stages and every renderer compares.
+            record = tjobs.join_below(job, tjobs.STYLE_SOURCE)
+            if _is_plain_file(record):
+                style = _record_style(record)
+                members.append((tjobs.STYLE_SOURCE, record))
+                members += _plain_files(tjobs.join_below(external, style), f"{STYLES_MEMBER}/{style}")
             return members
         except tjobs.UnsafePath as e:
             raise BundleUnavailable(str(e)) from None

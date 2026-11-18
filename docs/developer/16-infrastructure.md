@@ -42,7 +42,12 @@ the renderer and the sandbox reuse its tag with a different `command:`, so a reb
 | `logs-data` (`/logs`) | read-write | read-write | read-write | read-write | | |
 | `backups-data` (`/backups`) | read-write | read-write | read-write | | | |
 | `sandbox-spool` (`/sandbox` in MCP, `/spool` in the sandbox) | | read-write | | | read-write | |
+| `styles` (`/app/remotion/src/scenes/external`) | read-only | read-only | read-only | read-only | | |
 | `/etc/localtime`, `/etc/timezone` (host files) | read-only | | read-only | read-only | | |
+
+Every `styles` mount sets `nocopy`. The image holds `src/scenes/external/.gitkeep`, and without
+`nocopy` Docker copies that folder into the empty volume on first mount with its root owner, which
+leaves `~/.tubematic-data/styles` writable only by root.
 
 The secret files each service mounts are listed under
 [The secrets directory](#the-secrets-directory).
@@ -108,6 +113,8 @@ It runs the background passes described in [The Worker](12-the-worker.md).
 - It mounts the two timezone files because Auto Pilot's daily numbers and a scheduled post's wall
   time are host-zone days.
 - It has no `scenes-generated` mount, because it reads and writes no scene.
+- It mounts `styles` read-only, because the AI review is told an installed external style's look
+  from its pack.
 - It holds no secret file. The API keys it uses (Gemini for the review, postforme for publishing)
   are rows in the settings table.
 
@@ -127,6 +134,7 @@ the upload into the library and the worker runs the AI review, so the renderer m
 | Mount, variable or secret | Purpose |
 |---|---|
 | `scenes-generated` | Renders compile the shared generated-scene tree. A remote renderer stages the bundle's copy |
+| `styles` | Read-only. Renders of an external-style video compile its package from here. A remote renderer stages the bundle's copy |
 | `jobs-data` | The stills server reads a video's job files and writes Cartoon 3D stills under `<video_id>/cartoon/` and frame previews under `<video_id>/preview/`. Renders use the bundle |
 | `logs-data` | Its own JSONL log for the dashboard's Logs page |
 | `/etc/localtime`, `/etc/timezone` | Log timestamps in the host zone |
@@ -509,7 +517,7 @@ against the address it used. The dashboard therefore sets no `trustHostHeader` a
 
 ## Volumes
 
-All seven are named volumes with `o=bind` device paths under `${HOME}`:
+All eight are named volumes with `o=bind` device paths under `${HOME}`:
 
 | Volume | Device | Holds |
 |---|---|---|
@@ -520,6 +528,7 @@ All seven are named volumes with `o=bind` device paths under `${HOME}`:
 | `logs-data` | `~/.tubematic-data/logs` | JSONL logs. See [The log files](#the-log-files) |
 | `backups-data` | `~/.tubematic-data/backups` | Pre-migration database snapshots. See [Backups](#backups) |
 | `sandbox-spool` | `~/.tubematic-data/sandbox` | The code sandbox's requests and results, shared by `tubematic-mcp` and `tubematic-sandbox`. See [`tubematic-sandbox`](#tubematic-sandbox) |
+| `styles` | `~/.tubematic-data/styles` | Installed external visual styles, one package folder each. See [External styles](10-scene-authoring.md#external-styles) |
 
 The data folder also holds `secrets/` and the two override files, `compose.gpu.json` and
 `compose.renderers.json`. None of those is a volume.
