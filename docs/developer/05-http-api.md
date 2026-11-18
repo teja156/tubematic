@@ -64,6 +64,14 @@ The same process serves the [render gateway](#the-render-gateway), a separate ap
 | `POST` | [`/voices/<voice_id>/preview`](#post-voicesvoice_idpreview) | Generate or replay a sample |
 | `GET` | [`/visual-styles`](#get-visual-styles) | Every visual style, and whether this install can make it |
 | `GET` | [`/visual-styles/<id>/preview.<mp4\|webp>`](#get-visual-stylesidpreviewmp4webp) | An installed external style's preview loop or poster |
+| `GET` | [`/external-styles`](#get-external-styles) | Installed external styles, installs waiting for review, the gallery address |
+| `GET` | [`/external-styles/gallery`](#get-external-stylesgallery) | The curated gallery's styles |
+| `POST` | [`/external-styles/pending`](#post-external-stylespending) | Stage a package for review |
+| `GET` | [`/external-styles/pending/<id>`](#get-external-stylespendingid) | One staged install, with its scan |
+| `GET` | [`/external-styles/pending/<id>/file`](#get-external-stylespendingidfile) | One text file of a staged package |
+| `POST` | [`/external-styles/pending/<id>/confirm`](#post-external-stylespendingidconfirm) | Install it (needs the dashboard password) |
+| `DELETE` | [`/external-styles/pending/<id>`](#delete-external-stylespendingid) | Discard a staged install |
+| `DELETE` | [`/external-styles/<id>`](#delete-external-stylesid) | Remove an installed external style |
 | `GET` | [`/script-formulas`](#get-script-formulas) | Every script formula and hook type, with its label |
 | `GET` | [`/angle-kinds`](#get-angle-kinds) | Every kind a topic's angle can be, with its label |
 
@@ -902,6 +910,59 @@ Serves an installed external style's preview loop (`video/mp4`) or poster (`imag
 package. Anything else is a `404`: a built-in style (its previews are static files of the dashboard
 image), a broken or absent package, another file name. The dashboard relays it through
 `/external-style-previews/<id>/preview.<mp4|webp>`.
+
+### `GET /external-styles`
+
+Returns `{styles, pending, gallery_url}`. Each style is a package in the styles folder, valid or
+not: `id`, `label`, `ok`, `reason`, `needs_review` (valid but not approved, or changed since),
+`version`, `author`, `licence`, `homepage`, `renderer`, `needs_gpu`, `source` and `reviewed` from its
+approval record, `installed_at`, `in_auto`, `unfinished_videos` and the `domains` whose default it
+is. `pending` lists the staged installs, newest first. Served by `renderer/api/styles_api.py`, like
+every `/external-styles` route.
+
+### `GET /external-styles/gallery`
+
+Reads the index at `style_gallery_url` and returns `{gallery_url, styles}`, each entry with
+`installed_version` (`null` when it is not installed). An unset address or an unreadable index is
+`200` with `styles: []` and an `error`.
+
+### `POST /external-styles/pending`
+
+Stages a package and returns its record, `201`. The body is `{"kind": "zip", "filename", "data":
+<base64>}`, `{"kind": "git", "url", "ref"}`, `{"kind": "gallery", "id"}` or `{"kind": "installed",
+"id"}`. An `incoming` source is MCP-only. A refusal (a bad archive, an unpinned or non-https
+repository, a checksum that does not match the gallery, too many installs waiting) is `400`. The
+record holds `id`, `style_id`, `label`, `version`, `author`, `licence`, `homepage`, `renderer`,
+`needs_gpu`, `source`, `reviewed`, `created_at`, `expires_at`, `fingerprint`, `check` (`{ok,
+reason}`), `scan` (`{refusals, flags, files, imports, guide, fonts}`), `replaces` and `audit`.
+
+### `GET /external-styles/pending/<id>`
+
+The staged install's record plus `in_use` (`{videos, domains}` that use the style now). `404` once it
+expired or was confirmed or discarded.
+
+### `GET /external-styles/pending/<id>/file`
+
+`?path=<relative path>` returns `{path, text}` for one text file of the staged package. A path
+outside the package, a binary file or one over 1 MB is `404`.
+
+### `POST /external-styles/pending/<id>/confirm`
+
+Installs the staged package. The body must carry `{"password": <the dashboard password>}`: a
+missing or wrong one is `401`, and the check shares the login's throttle (`429` with `Retry-After`).
+A package that fails its check or the scan's refusals, or whose files changed after the scan, is
+`409`. Returns `{style_id, version, fingerprint}`.
+
+### `DELETE /external-styles/pending/<id>`
+
+Discards a staged install.
+
+### `DELETE /external-styles/<id>`
+
+Removes an installed external style and its approval. `409` while an unfinished video (any status
+but `PUBLISHED`, `PARTIALLY_PUBLISHED`, `FAILED` and `TOPIC_REJECTED`, and not archived) or a
+domain's default uses it; `404` for a built-in or unknown id. It also takes the style out of
+`external_styles_in_auto`.
 
 ### `GET /script-formulas`
 

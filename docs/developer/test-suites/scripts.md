@@ -847,6 +847,20 @@ Covers the `tubematic-process-cast` skill ([Process Cast](../10-scene-authoring.
 Trap: skill text that calls the cast mascots, or lets a character talk, leads the agent to the wrong
 video for this style. The test pins the wording that keeps them apart.
 
+### `test_install_style_command.py`
+
+Covers `/tubematic-install-style`, the agent command that stages an external style.
+
+- The Claude Code and OpenCode copies are the same file, and `tubematic.md` lists the command for
+  both.
+- It names `stage_style_install` and `audit_style_install` only, both real tools, with the three
+  source forms, the incoming folder and the dashboard link.
+- It never asks for the dashboard password, never picks a branch for the person, and never runs
+  anything from the package.
+
+Trap: the install is a person's yes on the dashboard. A command that asked for the password would
+hand the agent the one thing that tells the API a person approved.
+
 ### `test_make_external_example.py`
 
 Covers `scripts/make_external_example.py`, which repackages Night Signal (a scene style) and Low-Poly

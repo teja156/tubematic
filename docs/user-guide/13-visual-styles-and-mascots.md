@@ -321,6 +321,58 @@ video fails with a comment saying why. See
 
 ---
 
+## External styles
+
+An external style is a visual style made outside Tubematic's releases: by you with an agent, by
+someone else who shared it as a zip file or a git repository, or published in the Tubematic
+gallery. Once installed it appears in every style list with an **EXTERNAL** tag and works like the
+other styles. It takes no mascot and no insert scenes.
+
+A style package is code. It runs in the renderer's browser whenever a video in that style renders,
+and your agent reads its guide while it writes the video. Tubematic does not sandbox it, so install
+a style only from someone you trust. Gallery styles were reviewed by a person before they were
+published; a zip or a repository was not.
+
+### Installing a style
+
+Open **Profiles → Styles**. Then:
+
+- **Gallery** lists the reviewed styles. Press **Install** on one.
+- **Install from file** takes a zip of a style package.
+- **Install from repo URL** takes a git repository's https address and a commit or a tag. Name a
+  commit or a tag: a branch can change after you looked at it.
+
+Nothing is installed yet. The install screen opens and shows where the package came from, a warning,
+the result of Tubematic's checks, a scan of its code and guide, every file (click a text file to read
+it), and the guide your agent will read. The scan lists anything worth a look, such as code that
+reaches the internet. Read them. To install, enter your dashboard password and press **Install**. To
+drop it, press **Discard**. A package you leave waits for 24 hours.
+
+You can also ask your agent: `/tubematic-install-style ~/Downloads/my-style.zip` (or a folder, a
+repository address with `@<commit or tag>`, or a gallery id). The agent reads the package, writes its
+opinion onto the install screen and gives you the link. Only you can install it there, with your
+password. Never give the agent your password.
+
+### Using an external style
+
+Pick it like any style for a video or as a domain's default. **Auto** never picks an external style
+until you tick **Auto may pick it** on its row of the Styles page.
+
+A package whose files change after you installed it (for example, edited by hand) shows as
+unavailable with "its files changed after it was approved". Press **Review** on its row to see it
+again and approve it with your password. A package you copy into `~/.tubematic-data/styles/` by hand
+waits for the same review.
+
+Installing a newer version of a style replaces the old one. Videos already queued with the old
+version are not rendered with the new one: they go back for a fresh look first.
+
+### Removing an external style
+
+Press **Remove** on its row. It is refused while an unfinished video or a domain's default style
+uses it; finish those videos or switch them to another style first.
+
+---
+
 ## Mascots
 
 A mascot is a small character that walks on and off screen and reacts to the narration. It looks

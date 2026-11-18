@@ -83,6 +83,7 @@ _TUBEMATIC_COMMANDS = [
     "tubematic-list-strategies",
     "tubematic-set-strategy",
     "tubematic-dashboard-status",
+    "tubematic-install-style",
 ]
 
 

@@ -135,7 +135,7 @@ cadence, check the image floor and the bare-image cap again.
 
 ## Slash commands
 
-Twelve commands ship in `agent_files/<agent>/commands/`, one copy for each agent whose CLI has
+Thirteen commands ship in `agent_files/<agent>/commands/`, one copy for each agent whose CLI has
 user-defined commands: Claude Code and OpenCode. Codex has none, so a Codex install gets skills and
 the MCP registration only. The poller sends a prompt and uses no command. The user guide lists each
 command with its dashboard equivalent
@@ -154,6 +154,13 @@ Each agent has its own copy because some commands depend on the CLI:
 Tests in `scripts/tests/test_agent_adapters.py` pin that every agent ships the same set of
 filenames, that no copy names another agent's CLI, and that no copy tells an agent to run a tool
 its install denies.
+
+`/tubematic-install-style` stages an external style package with `stage_style_install` (a folder or
+zip it copies into `~/.tubematic-data/styles-incoming/`, a git repository at a commit or tag, or a
+gallery id), reads every file of the staged copy, records its verdict with `audit_style_install`
+and gives the person the install screen's link. It never asks for the dashboard password: the
+install is the person's, on the dashboard ([Installing a
+package](10-scene-authoring.md#installing-a-package)).
 
 Read `/tubematic-submit-new-job` before you modify it. It scores the topic against the
 producibility rubric and stops below 5. It looks for the topic's angle with the topic-research

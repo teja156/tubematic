@@ -406,7 +406,7 @@ Covers `docker-compose.yml` and the test stack's renderer, parsed as YAML
 - The styles folder is bound from the data root and mounted at `/app/remotion/src/scenes/external`
   in the API (read-write: it installs and removes packages), the MCP server, the worker and the
   renderer (read-only), and nowhere else, each with `nocopy`. Without it Docker copies the image's
-  folder into the empty volume with its root owner, and a person can no longer copy a package into
+  folder into the empty volume with its root owner, and a person cannot copy a package into
   the folder.
 - `styles-pending` (staged installs) is mounted in the API and the MCP server, and `styles-incoming`
   (where a host agent hands a package over) in the MCP server only, read-only. Both bind the data

@@ -174,9 +174,29 @@ buttons are disabled during an archive, because the two requests race at the API
 
 ### `profiles-nav.test.tsx`
 
-Covers `components/ProfilesNav.tsx`, the sub-nav on the Script Profiles and Mascots pages: both
-links render and the current page is marked. The two pages share one top-bar tab, because another
-tab does not fit the bar's one-row layout.
+Covers `components/ProfilesNav.tsx`, the sub-nav on the Script Profiles, Mascots and Styles pages:
+every link renders and the current page is marked, the install screen under `/styles` included. The
+pages share one top-bar tab, because another tab does not fit the bar's one-row layout.
+
+### `external-styles.test.tsx`
+
+Covers the Styles page (`app/styles/page.tsx`), the install screen
+(`app/styles/install/[id]/page.tsx`) and `dashboard/lib/externalStyles.ts`.
+
+- The warning depends on whether a person reviewed the package (gallery) or not, and the source is
+  named for each kind.
+- The install screen shows the warning, the scan's flags with file and line, the agent's audit, the
+  guide and a file's text, and installs only with a password, which it sends in the confirm's body
+  and clears afterwards. A wrong password keeps the person on the screen. A refused package offers no
+  password field, and a gallery package is marked reviewed. An expired install says so.
+- The Styles page lists installed styles with the EXTERNAL and REVIEWED tags, an unavailable
+  package's reason, its use by unfinished videos and the installs waiting for review. **Review** on a
+  hand-copied package stages it and opens the install screen. The Auto toggle keeps the other
+  opted-in styles. **Install from repo URL** needs a commit or tag, and the gallery offers Install or
+  Update from the installed version.
+
+Trap: the confirm sends the password in its body because the API token the dashboard relays with is
+one an agent can read; a page that confirmed without it would be refused.
 
 ### `settings-page.test.tsx`
 

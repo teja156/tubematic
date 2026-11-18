@@ -491,6 +491,8 @@ An external style is a visual style installed from a package folder in `~/.tubem
 outside the release. The pipeline reads it at runtime: no image is rebuilt and the MCP server holds
 no code for it. A package's drawing code runs in the renderer's Chromium and its guide is read by
 the agent, and Tubematic does not sandbox either, so installing a package means trusting its author.
+A person approves every package on the dashboard's install screen ([Installing a
+package](#installing-a-package)).
 
 ### The package
 
@@ -518,6 +520,10 @@ the agent, and Tubematic does not sandbox either, so installing a package means 
 - no relative import in its code leaves the package folder, and no import names an absolute path.
   The fingerprint covers the folder alone and a remote renderer stages it alone, so a package
   reaches the rest of the renderer only through `@tubematic/scene-api` and its npm packages.
+
+A package that passes is usable only once a person approved it: `~/.tubematic-data/styles/.installed.json` records
+each approved package's fingerprint, and a package with no record, or whose files changed after
+it was approved, is listed unavailable with `needs_review` set until someone reviews it again.
 
 A package that fails is listed unavailable with the reason, and every other style keeps working.
 A broken built-in pack stops the process at start-up because it ships with the release; a package
@@ -557,7 +563,9 @@ video, since webpack compiles each one. The
   video takes the `preview_frames` look before `submit_render`, and the look covers the package's
   fingerprint, so an updated package needs a new look.
 - A world style's video is one generated `CartoonShort` scene that imports the package's runner as
-  `../../external/<style id>/runner/<file>` and goes through the [beat gate](#cartoon-3d).
+  `../../external/<style id>/runner/<file>` and goes through the [beat gate](#cartoon-3d). The gate's
+  verdict is keyed by every file of the package the source imports as well as the video's own source
+  (`gate/sourceKey.ts`), so an updated package needs fresh judges.
 
 ### Rendering one
 
@@ -578,12 +586,48 @@ changed: a breaking change is a `v2.ts` and a new `SCENE_API`. A package that ta
 `scene_api` is unavailable, and `upgrade.py` names each installed style the new version cannot use
 before it upgrades.
 
+### Installing a package
+
+An install has two halves, in `tubematic_core/style_install.py`. Staging fetches a package, checks
+it like the registry does, scans it and leaves it in `~/.tubematic-data/styles-pending/<id>/` for 24
+hours. Confirming copies it into `styles/` and records its approval. Anything with the API or MCP
+token can stage; only a person can confirm.
+
+| Source | Staged by | What staging does |
+|---|---|---|
+| A zip file | The dashboard's **Install from file** | Unpacks it (25 MB zip, 60 MB unpacked, 2000 files at most; no path outside the package, no symlink; one wrapping folder allowed) |
+| A git repository | **Install from repo URL**, `stage_style_install("git:…")` | `git fetch --depth 1` of an https address at a commit or tag, and records the commit |
+| The gallery | The **Gallery** tab, `stage_style_install("gallery:…")` | Downloads the archive the index at `style_gallery_url` names and refuses it unless its sha256 matches the index; the install is marked reviewed |
+| A folder or zip on the host | `/tubematic-install-style`, `stage_style_install("incoming:…")` | Copies it from `~/.tubematic-data/styles-incoming/`, which only the MCP server mounts |
+| An installed package waiting for review | The **Review** button on the Styles page | Copies it from `styles/` |
+
+`tubematic_core/style_scan.py` scans the staged package. It refuses an import the renderer does not
+ship to styles (`style_scan.ALLOWED_IMPORTS`; a package reaches the rest of the renderer through
+`@tubematic/scene-api`) and a file type a style has no use for. It flags code that reaches the
+network, evaluates strings, imports at run time, touches browser storage or reads the environment;
+guide lines that read as shell commands, as calls to tools the authoring skill does not use, or as
+instructions about secrets; large files; and a font licence it does not recognise. Flags never
+block an install.
+
+The install screen shows the source, the warning (a gallery package was reviewed by a person, and
+nothing else was), the check, the scan, the agent's audit when an agent staged it, every file with a
+viewer for text files, the imports and the guide. `POST /external-styles/pending/<id>/confirm`
+installs only with the dashboard password in its body: the dashboard relays every request with the
+same API token an agent on the host can read, so the token cannot tell a person from an agent, and
+the password can. No MCP tool confirms. The confirm refuses a package whose files changed after the
+scan, swaps the folder into place and records the fingerprint, so the approved bytes are the ones
+that run.
+
+Removing a style (`DELETE /external-styles/<id>`) is refused while an unfinished video or a domain's
+default uses it, and takes it out of `external_styles_in_auto`.
+
 ### Making a test package
 
 `python3 scripts/make_external_example.py night_signal <out>` and `… low_poly_skit <out> [--gpu]`
 repackage Night Signal and Low-Poly Skit as `ext_night_signal`, `ext_low_poly_skit` and
-`ext_low_poly_skit_gpu`, with their imports of the rest of the renderer rewritten to the alias. Copy
-one into `~/.tubematic-data/styles/` on a test install to render it beside its built-in twin.
+`ext_low_poly_skit_gpu`, with their imports of the rest of the renderer rewritten to the alias. Zip
+one and install it from the dashboard's **Install from file**, or copy it into
+`~/.tubematic-data/styles/` and approve it with **Review**, to render it beside its built-in twin.
 
 ---
 

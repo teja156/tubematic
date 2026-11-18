@@ -202,7 +202,8 @@ export function TopBar() {
   const isArchive  = pathname.startsWith("/archive");
   const isTopics   = pathname.startsWith("/topics");
   const isProjects = pathname.startsWith("/projects");
-  const isProfiles = pathname.startsWith("/script-profiles") || pathname.startsWith("/mascots");
+  const isProfiles = pathname.startsWith("/script-profiles") || pathname.startsWith("/mascots")
+    || pathname.startsWith("/styles");
   const isSocials  = pathname.startsWith("/socials");
   const isAnalytics = pathname.startsWith("/analytics");
   const isLogs     = pathname.startsWith("/logs");

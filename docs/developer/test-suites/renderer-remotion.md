@@ -549,7 +549,7 @@ the camera in every Cartoon 3D video written afterwards.
 
 Covers `gate/sourceKey.ts`, what the beat gate's verdict is keyed by.
 
-- A built-in video's key material is exactly the shape it had before external styles, so verdicts
+- A built-in video's key material is the shape it had before external styles, so verdicts
   already recorded stay valid.
 - The external packages a world video imports are found from its source.
 - The key changes when a package the video imports changes, and not when another package does.

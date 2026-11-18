@@ -154,6 +154,7 @@ Claude Code and OpenCode have these slash commands:
 | `/tubematic-pause` | Pauses the pipeline | The switch above the tabs on **Settings** |
 | `/tubematic-resume` | Resumes it | The same switch |
 | `/tubematic-dashboard-status` | Checks the containers are running | `python3 scripts/service.py status` |
+| `/tubematic-install-style <source>` | Stages an external style from a folder, a zip, a git repository or the gallery, reads its code and gives you the link to install it | **Profiles → Styles** |
 | `/tubematic-register-mcp` | Registers Tubematic's tools with the agent again | See [Troubleshooting](08-troubleshooting.md#the-agent-has-no-tubematic-tools) |
 
 Codex has no slash commands. Ask in plain words, for example "show the Tubematic pipeline status".
