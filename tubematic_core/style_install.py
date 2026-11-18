@@ -47,7 +47,10 @@ PENDING_FILE = "pending.json"
 # The curated gallery's index (TMDEV-255). Only a package from this index is
 # marked reviewed: style_gallery_url can be pointed anywhere by anything with
 # the API token, and someone else's index is not the maintainer's review.
-OFFICIAL_GALLERY_URL = "https://teja156.github.io/tubematic-styles/index.json"
+# The gallery repo's own Pages domain, not teja156.github.io/tubematic-styles: the
+# account's github.io address redirects to another domain over plain http, which
+# the https-only download refuses.
+OFFICIAL_GALLERY_URL = "https://gallery.tubematic.ai/index.json"
 PID_RE = re.compile(r"[0-9a-f]{16}")
 REF_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,99}")
 INCOMING_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,80}")

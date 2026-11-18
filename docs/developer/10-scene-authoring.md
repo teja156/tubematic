@@ -626,7 +626,7 @@ default uses it, and takes it out of `external_styles_in_auto`.
 ### The gallery
 
 The curated gallery is its own repository, published on GitHub Pages at
-`https://teja156.github.io/tubematic-styles/index.json`, the default of `style_gallery_url` and
+`https://gallery.tubematic.ai/index.json`, the default of `style_gallery_url` and
 `style_install.OFFICIAL_GALLERY_URL`. Its skeleton (README, submission guide, review checklist and
 two workflows) is in `scripts/gallery/repo/`, and its tools are `scripts/gallery.py` in this
 repository, which its workflows check out:

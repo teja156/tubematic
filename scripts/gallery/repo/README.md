@@ -4,7 +4,7 @@ Visual styles for [Tubematic](https://github.com/teja156/tubematic) that a maint
 publishing them. Tubematic's dashboard lists them under **Profiles → Styles → Gallery**, and every
 install checks the downloaded package against the checksum in this gallery's index.
 
-- The index: https://teja156.github.io/tubematic-styles/index.json
+- The index: https://gallery.tubematic.ai/index.json
 - To submit a style, read [SUBMITTING.md](SUBMITTING.md).
 - Reviewers follow [REVIEW-CHECKLIST.md](REVIEW-CHECKLIST.md).
 

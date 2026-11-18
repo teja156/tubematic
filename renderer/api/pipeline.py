@@ -137,7 +137,7 @@ SETTINGS_SPEC = {
     # (TMDEV-253). https only; "" turns the Gallery tab off. The default is the
     # curated gallery (style_install.OFFICIAL_GALLERY_URL, TMDEV-255), the one
     # index whose installs are marked reviewed.
-    "style_gallery_url": ("str", "https://teja156.github.io/tubematic-styles/index.json"),
+    "style_gallery_url": ("str", "https://gallery.tubematic.ai/index.json"),
     "research_agent_model":   ("str",       ""),
     "research_agent_effort":  ("str",       ""),
     "pronunciation_lexicon":  ("lexicon",   "[]"),
