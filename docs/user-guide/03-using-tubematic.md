@@ -160,7 +160,7 @@ script and records it on the video. When your topic offers none, the agent says 
 and writes the script from the topic alone. The same happens to a topic that was proposed before
 angles existed.
 
-![The Topics page: three research mode switches, a list of mining sources, the form that adds a domain, and one row per domain with its pause button and its Edit domain button. The second domain is open and shows its description, style, inserts, voice, formula, agent and topic cap](../images/topics.png)
+![The Topics page: three research mode switches, a list of mining sources, the form that adds a domain with its description box, one row per domain with its pause button and its Edit domain button, and a closed Paused group. The second domain is open and shows its description, style, inserts, voice, formula, agent and topic cap](../images/topics.png)
 
 ### Adding a domain
 
