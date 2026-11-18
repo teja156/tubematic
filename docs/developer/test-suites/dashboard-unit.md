@@ -113,7 +113,10 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
   blur, trimmed, with every other field of the row, and sends nothing when the text is unchanged.
   An empty description is saved as empty. A refused save keeps the typed text in the box and shows
   the reason on the domain's line. A stored text longer than 2000 code points is shown whole and
-  cannot grow, so typing into it never cuts it; once under the limit, the limit holds.
+  cannot grow, so typing into it never cuts it; once under the limit, the limit holds. At the limit,
+  a letter typed into the middle is refused and a paste is cut to fit, so the end of the text is
+  never pushed out. A save that answers after the box was entered again leaves the newer typing in
+  the box, and a blur then saves it.
 - The formula default offers Auto and every formula with experimental ones marked, a change
   re-sends every other field, another edit keeps it, a new domain is created with the one picked,
   and a stored formula the list does not know stays selected under its id.

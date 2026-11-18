@@ -467,14 +467,17 @@ no prompt block:
 | Stage | Where the skill reads it |
 |---|---|
 | Topic research | Each project's `description` in `list_projects()` |
+| Mining | `mine_youtube_topics` puts the domain's `description` in Gemini's prompt |
 | Every per-video stage | `get_video`'s `style_routing.domain`, `{name, description}` |
 
 The operator skill states the rule once for every stage: apply the parts that fit the stage, as with
 user preferences. The research, script-writing, style-routing and formula-routing skills say what
 it changes in their own steps. Style and formula routing rule out a look or a structure it
-excludes, and pick a candidate it asks for when that candidate survives their other rule-out
-checks. A formula picked that way may be a recent one, so its `repeat_reason` names the
-description.
+excludes, and pick a candidate it asks for when that candidate is a clear fit, over a higher score
+and over the formula rotation. A requested candidate that is not a clear fit is not picked, because
+a style or structure forced onto the wrong topic makes a worse video; the domain's default style and
+formula pin one outright. A formula picked this way may be a recent one, so its `repeat_reason`
+names the description, which `choose_script_formula` accepts.
 
 Where the description and the user preferences disagree, the description wins, because it is the
 narrower of the two. It cannot cross a human checkpoint and never overrides a skill's fixed policy

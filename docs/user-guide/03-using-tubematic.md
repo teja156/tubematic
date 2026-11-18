@@ -186,7 +186,8 @@ made, and says "Install defaults for everything" when it has made none.
 The agent reads a domain's description as that domain's standing instructions. Research proposes
 topics inside its scope. When a video's style or formula is left on Auto, the pick follows what it
 says about the look and the structure: a look it rules out is not picked, and a style or formula it
-asks for is picked when the topic allows it. The script follows what it says about the audience, the tone and the wording.
+asks for is picked when it suits the topic. To use one style or formula on every video whatever the
+topic, set it as the domain's default under **Edit domain**. The script follows what it says about the audience, the tone and the wording.
 
 The [Preferences](05-settings.md#preferences) you write in **Settings** apply to every domain. Where
 a domain's description and your preferences disagree, the agent follows the description. Neither

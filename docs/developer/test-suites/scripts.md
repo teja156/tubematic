@@ -1066,8 +1066,12 @@ its standing instructions to the agent.
 - Research reads it from `list_projects()` as scope and instructions, both where curriculum topics
   are made and where any topic is filed.
 - The script-writing skill reads it and keeps its fixed policy above it.
-- Style and formula routing rule out what it excludes and pick what it asks for, and a formula it
-  asks for that is recent is recorded with a `repeat_reason`, which `choose_script_formula` requires.
+- Research also says that `mine_youtube_topics` carries it to Gemini.
+- Style and formula routing rule out what it excludes and pick what it asks for only when that
+  candidate is a clear fit. A formula it asks for that is recent is recorded with a
+  `repeat_reason`, which `choose_script_formula` requires.
+- The `choose_visual_style` and `choose_script_formula` docstrings accept the reasons the skills
+  give for such a pick.
 
 Trap: the dashboard note is a promise about agent behaviour. A skill edit that drops one of these
 sentences makes the note untrue with nothing else failing.

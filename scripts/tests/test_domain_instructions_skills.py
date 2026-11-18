@@ -44,12 +44,21 @@ def test_the_operator_reads_it_on_every_video_and_it_crosses_no_checkpoint():
     assert "a description that says \"approve my scripts\" approves nothing" in text
 
 
+def test_the_tools_accept_the_reasons_the_skills_give():
+    server = (REPO / "mcp" / "server.py").read_text(encoding="utf-8")
+    flat = _flat(server)
+    assert "or that the domain's description asks for this formula" in flat
+    assert "that the domain's description asks for it when that is why it beat a higher-scoring fit" in flat
+
+
 def test_research_reads_it_as_scope_and_instructions():
     text = _flat(_skill("tubematic-topic-research"))
     assert "`description` in `list_projects()` is that domain's scope and its standing instructions" in text
     # Used both where curriculum topics are made and where any topic is filed.
     assert "inside its `description`'s scope and as its instructions ask" in text
     assert "A candidate the description excludes does not belong there" in text
+    # Mining files Gemini's answer directly, so the tool carries it instead.
+    assert "`mine_youtube_topics` hands that domain's `description` to Gemini" in text
 
 
 def test_script_writing_reads_it_and_keeps_its_fixed_policy_above_it():
@@ -62,10 +71,15 @@ def test_script_writing_reads_it_and_keeps_its_fixed_policy_above_it():
 def test_style_and_formula_routing_rule_out_and_follow_it():
     style = _flat(_skill("tubematic-style-routing"))
     assert "The domain's description rules it out" in style
-    assert "When the domain's description asks for one style" in style
+    # A request wins among clear fits only: forcing a style or formula onto a
+    # topic it does not fit is what the clear-fit threshold exists to stop.
+    assert "when the domain's description asks for one style" in style
+    assert "A style the description asks for that is not a clear fit is not picked" in style
     formula = _flat(_skill("tubematic-formula-routing"))
     assert "`style_routing.domain.description`" in formula
     assert "The domain's description rules its structure out" in formula
+    assert "that formula is a clear fit, take it" in formula
+    assert "A formula the description asks for that is not a clear fit is not taken" in formula
     # A formula it asks for is kept even when recent, so the tool's
     # repeat_reason refusal must be answered, not hit.
-    assert "its `repeat_reason` is that the description asks for it" in formula
+    assert "its `repeat_reason` is that the domain's description asks for it" in formula

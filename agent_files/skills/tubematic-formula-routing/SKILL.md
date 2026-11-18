@@ -144,8 +144,11 @@ or `thin` (too few videos); `learned.videos` is how many videos are behind it.
 ## Step 4: Decide, and rotate
 
 When the domain's description asks for one formula for its videos, by name or by a structure only
-that candidate has, and Step 2 left it in, take it and skip the rest of this step. Say so in the
-reason; when it is `recent`, its `repeat_reason` is that the description asks for it.
+that candidate has, and that formula is a clear fit, take it and skip the rest of this step: the
+person asked for one structure, so rotating away from it would overrule them. Say so in the reason;
+when it is `recent`, its `repeat_reason` is that the domain's description asks for it. A formula
+the description asks for that is not a clear fit is not taken; the person can pin it as the
+domain's default formula instead.
 
 1. Take the clear fit with the most points, counting Step 3b. When two are within 1 point, break the tie (Step 5).
 2. **Rotation.** When that candidate is `recent` and another clear fit is not, take the best clear

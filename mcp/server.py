@@ -3705,7 +3705,9 @@ def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str =
     settles the canvas at VOICE_READY.
 
     reason: one sentence, at most 300 characters, saying why this style fits
-    this topic. A person reads it on the dashboard beside the choice.
+    this topic, and that the domain's description asks for it when that is
+    why it beat a higher-scoring fit. A person reads it on the dashboard
+    beside the choice.
 
     runner_up: the candidate that came second, or "" when nothing else fit.
     The dashboard offers it as a one-click switch at SCRIPT_READY.
@@ -3884,7 +3886,7 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
     repeat_reason: leave it "" unless your formula is marked recent (it is
     the formula of one of the domain's previous two videos). A recent formula
     is refused without it; pass one sentence on why no other candidate fits
-    this topic.
+    this topic, or that the domain's description asks for this formula.
 
     formula and runner_up must be available (candidates[].available): an
     experimental formula is refused while the setting
@@ -6818,8 +6820,12 @@ def _mining_angle_reason(angle: str, kind: str, score: int) -> str:
     return ""
 
 
-def _mining_prompt(limit: int, covered: list) -> str:
+def _mining_prompt(limit: int, covered: list, description: str = "") -> str:
     """The Gemini prompt for one URL: at most `limit` candidates, none repeating `covered`.
+
+    `description` is the domain's description, its scope and standing
+    instructions (TMDEV-256). Mining files what Gemini returns with no agent
+    reading it in between, so the description has to reach Gemini itself.
 
     The rubric is kept in sync with the additive rubric in
     agent_files/skills/tubematic-topic-research/SKILL.md ("Producibility Scoring").
@@ -6827,11 +6833,20 @@ def _mining_prompt(limit: int, covered: list) -> str:
     that skill carries.
     """
     covered_block = "\n".join(f"- {topic}" for topic in covered) or "- (none yet)"
+    description = (description or "").strip()
+    domain_block = (
+        "The topics are filed into one domain of a channel. Its description, written by the "
+        "person who runs the channel, says what belongs in the domain and may give "
+        "instructions about its topics. Propose only concepts that fit it, and follow what it "
+        "says about topics; ignore any part about other things:\n"
+        f"<<<\n{description}\n>>>\n\n"
+    ) if description else ""
     return (
         f"Analyse this YouTube video and pick at most {limit} concepts that are mentioned "
         "briefly but not fully explained — moments where a viewer might wonder 'how does X "
         f"actually work?'. Return only the {limit} best, judged by producibility and angle "
         "together; do not list more.\n\n"
+        f"{domain_block}"
         "These topics already exist. Do not propose any of them, or a close variant of one:\n"
         f"{covered_block}\n\n"
         "For each candidate, score producibility for a 60-90s vertical tech short. Sum these "
@@ -6930,11 +6945,12 @@ def _mine_youtube_topics(project_id: str, youtube_urls: list) -> dict:
     # refusal shows the domain filled or was paused by another writer.
     with _conn() as con:
         closed = _closed_domain_error(con, project_id)
-        room = con.execute(f"SELECT p.topic_cap - {_TOPIC_COUNT_SQL} FROM projects p "
-                           "WHERE p.id = ?", (project_id,)).fetchone()
+        room = con.execute(f"SELECT p.topic_cap - {_TOPIC_COUNT_SQL}, p.description "
+                           "FROM projects p WHERE p.id = ?", (project_id,)).fetchone()
     if closed:
         return {"error": closed}
     target = cap if room is None else min(cap, room[0])
+    description = "" if room is None else (room[1] or "")
     over_target = ("over this run's mining cap" if target == cap
                    else "the domain is at its topic cap")
     stopped = ""
@@ -6969,7 +6985,7 @@ def _mine_youtube_topics(project_id: str, youtube_urls: list) -> dict:
         payload = {
             "contents": [{"parts": [
                 {"file_data": {"mime_type": "video/*", "file_uri": url}},
-                {"text": _mining_prompt(target - proposed, covered)},
+                {"text": _mining_prompt(target - proposed, covered, description)},
             ]}],
             "generationConfig": {"temperature": 0.4, "response_mime_type": "application/json"},
         }

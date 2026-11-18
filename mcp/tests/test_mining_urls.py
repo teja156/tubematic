@@ -3,7 +3,8 @@
 A mining URL becomes Gemini's file_data.file_uri on a paid call. These pin
 that only a YouTube video URL ever gets there (checked before the first call,
 so a bad entry costs nothing), that one run makes at most one call per topic
-it may file, and that two runs never overlap.
+it may file, and that two runs never overlap. The domain's description reaches
+the prompt too: mining files Gemini's answer with no agent reading it first.
 """
 import json
 import threading
@@ -33,6 +34,7 @@ class _Gemini:
 
     def __init__(self, answer=(), on_post=None):
         self.uris = []
+        self.prompts = []
         self._answer = list(answer)
         self._on_post = on_post
 
@@ -47,6 +49,7 @@ class _Gemini:
 
     def post(self, url, headers=None, json=None, _dumps=json.dumps):
         self.uris.append(json["contents"][0]["parts"][0]["file_data"]["file_uri"])
+        self.prompts.append(json["contents"][0]["parts"][1]["text"])
         if self._on_post:
             self._on_post()
         text = _dumps(self._answer)
@@ -66,6 +69,24 @@ def _mine(monkeypatch, urls, gemini=None):
     monkeypatch.setattr(server, "_gemini_key", lambda: "test-key")
     monkeypatch.setattr(httpx, "Client", gemini)
     return server.mine_youtube_topics(project_id="proj_1", youtube_urls=urls), gemini
+
+
+# ── the domain's description reaches Gemini (TMDEV-256) ─────────────────────
+
+def test_the_domains_description_is_in_the_prompt(db, monkeypatch):
+    with server._conn() as con:
+        con.execute("UPDATE projects SET description = ? WHERE id = 'proj_1'",
+                    ("Kernel internals.\nNot: Kubernetes.",))
+    _, gemini = _mine(monkeypatch, [f"https://youtu.be/{ID_A}"])
+    assert len(gemini.prompts) == 1
+    assert "Propose only concepts that fit it" in gemini.prompts[0]
+    assert "<<<\nKernel internals.\nNot: Kubernetes.\n>>>" in gemini.prompts[0]
+
+
+def test_an_empty_description_adds_no_domain_block(db, monkeypatch):
+    _, gemini = _mine(monkeypatch, [f"https://youtu.be/{ID_A}"])
+    assert "Propose only concepts that fit it" not in gemini.prompts[0]
+    assert "<<<" not in gemini.prompts[0]
 
 
 # ── only a YouTube video URL reaches Gemini ─────────────────────────────────

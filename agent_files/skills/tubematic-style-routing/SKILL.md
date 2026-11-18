@@ -127,9 +127,12 @@ A candidate is a **clear fit** with at least 3 points.
 
 ## Step 4: Decide
 
-- When the domain's description asks for one style for its videos, by name or by a description
-  that fits only that candidate, and Step 2 left it in, pick it. Its reason names the description.
-- When at least one candidate is a clear fit, pick the one with the most points.
+- When at least one candidate is a clear fit, pick the one with the most points. Except: when the
+  domain's description asks for one style for its videos, by name or by a look only that candidate
+  has, and that style is a clear fit, pick it even when another clear fit has more points. Its
+  reason says why it fits the topic and that the description asks for it. A style the description
+  asks for that is not a clear fit is not picked: a style forced onto the wrong topic makes a worse
+  video, and the person can pin it as the domain's default style instead.
 - When none is, pick `scenes`. Do not pick a style that half fits: a topic forced into a style made
   for something else is worse than the mixed scene system.
 - A style that carries only some of the beats half fits, however many points those beats earn it.
@@ -219,8 +222,8 @@ request: DNS, TCP and TLS, the load balancer, the app server, the database, and 
 - [ ] Unavailable candidates, plain `avoid_for` matches, candidates whose `cannot_show` covers
       what must be seen, and looks the domain's description rules out, ruled out
 - [ ] Points counted from `best_for` and `signals` by meaning, not by shared words
-- [ ] A style the domain's description asks for picked when it is still in; otherwise a style
-      picked only as a clear fit (3 points or more), otherwise `scenes`
+- [ ] A style picked only as a clear fit (3 points or more), otherwise `scenes`; among clear fits,
+      the one the domain's description asks for
 - [ ] Ties broken by yielding, specificity, a person's hint, mood, cost, then order
 - [ ] `choose_visual_style` called with a one-sentence reason and a runner-up
 - [ ] A comment with the description and the top three scores

@@ -167,6 +167,8 @@ Covers what `mine_youtube_topics` may hand Gemini, and `set_mining_sources`
 - One URL that is not a YouTube video refuses the whole run with no Gemini call. Two spellings
   of one video are asked once.
 - A run makes at most as many calls as the topics it may file, including when every call fails.
+- The domain's description is in the prompt, fenced, and an empty one adds no domain block. Mining
+  files Gemini's answer with no agent reading it, so this is the only place the description acts.
 - A second run while one is in flight is refused, and the lock is released after a run that was
   refused or raised.
 - `set_mining_sources` stores the canonical, deduplicated list and refuses a list with a bad

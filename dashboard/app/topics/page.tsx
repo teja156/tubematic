@@ -175,12 +175,29 @@ const DESCRIPTION_NOTE =
   "domain's topics, scripts and look on every video here: what to cover or leave out, the " +
   "audience, the tone. It cannot skip a step that waits for your approval.";
 
+// The edit `next` makes to `prev`, with what it inserts cut so the text holds at
+// most `limit` code points. Only the inserted run is cut: a paste or a letter
+// typed into the middle of a full text must not push the end of it out.
+function clampEdit(prev: string, next: string, limit: number): string {
+  const after = codePoints(next);
+  if (after.length <= limit) return next;
+  const before = codePoints(prev);
+  let head = 0;
+  while (head < before.length && head < after.length && before[head] === after[head]) head++;
+  let tail = 0;
+  while (tail < before.length - head && tail < after.length - head
+         && before[before.length - 1 - tail] === after[after.length - 1 - tail]) tail++;
+  const inserted = after.slice(head, after.length - tail);
+  const room = Math.max(0, limit - (after.length - inserted.length));
+  return [...after.slice(0, head), ...inserted.slice(0, room), ...after.slice(after.length - tail)].join("");
+}
+
 // The description box on the add form and on a domain's open row: one
 // component so the cap, the counter and the note cannot drift apart. It grows
 // with its text, so a scope written in paragraphs is read without scrolling.
-function DomainDescriptionField({ testId, countTestId, value, onChange, onBlur }: {
+function DomainDescriptionField({ testId, countTestId, value, onChange, onFocus, onBlur }: {
   testId: string; countTestId: string; value: string;
-  onChange: (next: string) => void; onBlur?: () => void;
+  onChange: (next: string) => void; onFocus?: () => void; onBlur?: () => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -201,9 +218,7 @@ function DomainDescriptionField({ testId, countTestId, value, onChange, onBlur }
         onChange={(e) => {
           // The cap stops the text growing; it never cuts one stored longer
           // before the cap existed, which the API keeps until it changes.
-          const limit = Math.max(MAX_DOMAIN_DESCRIPTION_CHARS, count);
-          const chars = codePoints(e.target.value);
-          onChange(chars.length > limit ? chars.slice(0, limit).join("") : e.target.value);
+          onChange(clampEdit(value, e.target.value, Math.max(MAX_DOMAIN_DESCRIPTION_CHARS, count)));
         }}
         placeholder="Description: what this domain covers, and any instructions for the agent (optional)"
         style={{
@@ -219,7 +234,7 @@ function DomainDescriptionField({ testId, countTestId, value, onChange, onBlur }
           padding: "8px 12px",
           outline: "none",
         }}
-        onFocus={(e) => { e.currentTarget.style.borderColor = "var(--indigo)"; }}
+        onFocus={(e) => { e.currentTarget.style.borderColor = "var(--indigo)"; onFocus?.(); }}
         onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border)"; onBlur?.(); }}
       />
       <div style={{ display: "flex", gap: 16, alignItems: "baseline", marginTop: 4 }}>
@@ -245,15 +260,22 @@ function DomainDescriptionField({ testId, countTestId, value, onChange, onBlur }
 // A domain's description on its open row, saved on blur like the topic cap:
 // a save per keystroke would re-send the whole row for every letter. Trailing
 // space is trimmed as the add form trims it. A refused save keeps the text in
-// the box so it can be corrected; the row says why.
+// the box so it can be corrected; the row says why. The stored text is copied
+// in only while the box is not being edited: a save that lands after you
+// clicked back in and kept typing must not put the older text back.
 function DomainDescriptionInput({ testId, value, onCommit }: {
   testId: string; value: string; onCommit: (next: string) => Promise<boolean>;
 }) {
   const [local, setLocal] = useState(value);
-  useEffect(() => { setLocal(value); }, [value]);
+  const editing = useRef(false);
+  useEffect(() => { if (!editing.current) setLocal(value); }, [value]);
   function commit() {
+    editing.current = false;
     const next = local.trim();
     if (next !== value) void onCommit(next);
+    // A save landing while the box was focused was not copied in: show it now
+    // when nothing is left to send.
+    else setLocal(value);
   }
   return (
     <DomainDescriptionField
@@ -261,6 +283,7 @@ function DomainDescriptionInput({ testId, value, onCommit }: {
       countTestId={`${testId}-count`}
       value={local}
       onChange={setLocal}
+      onFocus={() => { editing.current = true; }}
       onBlur={commit}
     />
   );

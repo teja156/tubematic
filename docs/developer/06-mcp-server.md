@@ -553,7 +553,8 @@ calls it.
   dashboard shows it beside the choice.
 - `runner_up` is another candidate, or `""`. The dashboard offers it as a switch at `SCRIPT_READY`
   ([`POST /videos/<id>/switch-formula`](05-http-api.md#post-videosvideo_idswitch-formula)).
-- `repeat_reason` is one sentence, passed only for a formula marked `recent`.
+- `repeat_reason` is one sentence, passed only for a formula marked `recent`: why no other candidate
+  fits, or that the domain's description asks for this formula.
 - `learned_stamp` is `formula_routing.learned.stamp` whenever `learned.active` is `true`, else
   `""`.
 
@@ -1539,6 +1540,10 @@ as stored. See [HTTP API](05-http-api.md#mining-sources) for the reason.
 
 `mine_youtube_topics(project_id, youtube_urls)` asks Gemini for spin-off topics and files them
 through `create_video`.
+
+The prompt (`_mining_prompt`) carries the domain's `description`, fenced, when it has one. Mining
+files Gemini's answer with no agent reading it first, so the domain's scope and instructions
+([Domain instructions](07-agent-layer.md#domain-instructions)) have to reach Gemini itself.
 
 It makes one `generateContent` call per YouTube URL at most. The URL is passed as a
 `file_data.file_uri`, so Gemini fetches the video itself and nothing is downloaded or uploaded.

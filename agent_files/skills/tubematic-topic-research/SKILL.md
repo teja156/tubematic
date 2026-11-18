@@ -228,6 +228,7 @@ it in your research summary, and continue with other strategies.
 1. Call `get_mining_sources()` to retrieve the configured YouTube URLs.
    If the list is empty, skip mining and note it in your summary.
 2. Choose the most relevant project domain (`project_id`). Call `list_projects()` if unsure.
+   `mine_youtube_topics` hands that domain's `description` to Gemini, which proposes only what fits it.
 3. Call `mine_youtube_topics(project_id=..., youtube_urls=[...])` **once**.
    It files at most this run's mining cap itself: it asks Gemini only for what is
    left under the cap, shows it the topics that already exist, asks for an
