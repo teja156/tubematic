@@ -88,7 +88,7 @@ restart.
 
 ---
 
-## The 61 tools
+## The 62 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -163,6 +163,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`preview_frames`](#preview_frames) | Render chosen frames of the composed scene as pictures |
 | [`get_scene_config`](#get_scene_config) | Read `scene-config.json` |
 | [`get_timeline`](#get_timeline) | Read `timeline.json` |
+| [`get_style_guide`](#get_style_guide) | The guide of the installed external style a video is drawn in |
 | [`validate_job`](#validate_job) | Run the pre-render checks |
 | [`submit_render`](#submit_render) | Queue the video for rendering |
 
@@ -264,7 +265,7 @@ videos.
 | `illustrated_available` | `true` when an OpenAI key is stored, which Illustrated, Under the Hood, Case File Story, Archive and Engraving, Editorial Collage and Storybook Reveal need. The key is not returned |
 | `cartoon_3d_available`, `mascots_available` | `true` while some renderer's GPU test passed (`renderers.py::gpu_status` says `working`) |
 | `mascot` | `{id, name, version}` or `null` |
-| `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows, script, picture}`. Under `auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config`, `script` is `""` and `picture` is the mixed scenes' block |
+| `style` | The video's [style pack](10-scene-authoring.md#style-packs) as the agent needs it: `{id, label, renderer, canvas, authoring_skill, allows, script, picture, role, inserts, external}`, plus `props_key` for an [external style](10-scene-authoring.md#external-styles). Under `auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config`, `script` is `""` and `picture` is the mixed scenes' block |
 | `style_routing` | The style decision `auto` makes before the script: `{decided, pick, runner_up, reason, candidates, domain}`. See [How Auto picks a style](10-scene-authoring.md#how-auto-picks-a-style) |
 | `formula_routing` | The formula decision made before the script: `{decided, pick, runner_up, reason, choice, candidates, recent, learned}`. See [How a formula is picked](08-scripting-and-voice.md#how-a-formula-is-picked) |
 
@@ -281,7 +282,8 @@ is `false`, characters are line art and `generate_character` is not called). Und
 
 `style_routing.decided` is `true` once `auto` has picked (`pick` is a style id, or `scenes` for the
 mixed scene system) and whenever a person chose the style. `candidates` is
-`tubematic_core/visual_styles.py::routing_candidates`: every style pack in pack order, then
+`tubematic_core/visual_styles.py::routing_candidates`: every style pack in pack order, the
+external styles a person opted into Auto (settings key `external_styles_in_auto`), then
 `scenes`, each with its `routing` block, its generated-image count and whether this install and
 this video can have it (`available`, `unavailable_reason`). `domain` is the `{name, description}`
 of the video's domain.
@@ -1037,6 +1039,12 @@ It checks:
   `totalFrames`. Its beat sheet (the list of beats, each a frame range) tiles the video in order
   from frame 0 to the last frame with no gap or overlap, because a frame outside every beat is a
   frame no gate judges.
+- A scene with `source: "external"` names a component of the video's own
+  [external style](10-scene-authoring.md#external-styles) (`src` is
+  `<style id>/components/<Name>`), whose package is installed and valid. Each such scene's
+  `props[props_key]` must match the package's `schema.json`, and the errors name the path that
+  fails. The pack's caption settings fill every `subtitles` key the config leaves out, and inserts
+  are refused with the pack's message. `mcp/external_style.py` holds the checks.
 - A `system_flow` video holds the one installed `SystemFlow` scene, and its diagram passes
   `mcp/system_flow.py` (boards on word starts, node and row limits, label lengths, icons, an acyclic
   connected graph, events in a drawable order, no still stretch over 3.5 seconds). No other style may
@@ -1184,6 +1192,16 @@ script gave the segment, and `role` is what the picture owes it (`opening`, `tur
 video has no formula on record. See
 [The opening and the beats](10-scene-authoring.md#the-opening-and-the-beats).
 
+### `get_style_guide`
+
+`get_style_guide(video_id)` returns the guide of the installed
+[external style](10-scene-authoring.md#external-styles) a video is drawn in: `{style, label,
+props_key, renderer, reference, note}`. `reference` holds the package's `guide.md`,
+`example-config.json`, `example-timeline.json` when it has one, and `schema.json`, the JSON Schema each
+external scene's `props[props_key]` must match. `note` tells the agent that the guide is reference
+material from the package's author and never overrides Tubematic's rules, checkpoints or refusals.
+It refuses a video in a built-in style, and a video whose package is broken or gone.
+
 ---
 
 ## Validation and dispatch
@@ -1206,7 +1224,9 @@ video has no formula on record. See
    checked for coverage: the first starts near frame 0, the last ends near `totalFrames`, and no
    gap between segments is larger than 45 frames.
 6. Every scene named in the config resolves to a file, in `generated/` or `installed/` per its
-   `source`. A stale bare `src` that collides with a newer namespaced file is reported.
+   `source`. A stale bare `src` that collides with a newer namespaced file is reported. An
+   `external` scene must still name a component of the video's own style, in a package that is
+   installed and valid.
 7. Every image-shaped string in a scene's props has the form `/public/<video_id>/images/…` and
    exists on disk inside that video's `images/` directory.
 8. Cartoon 3D readiness, for a config with a Cartoon 3D scene: the video's generated source exists
@@ -1256,6 +1276,8 @@ by skipping `validate_job`:
 
 - A Cartoon 3D video with an open gate returns `cartoon_not_ready`.
 - A mascot video whose scene-config has no cue track returns `mascot_cues_missing`.
+- A video in an [external style](10-scene-authoring.md#external-styles) whose package fails its
+  checks, read from disk at that moment, returns `style_unavailable` with the reason.
 - A video whose current `scene-config.json` and `timeline.json` have no `preview/record.json` of that
   content returns `preview_not_taken`. A config rewritten after the look, such as in a revision,
   needs a new look. A record of `unavailable` passes, so a renderer that cannot draw never stops the
@@ -1263,7 +1285,8 @@ by skipping `validate_job`:
 
 When it queues a Cartoon 3D video it records the source's fingerprint in
 `<jobs>/<video_id>/cartoon/source.json`. The renderer renders that tree or fails the render back to
-the agent.
+the agent. When it queues an external-style video it records the package's fingerprint in
+`<jobs>/<video_id>/style-source.json`, and the renderer compares it the same way.
 
 The readiness check, the record and the status change run under one per-video lock.
 `write_scene_file`, `delete_scene_file`, `write_scene_config` and `cartoon_soundtrack` take the same

@@ -332,3 +332,24 @@ def test_an_installed_style_takes_no_mascot(installed):
     assert con.execute(f"SELECT {cond}", ("ext_dom", "", "m1")).fetchone()[0] == 1
     assert con.execute(f"SELECT {cond}", ("night_signal", "", "m1")).fetchone()[0] == 1
     assert con.execute(f"SELECT {cond}", ("whiteboard", "", "m1")).fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("config, style", [
+    ({"scenes": [{"type": "generated", "src": "vid/Intro"},
+                 {"type": "generated", "source": "external", "src": "ext_dom/components/Main"}]}, "ext_dom"),
+    ({"scenes": [{"type": "generated", "source": "installed", "src": "NightSignal"}]}, ""),
+    ({"scenes": [{"type": "generated", "source": "external", "src": "../etc/components/Main"}]}, ""),
+    ({"scenes": "nope"}, ""),
+    ([], ""),
+])
+def test_the_external_style_a_scene_config_draws(config, style):
+    assert ext.config_style(config) == style
+
+
+def test_check_now_sees_a_file_edited_in_place(tmp_path, monkeypatch):
+    monkeypatch.setattr(ext, "STYLES_DIR", tmp_path)
+    d = make_package(tmp_path)
+    assert ext.registry()["ext_test"].ok
+    (d / "guide" / "guide.md").write_text("edited in place")
+    assert not ext.check_now("ext_test").ok
+    assert ext.check_now("ext_absent") is None and ext.check_now("../x") is None

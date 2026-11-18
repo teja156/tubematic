@@ -241,9 +241,12 @@ def ensure_built(remotion_dir: Path) -> None:
         _built.add(key)
 
 
-def _env(remotion_dir: Path, props: dict | None = None, public_dir: Path | None = None) -> dict:
+def _env(remotion_dir: Path, props: dict | None = None, public_dir: Path | None = None,
+         external_style: str = "") -> dict:
     env = dict(os.environ)
     env["REMOTION_ROOT"] = str(remotion_dir)
+    # the one external style package the bundle compiles (TMDEV-252; webpack-override.mjs), none when ""
+    env["TUBEMATIC_EXTERNAL_STYLE"] = external_style
     if public_dir is not None:
         env["CARTOON_PUBLIC_DIR"] = str(public_dir)
         server = os.getenv("TUBEMATIC_STILLS_SERVER", "").strip()
@@ -260,11 +263,11 @@ def _env(remotion_dir: Path, props: dict | None = None, public_dir: Path | None 
 
 
 def run_cli(remotion_dir: Path, name: str, args: list[str], *, timeout: int, props: dict | None = None,
-            public_dir: Path | None = None) -> subprocess.CompletedProcess:
+            public_dir: Path | None = None, external_style: str = "") -> subprocess.CompletedProcess:
     ensure_built(remotion_dir)
     cli = remotion_dir / "cartoon-tools" / "dist" / f"{name}.mjs"
     try:
-        return subprocess.run([_node(), str(cli), *args], cwd=str(remotion_dir), env=_env(remotion_dir, props, public_dir),
+        return subprocess.run([_node(), str(cli), *args], cwd=str(remotion_dir), env=_env(remotion_dir, props, public_dir, external_style),
                               capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         raise CartoonError(f"the {name} tool did not finish within {timeout} s")

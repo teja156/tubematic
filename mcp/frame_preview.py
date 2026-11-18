@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import cartoon
+from tubematic_core import external_styles
 from tubematic_core import jobfiles as tjobs
 
 PREVIEW_DIR = "preview"
@@ -192,7 +193,8 @@ def preview(jobs_dir, video_id: str, remotion_dir: Path, frames, *, watermark: b
         try:
             try:
                 proc = cartoon.run_cli(remotion_dir, "still", [str(tjobs.job_dir(jobs_dir, video_id)), str(folder), *map(str, clean)],
-                                       timeout=TIMEOUT_SECS, props=props, public_dir=Path(jobs_dir))
+                                       timeout=TIMEOUT_SECS, props=props, public_dir=Path(jobs_dir),
+                                       external_style=external_styles.config_style(config))
             except (cartoon.CartoonError, OSError, subprocess.SubprocessError) as e:
                 why = str(e) or e.__class__.__name__
                 raise PreviewError(why)

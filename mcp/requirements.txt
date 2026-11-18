@@ -12,3 +12,7 @@ pillow>=10.0.0
 # synthesised with numpy, filtered and resampled with scipy.
 numpy>=1.26
 scipy>=1.11
+
+# The props of an external style's scenes are checked against the package's
+# JSON Schema (TMDEV-252, mcp/external_style.py).
+jsonschema>=4.23,<5

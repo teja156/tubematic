@@ -207,6 +207,32 @@ def get(sid: str) -> ExternalStyle | None:
     return registry().get((sid or "").strip())
 
 
+def check_now(sid: str) -> ExternalStyle | None:
+    """One installed package checked from disk, past the registry's cache: the
+    cache is refreshed by a changed manifest or folder, and a file edited in
+    place changes neither. The gates that queue a render use this."""
+    sid = (sid or "").strip()
+    d = STYLES_DIR / sid
+    if not ID_RE.fullmatch(sid) or not (d.is_dir() or d.is_symlink()):
+        return None
+    try:
+        return ExternalStyle(sid, d, _check(sid, d), True, "")
+    except (_Bad, OSError) as exc:
+        return ExternalStyle(sid, d, None, False, str(exc))
+
+
+def config_style(config) -> str:
+    """The external style a scene-config draws (the first `source: "external"`
+    scene's style id), or "" when it draws none. The bundlers compile that one
+    package (renderer/remotion/webpack-override.mjs)."""
+    scenes = config.get("scenes") if isinstance(config, dict) else None
+    for scene in scenes if isinstance(scenes, list) else []:
+        if isinstance(scene, dict) and scene.get("source") == "external" and isinstance(scene.get("src"), str):
+            sid = scene["src"].split("/", 1)[0]
+            return sid if ID_RE.fullmatch(sid) else ""
+    return ""
+
+
 def write_manifest(d: pathlib.Path) -> None:
     """Write `MANIFEST.json` for a package folder: every other file's sha256."""
     d = pathlib.Path(d)

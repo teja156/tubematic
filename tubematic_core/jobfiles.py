@@ -56,6 +56,9 @@ JOB_FILES = (AUDIO, TIMELINE, SCENE_CONFIG)
 # Kept apart from images/ so a run's output never counts against a style's
 # picture cap and is never staged into a render.
 RUNS = "runs"
+# The fingerprint of a video's external style package (TMDEV-252), written by
+# submit_render and compared by the renderer before it compiles the package.
+STYLE_SOURCE = "style-source.json"
 
 
 class UnsafePath(ValueError):
