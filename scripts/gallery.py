@@ -48,6 +48,8 @@ INDEX_VERSION = 1
 # render's exit code for a style CI cannot render (a 3D world): a notice, never a pass for a failed render
 NOT_RENDERABLE = 3
 COMMIT_RE = re.compile(r"[0-9a-f]{40}")
+# the version names the published archive (archives/<id>-<version>.zip): a safe file name and URL part
+VERSION_RE = re.compile(r"[0-9A-Za-z][0-9A-Za-z.+_-]{0,39}")
 _ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 
 
@@ -89,6 +91,10 @@ def check_one(sid: str, pkg: pathlib.Path) -> dict:
     pack, reason = ext.check_folder(sid, pkg)
     if pack is not None and pack.get("id") != sid:
         pack, reason = None, f"the submission is named {sid} but style.json's id is {pack.get('id')!r}"
+    version = str(((pack or {}).get("external") or {}).get("version", ""))
+    if pack is not None and not VERSION_RE.fullmatch(version):
+        pack, reason = None, (f"external.version {version!r} must be letters, digits, '.', '+', '_' or '-' "
+                              "(it names the published archive)")
     return {"id": sid, "pack": pack, "reason": reason, "scan": style_scan.scan(pkg)}
 
 

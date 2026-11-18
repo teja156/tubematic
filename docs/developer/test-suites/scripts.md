@@ -852,7 +852,8 @@ video for this style. The test pins the wording that keeps them apart.
 Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gallery/repo/`.
 
 - `scan` passes a good package, fails one the scan refuses or whose folder name differs from its id,
-  and fails a pointer that names a branch instead of a full commit.
+  fails a pointer that names a branch instead of a full commit, and (with `build`) fails a version
+  that is not a safe file name, since it names the published archive.
 - `build` writes the same archive bytes on every build, an index whose `sha256` is of that archive,
   and the previews; the official gallery's install from that site stages as reviewed and installs.
   It refuses to publish a package that fails its check.

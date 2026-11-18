@@ -318,3 +318,14 @@ def test_the_publish_workflow_links_the_page_to_its_repository():
     publish = yaml.safe_load((SKELETON / ".github" / "workflows" / "publish.yml").read_text())
     build_step = next(s for s in publish["jobs"]["build"]["steps"] if s.get("name", "").startswith("Build"))
     assert '--repo-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"' in build_step["run"]
+
+
+@pytest.mark.parametrize("version", ["../../escape", "1.0/x", "1.0?x", "1.0#x", " 1.0", ""])
+def test_a_version_that_is_not_a_safe_file_name_fails_scan_and_build(tmp_path, capsys, version):
+    """The version names the published archive: a slash or dot-dot wrote outside the site, ? or #
+    broke the download link."""
+    styles = _styles(tmp_path, "ext_good")
+    _set_pack(styles, "ext_good", external_version=version)
+    assert gallery.main(["scan", str(styles)]) == 1
+    assert gallery.main(["build", str(styles), str(tmp_path / "site"), "--base-url", BASE]) == 1
+    assert not list(tmp_path.glob("**/escape*")) and not (tmp_path / "site" / "index.json").exists()
