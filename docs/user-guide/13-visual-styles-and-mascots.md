@@ -369,8 +369,8 @@ In Claude Code or OpenCode, run `/tubematic-create-style` followed by the videos
 whose look you want (YouTube or Instagram). The agent first tells you what it costs and the risks of
 downloading from those sites, and does nothing until you agree. Then it:
 
-1. checks that `yt-dlp`, `ffmpeg` and `ffprobe` (which comes with ffmpeg) are installed (it never installs anything; install them yourself
-   if it asks);
+1. checks that `yt-dlp`, `ffmpeg` and `ffprobe` (which comes with ffmpeg) are installed (it never
+   installs anything; install them yourself if it asks);
 2. downloads a few of the videos, one at a time, and studies their look and motion;
 3. builds a style package and stages it, so you get an install screen link like any other install;
 4. after you install it, files one or two sample videos in a **Style samples** domain. You approve
