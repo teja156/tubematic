@@ -429,7 +429,9 @@ def read_file(pid: str, path: str) -> str:
     if rel.is_absolute() or ".." in rel.parts or not rel.parts:
         raise InstallError("no such file in the package")
     target = package.joinpath(*rel.parts)
-    if target.is_symlink() or not target.is_file() or rel.suffix.lower() not in style_scan._TEXT_SUFFIXES | {""}:
+    textual = rel.suffix.lower() in style_scan._TEXT_SUFFIXES or (
+        rel.suffix == "" and style_scan._BARE_NAMES.match(rel.name) is not None)  # LICENSE, NOTICE, ...
+    if target.is_symlink() or not target.is_file() or not textual:
         raise InstallError("no such text file in the package")
     if target.stat().st_size > 1_000_000:
         raise InstallError("the file is too large to show here")
