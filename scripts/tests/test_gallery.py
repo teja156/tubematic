@@ -109,7 +109,7 @@ def test_the_official_gallery_is_the_skeletons_pages_site():
 def test_the_skeletons_workflows_call_the_tools_that_exist():
     pr = yaml.safe_load((SKELETON / ".github" / "workflows" / "pr.yml").read_text())
     runs = " ".join(s.get("run", "") for job in pr["jobs"].values() for s in job["steps"])
-    assert "gallery.py scan styles --only" in runs and "gallery.py render" in runs
+    assert 'gallery.py scan styles --only "$IDS"' in runs and "gallery.py render" in runs
     # a fork has no origin/<base> branch: the diff is against the event's base commit
     assert '"$BASE_SHA" HEAD' in runs and "origin/" not in runs
     for job in pr["jobs"].values():
@@ -160,3 +160,14 @@ def test_the_pr_workflow_fails_on_a_failed_render():
     """A failed render used to be a warning, so a pull request passed with no example to review."""
     pr = (SKELETON / ".github" / "workflows" / "pr.yml").read_text()
     assert 'if [ "$rc" = 3 ]' in pr and 'exit 1; fi' in pr and "::warning::" not in pr
+
+
+def test_no_pull_request_controlled_value_is_expanded_inside_a_shell_command():
+    """A path like styles/$(cmd)/x reached `echo "${{ steps.changed.outputs.ids }}"` and ran."""
+    pr = yaml.safe_load((SKELETON / ".github" / "workflows" / "pr.yml").read_text())
+    for job in pr["jobs"].values():
+        for step in job["steps"]:
+            run = step.get("run", "")
+            assert "${{ steps." not in run and "${{ needs." not in run, step.get("name")
+    changed = next(s for s in pr["jobs"]["scan"]["steps"] if s.get("id") == "changed")["run"]
+    assert "ext_[a-z0-9_]{1,40}" in changed and "exit 1" in changed
