@@ -263,6 +263,9 @@ Covers `tubematic_core/style_install.py`, staging and installing packages.
 - Audits, discards, expiry, the cap on waiting installs, reading one text file of a staged package and
   removal. Staging the same style from the same source again replaces the older pending install,
   and the same style from another source is kept as a separate one.
+- A redirect to plain http is refused, directory entries count against the file cap, bytes changed
+  while a confirm copies them are not installed (the copy is what is fingerprinted), and only the
+  curated gallery's index marks an install reviewed.
 
 Trap: confirming is the human half. These tests stop at `confirm`; the API test checks that it
 needs the dashboard password.

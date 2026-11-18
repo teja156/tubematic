@@ -177,6 +177,7 @@ def test_the_gallery_verifies_the_archive_checksum_and_marks_reviewed(dirs, monk
                          "sha256": hashlib.sha256(data).hexdigest(), "commit": "abc"}]}
     served = {"https://g.invalid/index.json": json.dumps(index).encode(), "https://g.invalid/ext_test.zip": data}
     monkeypatch.setattr(si, "_http_get", lambda url, cap: served[url])
+    monkeypatch.setattr(si, "OFFICIAL_GALLERY_URL", "https://g.invalid/index.json")
     rec = si.stage({"kind": "gallery", "id": "ext_test"}, index_url="https://g.invalid/index.json")
     assert rec["reviewed"] is True and rec["source"]["commit"] == "abc"
     served["https://g.invalid/ext_test.zip"] = data + b"tampered"
@@ -299,3 +300,61 @@ def test_staging_the_same_style_from_the_same_source_replaces_the_older_pending_
     pkg = make_package(dirs.src, approve=False)
     third = si.stage({"kind": "zip", "data": _zip(pkg)})
     assert {r["id"] for r in si.list_pending()} == {second["id"], third["id"]}
+
+
+# ── review round 1 ───────────────────────────────────────────────────────────
+
+def test_a_redirect_to_plain_http_is_refused():
+    """Only the first address was checked for https; urlopen followed a
+    redirect anywhere, including an internal http address."""
+    import urllib.request
+    handler = si._HttpsOnlyRedirect()
+    req = urllib.request.Request("https://g.invalid/a")
+    with pytest.raises(si.InstallError, match="redirected to a non-https"):
+        handler.redirect_request(req, None, 302, "Found", {}, "http://127.0.0.1:8080/secret")
+    assert handler.redirect_request(req, None, 302, "Found", {}, "https://cdn.invalid/b") is not None
+
+
+def test_directory_entries_count_against_the_file_cap(dirs, monkeypatch):
+    monkeypatch.setattr(si, "MAX_FILES", 3)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for i in range(5):
+            zf.writestr(f"d{i}/", "")
+    with pytest.raises(si.InstallError, match="more than 3"):
+        si.stage({"kind": "zip", "data": buf.getvalue()})
+
+
+def test_bytes_changed_while_confirming_are_not_installed(dirs, monkeypatch):
+    """The fingerprint was taken before the copy, so a file edited between the
+    two was installed and approved. The copy is what is checked now."""
+    pkg = make_package(dirs.src, approve=False)
+    rec = si.stage({"kind": "zip", "data": _zip(pkg)})
+    real = si.shutil.copytree
+    staged = dirs.pending / rec["id"] / "package"
+
+    def tamper(src, dst, *a, **kw):
+        if pathlib.Path(src) == staged:
+            (staged / "guide" / "guide.md").write_text("# swapped mid-copy\n")
+        return real(src, dst, *a, **kw)
+
+    monkeypatch.setattr(si.shutil, "copytree", tamper)
+    with pytest.raises(si.InstallError, match="changed after it was scanned"):
+        si.confirm(rec["id"])
+    assert not (dirs.styles / "ext_test").exists()
+    assert not [p for p in dirs.styles.iterdir() if p.name.startswith(".incoming")]
+
+
+def test_only_the_official_gallery_marks_a_package_reviewed(dirs, monkeypatch):
+    """style_gallery_url can be set by anything with the API token: a gallery
+    of someone's own choosing is not the maintainer's review."""
+    pkg = make_package(dirs.src, approve=False)
+    data = _zip(pkg)
+    index = {"styles": [{"id": "ext_test", "archive_url": "https://g.invalid/a.zip",
+                         "sha256": hashlib.sha256(data).hexdigest()}]}
+    monkeypatch.setattr(si, "_http_get", lambda url, cap: json.dumps(index).encode() if url.endswith(".json") else data)
+    monkeypatch.setattr(si, "OFFICIAL_GALLERY_URL", "https://official.invalid/index.json")
+    rec = si.stage({"kind": "gallery", "id": "ext_test"}, index_url="https://other.invalid/index.json")
+    assert rec["reviewed"] is False
+    rec = si.stage({"kind": "gallery", "id": "ext_test"}, index_url="https://official.invalid/index.json")
+    assert rec["reviewed"] is True

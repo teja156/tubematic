@@ -21,6 +21,9 @@ from tubematic_core import external_styles as texternal
 from tubematic_core import style_install as tinstall
 from tubematic_core import visual_styles as tvs
 
+# A zip of style_install.MAX_ZIP_BYTES, base64-encoded in JSON, with room for the other fields.
+MAX_BODY_BYTES = tinstall.MAX_ZIP_BYTES * 4 // 3 + 64_000
+
 # A video in these statuses (or archived) no longer needs its style's package.
 FINISHED_STATUSES = ("PUBLISHED", "PARTIALLY_PUBLISHED", "FAILED", "TOPIC_REJECTED")
 
@@ -96,6 +99,9 @@ def create_styles_blueprint(db_path: str, throttle) -> Blueprint:
 
     @bp.post("/external-styles/pending")
     def stage():
+        # refused before the body is read: a huge one would be parsed and decoded first
+        if (request.content_length or 0) > MAX_BODY_BYTES:
+            return _err(f"the upload is larger than {tinstall.MAX_ZIP_BYTES // 1_000_000} MB", 413)
         body = request.get_json(silent=True) or {}
         kind = body.get("kind")
         source = {k: body.get(k) for k in ("kind", "url", "ref", "id", "name", "filename")}

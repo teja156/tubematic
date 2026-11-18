@@ -20,6 +20,7 @@ os.environ.setdefault("TUBEMATIC_DB", ":memory:")
 import pipeline
 from api_auth import LoginThrottle, create_auth_blueprint
 from pipeline import create_pipeline_blueprint
+import styles_api
 from styles_api import create_styles_blueprint
 from tubematic_core import auth as core_auth
 from tubematic_core import external_styles as ext
@@ -185,7 +186,15 @@ def test_a_gallery_install_is_marked_reviewed(env, monkeypatch):
         "id": "ext_test", "archive_url": "https://g.invalid/a.zip", "sha256": hashlib.sha256(data).hexdigest()}]}).encode(),
         "https://g.invalid/a.zip": data}
     monkeypatch.setattr(si, "_http_get", lambda url, cap: served[url])
+    monkeypatch.setattr(si, "OFFICIAL_GALLERY_URL", "https://g.invalid/i.json")
     rec = env.client.post("/external-styles/pending", json={"kind": "gallery", "id": "ext_test"}).get_json()
     assert rec["reviewed"] is True
     env.client.post(f"/external-styles/pending/{rec['id']}/confirm", json={"password": PASSWORD})
     assert env.client.get("/external-styles").get_json()["styles"][0]["reviewed"] is True
+
+
+def test_an_oversized_upload_is_refused_before_it_is_read(env):
+    """The body was parsed and decoded before the zip cap applied."""
+    r = env.client.post("/external-styles/pending", data="x" * 10, content_type="application/json",
+                        environ_overrides={"CONTENT_LENGTH": str(styles_api.MAX_BODY_BYTES + 1)})
+    assert r.status_code == 413

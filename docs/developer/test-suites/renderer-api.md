@@ -318,14 +318,14 @@ Covers `renderer/api/styles_api.py`, installing and removing external styles.
 - Confirming needs the dashboard password: no password or a wrong one is refused, and the right one
   installs and approves the package, which `GET /visual-styles` then lists as available. The confirm
   shares the login's throttle.
-- A bad upload, an `incoming` source (an MCP-only source) and an unknown kind are refused; a pending
-  install can be discarded.
+- A bad upload, an `incoming` source (an MCP-only source) and an unknown kind are refused, and an
+  upload over the cap is `413` before its body is read; a pending install can be discarded.
 - A package copied in by hand is listed as waiting for review and is approved through the same
   screen.
 - Removal is refused while an unfinished video or a domain default uses the style, and takes the
   style out of `external_styles_in_auto`. A built-in style cannot be removed.
-- The gallery lists the index from `style_gallery_url` (https only) with the installed version, and a
-  gallery install is marked reviewed.
+- The gallery lists the index from `style_gallery_url` (https only) with the installed version, and an
+  install from the curated gallery is marked reviewed.
 
 Trap: the dashboard relays every call with the same API token an agent on the host can read, so the
 password is the only proof that a person said yes. A test that confirms with the token alone would

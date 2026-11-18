@@ -592,13 +592,13 @@ An install has two halves, in `tubematic_core/style_install.py`. Staging fetches
 it like the registry does, scans it and leaves it in `~/.tubematic-data/styles-pending/<id>/` for 24
 hours. Staging the same style from the same source again replaces the older staged copy.
 Confirming copies it into `styles/` and records its approval. Anything with the API or MCP
-token can stage; only a person can confirm.
+token can stage; only a person can confirm. Downloads are https only, redirects included.
 
 | Source | Staged by | What staging does |
 |---|---|---|
 | A zip file | The dashboard's **Install from file** | Unpacks it (25 MB zip, 60 MB unpacked, 2000 files at most; no path outside the package, no symlink; one wrapping folder allowed) |
 | A git repository | **Install from repo URL**, `stage_style_install("git:…")` | `git fetch --depth 1` of an https address at a commit or tag, and records the commit |
-| The gallery | The **Gallery** tab, `stage_style_install("gallery:…")` | Downloads the archive the index at `style_gallery_url` names and refuses it unless its sha256 matches the index; the install is marked reviewed |
+| The gallery | The **Gallery** tab, `stage_style_install("gallery:…")` | Downloads the archive the index at `style_gallery_url` names and refuses it unless its sha256 matches the index. The install is marked reviewed only when that index is the curated gallery's (`style_install.OFFICIAL_GALLERY_URL`), since anything with the API token can change the setting |
 | A folder or zip on the host | `/tubematic-install-style`, `stage_style_install("incoming:…")` | Copies it from `~/.tubematic-data/styles-incoming/`, which only the MCP server mounts |
 | An installed package waiting for review | The **Review** button on the Styles page | Copies it from `styles/` |
 
