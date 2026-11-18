@@ -277,6 +277,8 @@ Covers the three lists that name a data folder: the bind volumes in `docker-comp
   reconcile map.
 - The directories step creates the sandbox and styles folders on a data root from a release that
   has none.
+- The release workflow's smoke job, which skips onboarding, creates every folder in `DATA_SUBDIRS`
+  itself.
 
 Trap: Docker does not create the device folder of a `local` bind volume, so an upgrade from a release
 without the folder fails to start unless the directories step runs first. `upgrade.py` reaches it through

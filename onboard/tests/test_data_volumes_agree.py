@@ -52,3 +52,13 @@ def test_the_directories_step_creates_the_styles_folder_on_an_upgrade(tmp_path, 
         (tmp_path / d).mkdir(parents=True)
     actions.apply_directories(None, Executor(dry_run=False), NullReporter())
     assert (tmp_path / "styles").is_dir()
+
+
+def test_the_release_smoke_test_creates_every_data_folder():
+    """release.yml's smoke job skips onboarding and creates the folders itself, so a
+    new bind volume that its list misses fails `up` at publish time, not in CI."""
+    import re
+    from pathlib import Path
+    workflow = (Path(__file__).resolve().parents[2] / ".github" / "workflows" / "release.yml").read_text()
+    made = set(re.findall(r'"\$HOME/\.tubematic-data/([a-z_/]+)"', workflow))
+    assert set(DATA_SUBDIRS) <= made, sorted(set(DATA_SUBDIRS) - made)
