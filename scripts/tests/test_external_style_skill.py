@@ -81,3 +81,12 @@ def test_the_agent_may_read_what_it_writes_against_and_look_at_its_stills():
 def test_tools_of_built_in_styles_are_named_as_not_serving_externals():
     body = _body()
     assert "render_style_parts" in body and "preview_frames" in body
+
+
+def test_the_install_scan_knows_every_tool_the_skill_names():
+    """The install scan (tubematic_core/style_scan.py) flags a guide that asks
+    for a tool outside the authoring skill; its list must cover the skill."""
+    from tubematic_core import style_scan
+    named = set(re.findall(r"`(\w+)\(", _body()))
+    assert named <= style_scan.AUTHORING_TOOLS, named - style_scan.AUTHORING_TOOLS
+    assert style_scan.AUTHORING_TOOLS <= _tools(), style_scan.AUTHORING_TOOLS - _tools()

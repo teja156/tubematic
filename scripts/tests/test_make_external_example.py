@@ -29,9 +29,9 @@ IMPORT = re.compile(r'(?:from |import\()"(\.[^"]+)"')
 ])
 def test_each_example_is_a_package_the_loader_accepts(tmp_path, args, sid, renderer, gpu):
     assert mk.main([args[0], str(tmp_path), *args[1:]]) == 0
-    found = ext.load(tmp_path)[sid]
-    assert found.ok, found.reason
-    assert found.pack["renderer"] == renderer and found.pack["needs"]["gpu"] is gpu
+    pack, reason = ext.check_folder(sid, tmp_path / sid)
+    assert pack, reason
+    assert pack["renderer"] == renderer and pack["needs"]["gpu"] is gpu
 
 
 @pytest.mark.parametrize("style", ["night_signal", "low_poly_skit"])

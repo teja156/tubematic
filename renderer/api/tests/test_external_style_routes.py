@@ -35,6 +35,7 @@ def _package(root, sid, ok=True):
         (d / name).write_text(body)
     if ok:
         ext.write_manifest(d)
+        ext.approve(root, sid)
 
 
 @pytest.fixture

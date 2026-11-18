@@ -41,7 +41,7 @@ def base_pack(sid, renderer="dom", gpu=False):
 write_manifest = ext.write_manifest
 
 
-def make_package(root, sid="ext_test", renderer="dom", gpu=False, pack=None, manifest=True):
+def make_package(root, sid="ext_test", renderer="dom", gpu=False, pack=None, manifest=True, approve=True):
     d = root / sid
     (d / "guide").mkdir(parents=True)
     (d / "style.json").write_text(json.dumps(pack or base_pack(sid, renderer, gpu)))
@@ -58,6 +58,8 @@ def make_package(root, sid="ext_test", renderer="dom", gpu=False, pack=None, man
     (d / "preview.webp").write_bytes(b"\0" * 100)
     if manifest:
         write_manifest(d)
+        if approve:
+            ext.approve(root, sid)
     return d
 
 
@@ -203,6 +205,7 @@ def test_fonts_need_a_licence_file(tmp_path):
     assert not got.ok and "licence" in got.reason
     (d / "fonts" / "OFL.txt").write_text("licence")
     write_manifest(d)
+    ext.approve(tmp_path, "ext_test")
     assert ext.load(tmp_path)["ext_test"].ok
 
 
@@ -394,6 +397,7 @@ def test_imports_inside_the_package_and_bare_imports_are_fine(tmp_path):
     (d / "components" / "Main.tsx").write_text(
         'import { a } from "./parts/a";\nimport { KEEP_OUT_X } from "@tubematic/scene-api";\nexport default () => a;\n')
     write_manifest(d)
+    ext.approve(tmp_path, "ext_test")
     assert ext.load(tmp_path)["ext_test"].ok
 
 
@@ -415,3 +419,63 @@ def test_a_package_folder_removed_while_listed_does_not_break_the_registry(tmp_p
         return real(path, *a, **k)
     monkeypatch.setattr(ext.os, "lstat", vanish)
     ext._stamp(tmp_path)   # must not raise
+
+
+# ── Approval (TMDEV-253) ──────────────────────────────────────────────────
+
+
+def test_a_valid_package_nobody_approved_waits_for_review(tmp_path):
+    """A package copied in by hand is valid but not approved: the human yes for
+    every install is on the dashboard's install screen."""
+    make_package(tmp_path, approve=False)
+    got = ext.load(tmp_path)["ext_test"]
+    assert not got.ok and got.needs_review and got.pack is not None
+    assert got.reason == ext.NOT_APPROVED
+
+
+def test_a_package_changed_after_approval_waits_for_review_again(tmp_path):
+    d = make_package(tmp_path)
+    assert ext.load(tmp_path)["ext_test"].ok
+    (d / "guide" / "guide.md").write_text("# Guide, changed\n")
+    write_manifest(d)  # a valid new version, with its manifest
+    got = ext.load(tmp_path)["ext_test"]
+    assert not got.ok and got.needs_review and got.reason == ext.CHANGED
+    ext.approve(tmp_path, "ext_test", version="1.0.1")
+    assert ext.load(tmp_path)["ext_test"].ok
+
+
+def test_a_broken_package_is_not_offered_for_review(tmp_path):
+    make_package(tmp_path, manifest=False)
+    got = ext.load(tmp_path)["ext_test"]
+    assert not got.ok and not got.needs_review
+
+
+def test_check_now_reads_the_approval_too(tmp_path, monkeypatch):
+    monkeypatch.setattr(ext, "STYLES_DIR", tmp_path)
+    make_package(tmp_path, approve=False)
+    assert ext.check_now("ext_test").reason == ext.NOT_APPROVED
+    ext.approve(tmp_path, "ext_test")
+    assert ext.check_now("ext_test").ok
+
+
+def test_dropping_an_approval_and_an_unreadable_record(tmp_path):
+    make_package(tmp_path)
+    ext.drop_approval(tmp_path, "ext_test")
+    assert ext.load(tmp_path)["ext_test"].reason == ext.NOT_APPROVED
+    (tmp_path / ext.INSTALLED).write_text("not json")
+    assert ext.approvals(tmp_path) == {}
+    assert ext.load(tmp_path)["ext_test"].needs_review
+
+
+def test_the_approval_record_is_not_a_package(tmp_path):
+    make_package(tmp_path)
+    assert list(ext.load(tmp_path)) == ["ext_test"]
+
+
+def test_check_folder_reports_a_staged_package(tmp_path):
+    d = make_package(tmp_path, approve=False)
+    pack, reason = ext.check_folder("ext_test", d)
+    assert pack["id"] == "ext_test" and reason == ""
+    (d / "schema.json").unlink()
+    pack, reason = ext.check_folder("ext_test", d)
+    assert pack is None and "schema.json" in reason
