@@ -28,6 +28,7 @@ FORCE = False
 # Skill directory names installed by onboard.py
 _TUBEMATIC_SKILLS = [
     "tubematic-create-script-writing-skill",
+    "tubematic-create-style",
     "tubematic-operator",
     "tubematic-scene-config",
     "tubematic-topic-research",
@@ -84,6 +85,7 @@ _TUBEMATIC_COMMANDS = [
     "tubematic-set-strategy",
     "tubematic-dashboard-status",
     "tubematic-install-style",
+    "tubematic-create-style",
 ]
 
 

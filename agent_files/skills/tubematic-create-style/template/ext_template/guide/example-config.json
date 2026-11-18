@@ -1,0 +1,16 @@
+{
+ "totalFrames": 240,
+ "fps": 30,
+ "canvas": "dark",
+ "scenes": [
+  {"type": "generated", "source": "external", "src": "ext_template/components/Card", "startFrame": 0,
+   "durationInFrames": 120,
+   "props": {"card": {"title": "Water boils at 100", "lines": ["at sea level", "lower on a mountain"],
+                      "lineAt": [30, 70], "palette": "ink"}}},
+  {"type": "generated", "source": "external", "src": "ext_template/components/Card", "startFrame": 120,
+   "durationInFrames": 120,
+   "props": {"card": {"title": "Pressure decides", "lines": ["less air above", "boils sooner"],
+                      "lineAt": [20, 60], "palette": "ink"}}}
+ ],
+ "sfx": []
+}

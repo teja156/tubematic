@@ -15,6 +15,7 @@ Display the following table:
 | `/tubematic-pause` | Pause the pipeline — agent will stop advancing videos |
 | `/tubematic-resume` | Resume the pipeline after a pause |
 | `/tubematic-dashboard-status` | Check whether API (:4000), MCP (:4100), worker, renderer and dashboard (:3000) containers are running |
+| `/tubematic-create-style` | Make a new visual style from reference videos: study them, build a style package, render voiced samples and write a report (long and token-heavy; it warns you first) |
 | `/tubematic-install-style` | Stage an external visual style (folder, zip, git repository or gallery id), audit it, and give you the dashboard link to install it |
 | `/tubematic-register-mcp` | Re-register the MCP server (use after moving the installation or reinstalling) |
 | `/tubematic-troubleshooting` | Work out what is wrong with the install and, if it is a bug, draft a redacted issue report (a skill — it never posts anything itself) |
