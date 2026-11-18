@@ -890,7 +890,7 @@ and command.
 - The command starts the skill with its disclaimer, for both agents.
 - The shot-change command runs at a log level that keeps `showinfo`'s lines, which are logged at
   info level: at `-v error` it prints no cuts.
-- The package rules say how scenes join: the renderer's default fade between scenes (read from
+- The package rules say how scenes join: the renderer's default fade between generated scenes (read from
   `CompositionBuilder.tsx`) and the `transitionToNext` setting a hard-cut style's guide must ask for.
 
 Trap: the skill runs on a person's machine with their accounts. The order (disclaimer, check, study,

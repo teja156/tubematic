@@ -87,7 +87,7 @@ not validate is a broken package).
 - Everything is a pure function of the frame: no timers, no `Math.random()` (use a seeded generator),
   no network, no storage. The scan flags `fetch`, `eval`, `Function`, dynamic `import()`, storage and
   environment reads, and a person sees each flag before installing.
-- Between two of the style's scenes the renderer fades the first out and the next in, 8 frames each by
+- Between two of the style's component scenes the renderer fades the first out and the next in, 8 frames each by
   default: a dip through the video's canvas colour (dark unless the pack sets a light canvas) at every
   cut. A scene's `transitionToNext.durationInFrames` sets its fade out and the
   next scene's fade in. For a style that hard-cuts, the guide tells the authoring agent to put
