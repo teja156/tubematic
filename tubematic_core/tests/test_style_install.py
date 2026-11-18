@@ -387,3 +387,14 @@ def test_a_malformed_pending_record_does_not_break_staging(dirs):
     (bad / si.PENDING_FILE).write_text(json.dumps({"style_id": "ext_test", "source": "x", "expires_at": "2999-01-01T00:00:00Z"}))
     pkg = make_package(dirs.src, approve=False)
     assert si.stage({"kind": "zip", "data": _zip(pkg)})["check"]["ok"]
+
+
+# ── review round 3 ───────────────────────────────────────────────────────────
+
+def test_an_incoming_folder_with_too_many_directories_is_refused(dirs, monkeypatch):
+    monkeypatch.setattr(si, "MAX_FILES", 5)
+    d = dirs.incoming / "many"
+    for i in range(8):
+        (d / f"d{i}").mkdir(parents=True)
+    with pytest.raises(si.InstallError, match="over 5 files and folders"):
+        si.stage({"kind": "incoming", "name": "many"})

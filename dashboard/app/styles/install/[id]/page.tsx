@@ -99,7 +99,7 @@ export default function InstallScreen() {
       </h1>
       <div style={{ ...mono, color: "var(--dim)", fontSize: 12, lineHeight: 1.7 }}>
         <div>{rec.style_id} · version {rec.version || "?"} · by {rec.author || "unknown"} · licence {rec.licence || "?"}</div>
-        <div>Source: {sourceLabel(rec.source)}</div>
+        <div>Source: {sourceLabel(rec.source, rec.reviewed)}</div>
         {rec.homepage && <div>Homepage: {rec.homepage}</div>}
         <div>Renderer: {rec.renderer === "cartoon_3d" ? "3D world (its own runner)" : "scene components"}
           {rec.needs_gpu ? " · needs a GPU" : ""}</div>

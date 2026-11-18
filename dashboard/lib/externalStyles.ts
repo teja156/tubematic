@@ -5,7 +5,7 @@
 export type InstallSource = {
   kind: "zip" | "git" | "gallery" | "incoming" | "installed";
   filename?: string; url?: string; ref?: string; commit?: string; gallery_id?: string;
-  name?: string; installed?: string; sha256?: string;
+  name?: string; installed?: string; sha256?: string; index?: string;
 };
 
 export type ScanFlag = { file: string; line: number; what: string };
@@ -43,10 +43,14 @@ export type GalleryEntry = {
   needs_gpu?: boolean; renderer?: string;
 };
 
-export function sourceLabel(s: InstallSource | null | undefined): string {
+/** `reviewed` is the API's word that the source is the curated Tubematic gallery; any other gallery
+ * address is someone's own index and is named as such. */
+export function sourceLabel(s: InstallSource | null | undefined, reviewed = false): string {
   if (!s) return "Copied into the styles folder by hand";
   switch (s.kind) {
-    case "gallery": return `Tubematic gallery (${s.gallery_id ?? ""})`;
+    case "gallery": return reviewed
+      ? `Tubematic gallery (${s.gallery_id ?? ""})`
+      : `Gallery at ${s.index ?? "an unknown address"} (${s.gallery_id ?? ""}), not reviewed`;
     case "zip": return `Zip file ${s.filename ?? ""}`.trim();
     case "git": return `Git repository ${s.url ?? ""} at ${s.commit ? s.commit.slice(0, 12) : s.ref ?? ""}`;
     case "incoming": return `Handed over by an agent (${s.name ?? ""})`;

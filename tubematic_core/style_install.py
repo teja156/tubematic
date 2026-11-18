@@ -383,7 +383,8 @@ def _drop_superseded(record: dict) -> None:
 
 def _copy_tree(src: pathlib.Path, dest: pathlib.Path) -> None:
     total, count = 0, 0
-    for top, _dirs, files in os.walk(src, followlinks=False):
+    for top, dirs, files in os.walk(src, followlinks=False):
+        count += len(dirs)  # each one is a mkdir, as in a zip
         for name in files:
             p = os.path.join(top, name)
             if os.path.islink(p):
@@ -391,7 +392,7 @@ def _copy_tree(src: pathlib.Path, dest: pathlib.Path) -> None:
             total += os.path.getsize(p)
             count += 1
     if count > MAX_FILES or total > MAX_UNPACKED_BYTES:
-        raise InstallError(f"the folder is over {MAX_FILES} files or {MAX_UNPACKED_BYTES // 1_000_000} MB")
+        raise InstallError(f"the folder is over {MAX_FILES} files and folders or {MAX_UNPACKED_BYTES // 1_000_000} MB")
     shutil.copytree(src, dest, symlinks=True)
 
 
