@@ -309,8 +309,13 @@ The Mascots page's create form uses the same agent, model and effort controls
   uninstalled, or a model the agent dropped, stays selected and cannot be picked again.
 - The description box is one component, `DomainDescriptionField`, on the add form and in the
   panel. It grows with its text up to 320px, counts code points against the API's 2000-character
-  limit, and stops the text growing past it. A description stored longer than the limit is shown
-  whole and can only shrink, since the API keeps such a text until it changes. Under the box, a note
+  limit, and stops the text growing past it. At the limit only the inserted text is cut
+  (`clampEdit`), located by the caret the browser reports after the edit, so a paste in the middle
+  never pushes out the end. A description stored longer than the limit is shown whole and can only
+  shrink, since the API keeps such a text until it changes. On a domain's row the stored text is
+  copied into the box only while the box is not focused and no newer text is still being saved,
+  so a save that answers late neither overwrites newer typing nor replaces a text whose own save
+  was then refused. Under the box, a note
   says the agent follows the description; `scripts/tests/test_domain_instructions_skills.py` keeps
   that note and the skills in step. The domain's line shows the description on one truncated line
   with the full text on hover.

@@ -1302,13 +1302,32 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     render(<TopicsPage />);
     await openDefaults();
     const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    // The caret after an edit is where the inserted text ends, as a browser
+    // reports it; the text after it is what the edit left in place.
+    const edit = (value: string, caret: number) =>
+      fireEvent.change(field, { target: { value, selectionStart: caret, selectionEnd: caret } });
     // One letter typed in the middle: refused, the text stays whole.
-    fireEvent.change(field, { target: { value: "a".repeat(1000) + "X" + "z".repeat(1000) } });
+    edit("a".repeat(1000) + "X" + "z".repeat(1000), 1001);
     expect(field.value).toBe("a".repeat(1000) + "z".repeat(1000));
     // Room made at the start, then a paste in the middle: only the paste is cut.
-    fireEvent.change(field, { target: { value: "a".repeat(997) + "z".repeat(1000) } });
-    fireEvent.change(field, { target: { value: "a".repeat(500) + "PASTE" + "a".repeat(497) + "z".repeat(1000) } });
+    edit("a".repeat(997) + "z".repeat(1000), 0);
+    edit("a".repeat(500) + "PASTE" + "a".repeat(497) + "z".repeat(1000), 505);
     expect(field.value).toBe("a".repeat(500) + "PAS" + "a".repeat(497) + "z".repeat(1000));
+  });
+
+  it("a paste over a selection that repeats what it replaced is cut where it was pasted", async () => {
+    const FULL = { ...DOMAIN, description: "a".repeat(1000) + "z".repeat(1000) };
+    mockDomains([FULL, PLAIN]);
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    // The first "a" selected and "ba" pasted over it. The strings alone cannot
+    // tell where the paste ends; the caret says it is the first two letters.
+    // Only the paste is cut, and the last "z" stays.
+    fireEvent.change(field, { target: { value: "ba" + "a".repeat(999) + "z".repeat(1000),
+                                        selectionStart: 2, selectionEnd: 2 } });
+    expect(field.value).toBe("b" + "a".repeat(999) + "z".repeat(1000));
   });
 
   it("a save that lands while the box is being edited again keeps the newer text", async () => {
@@ -1341,6 +1360,44 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     expect(field.value).toBe("Second draft");
     fireEvent.blur(field);
     await waitFor(() => expect(projectPosts(spy).map((b) => b.description)).toEqual(["First draft", "Second draft"]));
+  });
+
+  it("a newer save that is refused after an older one lands keeps the newer text", async () => {
+    const releases: Array<() => void> = [];
+    const spy = mockDomains();
+    const original = spy.getMockImplementation()!;
+    spy.mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      if (url.toString().endsWith("/projects") && init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        return new Promise((resolve) => {
+          releases.push(() => resolve(body.description === "First draft"
+            ? { ok: true, json: () => Promise.resolve({ ...DOMAIN, description: body.description }) } as Response
+            : { ok: false, status: 400, json: () => Promise.resolve({ error: "refused for the test" }) } as Response));
+        });
+      }
+      return original(url, init);
+    });
+    const { fireEvent, act } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "First draft" } });
+    fireEvent.blur(field);
+    await waitFor(() => expect(releases).toHaveLength(1));
+    // Typed again and left before the first save answers; the row's writes
+    // run one at a time, so the second waits behind the first.
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "Second draft" } });
+    fireEvent.blur(field);
+    await act(async () => { releases[0](); });
+    await waitFor(() => expect(screen.getByTestId("domain-description-seed-1").textContent).toBe("First draft"));
+    expect(field.value).toBe("Second draft");
+    await waitFor(() => expect(releases).toHaveLength(2));
+    await act(async () => { releases[1](); });
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-seed-1").textContent)
+      .toMatch(/refused for the test/));
+    expect(field.value).toBe("Second draft");
   });
 
   it("shows the domain's agent, model and effort, and offers only live agents", async () => {

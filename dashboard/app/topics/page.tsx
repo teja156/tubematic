@@ -178,18 +178,25 @@ const DESCRIPTION_NOTE =
 // The edit `next` makes to `prev`, with what it inserts cut so the text holds at
 // most `limit` code points. Only the inserted run is cut: a paste or a letter
 // typed into the middle of a full text must not push the end of it out.
-function clampEdit(prev: string, next: string, limit: number): string {
-  const after = codePoints(next);
-  if (after.length <= limit) return next;
-  const before = codePoints(prev);
-  let head = 0;
-  while (head < before.length && head < after.length && before[head] === after[head]) head++;
-  let tail = 0;
-  while (tail < before.length - head && tail < after.length - head
-         && before[before.length - 1 - tail] === after[after.length - 1 - tail]) tail++;
-  const inserted = after.slice(head, after.length - tail);
-  const room = Math.max(0, limit - (after.length - inserted.length));
-  return [...after.slice(0, head), ...inserted.slice(0, room), ...after.slice(after.length - tail)].join("");
+// `caret` is where the browser put the caret after the edit, the end of what
+// was inserted: the text after it is what the edit left in place. Comparing
+// the two strings alone cannot tell where a paste over a selection ends when
+// the pasted text repeats what it replaced.
+function clampEdit(prev: string, next: string, limit: number, caret = next.length): string {
+  const total = codePoints(next).length;
+  if (total <= limit) return next;
+  const end = Math.min(Math.max(caret, 0), next.length);
+  const kept = next.slice(end);
+  // Not an edit this function can read: refuse it rather than guess.
+  if (!prev.endsWith(kept)) return prev;
+  let start = 0;
+  const maxStart = Math.min(end, prev.length - kept.length);
+  while (start < maxStart && prev[start] === next[start]) start++;
+  // Never split a surrogate pair: back up to its first half.
+  if (start > 0 && /[\uD800-\uDBFF]/.test(next[start - 1])) start--;
+  const inserted = codePoints(next.slice(start, end));
+  const room = Math.max(0, limit - (total - inserted.length));
+  return next.slice(0, start) + inserted.slice(0, room).join("") + kept;
 }
 
 // The description box on the add form and on a domain's open row: one
@@ -218,7 +225,8 @@ function DomainDescriptionField({ testId, countTestId, value, onChange, onFocus,
         onChange={(e) => {
           // The cap stops the text growing; it never cuts one stored longer
           // before the cap existed, which the API keeps until it changes.
-          onChange(clampEdit(value, e.target.value, Math.max(MAX_DOMAIN_DESCRIPTION_CHARS, count)));
+          onChange(clampEdit(value, e.target.value, Math.max(MAX_DOMAIN_DESCRIPTION_CHARS, count),
+                             e.target.selectionEnd ?? undefined));
         }}
         placeholder="Description: what this domain covers, and any instructions for the agent (optional)"
         style={{
@@ -261,21 +269,34 @@ function DomainDescriptionField({ testId, countTestId, value, onChange, onFocus,
 // a save per keystroke would re-send the whole row for every letter. Trailing
 // space is trimmed as the add form trims it. A refused save keeps the text in
 // the box so it can be corrected; the row says why. The stored text is copied
-// in only while the box is not being edited: a save that lands after you
-// clicked back in and kept typing must not put the older text back.
+// in only while the box is not being edited and no newer text is still being
+// saved: an older save that lands after you typed again must not put the older
+// text back, nor leave it there if the newer save is then refused.
 function DomainDescriptionInput({ testId, value, onCommit }: {
   testId: string; value: string; onCommit: (next: string) => Promise<boolean>;
 }) {
   const [local, setLocal] = useState(value);
   const editing = useRef(false);
-  useEffect(() => { if (!editing.current) setLocal(value); }, [value]);
+  // The last text sent, until its save answers.
+  const pending = useRef<string | null>(null);
+  useEffect(() => {
+    if (editing.current) return;
+    if (pending.current !== null && value !== pending.current) return;
+    pending.current = null;
+    setLocal(value);
+  }, [value]);
   function commit() {
     editing.current = false;
     const next = local.trim();
-    if (next !== value) void onCommit(next);
-    // A save landing while the box was focused was not copied in: show it now
-    // when nothing is left to send.
-    else setLocal(value);
+    if (next === value) {
+      // A save landing while the box was focused was not copied in: show it
+      // now that nothing is left to send.
+      if (pending.current === null) setLocal(value);
+      return;
+    }
+    pending.current = next;
+    const settle = () => { if (pending.current === next) pending.current = null; };
+    onCommit(next).then(settle, settle);
   }
   return (
     <DomainDescriptionField

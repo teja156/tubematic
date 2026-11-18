@@ -219,7 +219,7 @@ If the call refuses:
 - **not available:** the setting changed since you read the list. Read `get_video` again and
   decide again from the new list.
 - **a recent formula with no `repeat_reason`:** go back to Step 4. Take another clear fit, or call
-  again with `repeat_reason` when there is none.
+  again with `repeat_reason` when there is none or the domain's description asks for this formula.
 - **the domain's watch figures changed since you read `get_video`:** another video of the domain
   was picked in between, a setting changed or new analytics arrived. Read `get_video` again and go
   back to Step 3b with the new points and `stamp`.

@@ -3998,8 +3998,9 @@ def choose_script_formula(video_id: str, formula: str, reason: str, runner_up: s
         if not choice and candidates[formula]["recent"] and not repeat_reason:
             return {"error": f"{candidates[formula]['label']} is the formula of one of this "
                              f"domain's previous {tformulas.ROTATION_WINDOW} videos. Pick "
-                             "another candidate, or, when no other candidate fits this topic, "
-                             "call again with repeat_reason: one sentence saying why."}
+                             "another candidate, or, when no other candidate fits this topic "
+                             "or the domain's description asks for this formula, call again "
+                             "with repeat_reason: one sentence saying why."}
         if choice:
             pick = choice
             if formula != choice:

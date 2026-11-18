@@ -475,8 +475,9 @@ user preferences. The research, script-writing, style-routing and formula-routin
 it changes in their own steps. Style and formula routing rule out a look or a structure it
 excludes, and pick a candidate it asks for when that candidate is a clear fit, over a higher score
 and over the formula rotation. A requested candidate that is not a clear fit is not picked, because
-a style or structure forced onto the wrong topic makes a worse video; the domain's default style and
-formula pin one outright. A formula picked this way may be a recent one, so its `repeat_reason`
+a style or structure forced onto the wrong topic makes a worse video. The domain's
+`default_formula_id` pins a formula on every new video, and its `default_visual_style` pins a style
+on curriculum videos. A formula picked this way may be a recent one, so its `repeat_reason`
 names the description, which `choose_script_formula` accepts.
 
 Where the description and the user preferences disagree, the description wins, because it is the

@@ -132,7 +132,7 @@ A candidate is a **clear fit** with at least 3 points.
   has, and that style is a clear fit, pick it even when another clear fit has more points. Its
   reason says why it fits the topic and that the description asks for it. A style the description
   asks for that is not a clear fit is not picked: a style forced onto the wrong topic makes a worse
-  video, and the person can pin it as the domain's default style instead.
+  video. The person can pin a style as the domain's default, which starts its curriculum videos.
 - When none is, pick `scenes`. Do not pick a style that half fits: a topic forced into a style made
   for something else is worse than the mixed scene system.
 - A style that carries only some of the beats half fits, however many points those beats earn it.

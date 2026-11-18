@@ -115,8 +115,10 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
   the reason on the domain's line. A stored text longer than 2000 code points is shown whole and
   cannot grow, so typing into it never cuts it; once under the limit, the limit holds. At the limit,
   a letter typed into the middle is refused and a paste is cut to fit, so the end of the text is
-  never pushed out. A save that answers after the box was entered again leaves the newer typing in
-  the box, and a blur then saves it.
+  never pushed out; a paste over a selection that repeats the replaced text is cut where the caret
+  says it went. A save that answers after the box was entered again leaves the newer typing in the
+  box, and a blur then saves it. A newer save refused after an older one landed leaves the newer
+  text in the box with the reason on the line.
 - The formula default offers Auto and every formula with experimental ones marked, a change
   re-sends every other field, another edit keeps it, a new domain is created with the one picked,
   and a stored formula the list does not know stays selected under its id.

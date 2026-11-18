@@ -1179,7 +1179,9 @@ Covers `choose_script_formula`, `get_video`'s `formula_routing`, the domain's de
   person's choice gets none.
 - `recent` is the domain's previous two videos, newest first, counting a video by its recorded
   formula or else its pick, and rows filed in the same second by insertion order. A formula among
-  them is refused without `repeat_reason` and accepted with it, and the reason is stored. Another domain's videos and a video with no domain have no
+  them is refused without `repeat_reason` and accepted with it, and the reason is stored. The
+  refusal names both cases a `repeat_reason` is for: no other candidate fits, or the domain's
+  description asks for the formula. Another domain's videos and a video with no domain have no
   history.
 - A person's choice becomes the pick, with the agent's formula as the runner-up and "Auto would
   have picked" in the reason. It holds for an experimental formula with the setting off, is exempt
