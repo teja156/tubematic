@@ -44,6 +44,8 @@ def test_a_bad_source_is_refused_with_the_forms(env):
     assert "incoming:<name>" in server.stage_style_install("ftp://x")["error"]
     assert "commit or a tag" in server.stage_style_install("git:https://github.com/a/b")["error"]
     assert "does not exist" in server.stage_style_install("incoming:nothing")["error"]
+    with server._conn() as con:
+        con.execute("INSERT INTO settings (key, value) VALUES ('style_gallery_url', '')")
     assert "no gallery address" in server.stage_style_install("gallery:ext_x")["error"]
 
 
@@ -64,3 +66,15 @@ def test_no_tool_can_confirm_or_remove_an_install():
     src = server.__file__ and open(server.__file__, encoding="utf-8").read()
     assert "_style_install.confirm" not in src and "_style_install.remove" not in src
     assert not any("confirm" in t and "style" in t for t in tools)
+
+
+def test_the_gallery_source_uses_the_curated_gallery_when_the_setting_was_never_written(env, monkeypatch):
+    """A fresh install has no style_gallery_url row; the API reads the spec's
+    default, and the agent's tool must reach the same gallery."""
+    seen = []
+    monkeypatch.setattr(si, "gallery_index", lambda url: seen.append(url) or [])
+    assert "no style" in server.stage_style_install("gallery:ext_x")["error"]
+    assert seen == [si.OFFICIAL_GALLERY_URL]
+    with server._conn() as con:
+        con.execute("INSERT INTO settings (key, value) VALUES ('style_gallery_url', '')")
+    assert "no gallery address" in server.stage_style_install("gallery:ext_x")["error"]

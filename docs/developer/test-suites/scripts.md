@@ -857,8 +857,10 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
   and the previews; the official gallery's install from that site stages as reviewed and installs.
   It refuses to publish a package that fails its check.
 - The official gallery address is the one the skeleton's publish workflow builds for, and the
-  skeleton's PR workflow calls `scan` and `render` on `ubuntu-24.04`. The review checklist covers what
-  the design asks a reviewer to check.
+  skeleton's PR workflow calls `scan` and `render` on `ubuntu-24.04`, diffs against the event's base
+  commit (a fork has no `origin/<base>`), and fails on a failed render. `render` names Chromium with
+  `--browser-executable` and exits 3 for a 3D world style. The review checklist covers what the
+  design asks a reviewer to check.
 - Opt-in (`TUBEMATIC_GALLERY_RENDER_IMAGE` set to a backend image): `render` makes a video of a scene
   style's example in that image.
 

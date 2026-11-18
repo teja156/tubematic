@@ -65,8 +65,12 @@ jobs:
           mkdir -p renders
           for id in $(echo "${{ needs.scan.outputs.changed }}" | tr , ' '); do
             if [ -d "styles/$id" ]; then
+              rc=0
               python3 .tubematic/scripts/gallery.py render "styles/$id" "renders/$id.mp4" \
-                --image "$TUBEMATIC_IMAGE" || echo "::warning::$id: no example render (see the log)"
+                --image "$TUBEMATIC_IMAGE" || rc=$?
+              # 3: a 3D world style, rendered by hand; anything else is a failed render and fails the job
+              if [ "$rc" = 3 ]; then echo "::notice::$id is a 3D world style: render it by hand";
+              elif [ "$rc" != 0 ]; then echo "::error::$id: the example did not render"; exit 1; fi
             else
               echo "::notice::$id is a pointer: the maintainer renders it from the pinned commit"
             fi

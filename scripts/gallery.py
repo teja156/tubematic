@@ -19,7 +19,7 @@ gallery's CI checks out Tubematic and runs:
     python3 scripts/gallery.py render <package> <out.mp4> --image <tubematic backend image>
         Render a scene style's example config (silent) in the backend image, for
         the review. A 3D world style's example needs generated source, so it is
-        rendered by hand.
+        rendered by hand: exit code 3. Any other failure exits 1.
 """
 import argparse
 import hashlib
@@ -42,6 +42,8 @@ from tubematic_core import style_install  # noqa: E402
 from tubematic_core import style_scan  # noqa: E402
 
 INDEX_VERSION = 1
+# render's exit code for a style CI cannot render (a 3D world): a notice, never a pass for a failed render
+NOT_RENDERABLE = 3
 COMMIT_RE = re.compile(r"[0-9a-f]{40}")
 _ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 
@@ -176,7 +178,9 @@ def render(args) -> int:
     if pack is None:
         sys.exit(f"{sid}: {reason}")
     if pack["renderer"] != "dom":
-        sys.exit(f"{sid} is a 3D world style: its example needs generated source, so render it by hand")
+        print(f"{sid} is a 3D world style: its example needs generated source, so render it by hand",
+              file=sys.stderr)
+        return NOT_RENDERABLE
     config = json.loads((pkg / "guide" / "example-config.json").read_text(encoding="utf-8"))
     timeline_file = pkg / "guide" / "example-timeline.json"
     timeline = (json.loads(timeline_file.read_text(encoding="utf-8")) if timeline_file.is_file()

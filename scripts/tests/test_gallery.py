@@ -147,3 +147,16 @@ def test_render_names_the_browser_with_the_flag_remotion_reads():
     """--browser-executable-path is ignored by the Remotion CLI (renderer/api/tests/test_gpu_rendering.py)."""
     src = (REPO / "scripts" / "gallery.py").read_text()
     assert "--browser-executable /usr/bin/chromium" in src and "--browser-executable-path" not in src
+
+
+def test_a_world_style_is_not_rendered_and_says_so_with_its_own_exit_code(tmp_path):
+    styles = tmp_path / "styles"
+    styles.mkdir()
+    make_package(styles, sid="ext_world", renderer="cartoon_3d", approve=False)
+    assert gallery.main(["render", str(styles / "ext_world"), str(tmp_path / "x.mp4"), "--image", "unused"]) == 3
+
+
+def test_the_pr_workflow_fails_on_a_failed_render():
+    """A failed render used to be a warning, so a pull request passed with no example to review."""
+    pr = (SKELETON / ".github" / "workflows" / "pr.yml").read_text()
+    assert 'if [ "$rc" = 3 ]' in pr and 'exit 1; fi' in pr and "::warning::" not in pr

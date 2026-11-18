@@ -9795,7 +9795,9 @@ def stage_style_install(source: str) -> dict:
     with _conn() as con:
         row = con.execute("SELECT value FROM settings WHERE key = 'style_gallery_url'").fetchone()
     try:
-        record = _style_install.stage(spec, index_url=(row["value"] if row else "") or "")
+        # no row yet: the setting's default, the curated gallery (as the API reads it)
+        index_url = row["value"] if row else _style_install.OFFICIAL_GALLERY_URL
+        record = _style_install.stage(spec, index_url=index_url or "")
     except _style_install.InstallError as e:
         return {"error": str(e)}
     return _pending_summary(record)
