@@ -315,7 +315,8 @@ Covers `renderer/api/styles_api.py`, installing and removing external styles.
 
 - Staging a zip shows the check and the scan, serves the staged package's text files and refuses a
   path outside it, and installs nothing.
-- Confirming needs the dashboard password: no password or a wrong one is refused, and the right one
+- Confirming needs the dashboard password: no password (`400`) or a wrong one (`403`, never `401`,
+  which the proxy would report as its own token refused) is refused, and the right one
   installs and approves the package, which `GET /visual-styles` then lists as available. The confirm
   shares the login's throttle.
 - A bad upload, an `incoming` source (an MCP-only source) and an unknown kind are refused, and an
