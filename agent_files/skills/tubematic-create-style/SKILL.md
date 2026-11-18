@@ -107,7 +107,7 @@ ffprobe -v error -show_entries stream=width,height,r_frame_rate:format=duration 
 ffmpeg -v error -i "<v>" -vf "fps=12/$(ffprobe -v error -show_entries format=duration -of csv=p=0 "<v>"),scale=360:-1" "$W/study/frames/<id>-%02d.jpg"
 ffmpeg -v error -i "<v>" -vf "fps=2,scale=240:-1,tile=6x4" -frames:v 1 "$W/study/frames/<id>-sheet.jpg"
 # shot changes, to measure how long a shot lasts
-ffmpeg -v error -i "<v>" -vf "select='gt(scene,0.3)',showinfo" -f null - 2>&1 | grep -o "pts_time:[0-9.]*"
+ffmpeg -hide_banner -nostats -i "<v>" -vf "select='gt(scene,0.3)',showinfo" -f null - 2>&1 | grep -o "pts_time:[0-9.]*"
 # a dense burst for motion: 12 frames over 1.2 s, starting a third of the way in (works for a short clip too)
 D=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "<v>")
 ffmpeg -v error -ss "$(python3 -c "print(max(0.0, float('$D') / 3))")" -t 1.2 -i "<v>" -vf "fps=10,scale=360:-1" "$W/study/frames/<id>-burst-%02d.jpg"
