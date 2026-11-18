@@ -87,6 +87,10 @@ not validate is a broken package).
 - Everything is a pure function of the frame: no timers, no `Math.random()` (use a seeded generator),
   no network, no storage. The scan flags `fetch`, `eval`, `Function`, dynamic `import()`, storage and
   environment reads, and a person sees each flag before installing.
+- Between two scenes the renderer fades the first out and the next in, 8 frames each by default: a dip
+  through black at every cut. A scene's `transitionToNext.durationInFrames` sets its fade out and the
+  next scene's fade in. For a style that hard-cuts, the guide tells the authoring agent to put
+  `"transitionToNext": {"durationInFrames": 0}` on every scene, and the example config does it.
 - The canvas is 1080x1920 at 30 fps. Keep text out of the watermark's box (`WATERMARK_*`,
   `KEEP_OUT_X`) and above the captions' band (the pack's `captions.position`).
 - Fonts: ship `.woff2` files in `fonts/` with their licence and load them with `useStyleFonts`. Never
