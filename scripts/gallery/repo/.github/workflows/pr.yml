@@ -8,14 +8,23 @@ on:
 permissions:
   contents: read
 
-env:
-  # The Tubematic version whose check, scan and renderer review submissions. Move it when Tubematic
-  # releases a version with a new scene API.
-  TUBEMATIC_REF: develop
-  TUBEMATIC_IMAGE: ghcr.io/teja156/tubematic-backend:latest
-
 jobs:
+  # The Tubematic whose check, scan and renderer review submissions: the newest release, found at
+  # run time (.github/tubematic-release.sh), so nothing here moves when Tubematic releases.
+  tubematic:
+    runs-on: ubuntu-24.04
+    outputs:
+      ref: ${{ steps.release.outputs.ref }}
+      image: ${{ steps.release.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/tubematic-release.sh
+
   scan:
+    needs: tubematic
     runs-on: ubuntu-24.04
     outputs:
       changed: ${{ steps.changed.outputs.ids }}
@@ -26,7 +35,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: teja156/tubematic
-          ref: ${{ env.TUBEMATIC_REF }}
+          ref: ${{ needs.tubematic.outputs.ref }}
           path: .tubematic
       - uses: actions/setup-python@v5
         with:
@@ -61,7 +70,7 @@ jobs:
         run: cat scan.md >> "$GITHUB_STEP_SUMMARY"
 
   render:
-    needs: scan
+    needs: [tubematic, scan]
     if: needs.scan.outputs.changed != ''
     runs-on: ubuntu-24.04
     steps:
@@ -69,18 +78,23 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: teja156/tubematic
-          ref: ${{ env.TUBEMATIC_REF }}
+          ref: ${{ needs.tubematic.outputs.ref }}
           path: .tubematic
       - name: Render each scene style's example (silent)
         env:
           IDS: ${{ needs.scan.outputs.changed }}
+          REVIEW_IMAGE: ${{ needs.tubematic.outputs.image }}
         run: |
+          if [ -z "$REVIEW_IMAGE" ]; then
+            echo "::notice::No Tubematic release renders external styles yet: render the examples on your own install"
+            exit 0
+          fi
           mkdir -p renders
           for id in $(printf '%s' "$IDS" | tr , ' '); do
             if [ -d "styles/$id" ]; then
               rc=0
               python3 .tubematic/scripts/gallery.py render "styles/$id" "renders/$id.mp4" \
-                --image "$TUBEMATIC_IMAGE" || rc=$?
+                --image "$REVIEW_IMAGE" || rc=$?
               # 3: a 3D world style, rendered by hand; anything else is a failed render and fails the job
               if [ "$rc" = 3 ]; then echo "::notice::$id is a 3D world style: render it by hand";
               elif [ "$rc" != 0 ]; then echo "::error::$id: the example did not render"; exit 1; fi

@@ -14,18 +14,20 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
-env:
-  TUBEMATIC_REF: develop
-
 jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      # the newest Tubematic release builds the gallery (.github/tubematic-release.sh)
+      - id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/tubematic-release.sh
       - uses: actions/checkout@v4
         with:
           repository: teja156/tubematic
-          ref: ${{ env.TUBEMATIC_REF }}
+          ref: ${{ steps.release.outputs.ref }}
           path: .tubematic
       - uses: actions/setup-python@v5
         with:

@@ -859,7 +859,11 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
 - The official gallery address is the one the skeleton's publish workflow builds for, and the
   skeleton's PR workflow calls `scan` and `render` on `ubuntu-24.04`, diffs against the event's base
   commit (a fork has no `origin/<base>`), refuses a changed path that is not a style id's folder or
-  pointer, never expands a pull request's values inside a shell command, and fails on a failed render. `render` names Chromium with
+  pointer, never expands a pull request's values inside a shell command, fails on a failed render,
+  and both workflows take Tubematic from `.github/tubematic-release.sh`: the newest published
+  release by version (drafts and prereleases skipped), or `develop` with no example render while that
+  release predates 2.4.0. A release publishes no `latest` image tag, so a fixed tag would need a
+  hand edit on every release. `render` names Chromium with
   `--browser-executable` and exits 3 for a 3D world style. The review checklist covers what the
   design asks a reviewer to check.
 - Opt-in (`TUBEMATIC_GALLERY_RENDER_IMAGE` set to a backend image): `render` makes a video of a scene
@@ -895,6 +899,15 @@ and command.
 
 Trap: the skill runs on a person's machine with their accounts. The order (disclaimer, check, study,
 build, stage, install, samples) is what keeps it from spending or downloading before they agreed.
+
+### `test_no_conflict_markers.py`
+
+Fails when any tracked text file holds a leftover merge-conflict marker (`<<<<<<< `, `>>>>>>> ` or
+`||||||| ` at the start of a line, or a line that is only `=======`).
+
+Trap: the docs checker reads names, links and wording, not structure, and the docs site publishes
+`develop` on every push. An unresolved merge in a docs page once reached the public site with both
+sides and the markers in it.
 
 ### `test_install_style_command.py`
 
