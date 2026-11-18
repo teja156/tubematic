@@ -18,18 +18,18 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # the newest Tubematic release builds the gallery (.github/tubematic-release.sh)
       - id: release
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash .github/tubematic-release.sh
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: teja156/tubematic
           ref: ${{ steps.release.outputs.ref }}
           path: .tubematic
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Build the index, archives and previews
@@ -37,7 +37,7 @@ jobs:
           python3 .tubematic/scripts/gallery.py build styles site \
             --base-url "https://gallery.tubematic.ai/" --commit "$GITHUB_SHA" \
             --repo-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
@@ -49,4 +49,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

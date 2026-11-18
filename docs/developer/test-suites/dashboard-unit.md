@@ -201,7 +201,9 @@ Covers the Styles page (`app/styles/page.tsx`), the install screen
 - The install screen shows the warning, the scan's flags with file and line, the agent's audit, the
   guide and a file's text, and installs only with a password, which it sends in the confirm's body
   and clears afterwards. A wrong password keeps the person on the screen. A refused package offers no
-  password field, and a gallery package is marked reviewed. An expired install says so.
+  password field, and a gallery package is marked reviewed. An expired install says so. A package
+  with the installed copy's fingerprint says it is identical to it; any other replacement names the
+  version it replaces.
 - The Styles page lists installed styles with the EXTERNAL and REVIEWED tags, an unavailable
   package's reason, its use by unfinished videos and the installs waiting for review. **Review** on a
   hand-copied package stages it and opens the install screen. The Auto toggle keeps the other

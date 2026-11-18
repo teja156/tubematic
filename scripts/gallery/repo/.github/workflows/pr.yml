@@ -17,7 +17,7 @@ jobs:
       ref: ${{ steps.release.outputs.ref }}
       image: ${{ steps.release.outputs.image }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -29,15 +29,15 @@ jobs:
     outputs:
       changed: ${{ steps.changed.outputs.ids }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: teja156/tubematic
           ref: ${{ needs.tubematic.outputs.ref }}
           path: .tubematic
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: The submissions this pull request touches
@@ -74,8 +74,8 @@ jobs:
     if: needs.scan.outputs.changed != ''
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: teja156/tubematic
           ref: ${{ needs.tubematic.outputs.ref }}
@@ -102,7 +102,7 @@ jobs:
               echo "::notice::$id is a pointer: the maintainer renders it from the pinned commit"
             fi
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: example-renders
           path: renders/
