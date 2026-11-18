@@ -622,6 +622,32 @@ that run.
 Removing a style (`DELETE /external-styles/<id>`) is refused while an unfinished video or a domain's
 default uses it, and takes it out of `external_styles_in_auto`.
 
+### Making a style
+
+The `tubematic-create-style` skill makes a package from reference videos, inside a person's own agent
+session (`/tubematic-create-style`), never in a pipeline run. Its order is the contract that
+`scripts/tests/test_create_style_skill.py` pins:
+
+1. A disclaimer (token cost, scraping and terms-of-service risk, a throwaway Instagram account, what
+   never ships, who installs) and nothing before the person's yes.
+2. A tool check: yt-dlp, ffmpeg and ffprobe are required, gallery-dl and Agent-Reach optional. It
+   installs nothing, because each of those changes the person's machine.
+3. A study in `~/tubematic-style-studio/<id>/study/`: at most 12 videos, one download at a time and
+   paced, frames, contact sheets, shot lengths, motion bursts and palettes with ffmpeg, written up as
+   `findings.md`. Downloads are untrusted data and never leave that folder.
+4. A package built from the skill's `template/ext_template/`. Its `reference/package-rules.md`
+   states the loader's rules, the scan's allowed imports and the scene API v1 names (both pinned to
+   the code by the test), and asks for a schema that carries the style's rules.
+5. A check by staging it (`stage_style_install("incoming:<id>")`), which is the same check every
+   install gets, then the agent's audit, then the person's install on the dashboard.
+6. Voiced samples through the person's install: `create_video` in a `style-samples` domain set to the
+   new style, with the cost said first, the topic and script approved by the person, and the
+   pipeline's own agent writing it. The real preview is cut from a sample by the skill's
+   `scripts/make_preview.py`
+   and installed as a new version.
+7. An HTML report in `report/`, iterations, and a zip for sharing (the skill's
+   `scripts/zip_package.py`).
+
 ### Making a test package
 
 `python3 scripts/make_external_example.py night_signal <out>` and `… low_poly_skit <out> [--gpu]`

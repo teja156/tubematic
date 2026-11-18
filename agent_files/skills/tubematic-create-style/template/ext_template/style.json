@@ -1,0 +1,77 @@
+{
+ "id": "ext_template",
+ "label": "Template Cards",
+ "order": 9500,
+ "experimental": true,
+ "role": "main",
+ "inserts": {
+  "host": false
+ },
+ "dimension": "2d",
+ "preview": "ext_template",
+ "tagline": "One bold card per beat: a headline and short lines that land on their words.",
+ "renderer": "dom",
+ "canvas": "dark",
+ "authoring_skill": "tubematic-external-style",
+ "allows": {
+  "figures": false,
+  "line_art": false,
+  "generated_characters": false
+ },
+ "needs": {
+  "openai_key": false,
+  "gpu": false
+ },
+ "mascot": false,
+ "messages": {
+  "mascot": "Mascots are not available in external styles. Choose no mascot.",
+  "inserts": "This external style takes no insert scenes."
+ },
+ "review": "- This video is drawn in the Template Cards style, and the following are its intended look: one flat-coloured card per beat, a heavy headline at the top, a short accent bar under it, up to three short lines that slide in on their words, the same palette for the whole video, captions near the bottom. Do NOT report the plain background, the lack of pictures or the repeated layout as defects: they are the style.\n- Do report: text cut off at the frame edge or overlapping other text, text too small to read on a phone, a line that appears long before or after its words, a headline that says something the narration does not, and a stretch of more than about five seconds where nothing new appears.\n",
+ "captions": {
+  "background": "none",
+  "uppercase": false,
+  "position": 0.78,
+  "color": "#ffffff",
+  "fontFamily": "system-ui, sans-serif",
+  "fontSize": 56,
+  "maxWords": 4
+ },
+ "script": "Every beat's `visual` names the card: its headline (at most five words) and the short lines under it. Write short declarative sentences, one idea each, so each card has one headline. Name things plainly; this style shows no pictures, so never write a beat that needs a photograph or a diagram.",
+ "picture": {
+  "opening": "Scene 1 is a card on screen from frame 0 whose headline is the first sentence's idea.",
+  "turn": "A new card on the first word of the turn.",
+  "payoff": "The card whose headline states the takeaway.",
+  "ending": "Hold the last card to the last frame. No closing card after it."
+ },
+ "routing": {
+  "best_for": [
+   "a short explainer told as a few plain claims, one per card",
+   "a list of facts or tips with one idea each"
+  ],
+  "avoid_for": [
+   "anything that needs pictures, people or places",
+   "a story with characters",
+   "dense numbers or diagrams"
+  ],
+  "cannot_show": "pictures of any kind: photographs, people, places, objects or diagrams; only words on flat colour",
+  "signals": [
+   "the script is a short list of plain claims",
+   "each sentence carries one idea"
+  ],
+  "moods": [
+   "calm",
+   "direct"
+  ],
+  "images_per_video": "0",
+  "images": 0
+ },
+ "external": {
+  "version": "0.1.0",
+  "author": "Your name",
+  "source": "https://example.invalid/where-this-style-lives",
+  "licence": "MIT",
+  "scene_api": 1,
+  "props_key": "card"
+ }
+}

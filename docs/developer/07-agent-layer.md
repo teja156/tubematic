@@ -43,6 +43,7 @@ These skills ship in `agent_files/skills/`.
 | `tubematic-scene-config` | `VOICE_READY`, and the revision path | Turns a voiced script and its timeline into images, scene TSX and `scene-config.json` |
 | `tubematic-cartoon3d` | `VOICE_READY` for a Cartoon 3D video, and its revision path | Writes the shots, camera, sets and cast as TypeScript, passes the beat gate with the `cartoon_*` tools and adds a soundtrack ([Cartoon 3D](10-scene-authoring.md#cartoon-3d)) |
 | `tubematic-external-style` | `VOICE_READY` for a video in an installed external style, and its revision path | Reads the package's guide with `get_style_guide`, writes the package's scenes with props that match its schema (or a 3D world on its runner, through the beat gate), looks and submits ([External styles](10-scene-authoring.md#external-styles)) |
+| `tubematic-create-style` | A person runs `/tubematic-create-style`; never a pipeline run | Studies reference videos after a cost and scraping disclaimer, builds an external style package, has the person install it, renders voiced samples and writes a report ([Making a style](10-scene-authoring.md#making-a-style)) |
 | `tubematic-lowpoly-skit` | `VOICE_READY` for a Low-Poly Skit video, and its revision path | Writes the shots, camera, sets and cast as TypeScript against the low-poly kit, passes the beat gate with the `cartoon_*` tools and adds a soundtrack ([Low-Poly Skit](10-scene-authoring.md#low-poly-skit)) |
 | `tubematic-inserts` | `VOICE_READY` and the revision path, when `get_timeline` marks a segment with `insert`. Each main style's authoring skill sends the agent here | Places one insert inside each marked segment in `scene-config.json`'s `inserts` list and keeps the main style's data quiet under it |
 | `tubematic-system-flow` | An insert segment marked `system_flow`, and `VOICE_READY` for a video that holds System Flow as its style from an earlier version | Writes a diagram's data (boards, components, connectors, events timed to the narration) for an insert, or for such a video the whole scene, which it then validates and submits ([System Flow](10-scene-authoring.md#system-flow)) |
@@ -135,7 +136,7 @@ cadence, check the image floor and the bare-image cap again.
 
 ## Slash commands
 
-Thirteen commands ship in `agent_files/<agent>/commands/`, one copy for each agent whose CLI has
+Fourteen commands ship in `agent_files/<agent>/commands/`, one copy for each agent whose CLI has
 user-defined commands: Claude Code and OpenCode. Codex has none, so a Codex install gets skills and
 the MCP registration only. The poller sends a prompt and uses no command. The user guide lists each
 command with its dashboard equivalent
