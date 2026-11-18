@@ -4153,8 +4153,9 @@ def upsert_project(
     '-', and is at most 128 characters — it becomes a directory name. A project
     groups multiple related videos from any sourcing mode.
 
-    description: the domain's scope, in as many paragraphs as it needs, at
-        most 2000 characters. The limit applies only to a changed description;
+    description: the domain's scope and its standing instructions to the
+        agent (what to cover or leave out, audience, tone, look), in as many
+        paragraphs as it needs, at most 2000 characters. The limit applies only to a changed description;
         re-sending a longer one already stored is not refused.
 
     is_curriculum_seed: set True to make curriculum mode actively enumerate

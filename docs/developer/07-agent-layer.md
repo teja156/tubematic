@@ -458,6 +458,33 @@ three agents the same way.
 
 ---
 
+## Domain instructions
+
+A domain's `description` (the `projects` column, edited on the dashboard's **Topics** page) is that
+domain's standing instructions as well as its scope. It reaches the agent through the tools, with
+no prompt block:
+
+| Stage | Where the skill reads it |
+|---|---|
+| Topic research | Each project's `description` in `list_projects()` |
+| Every per-video stage | `get_video`'s `style_routing.domain`, `{name, description}` |
+
+The operator skill states the rule once for every stage: apply the parts that fit the stage, as with
+user preferences. The research, script-writing, style-routing and formula-routing skills say what
+it changes in their own steps. Style and formula routing rule out a look or a structure it
+excludes, and pick a candidate it asks for when that candidate survives their other rule-out
+checks. A formula picked that way may be a recent one, so its `repeat_reason` names the
+description.
+
+Where the description and the user preferences disagree, the description wins, because it is the
+narrower of the two. It cannot cross a human checkpoint and never overrides a skill's fixed policy
+or a tool's refusal, for the same reason the preferences block says so.
+
+`scripts/tests/test_domain_instructions_skills.py` pins these sentences in the skills and the note
+the dashboard shows under the box.
+
+---
+
 ## Adding a capability
 
 For a new workflow rule, edit the relevant skill, deploy with `--install-agent` and restart the

@@ -163,6 +163,109 @@ const MAX_TOPIC_CAP = 750;
 // research run, so the server refuses anything longer.
 const MAX_DOMAIN_DESCRIPTION_CHARS = 2000;
 
+// Tallest the description box grows to on its own; past it the box scrolls,
+// and the corner handle still drags it taller.
+const DESCRIPTION_MAX_AUTO_HEIGHT = 320;
+
+// What the agent does with a domain's description. The skills read it as the
+// domain's standing instructions (TMDEV-256): keep this in step with
+// tubematic-operator, tubematic-topic-research and the script-writing skill.
+const DESCRIPTION_NOTE =
+  "Research works from this description, and the agent follows what it says about this " +
+  "domain's topics, scripts and look on every video here: what to cover or leave out, the " +
+  "audience, the tone. It cannot skip a step that waits for your approval.";
+
+// The description box on the add form and on a domain's open row: one
+// component so the cap, the counter and the note cannot drift apart. It grows
+// with its text, so a scope written in paragraphs is read without scrolling.
+function DomainDescriptionField({ testId, countTestId, value, onChange, onBlur }: {
+  testId: string; countTestId: string; value: string;
+  onChange: (next: string) => void; onBlur?: () => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight + 2, DESCRIPTION_MAX_AUTO_HEIGHT)}px`;
+  }, [value]);
+  const count = codePoints(value).length;
+  return (
+    <div style={{ width: "100%" }}>
+      <textarea
+        ref={ref}
+        data-testid={testId}
+        aria-label="Description"
+        value={value}
+        rows={3}
+        onChange={(e) => {
+          // The cap stops the text growing; it never cuts one stored longer
+          // before the cap existed, which the API keeps until it changes.
+          const limit = Math.max(MAX_DOMAIN_DESCRIPTION_CHARS, count);
+          const chars = codePoints(e.target.value);
+          onChange(chars.length > limit ? chars.slice(0, limit).join("") : e.target.value);
+        }}
+        placeholder="Description: what this domain covers, and any instructions for the agent (optional)"
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          resize: "vertical",
+          lineHeight: 1.5,
+          fontFamily: "var(--mono)",
+          fontSize: 12,
+          background: "var(--bg)",
+          border: "1px solid var(--border)",
+          color: "var(--ink)",
+          padding: "8px 12px",
+          outline: "none",
+        }}
+        onFocus={(e) => { e.currentTarget.style.borderColor = "var(--indigo)"; }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border)"; onBlur?.(); }}
+      />
+      <div style={{ display: "flex", gap: 16, alignItems: "baseline", marginTop: 4 }}>
+        <div data-testid={`${testId}-note`} style={{ ...noteStyle, flex: 1, minWidth: 0 }}>
+          {DESCRIPTION_NOTE}
+        </div>
+        <div
+          data-testid={countTestId}
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 10.5,
+            whiteSpace: "nowrap",
+            color: count >= MAX_DOMAIN_DESCRIPTION_CHARS * 0.9 ? "var(--amber)" : "var(--mute)",
+          }}
+        >
+          {count} / {MAX_DOMAIN_DESCRIPTION_CHARS}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// A domain's description on its open row, saved on blur like the topic cap:
+// a save per keystroke would re-send the whole row for every letter. Trailing
+// space is trimmed as the add form trims it. A refused save keeps the text in
+// the box so it can be corrected; the row says why.
+function DomainDescriptionInput({ testId, value, onCommit }: {
+  testId: string; value: string; onCommit: (next: string) => Promise<boolean>;
+}) {
+  const [local, setLocal] = useState(value);
+  useEffect(() => { setLocal(value); }, [value]);
+  function commit() {
+    const next = local.trim();
+    if (next !== value) void onCommit(next);
+  }
+  return (
+    <DomainDescriptionField
+      testId={testId}
+      countTestId={`${testId}-count`}
+      value={local}
+      onChange={setLocal}
+      onBlur={commit}
+    />
+  );
+}
+
 // Commits on blur or Enter, like Settings' number fields, so typing "300" is
 // one save rather than three. An entry outside the bounds is kept, with the
 // reason on the domain's line, so it can be corrected.
@@ -370,8 +473,8 @@ const badgeStyle = {
 } as const;
 
 // One line per domain: what it is, what it overrides, how full it is, and its
-// status. The defaults themselves sit in a panel under the line, opened by
-// "Edit defaults". Seven pickers and a cap on the line itself left no room
+// status. The description and the defaults sit in a panel under the line,
+// opened by "Edit domain". Seven pickers and a cap on the line itself left no room
 // for the name, and nowhere to say which videos each default applies to.
 function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, onInvalid, lists, canIllustrate, gpu }: {
   project: Project;
@@ -439,7 +542,7 @@ function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, o
               {project.name}
             </span>
             {project.description && (
-              <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--dim)", letterSpacing: "0.06em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+              <span data-testid={`domain-description-${project.id}`} title={project.description} style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--dim)", letterSpacing: "0.06em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
                 {project.description}
               </span>
             )}
@@ -582,7 +685,7 @@ function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, o
             flexShrink: 0,
           }}
         >
-          {open ? "Close" : "Edit defaults"}
+          {open ? "Close" : "Edit domain"}
         </button>
       </div>
 
@@ -594,6 +697,16 @@ function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, o
           data-testid={panelId}
           style={{ display: "flex", flexWrap: "wrap", gap: "20px 28px", padding: "16px 16px 18px 35px", borderTop: "1px solid var(--border)", background: "var(--panel-2)" }}
         >
+          {/* The description is the domain's standing instructions to the
+              agent (TMDEV-256), so it opens the panel, across its full width. */}
+          <DomainGroup title="Description" flex="1 1 100%"
+                       note="Saved when you click away from the box.">
+            <DomainDescriptionInput
+              testId={`domain-description-input-${project.id}`}
+              value={project.description ?? ""}
+              onCommit={(next) => onSave(project.id, { description: next })}
+            />
+          </DomainGroup>
           <DomainDefaults
             values={values}
             onChange={(patch) => { void onSave(project.id, patch as Partial<Project>); }}
@@ -710,48 +823,12 @@ function AddDomainForm({ onAdded, lists, canIllustrate, gpu }: {
 
       {/* Its own row: a scope statement wants paragraphs, and a tall box beside
           the one-line name made the row ragged. */}
-      <div>
-        <textarea
-          data-testid="domain-description-input"
-          value={description}
-          rows={3}
-          onChange={(e) => {
-            const chars = codePoints(e.target.value);
-            setDescription(chars.length > MAX_DOMAIN_DESCRIPTION_CHARS
-              ? chars.slice(0, MAX_DOMAIN_DESCRIPTION_CHARS).join("")
-              : e.target.value);
-          }}
-          placeholder="Description / scope (optional)"
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            resize: "vertical",
-            lineHeight: 1.5,
-            fontFamily: "var(--mono)",
-            fontSize: 12,
-            background: "var(--bg)",
-            border: "1px solid var(--border)",
-            color: "var(--ink)",
-            padding: "8px 12px",
-            outline: "none",
-          }}
-          onFocus={(e) => { e.currentTarget.style.borderColor = "var(--indigo)"; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-        />
-        <div
-          data-testid="domain-description-count"
-          style={{
-            fontFamily: "var(--mono)",
-            fontSize: 10.5,
-            textAlign: "right",
-            marginTop: 4,
-            color: codePoints(description).length >= MAX_DOMAIN_DESCRIPTION_CHARS * 0.9
-              ? "var(--amber)" : "var(--mute)",
-          }}
-        >
-          {codePoints(description).length} / {MAX_DOMAIN_DESCRIPTION_CHARS}
-        </div>
-      </div>
+      <DomainDescriptionField
+        testId="domain-description-input"
+        countTestId="domain-description-count"
+        value={description}
+        onChange={setDescription}
+      />
 
       {/* The same groups a domain's row opens, so what you choose here is
           what you find there. All optional. */}
@@ -883,6 +960,7 @@ function ModeToggles({
 // What the message beside the domain calls the field a refused save was about, when the API gave
 // no reason of its own.
 const SAVED_FIELD: Record<string, string> = {
+  description: "description",
   default_visual_style: "style",
   default_voice_id: "default voice",
   default_script_profile_id: "script profile",

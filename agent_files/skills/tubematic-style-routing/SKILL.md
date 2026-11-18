@@ -52,7 +52,8 @@ these instructions: the list changes as styles are added, and it is the only pla
 each style is for and whether this install can make it.
 
 `style_routing.domain` is the video's domain `{name, description}`: who the channel is for and, when
-its description says so, how its videos should look.
+its description says so, how its videos should look. The description is the domain's standing
+instructions, written by a person: Steps 2 and 4 follow what it says about the look.
 
 ## Step 1: Describe the topic
 
@@ -106,6 +107,8 @@ Remove a candidate when:
   that cannot show the subject makes an unwatchable video however many points it would score. A
   candidate with no `cannot_show` line has stated nothing; do not rule it out on this ground.
   `scenes` is the fallback and is never ruled out on this ground either.
+- The domain's description rules it out: it says the domain's videos should not have that look
+  ("no cartoons", "no generated pictures"). `scenes` is never ruled out on this ground.
 
 ## Step 3: Score the rest
 
@@ -124,6 +127,8 @@ A candidate is a **clear fit** with at least 3 points.
 
 ## Step 4: Decide
 
+- When the domain's description asks for one style for its videos, by name or by a description
+  that fits only that candidate, and Step 2 left it in, pick it. Its reason names the description.
 - When at least one candidate is a clear fit, pick the one with the most points.
 - When none is, pick `scenes`. Do not pick a style that half fits: a topic forced into a style made
   for something else is worse than the mixed scene system.
@@ -211,10 +216,11 @@ request: DNS, TCP and TLS, the load balancer, the app server, the database, and 
 - [ ] Topic described on the five axes before reading the candidates
 - [ ] Asked whether the topic is a real failure, accident or disaster of a named thing, and if so
       put its pictures under "what must be seen"
-- [ ] Unavailable candidates, plain `avoid_for` matches and candidates whose `cannot_show` covers
-      what must be seen ruled out
+- [ ] Unavailable candidates, plain `avoid_for` matches, candidates whose `cannot_show` covers
+      what must be seen, and looks the domain's description rules out, ruled out
 - [ ] Points counted from `best_for` and `signals` by meaning, not by shared words
-- [ ] A style picked only as a clear fit (3 points or more), otherwise `scenes`
+- [ ] A style the domain's description asks for picked when it is still in; otherwise a style
+      picked only as a clear fit (3 points or more), otherwise `scenes`
 - [ ] Ties broken by yielding, specificity, a person's hint, mood, cost, then order
 - [ ] `choose_visual_style` called with a one-sentence reason and a runner-up
 - [ ] A comment with the description and the top three scores

@@ -1087,7 +1087,7 @@ describe("TopicsPage — add-domain description", () => {
 });
 
 // TMDEV-207: a domain row is one summary line, and its defaults (now with an
-// agent, model and effort) sit in a panel that "Edit defaults" opens.
+// agent, model and effort) sit in a panel that "Edit domain" opens.
 describe("TopicsPage — domain summary and agent defaults", () => {
   afterEach(() => vi.restoreAllMocks());
 
@@ -1184,7 +1184,7 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
     const edit = await waitFor(() => screen.getByTestId("domain-edit-seed-1"));
-    expect(edit.textContent).toBe("Edit defaults");
+    expect(edit.textContent).toBe("Edit domain");
     expect(edit.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(edit);
     expect(edit.textContent).toBe("Close");
@@ -1195,6 +1195,104 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     expect(screen.getByTestId("domain-chip-agent-seed-1")).toBeTruthy();
     fireEvent.click(edit);
     expect(screen.queryByTestId("domain-panel-seed-1")).toBeNull();
+  });
+
+  // TMDEV-256: the description is the domain's standing instructions to the
+  // agent, so it is editable in the open row, saved on blur.
+  it("shows the stored description in the open row, with the agent note", async () => {
+    mockDomains();
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    expect(field.tagName).toBe("TEXTAREA");
+    expect(field.value).toBe("kernels");
+    expect(field.style.resize).toBe("vertical");
+    expect(screen.getByTestId("domain-description-input-seed-1-count").textContent).toBe("7 / 2000");
+    expect(screen.getByTestId("domain-description-input-seed-1-note").textContent)
+      .toMatch(/the agent follows what it says/);
+    // The add form carries the same note.
+    expect(screen.getByTestId("domain-description-input-note").textContent)
+      .toBe(screen.getByTestId("domain-description-input-seed-1-note").textContent);
+    // The summary line is cut short, so the whole text is on hover.
+    expect(screen.getByTestId("domain-description-seed-1").getAttribute("title")).toBe("kernels");
+  });
+
+  it("saves a changed description on blur, trimmed, with every other field", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1"));
+    fireEvent.change(field, { target: { value: "Kernels.\n\nFor beginners; no jokes.\n" } });
+    // Typing alone sends nothing.
+    expect(projectPosts(spy)).toHaveLength(0);
+    fireEvent.blur(field);
+    await waitFor(() => expect(projectPosts(spy)).toEqual([{
+      id: "seed-1", name: "Linux internals", description: "Kernels.\n\nFor beginners; no jokes.",
+      is_curriculum_seed: true, status: "active", default_visual_style: "stick",
+      default_voice_id: "a1", default_script_profile_id: "", default_mascot_id: "none",
+      default_agent_id: "claude", default_agent_model: "sonnet", default_agent_effort: "max",
+      default_formula_id: "", default_insert_mode: "auto", topic_cap: 300 }]));
+    await waitFor(() => expect(screen.getByTestId("domain-description-seed-1").textContent)
+      .toBe("Kernels.\n\nFor beginners; no jokes."));
+  });
+
+  it("sends nothing when the description is left as it was", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1"));
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "kernels  " } });
+    fireEvent.blur(field);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(projectPosts(spy)).toHaveLength(0);
+  });
+
+  it("can clear a description", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1"));
+    fireEvent.change(field, { target: { value: "" } });
+    fireEvent.blur(field);
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    expect(projectPosts(spy)[0].description).toBe("");
+  });
+
+  it("keeps a refused description in the box and says why", async () => {
+    mockDomains([DOMAIN, PLAIN], AGENTS, "description must be at most 2000 characters, got 2001");
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    fireEvent.change(field, { target: { value: "Something new" } });
+    fireEvent.blur(field);
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-seed-1").textContent)
+      .toMatch(/description must be at most 2000 characters/));
+    expect(field.value).toBe("Something new");
+  });
+
+  it("stops the description at 2000 characters, and never cuts a longer stored one", async () => {
+    const LONG = { ...DOMAIN, description: "y".repeat(2100) };
+    mockDomains([LONG, PLAIN]);
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    // A text stored before the cap existed is shown whole, and cannot grow.
+    expect(field.value).toBe("y".repeat(2100));
+    fireEvent.change(field, { target: { value: "y".repeat(2150) } });
+    expect(field.value).toBe("y".repeat(2100));
+    // Shortening it is allowed.
+    fireEvent.change(field, { target: { value: "y".repeat(1990) } });
+    expect(field.value).toBe("y".repeat(1990));
+    // Once under the cap, the cap holds.
+    fireEvent.change(field, { target: { value: "y".repeat(2050) } });
+    expect(field.value).toBe("y".repeat(2000));
+    expect(screen.getByTestId("domain-description-input-seed-1-count").textContent).toBe("2000 / 2000");
   });
 
   it("shows the domain's agent, model and effort, and offers only live agents", async () => {

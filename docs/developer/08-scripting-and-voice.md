@@ -141,8 +141,10 @@ there and an opening switch clears it, so the video moves on only after a rewrit
 ```mermaid
 flowchart TD
     A["TOPIC_APPROVED, style decided"] --> B["get_video: formula_routing.candidates"]
-    B --> C["Skill: describe the topic, rule out, score"]
-    C --> D{"Best fit used by the domain's previous two videos?"}
+    B --> C["Skill: describe the topic, rule out (with what the domain's description excludes), score"]
+    C --> R{"The domain's description asks for a formula still in?"}
+    R -- "yes" --> G
+    R -- "no" --> D{"Best fit used by the domain's previous two videos?"}
     D -- "no" --> G["choose_script_formula"]
     D -- "yes, another formula fits" --> E["Take the other formula"]
     D -- "yes, nothing else fits" --> F["Keep it and pass repeat_reason"]

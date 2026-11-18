@@ -1054,6 +1054,24 @@ Covers the `tubematic-style-routing` skill
 Trap: a skill that named styles would prefer the ones it knew about, and a new pack would need an
 edit to be picked. The candidates are data for that reason.
 
+### `test_domain_instructions_skills.py`
+
+Covers [Domain instructions](../07-agent-layer.md#domain-instructions): a domain's description is
+its standing instructions to the agent.
+
+- The note under the description box on the Topics page says the agent follows it for topics,
+  scripts and look, and that it cannot skip an approval.
+- The operator reads it from `get_video`'s `style_routing.domain` on every video, ranks it above
+  the user preferences, and lets it cross no checkpoint.
+- Research reads it from `list_projects()` as scope and instructions, both where curriculum topics
+  are made and where any topic is filed.
+- The script-writing skill reads it and keeps its fixed policy above it.
+- Style and formula routing rule out what it excludes and pick what it asks for, and a formula it
+  asks for that is recent is recorded with a `repeat_reason`, which `choose_script_formula` requires.
+
+Trap: the dashboard note is a promise about agent behaviour. A skill edit that drops one of these
+sentences makes the note untrue with nothing else failing.
+
 ### `test_formula_routing_skill.py`
 
 Covers the `tubematic-formula-routing` skill

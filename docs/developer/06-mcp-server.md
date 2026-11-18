@@ -619,7 +619,8 @@ HTTP route [`POST /projects`](05-http-api.md#post-projects) is a full replace.
   characters, because it names the domain's output directory. An existing domain is not checked, so
   one filed under an id with a dot can still be edited.
 - `topic_cap` is a whole number from 25 to 750.
-- `description` may run to several paragraphs and at most 2000 characters.
+- `description` may run to several paragraphs and at most 2000 characters. It is the domain's scope
+  and its standing instructions to the agent ([Domain instructions](07-agent-layer.md#domain-instructions)).
 - `default_voice_id` must be on the roster.
 - `default_script_profile_id` must name a `READY` profile that is not deleted.
 - `default_visual_style` set to `illustrated`, `under_the_hood` or `case_file_story` needs a stored OpenAI key, and set

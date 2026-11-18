@@ -64,7 +64,9 @@ can switch to. Never pass the person's choice just because it is theirs.
 ## Step 1: Describe the topic
 
 Read the video's `title`, its `topic` (the brief) and the comments: a person may have asked for a
-structure when approving or revising the topic. Read the topic's angle too: `angle` is one
+structure when approving or revising the topic. Read the domain's description too
+(`style_routing.domain.description` in `get_video`): it is the domain's standing instructions,
+written by a person, and Steps 2 and 4 follow what it says about structure. Read the topic's angle too: `angle` is one
 sentence on what the opening will use, `angle_kind` is its kind and `angle_formula` is the formula
 that kind is the first choice for. All three are `""` when the topic has no angle, which is a
 normal state: then work the shape out from the topic alone. Then write down:
@@ -97,6 +99,7 @@ Remove a candidate when:
 - Its structure contradicts the shape `style.script` asks for.
 - Its beats give lines to a second speaker, and `get_pipeline_status()`'s `elevenlabs_voices` has
   no voice besides this video's.
+- The domain's description rules its structure out ("no stories", "never a numbered list").
 
 ## Step 3: Score the rest
 
@@ -139,6 +142,10 @@ a formula fits. `learned.standing` is `better`, `even`, `mixed` (the accounts di
 or `thin` (too few videos); `learned.videos` is how many videos are behind it.
 
 ## Step 4: Decide, and rotate
+
+When the domain's description asks for one formula for its videos, by name or by a structure only
+that candidate has, and Step 2 left it in, take it and skip the rest of this step. Say so in the
+reason; when it is `recent`, its `repeat_reason` is that the description asks for it.
 
 1. Take the clear fit with the most points, counting Step 3b. When two are within 1 point, break the tie (Step 5).
 2. **Rotation.** When that candidate is `recent` and another clear fit is not, take the best clear
@@ -278,7 +285,7 @@ service was down. `formula_routing.recent.formulas` is `["case-timeline", "belie
 - [ ] Points counted by meaning from `best_for`, `also_for`, the angle, `signals` and the style
 - [ ] `learned.points` added to the clear fits only, and to nothing else
 - [ ] Two clear fits within 1 point decided first by `learned.standing` in `"learned"` mode
-- [ ] A `recent` formula passed over for another clear fit, or kept with `repeat_reason`
+- [ ] A `recent` formula passed over for another clear fit, or kept with `repeat_reason` (no other fit, or the domain's description asks for it)
 - [ ] Your own best formula passed, also when a person chose one
 - [ ] `choose_script_formula` called with a one-sentence reason and a runner-up
 - [ ] The script written in the returned `formula_pick`

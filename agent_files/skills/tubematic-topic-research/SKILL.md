@@ -23,6 +23,11 @@ carries no USER PREFERENCES block (an interactive session), read `user_preferenc
 `get_pipeline_status()` once. Either way, apply only the parts about topics — subjects to favour or
 avoid, audience, angle — when choosing and scoring candidates.
 
+Each project's `description` in `list_projects()` is that domain's scope and its standing
+instructions, written by a person on the dashboard. Read it as both: what belongs in the domain and
+what does not, and any instruction about its topics (subjects to favour or avoid, the audience, the
+angle). Where it and the user preferences disagree about a domain's topics, the description wins.
+
 For each active strategy:
 1. Research topic candidates using that strategy's method (below)
 2. Find each candidate's angle (**The angle**, below). A subject with no honest angle is dropped
@@ -30,7 +35,8 @@ For each active strategy:
 3. Score every remaining candidate twice: the producibility rubric and the angle score. Drop
    anything below 5 on either
 4. For each surviving candidate, file it into the right domain (**universal filing rule**):
-   - Match to an existing project by subject/domain
+   - Match to an existing project by subject/domain, reading each project's `description` for
+     what it covers and what it leaves out. A candidate the description excludes does not belong there
    - **If the best-matching project is paused** (`status='paused'`) **or expired**
      (`expired` is true in `list_projects()`), **skip the candidate.**
      Do not file it into a loosely related domain instead, and do not create a new domain
@@ -188,7 +194,7 @@ the framing), not as an abstract diagram.
 Enumerate sub-topics from **user-seeded domains only** — these are projects where `is_curriculum_seed=1` and `status='active'`. Do not pick arbitrary broad topics.
 
 1. From `list_projects()`, filter to `is_curriculum_seed=1 AND status='active'` and `expired` false
-2. For each seed domain: generate sub-topics that each explain ONE mechanism in 60–90 seconds and have an angle (respect the per-run target given in the research prompt; if no target is given, default to 3–5 new candidates; not exhaustive). Look for the angle first. Ask of the seed's subject what in it looks impossible, fails in front of its user, is widely believed and wrong, looks like a stupid design, went wrong on a known day, can be gamed, left evidence that made no sense, happened to one person, or can be measured. A mechanism that answers none of these is a definition: skip it
+2. For each seed domain: generate sub-topics inside its `description`'s scope and as its instructions ask that each explain ONE mechanism in 60–90 seconds and have an angle (respect the per-run target given in the research prompt; if no target is given, default to 3–5 new candidates; not exhaustive). Look for the angle first. Ask of the seed's subject what in it looks impossible, fails in front of its user, is widely believed and wrong, looks like a stupid design, went wrong on a known day, can be gamed, left evidence that made no sense, happened to one person, or can be measured. A mechanism that answers none of these is a definition: skip it
 3. Score both numbers, deduplicate against the seed domain's own topics (`list_project_topics`), and propose survivors
 
 Good sub-topics: specific mechanisms (GIL, reference counting, list over-allocation), each entered through its angle. Not vague overviews ("Python performance").
