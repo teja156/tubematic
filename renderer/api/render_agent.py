@@ -63,6 +63,7 @@ from pathlib import Path
 import httpx
 
 from tubematic_core import auth as tauth
+from tubematic_core import external_styles as texternal
 from tubematic_core import jobfiles as tjobs
 from tubematic_core import logging as tlog
 from tubematic_core import renderers
@@ -213,6 +214,10 @@ CARTOON_CHUNK_ATTEMPTS = 2          # a segment that hangs or fails is tried onc
 CARTOON_MIX = ("cartoon", "audio", "mix", "mix.wav")
 CARTOON_SOURCE = ("cartoon", "source.json")          # what submit_render froze: mcp/cartoon.py's SOURCE_RECORD
 GENERATED_DIR = REMOTION_DIR / "src" / "scenes" / "generated"   # keep in sync with mcp/cartoon.py's mix_file
+# Installed external style packages (TMDEV-252): the styles volume on the
+# built-in renderer, the job's staged copy on a remote one.
+EXTERNAL_DIR = REMOTION_DIR / "src" / "scenes" / "external"
+STYLES_MEMBER = "styles"   # keep in sync: render_gateway.py::STYLES_MEMBER
 # A mascot video's drawing code, staged beside its job files under public/<id>/
 # and named to the composition by the mascotPath render prop.
 MASCOT_CODE = "mascot.js"
@@ -271,6 +276,46 @@ def _cartoon_source_error(video_id: str, job_dir: Path) -> str | None:
         return ("the generated source changed after the beat gate passed and the video was queued; "
                 "run cartoon_beat_gate again on the new source, then submit_render")
     return None
+
+
+def _external_style(work: Path) -> tuple[str, str | None]:
+    """The external style this job's bundle compiles ("" for none) and why it
+    may not render (None when it may). submit_render recorded the package's
+    fingerprint in style-source.json; the package compiled now must be that
+    one, so a package changed or removed since the video was queued fails the
+    render back to the agent, as a changed Cartoon 3D source does."""
+    try:
+        config = json.loads((work / tjobs.SCENE_CONFIG).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        config = {}
+    drawn = texternal.config_style(config)
+    record = work / tjobs.STYLE_SOURCE
+    if record.is_symlink():
+        return drawn, f"{tjobs.STYLE_SOURCE} is a symlink; the record of the queued package must be a plain file"
+    if not record.is_file():
+        if drawn:
+            return drawn, (f"no record of the style package that was queued ({tjobs.STYLE_SOURCE} is missing): "
+                           "the video must be queued by submit_render")
+        return "", None
+    try:
+        data = json.loads(record.read_text(encoding="utf-8"))
+        style, frozen = data["style"], data["fingerprint"]
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return drawn, f"{tjobs.STYLE_SOURCE} cannot be read: {e}"
+    if not isinstance(style, str) or not texternal.ID_RE.fullmatch(style):
+        return drawn, f"{tjobs.STYLE_SOURCE} names no external style"
+    if drawn and drawn != style:
+        return drawn, f"the scene-config draws the {drawn} style, and the {style} package was queued"
+    try:
+        live = tjobs.source_fingerprint(EXTERNAL_DIR / style)
+    except tjobs.UnsafePath as e:
+        return drawn, f"the {style} style package cannot be rendered: {e}"
+    except OSError as e:
+        return drawn, f"the {style} style package could not be read (is it still installed?): {e}"
+    if frozen != live:
+        return drawn, (f"the {style} style package changed after the video was queued; check the video "
+                       "against the installed package (validate_job, preview_frames), then submit_render again")
+    return drawn, None
 
 
 def _run_ffmpeg(argv: list, timeout: float, **kwargs) -> subprocess.CompletedProcess:
@@ -1329,7 +1374,7 @@ def _start_heartbeat_thread() -> threading.Thread:
 
 FLAT_SCENES = "_flat"
 _BUNDLE_FILES = {tjobs.AUDIO, tjobs.TIMELINE, tjobs.SCENE_CONFIG, MASCOT_CODE,
-                 "/".join(CARTOON_SOURCE), "/".join(CARTOON_MIX)}
+                 "/".join(CARTOON_SOURCE), "/".join(CARTOON_MIX), tjobs.STYLE_SOURCE}
 
 
 def _bundle_parts(name, video_id: str) -> list:
@@ -1345,7 +1390,8 @@ def _bundle_parts(name, video_id: str) -> list:
             or (parts[0] == tjobs.IMAGES and len(parts) >= 2)
             or (parts[0] == "scenes" and len(parts) >= 3 and parts[1] == video_id)
             or (parts[0] == "scenes" and len(parts) == 3 and parts[1] == FLAT_SCENES
-                and parts[2].endswith(".tsx"))):
+                and parts[2].endswith(".tsx"))
+            or (parts[0] == STYLES_MEMBER and len(parts) >= 3 and texternal.ID_RE.fullmatch(parts[1]))):
         return parts
     raise _BundleRefused(f"the bundle holds a member the renderer does not expect: {name!r}")
 
@@ -1410,20 +1456,26 @@ def _download_bundle(job: _Job, work: Path) -> None:
 
 
 def _clear_generated() -> None:
-    """Empty this renderer's own generated-scene tree (a remote renderer: the
-    image's copy). Remotion compiles every file under it into every render, so
-    a scene left over from another job could break or leak into the next one.
-    Never the built-in renderer's: that tree is the shared volume the agent
-    writes, and refused for any mounted directory for the same reason."""
+    """Empty this renderer's own generated-scene tree and its staged style
+    packages (a remote renderer: the image's copies). Remotion compiles every
+    file under the generated tree into every render, so a scene left over from
+    another job could break or leak into the next one. Never the built-in
+    renderer's: those are the shared volumes the agent and the installs write,
+    and refused for any mounted directory for the same reason."""
     if _is_builtin():
         return
-    if os.path.ismount(GENERATED_DIR):
-        raise RuntimeError(f"{GENERATED_DIR} is a mounted directory: a remote renderer stages each job's scenes "
+    for tree in (GENERATED_DIR, EXTERNAL_DIR):
+        _clear_tree(tree)
+
+
+def _clear_tree(tree: Path) -> None:
+    if os.path.ismount(tree):
+        raise RuntimeError(f"{tree} is a mounted directory: a remote renderer stages each job's files "
                            "into its own copy and never clears a shared one")
-    if not GENERATED_DIR.is_dir():
-        GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+    if not tree.is_dir():
+        tree.mkdir(parents=True, exist_ok=True)
         return
-    for entry in GENERATED_DIR.iterdir():
+    for entry in tree.iterdir():
         if entry.name == ".gitkeep":
             continue
         if entry.is_dir() and not entry.is_symlink():
@@ -1459,6 +1511,12 @@ def _stage(job: _Job, work: Path, public: Path) -> None:
         for f in sorted(flat.iterdir()):
             if f.is_file() and not f.is_symlink() and f.suffix == ".tsx":
                 shutil.copy(f, tjobs.scene_file(GENERATED_DIR, "", f.stem))
+    # The one style package an external-style video compiles (TMDEV-252).
+    styles = work / STYLES_MEMBER
+    if styles.is_dir() and not styles.is_symlink():
+        for pkg in sorted(styles.iterdir()):
+            if pkg.is_dir() and not pkg.is_symlink() and texternal.ID_RE.fullmatch(pkg.name):
+                shutil.copytree(pkg, tjobs.join_below(EXTERNAL_DIR, pkg.name), ignore=tjobs.ignore_symlinks)
 
 
 def _clean_job(work: Path | None, public: Path | None) -> None:
@@ -1529,6 +1587,13 @@ def _render(job: _Job, claim: dict, work: Path, public: Path) -> dict:
                     "error": f"The renderer hit an error: this video renders on the GPU only, and this "
                              f"renderer's GPU did not pass its test ({why})"}
 
+    # An external-style video compiles the package submit_render recorded, and only it (TMDEV-252).
+    external_style, external_err = _external_style(work)
+    if external_err:
+        log.error(f"[{video_id}] render refused: {external_err}", extra={"video_id": video_id})
+        return _failure("failed", f"The style package cannot be rendered: {external_err}", False, "")
+    style_env = {"TUBEMATIC_EXTERNAL_STYLE": external_style}
+
     render_props = {
         "sceneConfigPath": f"/public/{video_id}/scene-config.json",
         "timelinePath": f"/public/{video_id}/timeline.json",
@@ -1550,7 +1615,8 @@ def _render(job: _Job, claim: dict, work: Path, public: Path) -> dict:
     if cartoon:
         on_gpu = _render_on_gpu()
         gl_argv, gl_env = _gl_args(on_gpu)
-        outcome, detail = _render_cartoon(video_id, work, props, output_path, gl_argv, gl_env, timeout_secs,
+        outcome, detail = _render_cartoon(video_id, work, props, output_path, gl_argv, {**gl_env, **style_env},
+                                          timeout_secs,
                                           stall_secs, total_frames, audio_path)
         if job.stopped:
             raise _Stopped()
@@ -1588,7 +1654,7 @@ def _render(job: _Job, claim: dict, work: Path, public: Path) -> dict:
                 *gl_argv,
             ],
             cwd=str(REMOTION_DIR),
-            env={**os.environ, **gl_env},
+            env={**os.environ, **gl_env, **style_env},
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

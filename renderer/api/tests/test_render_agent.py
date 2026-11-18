@@ -56,6 +56,7 @@ os.environ.setdefault("TUBEMATIC_DB", ":memory:")
 import render_agent
 import render_gateway
 from tubematic_core import auth as tauth
+from tubematic_core import jobfiles as tjobs
 from tubematic_core import renderers
 
 from .render_client_env import (BUILTIN_TOKEN, GATEWAY_URL, VERSION, FakeRemotion, finished_proc,
@@ -567,7 +568,8 @@ def test_a_delayed_heartbeat_for_claim_a_never_stops_or_extends_claim_b(env, rec
 @pytest.mark.parametrize("name", [
     "audio.mp3", "timeline.json", "scene-config.json", "mascot.js", "images/a.png", "images/sub/b.png",
     "cartoon/source.json", "cartoon/audio/mix/mix.wav", "scenes/vid-1/Intro.tsx", "scenes/vid-1/sets/street.ts",
-    "scenes/_flat/Legacy.tsx"])
+    "scenes/_flat/Legacy.tsx", "style-source.json", "styles/ext_dom/components/Main.tsx",
+    "styles/ext_dom/style.json"])
 def test_the_members_the_gateway_sends_are_accepted(name):
     assert render_agent._bundle_parts(name, "vid-1") == name.split("/")
 
@@ -575,7 +577,7 @@ def test_the_members_the_gateway_sends_are_accepted(name):
 @pytest.mark.parametrize("name", [
     "../escape", "/etc/passwd", "images/../../x", "images/./a.png", "images//a.png", "a\\b", "",
     "images", "scenes/vid-2/Intro.tsx", "scenes/_flat/a/b.tsx", "scenes/_flat/x.ts", "notes.txt",
-    "cartoon/other.json"])
+    "cartoon/other.json", "styles/ext_dom", "styles/night_signal/a.tsx", "styles/../x/a.tsx"])
 def test_any_other_member_is_refused(name):
     with pytest.raises(render_agent._BundleRefused):
         render_agent._bundle_parts(name, "vid-1")
@@ -1202,3 +1204,80 @@ def test_enrollment_and_a_heartbeat_over_real_tls(tmp_path, monkeypatch):
     finally:
         server.shutdown()
         thread.join(5)
+
+
+# ── external style packages (TMDEV-252) ───────────────────────────────────────
+
+EXTERNAL_SCENES = [{"type": "generated", "source": "external", "src": "ext_dom/components/Main"}]
+
+
+def _package(root, sid="ext_dom"):
+    (root / sid / "components").mkdir(parents=True)
+    (root / sid / "components" / "Main.tsx").write_text(f"{sid} main")
+    return root / sid
+
+
+def _record(job, pkg, sid="ext_dom"):
+    (job / tjobs.STYLE_SOURCE).write_text(json.dumps({"style": sid, "fingerprint": tjobs.source_fingerprint(pkg)}))
+
+
+def test_a_remote_renderer_stages_the_videos_style_package_and_clears_it(tmp_path, monkeypatch):
+    env = make_env(tmp_path, monkeypatch, builtin=False)
+    r = _remote_env(env, monkeypatch)
+    monkeypatch.setattr(render_agent, "_client", render_agent.GatewayClient(r.identity, transport=env.rec))
+    pkg = _package(env.external)
+    _package(env.external, "ext_other")
+    (env.client_external / "ext_leftover").mkdir()
+    _record(env.seed(visual_style="ext_dom", scenes=EXTERNAL_SCENES), pkg)
+    seen = {}
+
+    def look(argv, kw):
+        seen["tree"] = sorted(str(p.relative_to(env.client_external)) for p in env.client_external.rglob("*")
+                              if p.is_file())
+        seen["style"] = kw["env"]["TUBEMATIC_EXTERNAL_STYLE"]
+    render_agent._beat()
+    with mock.patch("subprocess.Popen", side_effect=FakeRemotion(on_start=look)):
+        render_agent._loop_once()
+    assert seen == {"tree": ["ext_dom/components/Main.tsx"], "style": "ext_dom"}
+    assert list(env.client_external.iterdir()) == []
+    assert env.video()["render_uploaded_at"]
+
+
+def test_the_built_in_renderer_compiles_the_mounted_package(env):
+    pkg = _package(env.external)
+    _record(env.seed(visual_style="ext_dom", scenes=EXTERNAL_SCENES), pkg)
+    env.start()
+    fake = FakeRemotion()
+    with mock.patch("subprocess.Popen", side_effect=fake):
+        render_agent._loop_once()
+    assert fake.calls[0][1]["env"]["TUBEMATIC_EXTERNAL_STYLE"] == "ext_dom"
+    assert env.video()["render_uploaded_at"] and pkg.is_dir()
+
+
+def test_a_package_changed_after_queueing_fails_the_render(env):
+    pkg = _package(env.external)
+    _record(env.seed(visual_style="ext_dom", scenes=EXTERNAL_SCENES), pkg)
+    (pkg / "components" / "Main.tsx").write_text("edited after the video was queued")
+    env.start()
+    fake = FakeRemotion()
+    with mock.patch("subprocess.Popen", side_effect=fake):
+        render_agent._loop_once()
+    assert fake.calls == []
+    assert any("style package changed after the video was queued" in c for c in env.comments())
+
+
+def test_an_external_scene_with_no_record_is_not_rendered(env):
+    _package(env.external)
+    env.seed(visual_style="ext_dom", scenes=EXTERNAL_SCENES)
+    env.start()
+    fake = FakeRemotion()
+    with mock.patch("subprocess.Popen", side_effect=fake):
+        render_agent._loop_once()
+    assert fake.calls == []
+    assert any("submit_render" in c for c in env.comments())
+
+
+def test_a_built_in_style_render_compiles_no_external_style(env, monkeypatch):
+    monkeypatch.setenv("TUBEMATIC_EXTERNAL_STYLE", "ext_stale")
+    fake = _render(env)
+    assert fake.calls[0][1]["env"]["TUBEMATIC_EXTERNAL_STYLE"] == ""

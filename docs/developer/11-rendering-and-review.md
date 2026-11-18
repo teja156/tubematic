@@ -164,6 +164,8 @@ uncompressed tar, streamed so that neither side holds a whole job in memory.
 | `mascot.js` | A mascot video: the pinned version's drawing code |
 | `scenes/<video_id>/**` | The video's generated scene tree |
 | `scenes/_flat/<name>.tsx` | Each legacy flat generated scene the scene-config names |
+| `style-source.json` | A video in an [external style](10-scene-authoring.md#external-styles): the style and the fingerprint of the package `submit_render` queued |
+| `styles/<style id>/**` | The one package that record names |
 
 Every file keeps its modification time. The gateway does not follow symlinks: a job file that is one
 makes the bundle unavailable (`409`), and one inside `images/` or a scene tree is skipped.
@@ -176,7 +178,18 @@ Remotion serves assets from `public/`, so the renderer copies the job into
 `/app/remotion/public/<video_id>/` (`_stage`), skipping symlinks inside `images/`. The built-in
 renderer ignores the bundle's scenes and compiles the shared `src/scenes/generated/` volume the
 agent writes. A remote renderer
-[stages them from the bundle](20-gpu-and-remote-renderers.md#scenes-on-a-remote-renderer).
+[stages them from the bundle](20-gpu-and-remote-renderers.md#scenes-on-a-remote-renderer). The same
+holds for an external style's package: the built-in renderer compiles the read-only styles volume
+at `src/scenes/external/`, and a remote renderer copies the bundle's package there and clears it
+after the job.
+
+Before it renders an external-style video, the renderer compares the package it is about to compile
+with the fingerprint in `style-source.json` (`render_agent.py::_external_style`). A package
+changed or removed since the video was queued, a scene-config that draws another style, or an
+external scene with no record fails the render back to the agent, as a changed Cartoon 3D source
+does. The render's environment names the style in `TUBEMATIC_EXTERNAL_STYLE`, and
+`webpack-override.mjs` compiles that one package (see
+[External styles](10-scene-authoring.md#external-styles)).
 
 The render command on the CPU path:
 
@@ -381,7 +394,9 @@ child process. A remote renderer has no `/jobs` volume and runs none.
 - It renders one still at a time and shares the GPU with renders.
 - Before every still it compares a stamp of the generated source tree (each file's path, size and
   mtime) with the one its bundle was made from, and bundles again when they differ. An edit to a
-  video's code costs its next still about twenty seconds.
+  video's code costs its next still about twenty seconds. A request names the video's external
+  style (`externalStyle`), and the stamp covers that style's package too, so a still of a video in
+  another external style bundles again with that package only.
 
 `_ensure_stills_server` starts it again when it has died (at most once every
 `STILLS_SERVER_RETRY_SECS`, 60) or when a GPU test moved renders between the GPU and the CPU. With

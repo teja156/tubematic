@@ -2025,3 +2025,36 @@ def test_the_api_runs_without_the_gateway_when_its_port_is_taken(api_server, mon
             mp.setattr(server.app, "run", lambda **kw: ran.append(kw))
             server.main()
     assert ran and ran[0]["port"] == 4000        # the dashboard's API still serves
+
+
+# ── external style packages (TMDEV-252) ───────────────────────────────────────
+
+def test_an_external_style_video_bundles_its_package_and_its_record(env):
+    _claimed(env)
+    job = env.jobs / "vid-1"
+    (job / "style-source.json").write_text('{"style": "ext_dom", "fingerprint": "f"}')
+    ext_root = env.remotion / "src" / "scenes" / "external"
+    for sid in ("ext_dom", "ext_other"):
+        (ext_root / sid / "components").mkdir(parents=True)
+        (ext_root / sid / "components" / "Main.tsx").write_text(sid)
+    outside = env.secrets / "outside"
+    outside.write_text("SECRET")
+    os.symlink(outside, ext_root / "ext_dom" / "components" / "planted.tsx")
+    members = _members(env.client.get("/v1/jobs/vid-1/bundle", headers=J(env)))
+    assert members["style-source.json"] == b'{"style": "ext_dom", "fingerprint": "f"}'
+    assert members["styles/ext_dom/components/Main.tsx"] == b"ext_dom"
+    assert not any(k.startswith("styles/ext_other") or k.endswith("planted.tsx") for k in members)
+
+
+@pytest.mark.parametrize("record", ['{"style": "../secrets", "fingerprint": "f"}', '{"style": 3}', "not json"])
+def test_a_record_naming_no_external_style_is_refused(env, record):
+    _claimed(env)
+    (env.jobs / "vid-1" / "style-source.json").write_text(record)
+    resp = env.client.get("/v1/jobs/vid-1/bundle", headers=J(env))
+    assert resp.status_code == 409 and resp.get_json()["error"] == "bundle_unavailable"
+
+
+def test_a_built_in_style_video_bundles_no_package(env):
+    _claimed(env)
+    members = _members(env.client.get("/v1/jobs/vid-1/bundle", headers=J(env)))
+    assert not any(k.startswith("styles/") or k == "style-source.json" for k in members)
