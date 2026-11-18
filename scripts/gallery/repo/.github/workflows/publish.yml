@@ -33,7 +33,7 @@ jobs:
       - name: Build the index, archives and previews
         run: |
           python3 .tubematic/scripts/gallery.py build styles site \
-            --base-url "https://tejaswaroop.com/tubematic-styles/" --commit "$GITHUB_SHA"
+            --base-url "https://gallery.tubematic.ai/" --commit "$GITHUB_SHA"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
