@@ -20,8 +20,8 @@
    "items": {"type": "integer", "minimum": 0}
   },
   "palette": {
-   "description": "The card's colours: ink (dark), paper (light) or signal (navy). Keep one palette per video.",
-   "enum": ["ink", "paper", "signal"]
+   "description": "The card's colours: ink (charcoal), ember (dark red-brown) or signal (navy), all dark under the white captions. Keep one palette per video.",
+   "enum": ["ink", "ember", "signal"]
   }
  }
 }

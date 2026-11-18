@@ -174,3 +174,15 @@ def test_the_command_starts_the_skill_with_its_disclaimer():
         cmd = (REPO / "agent_files" / agent / "commands" / "tubematic-create-style.md").read_text()
         assert "tubematic-create-style skill" in cmd and "disclaimer comes first" in cmd
         assert "/tubematic-create-style" in (REPO / "agent_files" / agent / "commands" / "tubematic.md").read_text()
+
+
+def test_every_template_palette_is_dark_under_its_white_captions():
+    """The pack's captions are white with no background, so a light palette hid them."""
+    pack = json.loads((TEMPLATE / "style.json").read_text())
+    assert pack["captions"]["color"].lower() == "#ffffff" and pack["captions"]["background"] == "none"
+    contract = (TEMPLATE / "components" / "card" / "contract.ts").read_text()
+    grounds = re.findall(r'ground: "#([0-9a-fA-F]{6})"', contract)
+    assert len(grounds) == len(json.loads((TEMPLATE / "schema.json").read_text())["properties"]["palette"]["enum"])
+    for hexv in grounds:
+        r, g, b = (int(hexv[i:i + 2], 16) for i in (0, 2, 4))
+        assert 0.2126 * r + 0.7152 * g + 0.0722 * b < 80, hexv

@@ -863,6 +863,8 @@ and command.
   with a clean scan; its example config matches its schema; `manifest.py` writes what the loader
   expects and refuses a symlink; `zip_package.py`'s zip stages on another install.
 - `reference/package-rules.md` names every allowed import and every scene API v1 export.
+- Every palette the template's schema allows is dark, since its captions are white with no
+  background.
 - The command starts the skill with its disclaimer, for both agents.
 
 Trap: the skill runs on a person's machine with their accounts. The order (disclaimer, check, study,
