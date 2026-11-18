@@ -900,6 +900,15 @@ and command.
 Trap: the skill runs on a person's machine with their accounts. The order (disclaimer, check, study,
 build, stage, install, samples) is what keeps it from spending or downloading before they agreed.
 
+### `test_no_conflict_markers.py`
+
+Fails when any tracked text file holds a leftover merge-conflict marker (`<<<<<<< `, `>>>>>>> ` or
+`||||||| ` at the start of a line).
+
+Trap: the docs checker reads names, links and wording, not structure, and the docs site publishes
+`develop` on every push. An unresolved merge in a docs page once reached the public site with both
+sides and the markers in it.
+
 ### `test_install_style_command.py`
 
 Covers `/tubematic-install-style`, the agent command that stages an external style.

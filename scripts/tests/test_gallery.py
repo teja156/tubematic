@@ -219,3 +219,36 @@ def test_both_workflows_take_tubematic_from_the_resolver():
     render = next(s for s in pr["jobs"]["render"]["steps"] if "gallery.py render" in s.get("run", ""))
     assert "outputs.image" in render["env"]["REVIEW_IMAGE"]
     assert 'if [ -z "$REVIEW_IMAGE" ]' in render["run"]
+
+
+def test_the_resolver_reads_every_page_of_releases(tmp_path):
+    """GitHub lists 100 releases a page; the newest version can be on a later page."""
+    import http.server
+    import threading
+
+    pages = {"/p1": ([_release("v2.4.0")], '<http://127.0.0.1:{port}/p2>; rel="next"'),
+             "/p2": ([_release("v2.5.3")], "")}
+
+    class Feed(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            body, link = pages[self.path]
+            self.send_response(200)
+            if link:
+                self.send_header("Link", link.format(port=self.server.server_port))
+            self.end_headers()
+            self.wfile.write(json.dumps(body).encode())
+
+        def log_message(self, *a):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Feed)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        out = tmp_path / "out"
+        out.write_text("")
+        env = {**os.environ, "TUBEMATIC_RELEASES_URL": f"http://127.0.0.1:{server.server_port}/p1",
+               "GITHUB_OUTPUT": str(out)}
+        subprocess.run(["bash", str(RELEASE_SCRIPT)], check=True, env=env, capture_output=True)
+        assert "ref=v2.5.3" in out.read_text()
+    finally:
+        server.shutdown()
