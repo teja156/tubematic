@@ -27,7 +27,8 @@ it("type-checks the skill's template package with the renderer's tsconfig", () =
   const anchor = path.join(ROOT, "src/scenes/external/x.tsx");
   host.resolveModuleNames = (names, containing) =>
     names.map((n) => ts.resolveModuleName(n, n.startsWith(".") ? containing : anchor, options, host).resolvedModule);
-  const files = sources(TEMPLATE);
+  // components/** is what validate_job hands to tsc (mcp/server.py::_external_scene_errors)
+  const files = sources(path.join(TEMPLATE, "components"));
   expect(files.length).toBeGreaterThan(0);
   const program = ts.createProgram(files, options, host);
   const errors = ts

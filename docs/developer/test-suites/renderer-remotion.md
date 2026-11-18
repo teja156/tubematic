@@ -67,11 +67,11 @@ already installed, so a breaking change is a new `v2.ts` and a new `SCENE_API` i
 
 ### `src/sceneApi/createStyleTemplate.test.ts`
 
-Type-checks the `tubematic-create-style` skill's template package under this project's
-`tsconfig.json`, with bare imports resolved as they are once a package is installed.
+Type-checks the `components/` of the `tubematic-create-style` skill's template package under this
+project's `tsconfig.json`, with bare imports resolved as they are once a package is installed.
 
-Trap: `validate_job` runs the same type check before an agent may submit a render, and the skill
-copies the template into every package it builds. A template error (an unused import under `noUnusedLocals`) passes the
+Trap: `validate_job`, which the authoring skills run before `submit_render`, type-checks the same
+files, and the skill copies the template into every package it builds. A template error (an unused import under `noUnusedLocals`) passes the
 install scan and then fails every video in the new style.
 
 ## Caption looks
