@@ -245,6 +245,16 @@ Covers `tubematic_core/angles.py`, the kinds and score of a
 Trap: a kind points at a formula by id. A kind left pointing at a formula that was removed would
 send the script writer to a reference file that is not there, so the test reads the formula files.
 
+### `test_external_styles_fence_migration.py`
+
+Covers migration `0031`, the rollback fence for external styles. The migration sits above `0030`, the
+newest one 2.3.x ships. Applying it to a 2.3.x database takes a backup and leaves every row as it was,
+and a second run changes nothing.
+
+Trap: 2.3.x renders a video in an external style blank. The fence is what makes its `upgrade.py`
+refuse the newer database until the backup is restored, so the test fails if the migration is removed
+or renumbered below the line.
+
 ### `test_formulas.py`
 
 Covers `tubematic_core/formulas.py` and the files in `tubematic_core/formulas/`

@@ -778,6 +778,7 @@ only in the pre-migration backup.
 | `0028_formula_evidence.sql` | Adds `videos.formula_evidence`, `''` on every existing video | No |
 | `0029_inserts.py` | Adds `videos.insert_mode`, `insert_styles` and `insert_reason` and `projects.default_insert_mode`, and moves stored `system_flow` and `terminal_doc` choices off those styles. Details below | Yes |
 | `0030_voice_speed.sql` | Adds `videos.voice_speed` and `videos.voiced_speed`, `NULL` on every existing video | No |
+| `0031_external_styles_fence.py` | Changes no data. Raises the schema version above what 2.3.x knows. Details below | Yes |
 
 `0001_baseline.py` is Python because SQLite has no `ADD COLUMN IF NOT EXISTS`, and a `.sql` file
 cannot express an `ALTER TABLE` guarded by a pragma check. Every statement in it is idempotent, so
@@ -823,6 +824,12 @@ outside the list would make every `generate_image` call refuse.
   its script was written without insert marks
 
 A video in either style that is already voiced keeps it and finishes as one whole-video scene.
+
+`0031_external_styles_fence.py` exists for rollback. A video in an
+[external style](10-scene-authoring.md#external-styles) stores an `ext_` id in
+`videos.visual_style`, which 2.3.x does not know and renders blank. Applying the migration takes the
+pre-upgrade backup, and the older `upgrade.py` refuses the newer database until that backup is
+restored.
 
 While `0016`, `0019` or `0029` is pending, `upgrade.py` refuses `--no-stop`, because containers
 recreated one at a time would leave old code running against the new database. A row that was `RENDERING`
