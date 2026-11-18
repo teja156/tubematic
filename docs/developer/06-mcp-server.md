@@ -88,7 +88,7 @@ restart.
 
 ---
 
-## The 64 tools
+## The 65 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -172,6 +172,7 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | Tool | Purpose |
 |---|---|
 | [`stage_style_install`](#stage_style_install) | Stage an external style package for a person to install |
+| [`read_style_install_file`](#read_style_install_file) | Read one text file of a staged package |
 | [`audit_style_install`](#audit_style_install) | Record the agent's audit of a staged package |
 
 ### Mascot tools
@@ -1231,8 +1232,16 @@ package and installs nothing. `source` is `incoming:<name>` (a folder or `.zip` 
 into `~/.tubematic-data/styles-incoming/`), `git:<https url>@<commit or tag>`, or
 `gallery:<style id>`. It returns `{pending_id, style_id, label, version, author, source, check,
 refusals, flags, files, replaces, expires_at, host_path, container_path, dashboard_link, audit}`.
-`host_path` is the staged package on the host, so an agent on the host can read what it audits.
+`host_path` is the staged package on the host, for the person; the agent reads its files with
+`read_style_install_file`.
 `dashboard_link` is the install screen, built from `dashboard_base_url` when that setting is set.
+
+### `read_style_install_file`
+
+`read_style_install_file(pending_id, path)` returns `{path, text}` for one text file of a staged
+package, at most 1 MB, through `style_install.read_file`. The agent workspace denies its Read tool on
+`~/.tubematic-data`, where the tokens and the database live, so the staged copy is audited through
+this tool.
 
 ### `audit_style_install`
 

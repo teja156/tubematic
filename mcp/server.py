@@ -9775,8 +9775,9 @@ def stage_style_install(source: str) -> dict:
       "gallery:<style id>"   a style from the curated gallery (Settings: style_gallery_url)
 
     Returns {pending_id, style_id, check, refusals, flags, files, host_path,
-    dashboard_link, ...}. Read the package at host_path, then call
-    audit_style_install with your verdict, then give the person dashboard_link.
+    dashboard_link, ...}. Read every file of the package with
+    read_style_install_file, then call audit_style_install with your verdict,
+    then give the person dashboard_link.
     """
     source = (source or "").strip()
     kind, _, rest = source.partition(":")
@@ -9801,6 +9802,21 @@ def stage_style_install(source: str) -> dict:
     except _style_install.InstallError as e:
         return {"error": str(e)}
     return _pending_summary(record)
+
+
+@mcp.tool
+def read_style_install_file(pending_id: str, path: str) -> dict:
+    """Read one text file of a staged style package, to audit it (TMDEV-253).
+
+    path is a path from stage_style_install's files list (style.json,
+    schema.json, guide/*.md, components/*.tsx, runner/**). Returns {path,
+    text}. Text files only, at most 1 MB; the agent workspace cannot read the
+    data folder directly, so this is how a staged package is read.
+    """
+    try:
+        return {"path": path, "text": _style_install.read_file(pending_id, path)}
+    except _style_install.InstallError as e:
+        return {"error": str(e)}
 
 
 @mcp.tool

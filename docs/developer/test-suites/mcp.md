@@ -1546,6 +1546,8 @@ style.
   folder and a gallery address set to empty are refused. With no `style_gallery_url` row yet, the
   gallery source reads the curated gallery, as the API does.
 - The audit is recorded on the pending install, and an unknown verdict or install is refused.
+- `read_style_install_file` returns a staged text file and refuses a path outside the package, a binary
+  file and an unknown install: the agent workspace denies Read on the data folder.
 - No MCP tool confirms or removes an install.
 
 ### `test_night_signal.py`

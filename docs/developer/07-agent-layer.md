@@ -158,7 +158,8 @@ its install denies.
 
 `/tubematic-install-style` stages an external style package with `stage_style_install` (a folder or
 zip it copies into `~/.tubematic-data/styles-incoming/`, a git repository at a commit or tag, or a
-gallery id), reads every file of the staged copy, records its verdict with `audit_style_install`
+gallery id), reads every file of the staged copy with `read_style_install_file` (the workspace
+denies Read on the data folder), records its verdict with `audit_style_install`
 and gives the person the install screen's link. It never asks for the dashboard password: the
 install is the person's, on the dashboard ([Installing a
 package](10-scene-authoring.md#installing-a-package)).

@@ -78,3 +78,15 @@ def test_the_gallery_source_uses_the_curated_gallery_when_the_setting_was_never_
     with server._conn() as con:
         con.execute("INSERT INTO settings (key, value) VALUES ('style_gallery_url', '')")
     assert "no gallery address" in server.stage_style_install("gallery:ext_x")["error"]
+
+
+def test_the_agent_reads_a_staged_file_through_the_tool(env):
+    """The agent workspace denies Read on ~/.tubematic-data (tokens and the
+    database live there), so a staged package is audited through MCP."""
+    make_package(env / "incoming", sid="ext_test", approve=False)
+    pid = server.stage_style_install("incoming:ext_test")["pending_id"]
+    got = server.read_style_install_file(pid, "components/Main.tsx")
+    assert got["path"] == "components/Main.tsx" and got["text"].startswith("export default")
+    assert "error" in server.read_style_install_file(pid, "../pending.json")
+    assert "error" in server.read_style_install_file(pid, "preview.mp4")
+    assert "error" in server.read_style_install_file("0" * 16, "style.json")
