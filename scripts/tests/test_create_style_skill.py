@@ -192,3 +192,12 @@ def test_it_stages_only_a_copy_it_just_made():
     """A failed copy left an older package in styles-incoming/, which the next step staged."""
     body = _flat()
     assert 'exit 1; }' in body and "Only when that printed `copied`" in body
+
+
+def test_the_cut_detection_command_keeps_showinfos_output():
+    # showinfo logs at ffmpeg's info level: `-v error` hid every cut, so the shot-length
+    # measurement came back empty (found in the e2e Kasm test).
+    cmds = [ln for ln in _body().splitlines()
+            if ln.startswith("ffmpeg ") and "select='gt(scene," in ln and "showinfo" in ln and "pts_time" in ln]
+    assert len(cmds) == 1, cmds
+    assert not re.search(r"-(v|loglevel)\s+(quiet|panic|fatal|error|warning)\b", cmds[0]), cmds[0]
