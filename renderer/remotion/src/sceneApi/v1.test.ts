@@ -10,10 +10,10 @@ vi.mock("../cartoon3d/CartoonShort", () => ({ CartoonShort: () => null, INK_DEFA
 
 it("exports the scene API v1 names", () => {
   expect(Object.keys(api).sort()).toEqual([
-    "CartoonShort", "FPS", "FRAME_WIDTH", "INK_DEFAULTS", "KEEP_OUT_GAP", "KEEP_OUT_X",
+    "CartoonShort", "FPS", "FRAME_WIDTH", "INK_DEFAULTS", "JOLT_FRAMES", "KEEP_OUT_GAP", "KEEP_OUT_X",
     "WATERMARK_BOTTOM", "WATERMARK_HEIGHT", "WATERMARK_LEFT", "WATERMARK_RIGHT", "WATERMARK_TOP",
-    "WATERMARK_WIDTH", "add", "clamp01", "dolly", "easeOut", "estimateWidth", "fitFontSize",
-    "fontFaceCss", "glide", "keyEnd", "kicked", "kicksAt", "layersAt", "lin", "makeCamAt", "pushK",
-    "rolled", "runKeys", "shotAt", "smooth", "useStyleFonts", "wrapCount", "zoom",
+    "WATERMARK_WIDTH", "add", "clamp01", "dofAtOf", "dolly", "easeOut", "estimateWidth", "fitFontSize",
+    "fontFaceCss", "glide", "joltAt", "jolted", "keyEnd", "kicked", "kicksAt", "layersAt", "lin", "makeCamAt",
+    "pushK", "rolled", "runKeys", "shotAt", "smooth", "useStyleFonts", "whip", "wrapCount", "zoom",
   ].sort());
 });

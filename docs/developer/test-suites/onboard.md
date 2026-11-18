@@ -503,6 +503,9 @@ list proves the order ([`upgrade.py` in detail](../18-releases.md#upgradepy-in-d
 - Live agents are redeployed, and an agent left without a working MCP registration fails the
   exit code after the upgrade finishes. A successful upgrade removes the old images one at a time
   without forcing, and one that needs attention removes none.
+- An installed external style the new version cannot use (another `scene_api`, a broken package) is
+  named with its reason, and the upgrade goes on. A valid one and a missing styles folder say
+  nothing.
 
 Trap: the removed-component check is a lexer and fails closed
 ([The removed-component check](../18-releases.md#the-removed-component-check)). Do not replace

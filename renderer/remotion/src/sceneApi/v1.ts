@@ -20,6 +20,6 @@ export { CartoonShort, INK_DEFAULTS } from "../cartoon3d/CartoonShort";
 export { FPS, type Camera, type CamInfo, type Dof, type Light, type SetPiece, type ShotDef, type Stage,
   type V3, type VideoDef } from "../cartoon3d/video";
 export {
-  add, clamp01, dolly, easeOut, glide, keyEnd, kicked, kicksAt, layersAt, lin, makeCamAt, pushK, rolled,
-  runKeys, shotAt, smooth, zoom, type Cam, type Key, type Shot,
+  add, clamp01, dofAtOf, dolly, easeOut, glide, JOLT_FRAMES, joltAt, jolted, keyEnd, kicked, kicksAt, layersAt,
+  lin, makeCamAt, pushK, rolled, runKeys, shotAt, smooth, whip, zoom, type Cam, type Key, type Shot,
 } from "../cartoon3d/camera";

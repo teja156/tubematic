@@ -847,6 +847,21 @@ Covers the `tubematic-process-cast` skill ([Process Cast](../10-scene-authoring.
 Trap: skill text that calls the cast mascots, or lets a character talk, leads the agent to the wrong
 video for this style. The test pins the wording that keeps them apart.
 
+### `test_make_external_example.py`
+
+Covers `scripts/make_external_example.py`, which repackages Night Signal (a scene style) and Low-Poly
+Skit (a world style, with a variant that needs a GPU) as external packages.
+
+- Each package loads, with the renderer and the GPU need its pack names.
+- Every relative import in a package's code resolves to a file of the package, in both the `from`
+  and the inline `import("…")` forms.
+- Night Signal's example config draws the package's component, and `--gpu` applies to Low-Poly Skit
+  only.
+
+Trap: a relative import that leaves the package compiles in this repository and fails on an
+install, where the package sits in the styles volume. Imports of the rest of the renderer go
+through `@tubematic/scene-api`.
+
 ### `test_external_style_skill.py`
 
 Covers `agent_files/skills/tubematic-external-style/SKILL.md`, the one authoring skill of every
