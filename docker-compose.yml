@@ -136,7 +136,7 @@ services:
       - jobs-data:/jobs
       - db-data:/data
       - scenes-generated:/app/remotion/src/scenes/generated
-      - styles:/app/remotion/src/scenes/external:ro
+      - styles:/app/remotion/src/scenes/external:ro,nocopy
       - logs-data:/logs
       - backups-data:/backups
       - /etc/localtime:/etc/localtime:ro
@@ -201,7 +201,7 @@ services:
       - jobs-data:/jobs
       - db-data:/data
       - scenes-generated:/app/remotion/src/scenes/generated
-      - styles:/app/remotion/src/scenes/external:ro
+      - styles:/app/remotion/src/scenes/external:ro,nocopy
       - logs-data:/logs
       - backups-data:/backups
       - sandbox-spool:/sandbox
@@ -269,7 +269,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
       # The AI review is told an installed external style's look (its pack).
-      - styles:/app/remotion/src/scenes/external:ro
+      - styles:/app/remotion/src/scenes/external:ro,nocopy
     networks:
       - tubematic-net
     # No env_file — same reason as tubematic-api above.
@@ -310,7 +310,7 @@ services:
     volumes:
       - jobs-data:/jobs
       - scenes-generated:/app/remotion/src/scenes/generated
-      - styles:/app/remotion/src/scenes/external:ro
+      - styles:/app/remotion/src/scenes/external:ro,nocopy
       - logs-data:/logs
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro

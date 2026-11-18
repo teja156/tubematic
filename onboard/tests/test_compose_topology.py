@@ -408,13 +408,18 @@ def test_the_installed_styles_are_read_only_where_the_style_lookups_run(services
     at the path external_styles.STYLES_DIR defaults to, read-only (TMDEV-252):
     installing a package is not something a render or an agent tool does. The
     dashboard reads styles through the API and the sandbox runs agent code, so
-    neither mounts it."""
+    neither mounts it.
+
+    nocopy: the image has src/scenes/external/.gitkeep, and Docker copies an
+    image folder into an empty volume on first mount, root owner included. The
+    styles folder then turned root-owned and a person could not copy a package
+    into it without sudo (found in the TMDEV-252 live test)."""
     holders = {}
     for name, service in services.items():
         for v in service.get("volumes", []):
             if v.startswith("styles:"):
                 holders[name] = v
-    assert holders == {n: "styles:/app/remotion/src/scenes/external:ro" for n in
+    assert holders == {n: "styles:/app/remotion/src/scenes/external:ro,nocopy" for n in
                        ("tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer")}
 
 

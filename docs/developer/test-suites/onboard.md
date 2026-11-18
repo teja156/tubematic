@@ -405,7 +405,8 @@ Covers `docker-compose.yml` and the test stack's renderer, parsed as YAML
   mounts the Docker socket.
 - The styles folder is bound from the data root and mounted read-only at
   `/app/remotion/src/scenes/external` in the API, the MCP server, the worker and the renderer, and
-  nowhere else.
+  nowhere else, each with `nocopy`. Without it Docker copies the image's folder into the empty
+  volume with its root owner, and a person can no longer copy a package into the folder.
 
 Trap: the mounts of the MCP server, the worker and the renderer are each asserted as an exact
 set, so a new mount is a decision. The sandbox's capability list is an exact set for the same

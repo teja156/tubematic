@@ -45,6 +45,10 @@ the renderer and the sandbox reuse its tag with a different `command:`, so a reb
 | `styles` (`/app/remotion/src/scenes/external`) | read-only | read-only | read-only | read-only | | |
 | `/etc/localtime`, `/etc/timezone` (host files) | read-only | | read-only | read-only | | |
 
+Every `styles` mount sets `nocopy`. The image holds `src/scenes/external/.gitkeep`, and without
+`nocopy` Docker copies that folder into the empty volume on first mount with its root owner, which
+leaves `~/.tubematic-data/styles` writable only by root.
+
 The secret files each service mounts are listed under
 [The secrets directory](#the-secrets-directory).
 
