@@ -21,12 +21,16 @@ import { webpack } from "@remotion/bundler";
 import { enableTailwind } from "@remotion/tailwind-v4";
 
 // The Remotion project directory: this file's, or above it when esbuild has
-// bundled this module into a command line under cartoon-tools/dist/.
+// bundled this module into a command line under cartoon-tools/dist/. The
+// Remotion CLI compiles remotion.config.ts (and this file with it) to CommonJS,
+// where import.meta is empty; it runs the config from the project directory, so
+// the search starts at the working directory there.
 const findRoot = () => {
-  let dir = path.dirname(fileURLToPath(import.meta.url));
+  const start = typeof import.meta.url === "string" ? path.dirname(fileURLToPath(import.meta.url)) : process.cwd();
+  let dir = start;
   while (!fs.existsSync(path.join(dir, "src", "sceneApi", "v1.ts"))) {
     const up = path.dirname(dir);
-    if (up === dir) return path.dirname(fileURLToPath(import.meta.url));
+    if (up === dir) return start;
     dir = up;
   }
   return dir;

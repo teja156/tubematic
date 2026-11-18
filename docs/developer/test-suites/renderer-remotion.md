@@ -46,6 +46,11 @@ Covers `webpack-override.mjs`, the bundler override of every bundle that compile
 - The generated-scene context matches the named video's scenes and the legacy flat files, treats a
   legacy id's dots and spaces as plain characters, and stays whole when no video is named. A real
   compile where another video's scene imports a missing package still builds this video's bundle.
+- `remotion.config.ts` compiles to CommonJS and runs the way the Remotion CLI loads it.
+
+Trap: the Remotion CLI compiles the config, and this module with it, to CommonJS, where
+`import.meta` is empty. The other bundles load the module as ESM, so only this test and a real
+`remotion render` see the difference.
 
 Trap: the composition's `import()` of `./scenes/external/${src}.tsx` is a webpack context, which
 compiles every matching file into every bundle. Without the context rule, one installed package that

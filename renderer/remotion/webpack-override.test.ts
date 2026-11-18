@@ -97,3 +97,24 @@ describe("another video's broken scene", () => {
     expect((await build("vid-2")).hasErrors()).toBe(true);
   });
 });
+
+describe("remotion.config.ts as the Remotion CLI loads it", () => {
+  // The CLI bundles the config to CommonJS with esbuild and evals it from the
+  // project folder (@remotion/cli/dist/load-config.js). There import.meta is
+  // empty: a module that reads import.meta.url at load failed every render while
+  // the ESM stills server worked (found in the TMDEV-252 live test).
+  it("compiles to CommonJS and runs without throwing", async () => {
+    const { BundlerInternals } = await import("@remotion/bundler");
+    const { createRequire } = await import("node:module");
+    const root = path.resolve(".");
+    const result = await BundlerInternals.esbuild.build({
+      platform: "node", target: "node16", bundle: true, entryPoints: [path.join(root, "remotion.config.ts")],
+      tsconfig: path.join(root, "tsconfig.json"), absWorkingDir: root, outfile: "bundle.js", write: false,
+      packages: "external", logLevel: "silent",
+    });
+    const code = new TextDecoder().decode(result.outputFiles[0].contents);
+    const module = { exports: {} };
+    const run = new Function("require", "module", "exports", code);
+    expect(() => run(createRequire(path.join(root, "remotion.config.ts")), module, module.exports)).not.toThrow();
+  });
+});
