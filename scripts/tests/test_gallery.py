@@ -26,7 +26,7 @@ from tubematic_core import style_install as si  # noqa: E402
 from tubematic_core.tests.test_external_styles import make_package  # noqa: E402
 
 SKELETON = REPO / "scripts" / "gallery" / "repo"
-BASE = "https://teja156.github.io/tubematic-styles/"
+BASE = "https://tejaswaroop.com/tubematic-styles/"
 
 
 def _styles(tmp_path, *ids):
