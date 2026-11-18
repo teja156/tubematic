@@ -205,10 +205,12 @@ def test_the_cut_detection_command_keeps_showinfos_output():
 
 def test_the_rules_say_how_scenes_join():
     # Every generated scene fades out and the next fades in (CompositionBuilder's DEFAULT_FADE),
-    # a dip through black at each cut. A hard-cut style that never says so in its guide gets
+    # a dip through the canvas at each cut. A hard-cut style that never says so in its guide gets
     # fades on every video (found in the e2e Kasm test).
     rules = (SKILL_DIR / "reference" / "package-rules.md").read_text(encoding="utf-8")
     src = (REPO / "renderer" / "remotion" / "src" / "CompositionBuilder.tsx").read_text(encoding="utf-8")
     fade = re.search(r"const DEFAULT_FADE = (\d+);", src).group(1)
     assert '"transitionToNext": {"durationInFrames": 0}' in rules
     assert f"{fade} frames" in rules
+    # the fade shows the canvas, which is not always black
+    assert "canvas colour" in rules
