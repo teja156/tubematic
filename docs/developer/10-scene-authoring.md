@@ -629,7 +629,10 @@ The curated gallery is its own repository, published on GitHub Pages at
 `https://gallery.tubematic.ai/index.json`, the default of `style_gallery_url` and
 `style_install.OFFICIAL_GALLERY_URL`. Its skeleton (README, submission guide, review checklist and
 two workflows) is in `scripts/gallery/repo/`, and its tools are `scripts/gallery.py` in this
-repository, which its workflows check out:
+repository. Its workflows check out the newest published release and render examples with that
+release's backend image (`.github/tubematic-release.sh` in the gallery repository), so a Tubematic
+release needs no edit there. Before 2.4.0, the first release with these tools, they use `develop`
+and render nothing:
 
 | Command | What it does |
 |---|---|

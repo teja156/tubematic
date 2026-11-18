@@ -174,8 +174,48 @@ def test_no_pull_request_controlled_value_is_expanded_inside_a_shell_command():
     assert "ext_[a-z0-9_]{1,40}" in changed and "exit 1" in changed
 
 
-def test_the_pr_workflow_renders_with_a_released_image_tag():
-    """`tubematic-backend:latest` does not exist: a release pushes only its version tag (release.yml),
-    so every review render failed with "manifest unknown" (found on the gallery's first pull request)."""
+RELEASE_SCRIPT = SKELETON / ".github" / "tubematic-release.sh"
+
+
+def _resolve(tmp_path, releases):
+    """Runs the gallery's release resolver on a fake release list; returns its step outputs."""
+    feed = tmp_path / "releases.json"
+    feed.write_text(json.dumps(releases))
+    out = tmp_path / "out"
+    out.write_text("")
+    env = {**os.environ, "TUBEMATIC_RELEASES_URL": feed.as_uri(), "GITHUB_OUTPUT": str(out)}
+    env.pop("GH_TOKEN", None)
+    subprocess.run(["bash", str(RELEASE_SCRIPT)], check=True, env=env, capture_output=True, text=True)
+    return dict(line.split("=", 1) for line in out.read_text().splitlines())
+
+
+def _release(tag, draft=False, prerelease=False):
+    return {"tag_name": tag, "draft": draft, "prerelease": prerelease}
+
+
+def test_the_gallery_reviews_with_the_newest_published_release(tmp_path):
+    """Nothing in the gallery repo moves by hand on a Tubematic release (`tubematic-backend:latest` never
+    existed: a release pushes only its version tag). The newest published release by version wins, not
+    the newest by date (a patch on an older line) nor a draft or prerelease."""
+    got = _resolve(tmp_path, [_release("v2.4.1"), _release("v2.3.2"), _release("v2.4.0"),
+                              _release("v2.5.0", draft=True), _release("v2.6.0", prerelease=True)])
+    assert got == {"ref": "v2.4.1", "image": "ghcr.io/teja156/tubematic-backend:2.4.1"}
+
+
+def test_before_2_4_0_the_gallery_uses_develop_and_renders_nothing(tmp_path):
+    """2.4.0 is the first release with scripts/gallery.py and external-style rendering."""
+    assert _resolve(tmp_path, [_release("v2.3.1"), _release("v2.3.0")]) == {"ref": "develop", "image": ""}
+
+
+def test_both_workflows_take_tubematic_from_the_resolver():
     pr = yaml.safe_load((SKELETON / ".github" / "workflows" / "pr.yml").read_text())
-    assert re.fullmatch(r"ghcr\.io/teja156/tubematic-backend:\d+\.\d+\.\d+", pr["env"]["TUBEMATIC_IMAGE"])
+    pub = yaml.safe_load((SKELETON / ".github" / "workflows" / "publish.yml").read_text())
+    for wf in (pr, pub):
+        assert "TUBEMATIC_REF" not in str(wf) and "TUBEMATIC_IMAGE" not in str(wf) and ":latest" not in str(wf)
+        steps = [s for job in wf["jobs"].values() for s in job["steps"]]
+        assert any(s.get("run", "").strip() == "bash .github/tubematic-release.sh" for s in steps)
+        checkouts = [s["with"] for s in steps if s.get("with", {}).get("repository") == "teja156/tubematic"]
+        assert checkouts and all("outputs.ref" in c["ref"] for c in checkouts)
+    render = next(s for s in pr["jobs"]["render"]["steps"] if "gallery.py render" in s.get("run", ""))
+    assert "outputs.image" in render["env"]["REVIEW_IMAGE"]
+    assert 'if [ -z "$REVIEW_IMAGE" ]' in render["run"]
