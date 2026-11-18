@@ -133,6 +133,9 @@ SETTINGS_SPEC = {
     # id whose package is gone or broken. Keep in sync: mcp/server.py's
     # _auto_externals.
     "external_styles_in_auto": ("json_list", "[]"),
+    # Where the dashboard's Gallery tab reads the curated styles' index.json
+    # (TMDEV-253). https only; "" turns the Gallery tab off.
+    "style_gallery_url": ("str", ""),
     "research_agent_model":   ("str",       ""),
     "research_agent_effort":  ("str",       ""),
     "pronunciation_lexicon":  ("lexicon",   "[]"),
@@ -1096,6 +1099,8 @@ def _coerce_setting(key: str, raw) -> tuple:
                     f"dashboard_base_url must start with http:// or https://, got {stripped!r}"
                 )
             stripped = stripped.rstrip("/")
+        if key == "style_gallery_url" and stripped and not re.match(r"^https://[^\s/]+", stripped):
+            raise ValueError(f"style_gallery_url must start with https://, got {stripped!r}")
         # The text is carried inside an agent's argv, and exec refuses an
         # argument with an embedded NUL — stored, it would fail every tick.
         if key == "user_preferences" and "\x00" in stripped:

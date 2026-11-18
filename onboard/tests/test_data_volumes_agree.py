@@ -60,5 +60,5 @@ def test_the_release_smoke_test_creates_every_data_folder():
     import re
     from pathlib import Path
     workflow = (Path(__file__).resolve().parents[2] / ".github" / "workflows" / "release.yml").read_text()
-    made = set(re.findall(r'"\$HOME/\.tubematic-data/([a-z_/]+)"', workflow))
+    made = set(re.findall(r'"\$HOME/\.tubematic-data/([a-z_/-]+)"', workflow))
     assert set(DATA_SUBDIRS) <= made, sorted(set(DATA_SUBDIRS) - made)

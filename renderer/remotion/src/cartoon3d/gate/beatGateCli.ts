@@ -23,6 +23,7 @@ import { beatGateStatus, describeStatus, type BeatAnswer, type JudgeRecord } fro
 import { renderStills } from "./stills";
 import { cartoonScene } from "./sceneConfig";
 import { writeAtomic } from "./atomic";
+import { keyMaterial } from "./sourceKey";
 
 const args = process.argv.slice(2);
 const recordAt = args.indexOf("--record");
@@ -40,22 +41,12 @@ const { beats } = cartoonScene(read("scene-config.json"));
 const timeline = read("timeline.json") as { fps: number; words: { word: string; startFrame: number; endFrame: number }[] };
 const sentenceOf = (b: { start: number; end: number }) =>
   timeline.words.filter((w) => w.startFrame <= b.end && w.endFrame >= b.start).map((w) => w.word).join(" ");
-/** every source file of the video, by relative path, in a fixed order */
-const sourceFiles = (root: string): [string, string][] => {
-  const out: [string, string][] = [];
-  const walk = (d: string) => {
-    for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) walk(p);
-      else if (e.isFile()) out.push([path.relative(root, p), fs.readFileSync(p, "utf8")]);
-    }
-  };
-  walk(root);
-  return out;
-};
 // the verdict is about THIS code showing THESE sentences at THESE frames: an edit to the video's source, to its beats
 // or a re-voiced narration changes the question, so all three are the key
-const hash = createHash("sha256").update(JSON.stringify({ source: sourceFiles(srcdir), beats, sentences: beats.map(sentenceOf) })).digest("hex").slice(0, 12);
+// (and, for an external style, the package it draws with: sourceKey.ts)
+const hash = createHash("sha256")
+  .update(keyMaterial(srcdir, path.join(ROOT, "src/scenes/external"), { beats, sentences: beats.map(sentenceOf) }))
+  .digest("hex").slice(0, 12);
 fs.mkdirSync(outdir, { recursive: true });
 const verdictFile = path.join(outdir, "beat-verdict.json");
 type Verdict = { hash: string; at: string; pass: boolean; stage: "stills" | "judge"; answers?: BeatAnswer[]; stills: string[]; prompt?: string };

@@ -309,6 +309,28 @@ Covers external styles over HTTP:
 - `external_styles_in_auto` accepts only installed external styles with a valid package, and is
   checked on change only, so a list whose style broke since still saves with an unrelated key.
 
+### `test_styles_api.py`
+
+Covers `renderer/api/styles_api.py`, installing and removing external styles.
+
+- Staging a zip shows the check and the scan, serves the staged package's text files and refuses a
+  path outside it, and installs nothing.
+- Confirming needs the dashboard password: no password or a wrong one is refused, and the right one
+  installs and approves the package, which `GET /visual-styles` then lists as available. The confirm
+  shares the login's throttle.
+- A bad upload, an `incoming` source (an MCP-only source) and an unknown kind are refused; a pending
+  install can be discarded.
+- A package copied in by hand is listed as waiting for review and is approved through the same
+  screen.
+- Removal is refused while an unfinished video or a domain default uses the style, and takes the
+  style out of `external_styles_in_auto`. A built-in style cannot be removed.
+- The gallery lists the index from `style_gallery_url` (https only) with the installed version, and a
+  gallery install is marked reviewed.
+
+Trap: the dashboard relays every call with the same API token an agent on the host can read, so the
+password is the only proof that a person said yes. A test that confirms with the token alone would
+hide the hole the design closes.
+
 ### `test_visual_style.py`
 
 Covers the visual style over HTTP and the style contract of the AI review prompt

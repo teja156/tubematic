@@ -172,10 +172,11 @@ def _mounts(service):
     return {v.split(":")[1] for v in service["volumes"]}
 
 
-def test_mcp_mounts_exactly_the_seven_it_needs(services):
+def test_mcp_mounts_exactly_the_nine_it_needs(services):
     """TUBEMATIC_DB, TUBEMATIC_JOBS_DIR, the generated scene tree, /logs, /backups,
     /sandbox (the spool run_code hands code to the sandbox through, TMDEV-242),
-    and the installed external styles (TMDEV-252).
+    the installed external styles (TMDEV-252), and the staged installs and the
+    folder a host agent hands packages over in (stage_style_install, TMDEV-253).
 
     Deliberately an exact set: the standing instruction is that MCP gets no
     volume it does not use, and an exact assertion is what forces a yes/no
@@ -186,7 +187,7 @@ def test_mcp_mounts_exactly_the_seven_it_needs(services):
     """
     assert _mounts(services["tubematic-mcp"]) == {
         "/data", "/jobs", "/app/remotion/src/scenes/generated", "/logs", "/backups", "/sandbox",
-        "/app/remotion/src/scenes/external",
+        "/app/remotion/src/scenes/external", "/styles-pending", "/styles-incoming",
     }
 
 
@@ -419,13 +420,33 @@ def test_the_installed_styles_are_read_only_where_the_style_lookups_run(services
         for v in service.get("volumes", []):
             if v.startswith("styles:"):
                 holders[name] = v
-    assert holders == {n: "styles:/app/remotion/src/scenes/external:ro,nocopy" for n in
-                       ("tubematic-api", "tubematic-mcp", "tubematic-worker", "tubematic-renderer")}
+    assert holders == {**{n: "styles:/app/remotion/src/scenes/external:ro,nocopy" for n in
+                          ("tubematic-mcp", "tubematic-worker", "tubematic-renderer")},
+                       # the API installs and removes packages (TMDEV-253), nothing else writes them
+                       "tubematic-api": "styles:/app/remotion/src/scenes/external:nocopy"}
+
+
+def test_staged_installs_are_shared_by_the_api_and_mcp_and_incoming_is_mcp_only(services):
+    """TMDEV-253: both the API (dashboard) and MCP (agent command) stage an
+    install into styles-pending; only MCP reads styles-incoming, where a host
+    agent drops a local package. Paths are style_install.PENDING_DIR and
+    INCOMING_DIR's defaults."""
+    found = {}
+    for name, service in services.items():
+        for v in service.get("volumes", []):
+            if v.startswith(("styles-pending:", "styles-incoming:")):
+                found.setdefault(name, []).append(v)
+    assert found == {
+        "tubematic-api": ["styles-pending:/styles-pending:nocopy"],
+        "tubematic-mcp": ["styles-pending:/styles-pending:nocopy", "styles-incoming:/styles-incoming:ro,nocopy"],
+    }
 
 
 def test_the_styles_volume_binds_the_data_root_styles_folder():
     volumes = yaml.safe_load(COMPOSE.read_text())["volumes"]
     assert volumes["styles"]["driver_opts"]["device"] == "${HOME}/.tubematic-data/styles"
+    assert volumes["styles-pending"]["driver_opts"]["device"] == "${HOME}/.tubematic-data/styles-pending"
+    assert volumes["styles-incoming"]["driver_opts"]["device"] == "${HOME}/.tubematic-data/styles-incoming"
 
 
 def test_the_sandbox_volume_binds_the_data_root_sandbox_folder():

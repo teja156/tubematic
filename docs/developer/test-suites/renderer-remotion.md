@@ -545,6 +545,18 @@ from.
 Trap: an agent writes each video's shot plan against these timings, so a change to one of them moves
 the camera in every Cartoon 3D video written afterwards.
 
+### `src/cartoon3d/gate/sourceKey.test.ts`
+
+Covers `gate/sourceKey.ts`, what the beat gate's verdict is keyed by.
+
+- A built-in video's key material is exactly the shape it had before external styles, so verdicts
+  already recorded stay valid.
+- The external packages a world video imports are found from its source.
+- The key changes when a package the video imports changes, and not when another package does.
+
+Trap: without the package in the key, an updated package kept the judges' verdict on frames it no
+longer draws.
+
 ### `src/cartoon3d/gate/beatVerdict.test.ts`
 
 Covers `gate/beatVerdict.ts::beatGateStatus` and `describeStatus`, which turn the judges' recorded

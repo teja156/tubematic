@@ -88,7 +88,7 @@ restart.
 
 ---
 
-## The 62 tools
+## The 64 tools
 
 A tool that refuses a call returns `{"error": …}`. Four tools call a paid provider: `generate_voice`
 (ElevenLabs), `generate_image` and `generate_character` (OpenAI) and `mine_youtube_topics`
@@ -166,6 +166,13 @@ A tool that refuses a call returns `{"error": …}`. Four tools call a paid prov
 | [`get_style_guide`](#get_style_guide) | The guide of the installed external style a video is drawn in |
 | [`validate_job`](#validate_job) | Run the pre-render checks |
 | [`submit_render`](#submit_render) | Queue the video for rendering |
+
+### Style install tools
+
+| Tool | Purpose |
+|---|---|
+| [`stage_style_install`](#stage_style_install) | Stage an external style package for a person to install |
+| [`audit_style_install`](#audit_style_install) | Record the agent's audit of a staged package |
 
 ### Mascot tools
 
@@ -1216,6 +1223,22 @@ file's source. A world style's video imports the package's runner, and the agent
 imports. Any other path is refused, so nothing outside the package's code can be read.
 
 It refuses a video in a built-in style, and a video whose package is broken or gone.
+
+### `stage_style_install`
+
+`stage_style_install(source)` stages an [external style](10-scene-authoring.md#installing-a-package)
+package and installs nothing. `source` is `incoming:<name>` (a folder or `.zip` the agent copied
+into `~/.tubematic-data/styles-incoming/`), `git:<https url>@<commit or tag>`, or
+`gallery:<style id>`. It returns `{pending_id, style_id, label, version, author, source, check,
+refusals, flags, files, replaces, expires_at, host_path, container_path, dashboard_link, audit}`.
+`host_path` is the staged package on the host, so an agent on the host can read what it audits.
+`dashboard_link` is the install screen, built from `dashboard_base_url` when that setting is set.
+
+### `audit_style_install`
+
+`audit_style_install(pending_id, verdict, notes)` records the agent's audit on a staged install.
+`verdict` is `no_concerns`, `concerns` or `refuse`. The install screen shows it beside the scan. No MCP
+tool confirms or removes an install: the person does both on the dashboard.
 
 ---
 

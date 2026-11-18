@@ -756,9 +756,11 @@ def _report_external_styles(data_root: Path, rep) -> None:
     """Name each installed external style (TMDEV-252) this version cannot use,
     with the reason: a package that targets another scene API, or one that
     broke. Never a refusal: the style is listed unavailable in the pickers, and
-    every other style keeps working."""
+    every other style keeps working. A package that only waits for a person's
+    approval on the Styles page (TMDEV-253) is not this version's problem and
+    is not named."""
     from tubematic_core import external_styles
-    bad = [s for s in external_styles.load(data_root / "styles").values() if not s.ok]
+    bad = [s for s in external_styles.load(data_root / "styles").values() if not s.ok and not s.needs_review]
     for s in bad:
         rep.warn(f"The installed external style {s.id} cannot be used with this version: {s.reason}. "
                  "It shows as unavailable until its package is updated or removed.")
