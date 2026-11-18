@@ -19,6 +19,9 @@ the checks are the MCP tools'.
 | Deployed by | Rebuilding the image | The write itself. The directory is a bind mount |
 | Reused | By every video | By one video |
 
+A third source, `external`, names a component of an installed
+[external style](#external-styles) package.
+
 Generated scenes are namespaced per video, so two videos that give a scene the same name do not
 overwrite each other. Reuse across videos is by copy: the agent reads another video's scene with
 `read_scene_file` and writes its own copy with `write_scene_file`.
@@ -479,6 +482,95 @@ yet voiced, and leaves them alone from voicing on.
 - Its `routing.avoid_for` names the beats that belong to the other insert styles that also put text
   or pictures on a screen ("a command typed at a shell (Terminal Doc shows it)"): insert routing
   settles a beat that fits two candidates by those entries.
+
+---
+
+## External styles
+
+An external style is a visual style installed from a package folder in `~/.tubematic-data/styles/`,
+outside the release. The pipeline reads it at runtime: no image is rebuilt and the MCP server holds
+no code for it. A package's drawing code runs in the renderer's Chromium and its guide is read by
+the agent, and Tubematic does not sandbox either, so installing a package means trusting its author.
+
+### The package
+
+| Path | Holds |
+|---|---|
+| `style.json` | The pack, in the [style pack](#style-packs) schema, plus an `external` block: `version`, `author`, `source`, `licence`, `scene_api` and `props_key` |
+| `MANIFEST.json` | `{"files": {"<path>": "<sha256>"}}` for every other file of the package |
+| `schema.json` | The JSON Schema each external scene's `props[props_key]` must match |
+| `components/*.tsx` | The scene components of a scene style (`renderer` `dom`) |
+| `runner/**` | The whole-video runner and kit of a 3D world style (`renderer` `cartoon_3d`) |
+| `guide/guide.md`, `guide/example-config.json`, `guide/example-timeline.json` | What the agent reads through `get_style_guide`. The example timeline is optional |
+| `preview.mp4`, `preview.webp` | The picker's loop and poster, within the built-in [preview](#style-previews) caps |
+| `fonts/` | Optional font files, with a licence file |
+
+`tubematic_core/external_styles.py::load` accepts a package when:
+
+- the folder name is the style id, `ext_` followed by lowercase letters, digits and `_`, and the
+  pack's `id` equals it;
+- every file matches `MANIFEST.json`, no file is missing from it, and no entry is a symlink;
+- the pack passes the built-in pack check, is a `main` style with `inserts` `{"host": false}`,
+  `mascot` false, `authoring_skill` `tubematic-external-style` and the `scene_api` this version
+  draws (`external_styles.SCENE_API`);
+- the required files are there, the schema is a JSON object, and the code folder its renderer needs
+  holds a `.tsx` file.
+
+A package that fails is listed unavailable with the reason, and every other style keeps working.
+A broken built-in pack stops the process at start-up because it ships with the release; a package
+does not. The registry is read again whenever the folder or a manifest changes, so a new package
+needs no restart.
+
+### How the pipeline sees one
+
+`visual_styles.pack`, `is_main_style`, `is_world_style` and `fixed_canvas` read installed packages,
+so a valid external style can be chosen for a video or as a domain's default like a built-in one.
+`GET /visual-styles` lists them after the built-in styles with `external: true`, and the picker
+tags them EXTERNAL. A `needs.gpu` pack is gated like Cartoon 3D. External styles take no mascot and
+host no inserts.
+
+Auto picks an external style only once a person names it in the `external_styles_in_auto` setting,
+because a package's routing text is its author's claim and Auto has never been measured on it.
+
+### Authoring one
+
+Every external pack names the one skill `tubematic-external-style`. The agent reads the package's
+guide with `get_style_guide`, which hands it over as reference material that never overrides
+Tubematic's rules.
+
+- A scene style's scenes are `{"type": "generated", "source": "external", "src":
+  "<style id>/components/<Name>", "props": {"<props_key>": {…}}}`. `write_scene_config` refuses a
+  component of another style or one the package lacks, and props that break `schema.json`, naming the
+  failing path (`mcp/external_style.py`). The pack's captions fill the config, and the video takes
+  the `preview_frames` look before `submit_render`.
+- A world style's video is one generated `CartoonShort` scene that imports the package's runner as
+  `../../external/<style id>/runner/<file>` and goes through the [beat gate](#cartoon-3d).
+
+### Rendering one
+
+`submit_render` checks the package from disk and records its fingerprint in
+`<jobs>/<video_id>/style-source.json`. The bundle carries that record and the one package, a remote
+renderer stages it under `src/scenes/external/`, and every renderer compares the package it compiles
+with the record before it renders ([The bundle](11-rendering-and-review.md#the-bundle-staging-and-the-render-call)).
+Each bundle compiles that one package and no other
+([Dynamic import](09-remotion-project.md#dynamic-import-and-why-there-are-three-branches)).
+
+### Scene API v1
+
+A package imports the renderer through the alias `@tubematic/scene-api`, which resolves to
+`renderer/remotion/src/sceneApi/v1.ts`: the caption and timeline types, the watermark keep-out,
+`fitText`, the font helpers, and for world styles the Cartoon 3D engine, its video types and its
+camera helpers. Every installed package compiles against these names, so a name is never removed or
+changed: a breaking change is a `v2.ts` and a new `SCENE_API`. A package that targets another
+`scene_api` is unavailable, and `upgrade.py` names each installed style the new version cannot use
+before it upgrades.
+
+### Making a test package
+
+`python3 scripts/make_external_example.py night_signal <out>` and `… low_poly_skit <out> [--gpu]`
+repackage Night Signal and Low-Poly Skit as `ext_night_signal`, `ext_low_poly_skit` and
+`ext_low_poly_skit_gpu`, with their imports of the rest of the renderer rewritten to the alias. Copy
+one into `~/.tubematic-data/styles/` on a test install to render it beside its built-in twin.
 
 ---
 
