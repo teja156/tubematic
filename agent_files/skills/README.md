@@ -25,6 +25,7 @@ Run it from the repository root. When each skill runs and how the agent layer wo
 | `tubematic-scene-config/` | Writes `scene-config.json` and the scene TSX files for a voiced video |
 | `tubematic-inserts/` | Places a video's insert scenes for any main style's skill: one insert inside each segment the script marked, in the config's `inserts` list, with the main style held quiet under it |
 | `tubematic-cartoon3d/` | Writes a Cartoon 3D video as TypeScript against the renderer's kit, takes it through the beat gate and submits it |
+| `tubematic-external-style/` | Writes a video in an installed external style: reads the package's guide with `get_style_guide`, fills its components with props that match its schema (or writes a 3D world on its runner and takes it through the beat gate), looks at it and submits it |
 | `tubematic-lowpoly-skit/` | Writes a Low-Poly Skit video as TypeScript against the renderer's low-poly kit (toy people in small diorama sets, a new shot a second), takes it through the beat gate and submits it |
 | `tubematic-system-flow/` | Writes a System Flow insert as data (boards, components, connectors and events timed to the narration). System Flow is an insert style; the skill also finishes a whole System Flow video voiced before it became one |
 | `tubematic-whiteboard/` | Writes a Whiteboard video as data (regions of handwriting, formulas, doodles and marks timed to the narration) for the one `Whiteboard` scene, validates and submits it |

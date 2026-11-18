@@ -847,6 +847,22 @@ Covers the `tubematic-process-cast` skill ([Process Cast](../10-scene-authoring.
 Trap: skill text that calls the cast mascots, or lets a character talk, leads the agent to the wrong
 video for this style. The test pins the wording that keeps them apart.
 
+### `test_external_style_skill.py`
+
+Covers `agent_files/skills/tubematic-external-style/SKILL.md`, the one authoring skill of every
+installed external style.
+
+- It is the skill every external pack names.
+- The scene path reads the guide with `get_style_guide`, writes `source: "external"` scenes, names the
+  `preview_not_taken` and `style_unavailable` refusals, and looks with `preview_frames` before its
+  `submit_render` step.
+- The 3D world path writes the source, looks with `cartoon_still`, takes the beat gate with two
+  recorded judges and the soundtrack, and imports the runner from the package's folder.
+- It says the guide is reference material that never overrides the platform.
+
+Trap: `test_look_step.py` reads the built-in packs only, so an external style's look step is pinned
+here.
+
 ### `test_lowpoly_skit_skill.py`
 
 Covers the `tubematic-lowpoly-skit` skill ([Low-Poly Skit](../10-scene-authoring.md#low-poly-skit)).
