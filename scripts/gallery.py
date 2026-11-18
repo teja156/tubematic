@@ -232,7 +232,7 @@ def render_page(entries: list[dict], repo_url: str = "") -> str:
         cards.append(
             f'<article class="card" id="{e(s["id"])}">'
             f'<video src="previews/{e(s["id"])}.mp4" poster="previews/{e(s["id"])}.webp" '
-            f'muted loop autoplay playsinline preload="none"></video>'
+            f'muted loop autoplay playsinline preload="none" aria-label="Preview of {e(s["name"])}"></video>'
             f'<div class="body"><h2>{e(s["name"])}</h2>'
             f'<div class="meta">{e(s["id"])} · {e(s["version"])} · {e(s["author"])} · {e(s["licence"])}</div>'
             f'<p>{e(s["tagline"])}</p>'

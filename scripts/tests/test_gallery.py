@@ -6,6 +6,7 @@ maintainer reviewed. That holds only if the index's checksum is of the exact
 archive published, the archive is the same bytes on every build, and an
 install from it passes the installer's own checks.
 """
+import base64
 import hashlib
 import json
 import os
@@ -340,7 +341,18 @@ def test_the_page_wears_the_dashboards_theme(tmp_path):
     page = gallery.render_page([], "")
     for name in ("bg", "panel", "panel-2", "border", "border-2", "ink", "ink-2", "dim", "mute", "amber"):
         assert f"--{name}: {tokens[name]};" in page, name
-    assert "Space+Mono" in page and "Inter" in page
-    logo = (REPO / "dashboard" / "public" / "logo-mark.svg").read_text()
-    assert "<rect x=\"36\" y=\"24\" width=\"4\" height=\"24\">" in logo  # the mark, as the dashboard draws it
-    assert "data:image/svg+xml;base64," in page and ">TUBEMATIC<" in page
+    for name in ("amber-soft", "mono", "sans"):
+        value = re.search(rf"--{name}:\s*([^;]+);", root).group(1).strip()
+        assert f"--{name}: {value};" in page, name
+    assert "Space+Mono" in page and "Inter" in page and ">TUBEMATIC<" in page
+    # the logo is the dashboard's own file, embedded byte for byte
+    uri = re.search(r'<img src="data:image/svg\+xml;base64,([^"]+)"', page).group(1)
+    assert base64.b64decode(uri) == (REPO / "dashboard" / "public" / "logo-mark.svg").read_bytes()
+
+
+def test_each_preview_has_an_accessible_name(tmp_path):
+    styles = _styles(tmp_path, "ext_good")
+    assert gallery.main(["build", str(styles), str(tmp_path / "site"), "--base-url", BASE]) == 0
+    page = (tmp_path / "site" / "index.html").read_text()
+    name = json.loads((tmp_path / "site" / "index.json").read_text())["styles"][0]["name"]
+    assert f'aria-label="Preview of {name}"' in page
