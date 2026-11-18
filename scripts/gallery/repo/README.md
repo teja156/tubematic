@@ -4,7 +4,8 @@ Visual styles for [Tubematic](https://github.com/teja156/tubematic) that a maint
 publishing them. Tubematic's dashboard lists them under **Profiles → Styles → Gallery**, and every
 install checks the downloaded package against the checksum in this gallery's index.
 
-- The index: https://gallery.tubematic.ai/index.json
+- Browse the styles: https://gallery.tubematic.ai/
+- The index Tubematic reads: https://gallery.tubematic.ai/index.json
 - To submit a style, read [SUBMITTING.md](SUBMITTING.md).
 - Reviewers follow [REVIEW-CHECKLIST.md](REVIEW-CHECKLIST.md).
 
@@ -21,7 +22,8 @@ one; it does not remove it.
   released no published image renders external styles: the render job then passes with a notice,
   and the reviewer renders the example on their own install.
 - Merging to `main` publishes: `build` writes a deterministic zip of each package, its sha256, its
-  previews and `index.json`, and the workflow deploys them to GitHub Pages.
+  previews, `index.json` and the browsable page `index.html`, and the workflow deploys them to GitHub
+  Pages.
 
 The tools are `scripts/gallery.py` in the Tubematic repository. The workflows use the newest
 Tubematic release, found when they run (`.github/tubematic-release.sh`), so nothing here changes

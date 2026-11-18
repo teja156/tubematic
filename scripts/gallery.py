@@ -11,10 +11,12 @@ gallery's CI checks out Tubematic and runs:
         Check and scan each package the way an install does. Prints a Markdown
         report; exits 1 when a package fails its check or the scan refuses it.
 
-    python3 scripts/gallery.py build <gallery>/styles <site dir> --base-url https://…/
+    python3 scripts/gallery.py build <gallery>/styles <site dir> --base-url https://…/ [--repo-url https://…]
         Write the site: archives/<id>-<version>.zip (a deterministic zip of the
-        package), previews/<id>.mp4 and .webp, and index.json, which Tubematic's
-        Gallery tab reads and every gallery install checks against.
+        package), previews/<id>.mp4 and .webp, index.json, which Tubematic's
+        Gallery tab reads and every gallery install checks against, and
+        index.html, a page people browse (it links the repo's submission guide
+        when --repo-url is given).
 
     python3 scripts/gallery.py render <package> <out.mp4> --image <tubematic backend image>
         Render a scene style's example config (silent) in the backend image, for
@@ -23,6 +25,7 @@ gallery's CI checks out Tubematic and runs:
 """
 import argparse
 import hashlib
+import html
 import io
 import json
 import os
@@ -136,6 +139,72 @@ def deterministic_zip(pkg: pathlib.Path, sid: str) -> bytes:
     return buf.getvalue()
 
 
+_PAGE_CSS = """
+:root { --bg: #f6f5f1; --card: #fff; --ink: #1d1c19; --muted: #66625a; --rule: #dcd8ce; --accent: #b86a00; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #12110f; --card: #1b1a17; --ink: #ece8df; --muted: #a39d90; --rule: #34312b; --accent: #f0a23a; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1120px; margin: 0 auto; padding: 40px max(16px, env(safe-area-inset-left)) 64px; }
+h1 { font-size: 2rem; margin: 0 0 8px; }
+.lede, .how { max-width: 70ch; color: var(--muted); }
+a { color: var(--accent); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; margin-top: 28px; }
+.card { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; display: grid; min-width: 0; }
+.card video { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; background: #000; display: block; }
+.body { padding: 14px 16px 16px; display: grid; gap: 6px; min-width: 0; }
+.body h2 { font-size: 1.1rem; margin: 0; }
+.meta, .sum { font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); overflow-wrap: anywhere; }
+.body p { margin: 0; }
+.empty { margin-top: 28px; color: var(--muted); }
+footer { margin-top: 40px; color: var(--muted); font-size: 14px; }
+"""
+
+
+def render_page(entries: list[dict], repo_url: str = "") -> str:
+    """The gallery's browsable page (index.html), from the same entries as index.json. Static and
+    script-free. Every package field is a submitter's text, so all of it is escaped, and a homepage
+    is linked only when it is an https address. Paths are relative, so the page works at any address."""
+    e = lambda s: html.escape(str(s), quote=True)  # noqa: E731
+    cards = []
+    for s in entries:
+        archive = s["archive_url"].rsplit("/", 1)[-1]
+        homepage = s.get("homepage") or ""
+        home = (f' · <a href="{e(homepage)}" rel="noopener">homepage</a>'
+                if re.fullmatch(r"https://[^\s\"'<>]+", homepage) else "")
+        needs = "needs a GPU" if s.get("needs_gpu") else "renders on a CPU"
+        cards.append(
+            f'<article class="card" id="{e(s["id"])}">'
+            f'<video src="previews/{e(s["id"])}.mp4" poster="previews/{e(s["id"])}.webp" '
+            f'muted loop autoplay playsinline preload="none"></video>'
+            f'<div class="body"><h2>{e(s["name"])}</h2>'
+            f'<div class="meta">{e(s["id"])} · {e(s["version"])} · by {e(s["author"])} · licence {e(s["licence"])}</div>'
+            f'<p>{e(s["tagline"])}</p>'
+            f'<div class="meta">{e(needs)}{home}</div>'
+            f'<div class="meta"><a href="archives/{e(archive)}" download>Download the zip</a></div>'
+            f'<div class="sum">sha256 {e(s["sha256"])}</div></div></article>')
+    listing = (f'<div class="grid">{"".join(cards)}</div>' if cards
+               else '<p class="empty">No styles yet.</p>')
+    submit = (f' To add a style, read <a href="{e(repo_url.rstrip("/"))}/blob/main/SUBMITTING.md">the submission guide</a>.'
+              if re.fullmatch(r"https://[^\s\"'<>]+", repo_url or "") else "")
+    return (
+        "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        "<title>Tubematic style gallery</title>"
+        f"<style>{_PAGE_CSS}</style></head><body><main>"
+        "<h1>Tubematic style gallery</h1>"
+        "<p class=\"lede\">Visual styles for Tubematic, each reviewed by a maintainer before it was published. "
+        "A style is code that runs in Tubematic's renderer: a review lowers the risk of installing one, "
+        "it does not remove it.</p>"
+        "<p class=\"how\">To install one, open your Tubematic dashboard and go to <b>Profiles</b> → <b>Styles</b> "
+        "→ <b>Gallery</b>. Or download its zip and use <b>Install from file</b> there. Either way, Tubematic "
+        f"checks the download against its sha256 and shows you the package before it installs.{submit}</p>"
+        f"{listing}"
+        "<footer>The machine-readable list is <a href=\"index.json\">index.json</a>.</footer>"
+        "</main></body></html>\n")
+
+
 def build(args) -> int:
     site = pathlib.Path(args.site)
     base = args.base_url.rstrip("/") + "/"
@@ -166,7 +235,8 @@ def build(args) -> int:
             })
     index = {"version": INDEX_VERSION, "styles": entries}
     (site / "index.json").write_text(json.dumps(index, indent=1, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"index.json lists {len(entries)} style(s)")
+    (site / "index.html").write_text(render_page(entries, args.repo_url or ""), encoding="utf-8")
+    print(f"index.json and index.html list {len(entries)} style(s)")
     return 0
 
 
@@ -226,6 +296,7 @@ def main(argv=None) -> int:
     p.add_argument("site")
     p.add_argument("--base-url", required=True)
     p.add_argument("--commit", default="", help="the gallery repository's commit, for folder submissions")
+    p.add_argument("--repo-url", default="", help="the gallery repository, linked from index.html")
     p = sub.add_parser("render")
     p.add_argument("package")
     p.add_argument("out")

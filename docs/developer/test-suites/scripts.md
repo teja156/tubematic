@@ -856,6 +856,10 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
 - `build` writes the same archive bytes on every build, an index whose `sha256` is of that archive,
   and the previews; the official gallery's install from that site stages as reviewed and installs.
   It refuses to publish a package that fails its check.
+- `build` also writes `index.html` from the same entries: a card per style with its own files by
+  relative path, the same bytes on every build, "No styles yet" when empty, no script, every field a
+  submitter wrote escaped, and a homepage linked only when it is an https address. The publish
+  workflow passes the repository, so the page links its submission guide.
 - The official gallery address is the one the skeleton's publish workflow builds for, and the
   skeleton's PR workflow calls `scan` and `render` on `ubuntu-24.04`, diffs against the event's base
   commit (a fork has no `origin/<base>`), refuses a changed path that is not a style id's folder or
