@@ -116,7 +116,8 @@ export default function InstallScreen() {
         // the same bytes from another source (a gallery copy of a zip install): nothing that renders changes
         <p data-testid="install-replaces" data-identical="true" style={{ fontSize: 13 }}>
           This is identical to the installed version {rec.replaces.version || "(no version)"} (the same
-          fingerprint). Installing it changes only where Tubematic records the style came from.
+          fingerprint). Installing it keeps the same code and refreshes its install record: where it came
+          from, whether it was reviewed, and when it was installed.
         </p>
       ) : (
         <p data-testid="install-replaces" data-identical="false" style={{ fontSize: 13 }}>
