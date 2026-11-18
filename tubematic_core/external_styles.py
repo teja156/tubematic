@@ -198,11 +198,16 @@ def _stamp(root: pathlib.Path):
         return ()
     rows = []
     for entry in sorted(os.scandir(root), key=lambda e: e.name):
+        # a folder can vanish between the listing and the stat (a package being removed)
+        try:
+            d = os.lstat(entry.path).st_mtime_ns
+        except OSError:
+            continue
         try:
             m = os.stat(os.path.join(entry.path, MANIFEST), follow_symlinks=False).st_mtime_ns
         except OSError:
             m = None
-        rows.append((entry.name, os.lstat(entry.path).st_mtime_ns, m))
+        rows.append((entry.name, d, m))
     return tuple(rows)
 
 

@@ -6374,6 +6374,12 @@ def _external_block(video_id: str) -> dict | None:
         row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
     style = (row["visual_style"] if row else "") or ""
     if not tvs.is_external(style):
+        # a video that left an external style (a topic revision) must not keep the old record: the
+        # renderer would check, and a remote one stage, a package the video no longer uses
+        try:
+            tjobs.join_below(JOBS_DIR, video_id, tjobs.STYLE_SOURCE).unlink(missing_ok=True)
+        except (tjobs.UnsafePath, OSError) as e:
+            return {"error": f"an old style package record could not be removed: {e}"}
         return None
     found = _external_styles.check_now(style)
     if not found or not found.ok:

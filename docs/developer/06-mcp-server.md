@@ -1297,7 +1297,9 @@ by skipping `validate_job`:
 When it queues a Cartoon 3D video it records the source's fingerprint in
 `<jobs>/<video_id>/cartoon/source.json`. The renderer renders that tree or fails the render back to
 the agent. When it queues an external-style video it records the package's fingerprint in
-`<jobs>/<video_id>/style-source.json`, and the renderer compares it the same way.
+`<jobs>/<video_id>/style-source.json`, and the renderer compares it the same way. It removes that
+record when it queues a video that is no longer in an external style, so the renderer never checks
+a package the video does not use.
 
 The readiness check, the record and the status change run under one per-video lock.
 `write_scene_file`, `delete_scene_file`, `write_scene_config` and `cartoon_soundtrack` take the same

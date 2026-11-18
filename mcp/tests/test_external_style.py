@@ -277,3 +277,20 @@ def test_a_style_that_takes_no_generated_images_refuses_them_for_an_external_sty
     vid = env["video"]("vid_img")
     plan = server._image_plan("ext_dom", vid, "a", "a prompt", "9:16", "")
     assert "takes no generated images" in plan["error"]
+
+
+# ── review round 3 ───────────────────────────────────────────────────────────
+
+def test_a_video_no_longer_in_an_external_style_drops_the_old_record(env, monkeypatch):
+    """A topic revision can move a video back to a built-in style; the record of
+    its old package must not make the renderer check a package it does not use."""
+    monkeypatch.setattr(server, "_preview_block", lambda video_id: None)
+    vid = env["video"]("vid_switch")
+    assert server.write_scene_config(vid, _config()).get("error") is None
+    assert server.submit_render(vid)["status"] == "queued"
+    record = server.JOBS_DIR / vid / "style-source.json"
+    assert record.is_file()
+    with server._conn() as con:
+        con.execute("UPDATE videos SET status = 'VOICE_READY', visual_style = 'whiteboard' WHERE id = ?", (vid,))
+    assert server._external_block(vid) is None
+    assert not record.exists()

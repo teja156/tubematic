@@ -390,3 +390,16 @@ def test_the_agent_view_of_a_broken_package_stays_external(installed):
     assert view["external"] is True and view["authoring_skill"] == ext.AUTHORING_SKILL
     assert "MANIFEST.json" in view["unavailable_reason"]
     assert view["allows"] == {"figures": False, "line_art": False, "generated_characters": False}
+
+
+def test_a_package_folder_removed_while_listed_does_not_break_the_registry(tmp_path, monkeypatch):
+    monkeypatch.setattr(ext, "STYLES_DIR", tmp_path)
+    make_package(tmp_path)
+    real = os.lstat
+
+    def vanish(path, *a, **k):
+        if str(path).endswith("ext_test"):
+            raise FileNotFoundError(path)
+        return real(path, *a, **k)
+    monkeypatch.setattr(ext.os, "lstat", vanish)
+    ext._stamp(tmp_path)   # must not raise
