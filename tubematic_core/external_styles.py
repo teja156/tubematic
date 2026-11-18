@@ -31,6 +31,15 @@ PROPS_KEY_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,40}")
 AUTHORING_SKILL = "tubematic-external-style"
 STYLES_DIR = pathlib.Path(os.environ.get("TUBEMATIC_STYLES_DIR", "/app/remotion/src/scenes/external"))
 MANIFEST = "MANIFEST.json"
+# The approval record (TMDEV-253): {id: {"fingerprint", "version", "source", "reviewed", "installed_at"}}.
+# A person approves every package on the dashboard's install screen; a package
+# with no record, or whose files changed after it was approved, is listed
+# unavailable, so a changed package goes through that screen again. A file
+# beside the packages, not a table: the renderer and upgrade.py read packages
+# without the database.
+INSTALLED = ".installed.json"
+NOT_APPROVED = "it has not been approved: review it on the dashboard's Styles page"
+CHANGED = "its files changed after it was approved: review it again on the dashboard's Styles page"
 # The built-in previews' caps (tubematic_core/tests/test_style_packs.py), so an
 # external style costs the picker no more than a built-in one.
 PREVIEW_CAPS = {"preview.mp4": 400_000, "preview.webp": 40_000}
@@ -49,6 +58,8 @@ class ExternalStyle:
     pack: dict | None
     ok: bool
     reason: str
+    # a valid package that only waits for a person's approval (a Review button, not a broken package)
+    needs_review: bool = False
 
 
 class _Bad(Exception):
@@ -172,21 +183,62 @@ def _check(sid: str, d: pathlib.Path) -> dict:
     return pack
 
 
+def approvals(root: pathlib.Path) -> dict:
+    """The approval record of the packages under root; {} when there is none or it is unreadable."""
+    try:
+        data = json.loads((pathlib.Path(root) / INSTALLED).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(v, dict)} if isinstance(data, dict) else {}
+
+
+def _write_approvals(root: pathlib.Path, data: dict) -> None:
+    path = pathlib.Path(root) / INSTALLED
+    tmp = path.with_name(f"{INSTALLED}.tmp")
+    tmp.write_text(json.dumps(data, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def approve(root: pathlib.Path, sid: str, fingerprint: str = "", **meta) -> str:
+    """Record the package under root/sid as approved; returns the fingerprint recorded.
+    An installer passes the fingerprint it checked; otherwise it is the package as it is now."""
+    fp = fingerprint or jobfiles.source_fingerprint(pathlib.Path(root) / sid)
+    data = approvals(root)
+    data[sid] = {**meta, "fingerprint": fp}
+    _write_approvals(root, data)
+    return fp
+
+
+def drop_approval(root: pathlib.Path, sid: str) -> None:
+    data = approvals(root)
+    if data.pop(sid, None) is not None:
+        _write_approvals(root, data)
+
+
+def _checked(sid: str, d: pathlib.Path, record: dict | None) -> ExternalStyle:
+    try:
+        pack = _check(sid, d)
+        fp = jobfiles.source_fingerprint(d)
+    except (_Bad, OSError, jobfiles.UnsafePath) as exc:
+        return ExternalStyle(sid, d, None, False, str(exc))
+    if not record:
+        return ExternalStyle(sid, d, pack, False, NOT_APPROVED, needs_review=True)
+    if record.get("fingerprint") != fp:
+        return ExternalStyle(sid, d, pack, False, CHANGED, needs_review=True)
+    return ExternalStyle(sid, d, pack, True, "")
+
+
 def load(root: pathlib.Path) -> dict[str, ExternalStyle]:
     """Every package folder under root, valid or not, by id."""
     root = pathlib.Path(root)
     if not root.is_dir():
         return {}
+    records = approvals(root)
     out = {}
     for entry in sorted(os.scandir(root), key=lambda e: e.name):
         if entry.name.startswith(".") or not (entry.is_dir() or entry.is_symlink()):
             continue
-        d = pathlib.Path(entry.path)
-        try:
-            pack, ok, reason = _check(entry.name, d), True, ""
-        except (_Bad, OSError) as exc:
-            pack, ok, reason = None, False, str(exc)
-        out[entry.name] = ExternalStyle(entry.name, d, pack, ok, reason)
+        out[entry.name] = _checked(entry.name, pathlib.Path(entry.path), records.get(entry.name))
     return out
 
 
@@ -240,10 +292,16 @@ def check_now(sid: str) -> ExternalStyle | None:
     d = STYLES_DIR / sid
     if not ID_RE.fullmatch(sid) or not (d.is_dir() or d.is_symlink()):
         return None
+    return _checked(sid, d, approvals(STYLES_DIR).get(sid))
+
+
+def check_folder(sid: str, d: pathlib.Path) -> tuple[dict | None, str]:
+    """A package folder that is not installed (a staged install): its pack, or
+    None and the reason it would be listed unavailable."""
     try:
-        return ExternalStyle(sid, d, _check(sid, d), True, "")
+        return _check(sid, pathlib.Path(d)), ""
     except (_Bad, OSError) as exc:
-        return ExternalStyle(sid, d, None, False, str(exc))
+        return None, str(exc)
 
 
 def config_style(config) -> str:

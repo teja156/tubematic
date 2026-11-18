@@ -403,10 +403,14 @@ Covers `docker-compose.yml` and the test stack's renderer, parsed as YAML
   only the six it needs added, `no-new-privileges`, CPU, memory and process ceilings, the daemon
   command with no entrypoint, and the spool shared with the MCP server and nobody else. No service
   mounts the Docker socket.
-- The styles folder is bound from the data root and mounted read-only at
-  `/app/remotion/src/scenes/external` in the API, the MCP server, the worker and the renderer, and
-  nowhere else, each with `nocopy`. Without it Docker copies the image's folder into the empty
-  volume with its root owner, and a person can no longer copy a package into the folder.
+- The styles folder is bound from the data root and mounted at `/app/remotion/src/scenes/external`
+  in the API (read-write: it installs and removes packages), the MCP server, the worker and the
+  renderer (read-only), and nowhere else, each with `nocopy`. Without it Docker copies the image's
+  folder into the empty volume with its root owner, and a person cannot copy a package into
+  the folder.
+- `styles-pending` (staged installs) is mounted in the API and the MCP server, and `styles-incoming`
+  (where a host agent hands a package over) in the MCP server only, read-only. Both bind the data
+  root's folders of the same name.
 
 Trap: the mounts of the MCP server, the worker and the renderer are each asserted as an exact
 set, so a new mount is a decision. The sandbox's capability list is an exact set for the same

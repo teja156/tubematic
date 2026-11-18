@@ -143,9 +143,9 @@ def main(argv=None) -> int:
     if args.gpu and args.style != "low_poly_skit":
         ap.error("--gpu applies to low_poly_skit only")
     d = night_signal(args.out) if args.style == "night_signal" else low_poly_skit(args.out, args.gpu)
-    found = ext.load(args.out)[d.name]
-    if not found.ok:
-        print(f"{d}: the package does not load: {found.reason}", file=sys.stderr)
+    pack, reason = ext.check_folder(d.name, d)
+    if pack is None:
+        print(f"{d}: the package does not load: {reason}", file=sys.stderr)
         return 1
     print(d)
     return 0

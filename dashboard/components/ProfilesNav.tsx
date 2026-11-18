@@ -4,15 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /**
- * "Script profiles · Mascots": the two libraries share the Profiles tab. A
+ * "Script profiles · Mascots · Styles": the libraries share the Profiles tab. A
  * twelfth top-bar tab would not fit the one-row layout at 1640px, so the tab
- * stays one and this sub-nav switches between its two pages.
+ * stays one and this sub-nav switches between its pages.
  */
 export function ProfilesNav() {
   const pathname = usePathname() ?? "";
   const links = [
     { href: "/script-profiles", label: "Script profiles", id: "script-profiles" },
     { href: "/mascots", label: "Mascots", id: "mascots" },
+    { href: "/styles", label: "Styles", id: "styles" },
   ];
   return (
     <nav

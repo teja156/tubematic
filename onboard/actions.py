@@ -878,6 +878,8 @@ _VOLUME_DEVICES = {
     "tubematic_backups-data":     "backups",
     "tubematic_sandbox-spool":    "sandbox",
     "tubematic_styles":           "styles",
+    "tubematic_styles-pending":   "styles-pending",
+    "tubematic_styles-incoming":  "styles-incoming",
 }
 
 

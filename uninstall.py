@@ -83,6 +83,7 @@ _TUBEMATIC_COMMANDS = [
     "tubematic-list-strategies",
     "tubematic-set-strategy",
     "tubematic-dashboard-status",
+    "tubematic-install-style",
 ]
 
 
@@ -874,8 +875,8 @@ def remove_data_root() -> None:
     # Declined: prune what is provably empty so the leftovers are only the
     # things actually worth keeping, and say where they are.
     pruned = []
-    for sub in ("data", "jobs", "output_videos", "logs", "sandbox", "styles", "scenes/generated",
-                "scenes"):
+    for sub in ("data", "jobs", "output_videos", "logs", "sandbox", "styles", "styles-pending",
+                "styles-incoming", "scenes/generated", "scenes"):
         d = DATA_ROOT / sub
         try:
             if d.is_dir() and not any(d.iterdir()):

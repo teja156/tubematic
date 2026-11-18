@@ -227,7 +227,9 @@ What each page is for is in [The Dashboard: Pages](../user-guide/04-dashboard.md
 | `/topics` | `app/topics/page.tsx` | See [The Topics page](#the-topics-page) |
 | `/projects` | `app/projects/page.tsx` | Two panes, with its own action dispatcher (see [Actions](#actions)). An expired domain carries a badge |
 | `/script-profiles` | `app/script-profiles/page.tsx` | Creates, polls and deletes through `/script-profiles`. See [Script profiles](08-scripting-and-voice.md#script-profiles) |
-| `/mascots` | `app/mascots/page.tsx` | The mascot library. `ProfilesNav.tsx` switches between it and Script Profiles under the one **Profiles** tab. Model sheets are `<img>` tags that point at `/mascot-sheets/...` |
+| `/mascots` | `app/mascots/page.tsx` | The mascot library. `ProfilesNav.tsx` switches between it, Script Profiles and Styles under the one **Profiles** tab. Model sheets are `<img>` tags that point at `/mascot-sheets/...` |
+| `/styles` | `app/styles/page.tsx` | External styles: installed ones (Remove, Review, the Auto toggle that writes `external_styles_in_auto`), installs waiting for review, the gallery (and `style_gallery_url`), Install from file (a zip sent base64 in JSON, since the proxy forwards JSON only) and Install from repo URL. See [Installing a package](10-scene-authoring.md#installing-a-package) |
+| `/styles/install/<id>` | `app/styles/install/[id]/page.tsx` | The install screen: source, warning, check, scan, the agent's audit, files, imports and guide of a staged package, and the password field that confirms it |
 | `/socials`, `/analytics` | `app/socials/page.tsx`, `app/analytics/page.tsx` | See [Publishing surfaces](#publishing-surfaces). The Spend tab is `SpendCard.tsx` and the Watch time tab is `WatchTimePanel.tsx` |
 | `/logs` | `app/logs/page.tsx` | Filters by service, minimum level, free text and row limit, with no live tail. It reads through the proxy, so the container needs no log mount |
 | `/settings` | `app/settings/page.tsx` | See [The settings page](#the-settings-page) |
@@ -1130,6 +1132,7 @@ suite can test them without React.
 | `voices.ts` | Voice labels and conflicts, the shown voice, and what Approve Topic sends for the voice |
 | `visualStyles.ts` | Picker options and labels built from the fetched style list, when a style is disabled, and how a frozen style reads on a card |
 | `mascots.ts` | The GPU gate for mascot pickers, their options and the mascot an approval sends |
+| `externalStyles.ts` | The shapes of the `/external-styles` routes, a source's label, the install warning, when Install is blocked, and reading a zip as base64 |
 | `inserts.ts` | The Inserts options, whether a style takes inserts, the stored insert list read as a list, and the video window's Inserts row. See [Inserts](#inserts) |
 | `angles.ts` | The kind list fetched from `GET /angle-kinds`, a kind's label, the angle score's label and the sentence's length limit |
 | `videoStatus.ts` | Which statuses can be deleted, when Retry publishing, Mark as published and Retry agent are offered, and `patchVideo` |

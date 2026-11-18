@@ -9,6 +9,34 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
 
 ---
 
+## v2.4.0
+
+### Upgrade notes
+
+1. Close and reopen any agent session you had open (Claude Code, Codex or OpenCode) after you
+   upgrade. The agent gets a new command, `/tubematic-install-style`, and new tools, and a session
+   started before the upgrade does not have them.
+2. Going back to 2.3.x after this upgrade needs the database backup the upgrade took: 2.3.x refuses
+   to start on this version's database. Follow the
+   [rollback policy](https://docs.tubematic.ai/user-guide/upgrading#rollback-policy). Videos in an
+   external style cannot be finished on 2.3.x; switch them to another style first, or finish them
+   before you go back.
+
+### Added
+
+- External visual styles. You can now install visual styles made outside Tubematic's releases: from
+  the Tubematic gallery, from a zip file, or from a git repository at a commit or tag. Open
+  **Profiles → Styles**. Each install opens a screen that shows where the package came from, a
+  warning, Tubematic's checks, a scan of its code and guide, every file and the guide your agent
+  will read, and installs only after you enter your dashboard password. An installed style appears in
+  every style list with an **EXTERNAL** tag. Auto never picks one until you allow it on the Styles
+  page. A package changed after you installed it stops being used until you review it again.
+  [Visual Styles and Mascots](https://docs.tubematic.ai/user-guide/visual-styles-and-mascots#external-styles)
+  describes it.
+- `/tubematic-install-style` in Claude Code and OpenCode stages a style from a folder, a zip, a git
+  repository or the gallery, reads its code, writes its opinion onto the install screen and gives you
+  the link. Only you can install it there.
+
 ## v2.3.1
 
 ### Upgrade notes

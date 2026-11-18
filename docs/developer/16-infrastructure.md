@@ -42,8 +42,15 @@ the renderer and the sandbox reuse its tag with a different `command:`, so a reb
 | `logs-data` (`/logs`) | read-write | read-write | read-write | read-write | | |
 | `backups-data` (`/backups`) | read-write | read-write | read-write | | | |
 | `sandbox-spool` (`/sandbox` in MCP, `/spool` in the sandbox) | | read-write | | | read-write | |
-| `styles` (`/app/remotion/src/scenes/external`) | read-only | read-only | read-only | read-only | | |
+| `styles` (`/app/remotion/src/scenes/external`) | read-write | read-only | read-only | read-only | | |
+| `styles-pending` (`/styles-pending`) | read-write | read-write | | | | |
+| `styles-incoming` (`/styles-incoming`) | | read-only | | | | |
 | `/etc/localtime`, `/etc/timezone` (host files) | read-only | | read-only | read-only | | |
+
+The API is the one service that writes `styles`: it installs and removes packages. The API and
+the MCP server both stage installs in `styles-pending`, and only the MCP server reads
+`styles-incoming`, where an agent on the host hands it a package. Files the containers write there
+are given to the data folder's owner.
 
 Every `styles` mount sets `nocopy`. The image holds `src/scenes/external/.gitkeep`, and without
 `nocopy` Docker copies that folder into the empty volume on first mount with its root owner, which
@@ -528,7 +535,9 @@ All eight are named volumes with `o=bind` device paths under `${HOME}`:
 | `logs-data` | `~/.tubematic-data/logs` | JSONL logs. See [The log files](#the-log-files) |
 | `backups-data` | `~/.tubematic-data/backups` | Pre-migration database snapshots. See [Backups](#backups) |
 | `sandbox-spool` | `~/.tubematic-data/sandbox` | The code sandbox's requests and results, shared by `tubematic-mcp` and `tubematic-sandbox`. See [`tubematic-sandbox`](#tubematic-sandbox) |
-| `styles` | `~/.tubematic-data/styles` | Installed external visual styles, one package folder each. See [External styles](10-scene-authoring.md#external-styles) |
+| `styles` | `~/.tubematic-data/styles` | Installed external visual styles, one package folder each, and `.installed.json`, the approval record. See [External styles](10-scene-authoring.md#external-styles) |
+| `styles-pending` | `~/.tubematic-data/styles-pending` | Installs waiting for a person's yes. See [Installing a package](10-scene-authoring.md#installing-a-package) |
+| `styles-incoming` | `~/.tubematic-data/styles-incoming` | Package folders or zips an agent on the host hands to `stage_style_install` |
 
 The data folder also holds `secrets/` and the two override files, `compose.gpu.json` and
 `compose.renderers.json`. None of those is a volume.

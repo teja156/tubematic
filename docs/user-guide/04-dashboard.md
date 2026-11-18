@@ -71,7 +71,7 @@ not upgrade anything by itself.
 | **Archive** | Videos whose files were deleted. Their records, links and view counts remain |
 | **Topics** | Research modes, mining sources and your domains |
 | **Projects** | One domain at a time, with its videos |
-| **Profiles** | Script profiles and mascots |
+| **Profiles** | Script profiles, mascots and external styles |
 | **Socials** | The social accounts Tubematic may post to |
 | **Analytics** | Views and likes of published videos, and what the install has spent |
 | **Logs** | Log records from every part of Tubematic |
@@ -202,9 +202,10 @@ on the Pipeline page.
 
 ### Profiles
 
-Two pages share this tab. Script profiles are covered in
-[Using Tubematic](03-using-tubematic.md#script-profiles), and mascots in
-[Visual Styles and Mascots](13-visual-styles-and-mascots.md#mascots).
+Three pages share this tab. Script profiles are covered in
+[Using Tubematic](03-using-tubematic.md#script-profiles), mascots in
+[Visual Styles and Mascots](13-visual-styles-and-mascots.md#mascots), and external styles in
+[Visual Styles and Mascots](13-visual-styles-and-mascots.md#external-styles).
 
 ### Socials and Analytics
 

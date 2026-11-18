@@ -150,7 +150,9 @@ Pipeline data lives at a fixed absolute path outside the checkout:
 ├── logs/<service>.<date>.jsonl    # structured logs, one file per service per day
 ├── backups/                       # pre-migration database snapshots
 ├── sandbox/                       # the code sandbox's requests and results
-├── styles/<style id>/             # installed external style packages
+├── styles/<style id>/             # installed external style packages, and .installed.json
+├── styles-pending/<id>/           # style installs waiting for a person's yes
+├── styles-incoming/               # packages an agent on the host hands to stage_style_install
 └── secrets/                       # the four service tokens (API, MCP, dashboard session, built-in
                                    # renderer) and the render gateway's TLS key and certificate
 ```
@@ -174,7 +176,7 @@ columns. Each derives it from the video's ids, and the dashboard plays a render 
 | | |
 |---|---|
 | Baked into the image | `renderer/api/`, `mcp/`, the dashboard, the Remotion project's `src/` including `scenes/installed/` |
-| Bind-mounted | The data directories above that are volumes, including `scenes/generated/` and `styles/` (read-only, at `src/scenes/external/`) |
+| Bind-mounted | The data directories above that are volumes, including `scenes/generated/` and `styles/` (at `src/scenes/external/`, writable by the API only) |
 
 Editing the repository changes nothing in a running container until you rebuild the image.
 `scenes/generated/` is a volume, so agent-written scenes appear without a rebuild, and so is

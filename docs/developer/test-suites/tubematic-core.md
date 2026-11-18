@@ -219,9 +219,58 @@ data folder:
 - Auto routes to an installed style only once it is opted in, and never to a broken one.
 - A world style that needs a GPU is gated like Cartoon 3D, and every external style takes no
   mascot, including in the SQL clash condition.
+- Approval: a valid package with no record in `.installed.json` waits for review, and so does one
+  whose files changed after it was approved. Both keep their pack and set `needs_review`; a broken
+  package never does. `check_now` reads the record too, the record file is never listed as a package,
+  and an unreadable record approves nothing. `check_folder` checks a staged package that is not
+  installed.
 
 Trap: a package comes from outside the release, so the loader never raises. A broken built-in pack
 stops the process at start-up; a broken package must leave every other style working.
+
+### `test_style_scan.py`
+
+Covers `tubematic_core/style_scan.py`, the scan the install screen shows before a person approves a
+package.
+
+- A clean package has no refusals and no flags, and the scan lists its imports, its files with line
+  counts for text files, and its guide.
+- An import the renderer does not ship (a Node built-in, `@remotion/google-fonts`) is refused; three's
+  examples are allowed. A script or binary file is refused; a licence file without an extension is fine.
+- Network access, `eval` and `Function`, dynamic `import()`, browser storage and WebSockets in code are
+  flagged with their line, and flags never refuse.
+- Guide lines that read as shell commands, tool calls outside the authoring skill, or instructions about
+  secrets are flagged, and a line naming the skill's own tools is not.
+- Large code files, a font licence the scan does not recognise, an SVG with a script, and a symlink
+  (one refusal, no exception) are reported.
+
+### `test_style_install.py`
+
+Covers `tubematic_core/style_install.py`, staging and installing packages.
+
+- A zip stages, checks and scans without installing anything, with one wrapping folder and macOS
+  litter allowed. Paths outside the package, symlinks, oversize archives and files that are not zips
+  are refused, and a refused stage leaves nothing behind.
+- A package that fails its check, or that the scan refuses, stages but cannot be confirmed.
+- Confirming installs the bytes that were scanned and records the approval; a staged package changed
+  after the scan is refused. An update replaces the installed version and the record says which
+  version it replaces.
+- A folder or zip in `styles-incoming/`, and an installed package that waits for review, stage. The
+  gallery source verifies the archive against the index's checksum and marks the install reviewed.
+- git fetches a pinned tag or commit from a real repository and records the commit; a local
+  repository is refused by default, and an address with credentials, plain http or a missing or
+  unsafe ref is refused before git runs.
+- Audits, discards, expiry, the cap on waiting installs, reading one text file of a staged package and
+  removal. Staging the same style from the same source again replaces the older pending install,
+  and the same style from another source is kept as a separate one.
+- A redirect to plain http is refused, directory entries count against the file cap (in a zip and
+  in an incoming folder), bytes changed
+  while a confirm copies them are not installed (the copy is what is fingerprinted), bytes changed
+  after that check are not approved (the record holds the checked fingerprint), a malformed pending
+  record does not break staging, and only the curated gallery's index marks an install reviewed.
+
+Trap: confirming is the human half. These tests stop at `confirm`; the API test checks that it
+needs the dashboard password.
 
 ### `test_angles.py`
 

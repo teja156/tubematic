@@ -295,7 +295,9 @@ jobs:
             "$HOME/.tubematic-data/logs" \
             "$HOME/.tubematic-data/backups" \
             "$HOME/.tubematic-data/sandbox" \
-            "$HOME/.tubematic-data/styles"
+            "$HOME/.tubematic-data/styles" \
+            "$HOME/.tubematic-data/styles-pending" \
+            "$HOME/.tubematic-data/styles-incoming"
 
       # The compose file mounts each service token from ~/.tubematic-data/secrets/ and, on purpose,
       # refuses to start a service whose file is missing ("bind source path does not exist"). A real

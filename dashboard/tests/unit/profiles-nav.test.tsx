@@ -21,3 +21,12 @@ describe("ProfilesNav", () => {
     expect(screen.getByTestId("profiles-subnav-script-profiles").getAttribute("aria-current")).toBe("page");
   });
 });
+
+describe("ProfilesNav, Styles (TMDEV-253)", () => {
+  it("links the external styles page and marks it on its install screen", () => {
+    pathname.value = "/styles/install/0123456789abcdef";
+    render(<ProfilesNav />);
+    expect(screen.getByTestId("profiles-subnav-styles").getAttribute("href")).toBe("/styles");
+    expect(screen.getByTestId("profiles-subnav-styles").getAttribute("aria-current")).toBe("page");
+  });
+});

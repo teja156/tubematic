@@ -6,8 +6,9 @@ from flask import Flask, jsonify
 
 import db
 import render_gateway
-from api_auth import create_auth_blueprint, install_auth
+from api_auth import LoginThrottle, create_auth_blueprint, install_auth
 from pipeline import create_pipeline_blueprint
+from styles_api import create_styles_blueprint
 from tubematic_core import renderers
 from tubematic_core.auth import read_secret
 
@@ -33,7 +34,11 @@ def render_health():
 
 
 app.register_blueprint(create_pipeline_blueprint())
-app.register_blueprint(create_auth_blueprint(os.getenv("TUBEMATIC_DB", "/data/tubematic.db")))
+# One throttle for every password check: confirming a style install asks for
+# the dashboard password too, and must not be a way around the login's backoff.
+_password_throttle = LoginThrottle()
+app.register_blueprint(create_auth_blueprint(os.getenv("TUBEMATIC_DB", "/data/tubematic.db"), _password_throttle))
+app.register_blueprint(create_styles_blueprint(os.getenv("TUBEMATIC_DB", "/data/tubematic.db"), _password_throttle))
 # Raises if the token file is missing or empty, so the API refuses to start
 # rather than starting open.
 install_auth(app, read_secret("api_token"))

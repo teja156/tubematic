@@ -847,12 +847,27 @@ Covers the `tubematic-process-cast` skill ([Process Cast](../10-scene-authoring.
 Trap: skill text that calls the cast mascots, or lets a character talk, leads the agent to the wrong
 video for this style. The test pins the wording that keeps them apart.
 
+### `test_install_style_command.py`
+
+Covers `/tubematic-install-style`, the agent command that stages an external style.
+
+- The Claude Code and OpenCode copies are the same file, and `tubematic.md` lists the command for
+  both.
+- It names `stage_style_install` and `audit_style_install` only, both real tools, with the three
+  source forms, the incoming folder and the dashboard link.
+- It never asks for the dashboard password, never picks a branch for the person, and never runs
+  anything from the package.
+
+Trap: the install is a person's yes on the dashboard. A command that asked for the password would
+hand the agent the one thing that tells the API a person approved.
+
 ### `test_make_external_example.py`
 
 Covers `scripts/make_external_example.py`, which repackages Night Signal (a scene style) and Low-Poly
 Skit (a world style, with a variant that needs a GPU) as external packages.
 
-- Each package loads, with the renderer and the GPU need its pack names.
+- Each package passes the loader's check (it is not approved: approval happens on the install
+  screen), with the renderer and the GPU need its pack names.
 - Every relative import in a package's code resolves to a file of the package, in both the `from`
   and the inline `import("…")` forms.
 - Night Signal's example config draws the package's component, and `--gpu` applies to Low-Poly Skit
@@ -882,6 +897,8 @@ installed external style.
   looking at gate stills (`get_style_guide` with a path, `cartoon_kit_read`, `cartoon_read_still`,
   `list_scene_files`, `read_scene_file`). It says a built-in style's own tools, such as
   `render_style_parts`, do not serve an external style.
+- The install scan's list of authoring tools covers every tool the skill names, and names only real
+  tools, so a guide that asks for the skill's own tools is never flagged.
 
 Trap: `test_look_step.py` reads the built-in packs only, so an external style's look step is pinned
 here. The skill forbids any tool it does not name, so a tool missing from it is one the agent never

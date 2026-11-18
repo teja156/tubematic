@@ -46,6 +46,7 @@ def _package(root, sid, ok=True):
         (d / name).write_text(body)
     if ok:
         ext.write_manifest(d)
+        ext.approve(root, sid)
     return d
 
 
@@ -148,6 +149,7 @@ def test_the_style_guide_lists_the_package_code_and_reads_one_file(env):
     (pkg / "components" / "parts").mkdir()
     (pkg / "components" / "parts" / "draw.ts").write_text("export const draw = 1;\n")
     ext.write_manifest(pkg)
+    ext.approve(env["styles"], "ext_dom")
     vid = env["video"]("vid_code")
     assert server.get_style_guide(vid)["code"] == ["components/Main.tsx", "components/parts/draw.ts"]
     got = server.get_style_guide(vid, path="components/parts/draw.ts")
@@ -216,6 +218,7 @@ def _rewrite(env, sid, name, body):
     d = env["styles"] / sid
     (d / name).write_text(body)
     ext.write_manifest(d)
+    ext.approve(env["styles"], sid)
 
 
 def test_a_schema_never_fetches_a_remote_reference(env, monkeypatch):
@@ -287,6 +290,7 @@ def test_validate_job_typechecks_every_file_of_the_package(env):
     assert server.write_scene_config(vid, _config()).get("error") is None
     (env["styles"] / "ext_dom" / "components" / "Unused.tsx").write_text("export default (;")
     ext.write_manifest(env["styles"] / "ext_dom")
+    ext.approve(env["styles"], "ext_dom")
     _, files = server._external_scene_errors(vid, json.loads((server.JOBS_DIR / vid / "scene-config.json").read_text()))
     assert env["styles"] / "ext_dom" / "components" / "Unused.tsx" in files
 

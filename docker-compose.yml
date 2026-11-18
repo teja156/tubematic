@@ -76,6 +76,22 @@ volumes:
       type: none
       o: bind
       device: ${HOME}/.tubematic-data/styles
+  # Installs waiting for a person's yes (TMDEV-253): the API and MCP stage a
+  # package here, and the API moves it into styles/ once it is confirmed.
+  styles-pending:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/.tubematic-data/styles-pending
+  # Where an agent on the host drops a package folder or zip for MCP to stage
+  # (the MCP container cannot see the rest of the host).
+  styles-incoming:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/.tubematic-data/styles-incoming
 
 # Service tokens (TMDEV-152), one file each under ~/.tubematic-data/secrets/,
 # written by onboarding and upgrade.py (tubematic_core/auth.py). Compose mounts
@@ -136,7 +152,9 @@ services:
       - jobs-data:/jobs
       - db-data:/data
       - scenes-generated:/app/remotion/src/scenes/generated
-      - styles:/app/remotion/src/scenes/external:ro,nocopy
+      # read-write here only: the API installs and removes packages (TMDEV-253)
+      - styles:/app/remotion/src/scenes/external:nocopy
+      - styles-pending:/styles-pending:nocopy
       - logs-data:/logs
       - backups-data:/backups
       - /etc/localtime:/etc/localtime:ro
@@ -202,6 +220,8 @@ services:
       - db-data:/data
       - scenes-generated:/app/remotion/src/scenes/generated
       - styles:/app/remotion/src/scenes/external:ro,nocopy
+      - styles-pending:/styles-pending:nocopy
+      - styles-incoming:/styles-incoming:ro,nocopy
       - logs-data:/logs
       - backups-data:/backups
       - sandbox-spool:/sandbox

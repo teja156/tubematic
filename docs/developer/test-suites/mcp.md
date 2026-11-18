@@ -1535,6 +1535,18 @@ Covers `mcp/external_style.py` and the external-style path through `mcp/server.p
 Trap: the registry cache only notices a new manifest or folder, so `submit_render` checks the
 package from disk. A file edited in place would otherwise reach the render as an approved package.
 
+### `test_style_install_tools.py`
+
+Covers `stage_style_install` and `audit_style_install`, the agent's half of installing an external
+style.
+
+- A folder in `styles-incoming/` stages without installing, and the result names the host path to
+  audit and the install screen's link (with `dashboard_base_url` when it is set).
+- A source in none of the three forms, a git address without a commit or tag, a missing incoming
+  folder and an unset gallery address are refused.
+- The audit is recorded on the pending install, and an unknown verdict or install is refused.
+- No MCP tool confirms or removes an install.
+
 ### `test_night_signal.py`
 
 Covers `mcp/night_signal.py`, the checks `write_scene_config` runs on a Night Signal config, the text
