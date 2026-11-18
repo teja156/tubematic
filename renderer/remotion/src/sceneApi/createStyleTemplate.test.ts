@@ -20,7 +20,8 @@ function sources(dir: string): string[] {
 
 it("type-checks the skill's template package with the renderer's tsconfig", () => {
   const cfg = ts.readConfigFile(path.join(ROOT, "tsconfig.json"), ts.sys.readFile);
-  const { options } = ts.parseJsonConfigFileContent(cfg.config, ts.sys, ROOT);
+  const parsed = ts.parseJsonConfigFileContent(cfg.config, ts.sys, ROOT);
+  const { options } = parsed;
   const host = ts.createCompilerHost(options);
   // The template lives outside this project; bare imports resolve as they do once it
   // is installed under src/scenes/external.
@@ -31,8 +32,7 @@ it("type-checks the skill's template package with the renderer's tsconfig", () =
   const files = sources(path.join(TEMPLATE, "components"));
   expect(files.length).toBeGreaterThan(0);
   const program = ts.createProgram(files, options, host);
-  const errors = ts
-    .getPreEmitDiagnostics(program)
+  const errors = [...(cfg.error ? [cfg.error] : []), ...parsed.errors, ...ts.getPreEmitDiagnostics(program)]
     .map((d) => `${d.file ? path.relative(ROOT, d.file.fileName) : "(global)"}: TS${d.code} ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`);
   expect(errors).toEqual([]);
 }, 60_000);
