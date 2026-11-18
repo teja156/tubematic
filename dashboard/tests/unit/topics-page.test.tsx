@@ -1362,6 +1362,38 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     await waitFor(() => expect(projectPosts(spy).map((b) => b.description)).toEqual(["First draft", "Second draft"]));
   });
 
+  it("a draft whose save is refused after the panel was closed is there on reopen", async () => {
+    let release: (() => void) | null = null;
+    const spy = mockDomains();
+    const original = spy.getMockImplementation()!;
+    spy.mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      if (url.toString().endsWith("/projects") && init?.method === "POST") {
+        return new Promise((resolve) => {
+          release = () => resolve({ ok: false, status: 400,
+            json: () => Promise.resolve({ error: "refused for the test" }) } as Response);
+        });
+      }
+      return original(url, init);
+    });
+    const { fireEvent, act } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "A correction" } });
+    // Pressing Close blurs the box first, which starts the save.
+    fireEvent.blur(field);
+    fireEvent.click(screen.getByTestId("domain-edit-seed-1"));
+    expect(screen.queryByTestId("domain-panel-seed-1")).toBeNull();
+    await waitFor(() => expect(release).not.toBeNull());
+    await act(async () => { release!(); });
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-seed-1").textContent)
+      .toMatch(/refused for the test/));
+    fireEvent.click(screen.getByTestId("domain-edit-seed-1"));
+    expect((screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement).value)
+      .toBe("A correction");
+  });
+
   it("a newer save that is refused after an older one lands keeps the newer text", async () => {
     const releases: Array<() => void> = [];
     const spy = mockDomains();

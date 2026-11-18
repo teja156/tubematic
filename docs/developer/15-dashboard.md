@@ -315,7 +315,9 @@ The Mascots page's create form uses the same agent, model and effort controls
   shrink, since the API keeps such a text until it changes. On a domain's row the stored text is
   copied into the box only while the box is not focused and no newer text is still being saved,
   so a save that answers late neither overwrites newer typing nor replaces a text whose own save
-  was then refused. Under the box, a note
+  was then refused. That draft is held by the row (`useDescriptionDraft`), which stays mounted
+  while the panel is closed, because **Close** starts the save and unmounts the panel in one click.
+  Under the box, a note
   says the agent follows the description; `scripts/tests/test_domain_instructions_skills.py` keeps
   that note and the skills in step. The domain's line shows the description on one truncated line
   with the full text on hover.

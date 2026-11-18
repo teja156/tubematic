@@ -272,9 +272,15 @@ function DomainDescriptionField({ testId, countTestId, value, onChange, onFocus,
 // in only while the box is not being edited and no newer text is still being
 // saved: an older save that lands after you typed again must not put the older
 // text back, nor leave it there if the newer save is then refused.
-function DomainDescriptionInput({ testId, value, onCommit }: {
-  testId: string; value: string; onCommit: (next: string) => Promise<boolean>;
-}) {
+//
+// The draft lives on the row, which stays mounted while its panel is closed:
+// Close blurs the box, which starts a save, and then unmounts the panel. Held
+// in the panel, a draft whose save was then refused would be gone on reopen.
+type DescriptionDraft = {
+  local: string; setLocal: (next: string) => void; focus: () => void; commit: () => void;
+};
+
+function useDescriptionDraft(value: string, onCommit: (next: string) => Promise<boolean>): DescriptionDraft {
   const [local, setLocal] = useState(value);
   const editing = useRef(false);
   // The last text sent, until its save answers.
@@ -298,14 +304,18 @@ function DomainDescriptionInput({ testId, value, onCommit }: {
     const settle = () => { if (pending.current === next) pending.current = null; };
     onCommit(next).then(settle, settle);
   }
+  return { local, setLocal, focus: () => { editing.current = true; }, commit };
+}
+
+function DomainDescriptionInput({ testId, draft }: { testId: string; draft: DescriptionDraft }) {
   return (
     <DomainDescriptionField
       testId={testId}
       countTestId={`${testId}-count`}
-      value={local}
-      onChange={setLocal}
-      onFocus={() => { editing.current = true; }}
-      onBlur={commit}
+      value={draft.local}
+      onChange={draft.setLocal}
+      onFocus={draft.focus}
+      onBlur={draft.commit}
     />
   );
 }
@@ -539,6 +549,8 @@ function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, o
 }) {
   // Each row keeps its own state, so two domains can be open side by side.
   const [open, setOpen] = useState(false);
+  const description = useDescriptionDraft(project.description ?? "",
+                                          (next) => onSave(project.id, { description: next }));
   const isPaused = project.status === "paused";
   const isExpired = project.expired === true;
   const isSeed = project.is_curriculum_seed === 1;
@@ -747,8 +759,7 @@ function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, o
                        note="Saved when you click away from the box.">
             <DomainDescriptionInput
               testId={`domain-description-input-${project.id}`}
-              value={project.description ?? ""}
-              onCommit={(next) => onSave(project.id, { description: next })}
+              draft={description}
             />
           </DomainGroup>
           <DomainDefaults

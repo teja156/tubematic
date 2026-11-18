@@ -118,7 +118,8 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
   never pushed out; a paste over a selection that repeats the replaced text is cut where the caret
   says it went. A save that answers after the box was entered again leaves the newer typing in the
   box, and a blur then saves it. A newer save refused after an older one landed leaves the newer
-  text in the box with the reason on the line.
+  text in the box with the reason on the line. A draft whose save is refused after **Close** is in
+  the box again when the row reopens.
 - The formula default offers Auto and every formula with experimental ones marked, a change
   re-sends every other field, another edit keeps it, a new domain is created with the one picked,
   and a stored formula the list does not know stays selected under its id.
