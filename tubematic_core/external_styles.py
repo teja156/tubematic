@@ -196,6 +196,8 @@ _cache: tuple = (None, None, {})
 def _stamp(root: pathlib.Path):
     if not root.is_dir():
         return ()
+    # Every file's mtime and size, so a file edited in place reloads the
+    # registry too: packages are a few dozen files, so the walk is cheap.
     rows = []
     for entry in sorted(os.scandir(root), key=lambda e: e.name):
         # a folder can vanish between the listing and the stat (a package being removed)
@@ -203,16 +205,21 @@ def _stamp(root: pathlib.Path):
             d = os.lstat(entry.path).st_mtime_ns
         except OSError:
             continue
-        try:
-            m = os.stat(os.path.join(entry.path, MANIFEST), follow_symlinks=False).st_mtime_ns
-        except OSError:
-            m = None
-        rows.append((entry.name, d, m))
+        files = []
+        for top, dirs, names in os.walk(entry.path):
+            dirs.sort()
+            for name in sorted(names):
+                try:
+                    st = os.lstat(os.path.join(top, name))
+                except OSError:
+                    continue
+                files.append((os.path.relpath(os.path.join(top, name), entry.path), st.st_mtime_ns, st.st_size))
+        rows.append((entry.name, d, tuple(files)))
     return tuple(rows)
 
 
 def registry() -> dict[str, ExternalStyle]:
-    """The installed packages, read again when the folder or a manifest changes."""
+    """The installed packages, read again when any file of the folder changes."""
     global _cache
     root, stamp = STYLES_DIR, _stamp(STYLES_DIR)
     if _cache[0] != root or _cache[1] != stamp:
@@ -225,9 +232,10 @@ def get(sid: str) -> ExternalStyle | None:
 
 
 def check_now(sid: str) -> ExternalStyle | None:
-    """One installed package checked from disk, past the registry's cache: the
-    cache is refreshed by a changed manifest or folder, and a file edited in
-    place changes neither. The gates that queue a render use this."""
+    """One installed package checked from disk, past the registry's cache. The
+    cache reloads on any file's mtime or size; an edit that keeps both (a
+    copy with preserved times) still reaches this. The gates that queue a
+    render use it."""
     sid = (sid or "").strip()
     d = STYLES_DIR / sid
     if not ID_RE.fullmatch(sid) or not (d.is_dir() or d.is_symlink()):

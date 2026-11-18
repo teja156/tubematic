@@ -356,6 +356,18 @@ def test_check_now_sees_a_file_edited_in_place(tmp_path, monkeypatch):
     assert ext.check_now("ext_absent") is None and ext.check_now("../x") is None
 
 
+def test_the_registry_sees_a_file_edited_in_place(tmp_path, monkeypatch):
+    """The pickers and write_scene_config read the registry: a package whose
+    file was edited after install (manifest untouched) must show unavailable
+    there too, not only at submit (found in the TMDEV-252 live test)."""
+    monkeypatch.setattr(ext, "STYLES_DIR", tmp_path)
+    d = make_package(tmp_path)
+    assert ext.registry()["ext_test"].ok
+    with open(d / "guide" / "guide.md", "a", encoding="utf-8") as f:
+        f.write("\nedited in place\n")
+    assert not ext.registry()["ext_test"].ok
+
+
 # ── review round 2 ───────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("line", [

@@ -521,8 +521,8 @@ the agent, and Tubematic does not sandbox either, so installing a package means 
 
 A package that fails is listed unavailable with the reason, and every other style keeps working.
 A broken built-in pack stops the process at start-up because it ships with the release; a package
-does not. The registry is read again whenever the folder or a manifest changes, so a new package
-needs no restart.
+does not. The registry is read again whenever any file of the folder changes (its mtime or size), so
+a new package needs no restart, and a file edited after install shows the package unavailable at once.
 
 ### How the pipeline sees one
 

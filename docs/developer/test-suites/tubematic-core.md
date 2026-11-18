@@ -204,8 +204,8 @@ data folder:
   with no licence file.
 - One broken package leaves the others available.
 - The registry sees a package added or rewritten without a restart, and the fingerprint changes with
-  any file. `check_now` sees a file edited in place, which the registry's cache does not. A package
-  folder removed while the registry lists it does not raise.
+  any file. The registry and `check_now` both see a file edited in place with the manifest untouched.
+  A package folder removed while the registry lists it does not raise.
 - A package whose code imports outside its folder (a relative path that leaves it, an absolute path,
   in the `from`, side-effect, `export … from` and `import()` forms) is unavailable; imports inside
   it, the scene-API alias and npm packages are fine. The agent view of a broken package stays
