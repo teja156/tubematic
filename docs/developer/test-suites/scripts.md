@@ -903,7 +903,7 @@ build, stage, install, samples) is what keeps it from spending or downloading be
 ### `test_no_conflict_markers.py`
 
 Fails when any tracked text file holds a leftover merge-conflict marker (`<<<<<<< `, `>>>>>>> ` or
-`||||||| ` at the start of a line).
+`||||||| ` at the start of a line, or a line that is only `=======`).
 
 Trap: the docs checker reads names, links and wording, not structure, and the docs site publishes
 `develop` on every push. An unresolved merge in a docs page once reached the public site with both

@@ -8,7 +8,7 @@ import re
 import subprocess
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-MARKER = re.compile(rb"^(<{7} |>{7} |\|{7} )", re.M)
+MARKER = re.compile(rb"^(<{7} |>{7} |\|{7} |={7}$)", re.M)
 
 
 def test_no_tracked_file_has_a_conflict_marker():
