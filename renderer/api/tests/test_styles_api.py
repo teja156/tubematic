@@ -168,6 +168,7 @@ def pipeline_conn(env):
 
 
 def test_the_gallery_lists_the_index_and_marks_installed_versions(env, monkeypatch):
+    assert env.client.post("/settings", json={"style_gallery_url": ""}).status_code == 200
     assert env.client.get("/external-styles/gallery").get_json()["error"] == "No gallery address is set."
     assert env.client.post("/settings", json={"style_gallery_url": "http://g.invalid/i.json"}).status_code == 400
     assert env.client.post("/settings", json={"style_gallery_url": "https://g.invalid/i.json"}).status_code == 200
@@ -208,3 +209,10 @@ def test_a_chunked_upload_over_the_cap_is_refused(env, monkeypatch):
     r = env.client.post("/external-styles/pending", data=body, content_type="application/json",
                         environ_overrides={"CONTENT_LENGTH": "", "wsgi.input_terminated": True})
     assert r.status_code == 413
+
+
+def test_the_default_gallery_is_the_curated_one():
+    """TMDEV-255: the setting's default and the one index whose installs are
+    marked reviewed are the same address."""
+    assert pipeline.SETTINGS_SPEC["style_gallery_url"][1] == si.OFFICIAL_GALLERY_URL
+    assert si.OFFICIAL_GALLERY_URL.startswith("https://")

@@ -354,6 +354,15 @@ repository address with `@<commit or tag>`, or a gallery id). The agent reads th
 opinion onto the install screen and gives you the link. Only you can install it there, with your
 password. Never give the agent your password.
 
+### Sharing a style in the gallery
+
+The Tubematic gallery is the GitHub repository
+[teja156/tubematic-styles](https://github.com/teja156/tubematic-styles). To submit a style, open a pull
+request there with the package folder, or with a pointer to your own repository at a commit; its
+`SUBMITTING.md` says how. A maintainer reviews the code, the guide and the content against a written
+checklist, and merging publishes it to every Tubematic's **Gallery** tab. The **Gallery** tab reads
+the address in its **Gallery address** field; clear it to turn the gallery off.
+
 ### Using an external style
 
 Pick it like any style for a video or as a domain's default. **Auto** never picks an external style

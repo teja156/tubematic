@@ -116,7 +116,7 @@ each model.
 | `default_mascot_id` | str | `""` | `""` or a pickable mascot. See [above](#the-default-mascot-is-checked-on-read-and-on-write) | Video creation, in the API and the MCP server, when the domain has no default of its own |
 | `watermark_enabled` | bool | `true` | | The render gateway, with each claim. The renderer passes it to the composition |
 | `external_styles_in_auto` | json_list | `[]` | Ids of installed [external styles](10-scene-authoring.md#external-styles) with a valid package. Checked on change only | `visual_styles.routing_candidates` and `route_choices`, through the MCP server: the external styles Auto may pick |
-| `style_gallery_url` | str | `""` | An https address or empty. Checked on change | `GET /external-styles/gallery` and the gallery source of `stage_style_install`: the index of the curated style gallery |
+| `style_gallery_url` | str | `https://teja156.github.io/tubematic-styles/index.json` | An https address or empty. Checked on change | `GET /external-styles/gallery` and the gallery source of `stage_style_install`: the index of the style gallery. Only installs from the default, curated one are marked reviewed |
 
 - `render_timeout_secs` detects a render that will not end. Three hours covers a three-minute Short
   on the CPU with headroom. `render_stall_timeout_secs` catches a hung render sooner, whatever the

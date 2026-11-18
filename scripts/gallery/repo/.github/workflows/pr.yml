@@ -1,0 +1,75 @@
+name: Review a submission
+
+on:
+  pull_request:
+    paths:
+      - "styles/**"
+
+permissions:
+  contents: read
+
+env:
+  # The Tubematic version whose check, scan and renderer review submissions. Move it when Tubematic
+  # releases a version with a new scene API.
+  TUBEMATIC_REF: develop
+  TUBEMATIC_IMAGE: ghcr.io/teja156/tubematic-backend:latest
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    outputs:
+      changed: ${{ steps.changed.outputs.ids }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: teja156/tubematic
+          ref: ${{ env.TUBEMATIC_REF }}
+          path: .tubematic
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: The submissions this pull request touches
+        id: changed
+        run: |
+          ids=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- styles/ \
+                | sed -E 's#^styles/([^/]+).*#\1#; s#\.json$##' | sort -u | paste -sd, -)
+          echo "ids=$ids" >> "$GITHUB_OUTPUT"
+      - name: Check and scan them as an install does
+        run: |
+          python3 .tubematic/scripts/gallery.py scan styles --only "${{ steps.changed.outputs.ids }}" \
+            | tee scan.md
+          exit "${PIPESTATUS[0]}"
+      - name: Show the scan in the run summary
+        if: always()
+        run: cat scan.md >> "$GITHUB_STEP_SUMMARY"
+
+  render:
+    needs: scan
+    if: needs.scan.outputs.changed != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: teja156/tubematic
+          ref: ${{ env.TUBEMATIC_REF }}
+          path: .tubematic
+      - name: Render each scene style's example (silent)
+        run: |
+          mkdir -p renders
+          for id in $(echo "${{ needs.scan.outputs.changed }}" | tr , ' '); do
+            if [ -d "styles/$id" ]; then
+              python3 .tubematic/scripts/gallery.py render "styles/$id" "renders/$id.mp4" \
+                --image "$TUBEMATIC_IMAGE" || echo "::warning::$id: no example render (see the log)"
+            else
+              echo "::notice::$id is a pointer: the maintainer renders it from the pinned commit"
+            fi
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: example-renders
+          path: renders/
+          if-no-files-found: ignore

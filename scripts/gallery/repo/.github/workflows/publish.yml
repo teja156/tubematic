@@ -1,0 +1,49 @@
+name: Publish the gallery
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  TUBEMATIC_REF: develop
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: teja156/tubematic
+          ref: ${{ env.TUBEMATIC_REF }}
+          path: .tubematic
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the index, archives and previews
+        run: |
+          python3 .tubematic/scripts/gallery.py build styles site \
+            --base-url "https://teja156.github.io/tubematic-styles/" --commit "$GITHUB_SHA"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

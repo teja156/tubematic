@@ -847,6 +847,24 @@ Covers the `tubematic-process-cast` skill ([Process Cast](../10-scene-authoring.
 Trap: skill text that calls the cast mascots, or lets a character talk, leads the agent to the wrong
 video for this style. The test pins the wording that keeps them apart.
 
+### `test_gallery.py`
+
+Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gallery/repo/`.
+
+- `scan` passes a good package, fails one the scan refuses or whose folder name differs from its id,
+  and fails a pointer that names a branch instead of a full commit.
+- `build` writes the same archive bytes on every build, an index whose `sha256` is of that archive,
+  and the previews; the official gallery's install from that site stages as reviewed and installs.
+  It refuses to publish a package that fails its check.
+- The official gallery address is the one the skeleton's publish workflow builds for, and the
+  skeleton's PR workflow calls `scan` and `render` on `ubuntu-24.04`. The review checklist covers what
+  the design asks a reviewer to check.
+- Opt-in (`TUBEMATIC_GALLERY_RENDER_IMAGE` set to a backend image): `render` makes a video of a scene
+  style's example in that image.
+
+Trap: an install trusts the index's checksum. A build that wrote different bytes each time would
+publish an index whose checksums a reviewer never saw.
+
 ### `test_install_style_command.py`
 
 Covers `/tubematic-install-style`, the agent command that stages an external style.
