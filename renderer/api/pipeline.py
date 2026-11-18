@@ -134,8 +134,10 @@ SETTINGS_SPEC = {
     # _auto_externals.
     "external_styles_in_auto": ("json_list", "[]"),
     # Where the dashboard's Gallery tab reads the curated styles' index.json
-    # (TMDEV-253). https only; "" turns the Gallery tab off.
-    "style_gallery_url": ("str", ""),
+    # (TMDEV-253). https only; "" turns the Gallery tab off. The default is the
+    # curated gallery (style_install.OFFICIAL_GALLERY_URL, TMDEV-255), the one
+    # index whose installs are marked reviewed.
+    "style_gallery_url": ("str", "https://teja156.github.io/tubematic-styles/index.json"),
     "research_agent_model":   ("str",       ""),
     "research_agent_effort":  ("str",       ""),
     "pronunciation_lexicon":  ("lexicon",   "[]"),

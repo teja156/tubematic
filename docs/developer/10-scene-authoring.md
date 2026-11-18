@@ -622,6 +622,28 @@ that run.
 Removing a style (`DELETE /external-styles/<id>`) is refused while an unfinished video or a domain's
 default uses it, and takes it out of `external_styles_in_auto`.
 
+<<<<<<< HEAD
+### The gallery
+
+The curated gallery is its own repository, published on GitHub Pages at
+`https://teja156.github.io/tubematic-styles/index.json`, the default of `style_gallery_url` and
+`style_install.OFFICIAL_GALLERY_URL`. Its skeleton (README, submission guide, review checklist and
+two workflows) is in `scripts/gallery/repo/`, and its tools are `scripts/gallery.py` in this
+repository, which its workflows check out:
+
+| Command | What it does |
+|---|---|
+| `python3 scripts/gallery.py scan <styles> [--only ids]` | Checks and scans each submission as an install does and prints a Markdown report; exits 1 when one fails its check or the scan refuses it |
+| `python3 scripts/gallery.py build <styles> <site> --base-url <url>` | Writes `archives/<id>-<version>.zip`, `previews/<id>.mp4` and `.webp`, and `index.json` (each entry's `sha256` is of its archive's bytes), and refuses to publish a failing package |
+| `python3 scripts/gallery.py render <package> <out.mp4> --image <backend image>` | Renders a scene style's example config, silent, in the backend image. A 3D world style exits 3 (rendered by hand); any other failure exits 1 and fails the pull request |
+
+A submission is a package folder `styles/<id>/` or a pointer `styles/<id>.json`,
+`{"repo": <https url>, "commit": <40-hex commit>}`, fetched with the installer's own pinned git
+fetch. The archive is written with fixed times and order, so a rebuild of the same package gives the
+same bytes and the same checksum. A pull request runs `scan` and `render` (a 3D world style's example
+needs generated source, so the maintainer renders it by hand); a merge to `main` runs `build` and
+deploys the site.
+=======
 ### Making a style
 
 The `tubematic-create-style` skill makes a package from reference videos, inside a person's own agent
@@ -647,6 +669,7 @@ session (`/tubematic-create-style`), never in a pipeline run. Its order is the c
    and installed as a new version.
 7. An HTML report in `report/`, iterations, and a zip for sharing (the skill's
    `scripts/zip_package.py`).
+>>>>>>> develop
 
 ### Making a test package
 

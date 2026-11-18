@@ -1543,7 +1543,8 @@ style.
 - A folder in `styles-incoming/` stages without installing, and the result names the host path to
   audit and the install screen's link (with `dashboard_base_url` when it is set).
 - A source in none of the three forms, a git address without a commit or tag, a missing incoming
-  folder and an unset gallery address are refused.
+  folder and a gallery address set to empty are refused. With no `style_gallery_url` row yet, the
+  gallery source reads the curated gallery, as the API does.
 - The audit is recorded on the pending install, and an unknown verdict or install is refused.
 - No MCP tool confirms or removes an install.
 

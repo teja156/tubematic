@@ -326,7 +326,7 @@ Covers `renderer/api/styles_api.py`, installing and removing external styles.
 - Removal is refused while an unfinished video or a domain default uses the style, and takes the
   style out of `external_styles_in_auto`. A built-in style cannot be removed.
 - The gallery lists the index from `style_gallery_url` (https only) with the installed version, and an
-  install from the curated gallery is marked reviewed.
+  install from the curated gallery is marked reviewed. The setting's default is the curated gallery.
 
 Trap: the dashboard relays every call with the same API token an agent on the host can read, so the
 password is the only proof that a person said yes. A test that confirms with the token alone would

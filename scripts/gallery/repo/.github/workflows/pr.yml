@@ -1,0 +1,95 @@
+name: Review a submission
+
+on:
+  pull_request:
+    paths:
+      - "styles/**"
+
+permissions:
+  contents: read
+
+env:
+  # The Tubematic version whose check, scan and renderer review submissions. Move it when Tubematic
+  # releases a version with a new scene API.
+  TUBEMATIC_REF: develop
+  TUBEMATIC_IMAGE: ghcr.io/teja156/tubematic-backend:latest
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    outputs:
+      changed: ${{ steps.changed.outputs.ids }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: teja156/tubematic
+          ref: ${{ env.TUBEMATIC_REF }}
+          path: .tubematic
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: The submissions this pull request touches
+        id: changed
+        env:
+          # the event's own commits: a fork's checkout has no origin/<base> branch to diff against
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # every changed path must be a style id's folder or pointer; a path is never put in a
+          # shell command unchecked, since a pull request chooses its own file names
+          ids=""
+          while IFS= read -r p; do
+            id=$(printf '%s' "$p" | sed -E 's#^styles/([^/]+).*#\1#; s#\.json$##')
+            if ! printf '%s' "$id" | grep -Eqx 'ext_[a-z0-9_]{1,40}|\.gitkeep'; then
+              echo "::error::$(printf '%q' "$p") is not under styles/<style id>/ or styles/<style id>.json"
+              exit 1
+            fi
+            [ "$id" = .gitkeep ] || ids="$ids${ids:+,}$id"
+          done < <(git diff --name-only "$BASE_SHA" HEAD -- styles/)
+          ids=$(printf '%s' "$ids" | tr , '\n' | sort -u | paste -sd, -)
+          echo "ids=$ids" >> "$GITHUB_OUTPUT"
+      - name: Check and scan them as an install does
+        env:
+          IDS: ${{ steps.changed.outputs.ids }}
+        run: |
+          python3 .tubematic/scripts/gallery.py scan styles --only "$IDS" | tee scan.md
+          exit "${PIPESTATUS[0]}"
+      - name: Show the scan in the run summary
+        if: always()
+        run: cat scan.md >> "$GITHUB_STEP_SUMMARY"
+
+  render:
+    needs: scan
+    if: needs.scan.outputs.changed != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: teja156/tubematic
+          ref: ${{ env.TUBEMATIC_REF }}
+          path: .tubematic
+      - name: Render each scene style's example (silent)
+        env:
+          IDS: ${{ needs.scan.outputs.changed }}
+        run: |
+          mkdir -p renders
+          for id in $(printf '%s' "$IDS" | tr , ' '); do
+            if [ -d "styles/$id" ]; then
+              rc=0
+              python3 .tubematic/scripts/gallery.py render "styles/$id" "renders/$id.mp4" \
+                --image "$TUBEMATIC_IMAGE" || rc=$?
+              # 3: a 3D world style, rendered by hand; anything else is a failed render and fails the job
+              if [ "$rc" = 3 ]; then echo "::notice::$id is a 3D world style: render it by hand";
+              elif [ "$rc" != 0 ]; then echo "::error::$id: the example did not render"; exit 1; fi
+            else
+              echo "::notice::$id is a pointer: the maintainer renders it from the pinned commit"
+            fi
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: example-renders
+          path: renders/
+          if-no-files-found: ignore
