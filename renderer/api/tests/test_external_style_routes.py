@@ -106,3 +106,16 @@ def test_an_unchanged_opt_in_list_saves_after_its_style_breaks(client, monkeypat
     monkeypatch.setattr(ext, "STYLES_DIR", tmp_path / "empty")
     assert client.post("/settings", json={"external_styles_in_auto": ["ext_good"],
                                           "pipeline_paused": True}).status_code == 200
+
+
+@pytest.mark.parametrize("ext_name, mimetype", [("mp4", "video/mp4"), ("webp", "image/webp")])
+def test_an_installed_styles_preview_is_served(client, ext_name, mimetype):
+    resp = client.get(f"/visual-styles/ext_good/preview.{ext_name}")
+    assert resp.status_code == 200 and resp.mimetype == mimetype and resp.data == b"x"
+
+
+@pytest.mark.parametrize("path", ["/visual-styles/ext_broken/preview.mp4", "/visual-styles/ext_absent/preview.mp4",
+                                  "/visual-styles/night_signal/preview.mp4", "/visual-styles/ext_good/preview.gif",
+                                  "/visual-styles/ext_good/style.json", "/visual-styles/..%2Fsecrets/preview.mp4"])
+def test_nothing_else_is_served_as_a_preview(client, path):
+    assert client.get(path).status_code == 404

@@ -63,6 +63,7 @@ The same process serves the [render gateway](#the-render-gateway), a separate ap
 | `POST` | [`/settings`](#post-settings) | Write a subset of settings |
 | `POST` | [`/voices/<voice_id>/preview`](#post-voicesvoice_idpreview) | Generate or replay a sample |
 | `GET` | [`/visual-styles`](#get-visual-styles) | Every visual style, and whether this install can make it |
+| `GET` | [`/visual-styles/<id>/preview.<mp4\|webp>`](#get-visual-stylesidpreviewmp4webp) | An installed external style's preview loop or poster |
 | `GET` | [`/script-formulas`](#get-script-formulas) | Every script formula and hook type, with its label |
 | `GET` | [`/angle-kinds`](#get-angle-kinds) | Every kind a topic's angle can be, with its label |
 
@@ -889,6 +890,18 @@ a main style that takes inserts, `{host: false}` otherwise), `dimension` (`2d` o
 `available` with `unavailable_reason` for this install now: `needs an OpenAI key`, `needs a working
 GPU` or `GPU not tested yet`. `auto` has `null` for `dimension` and `preview`. The dashboard builds its
 style pickers from it. The write routes still refuse an unavailable style themselves.
+
+Installed [external styles](10-scene-authoring.md#external-styles) follow the built-in ones, sorted
+by label, with `external: true` (every built-in entry has `external: false`). Their `preview` is the
+style id, served by the route below. A package that fails its checks is listed with its id as the
+label, `available: false` and the reason.
+
+### `GET /visual-styles/<id>/preview.<mp4|webp>`
+
+Serves an installed external style's preview loop (`video/mp4`) or poster (`image/webp`) from its
+package. Anything else is a `404`: a built-in style (its previews are static files of the dashboard
+image), a broken or absent package, another file name. The dashboard relays it through
+`/external-style-previews/<id>/preview.<mp4|webp>`.
 
 ### `GET /script-formulas`
 

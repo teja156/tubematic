@@ -29,7 +29,7 @@ import zoneinfo
 from contextlib import contextmanager
 from pathlib import Path
 
-from flask import Blueprint, Response, g, jsonify, request
+from flask import Blueprint, Response, g, jsonify, request, send_file
 
 import discord_notify
 import hosttz
@@ -506,6 +506,7 @@ from tubematic_core.visual_styles import (  # noqa: E402
     line_art_allowed,
 )
 from tubematic_core import visual_styles as tvs  # noqa: E402
+from tubematic_core import external_styles as texternal  # noqa: E402
 
 # Mining is the one strategy that needs a key: it sends YouTube URLs to Gemini.
 # With no Gemini key it is off — derived at every read, never stored — so a
@@ -5843,6 +5844,19 @@ def create_pipeline_blueprint() -> Blueprint:
         with _conn() as con:
             key_set = bool(_secret(_read_all_settings(con), "openai_api_key", "OPENAI_API_KEY"))
             return jsonify({"styles": tvs.public_list(key_set, trenderers.gpu_status(con)["status"])})
+
+    # An installed external style's preview loop and poster (TMDEV-252). Built-in
+    # previews ship inside the dashboard image; an external one lives in its
+    # package, so the dashboard asks for it here. Only a valid package's two
+    # fixed files: nothing else in a package is served.
+    _PREVIEW_TYPES = {"mp4": "video/mp4", "webp": "image/webp"}
+
+    @bp.get("/visual-styles/<style_id>/preview.<ext>")
+    def external_style_preview(style_id, ext):
+        found = texternal.get(style_id) if tvs.is_external(style_id) else None
+        if not found or not found.ok or ext not in _PREVIEW_TYPES:
+            return jsonify({"error": "not_found"}), 404
+        return send_file(found.path / f"preview.{ext}", mimetype=_PREVIEW_TYPES[ext], max_age=300)
 
     @bp.get("/script-formulas")
     def list_script_formulas():

@@ -112,6 +112,10 @@ describe("previewUrls", () => {
   it("points at the files the dashboard serves", () => {
     expect(previewUrls("whiteboard")).toEqual({ video: "/style-previews/whiteboard.mp4", poster: "/style-previews/whiteboard.webp" });
   });
+  it("points an installed external style at its package, through the dashboard's preview route", () => {
+    expect(previewUrls("ext_paper", true)).toEqual({
+      video: "/external-style-previews/ext_paper/preview.mp4", poster: "/external-style-previews/ext_paper/preview.webp" });
+  });
 });
 
 describe("cartoon3dAvailable", () => {

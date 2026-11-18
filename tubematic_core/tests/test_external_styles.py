@@ -297,6 +297,7 @@ def test_the_public_list_marks_installed_styles(installed):
     assert rows["ext_broken"]["available"] is False
     assert "MANIFEST.json" in rows["ext_broken"]["unavailable_reason"]
     assert rows["ext_dom"]["mascot"] is False
+    assert rows["ext_dom"]["preview"] == "ext_dom"
 
 
 def test_the_agent_view_of_an_installed_style(installed):

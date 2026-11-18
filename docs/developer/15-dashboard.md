@@ -67,8 +67,8 @@ behind a proxy.
   apply without a restart. A missing or empty secret means no session is valid.
 - `middleware.ts` redirects a page load with no cookie to `/login?next=…`. It runs on the Edge
   runtime, which cannot read the signing secret, so it only checks that a cookie is present. The
-  proxy, the stream route, the mascot-sheet route and the update-check
-  route verify the signature on every request. A forged cookie gets a page shell with no data.
+  proxy, the stream route, the mascot-sheet route, the external-style preview route and the
+  update-check route verify the signature on every request. A forged cookie gets a page shell with no data.
 - The middleware's matcher leaves out the API routes, `/stream`, `/mascot-sheets`, Next's assets,
   static files and `/login`, so a `fetch()` or a `<video>` without a session gets a `401` and never
   the login page's HTML.
@@ -202,6 +202,15 @@ An `<img>` tag cannot send the API token, the proxy relays JSON only and the str
 only mp4 and mp3. This `GET`-only route relays one mascot's model-sheet image from the API's
 `/mascots/<id>/versions/<n>/sheets/<name>`. It checks the session like the proxy, accepts only that
 path shape, adds the bearer token and passes through only `image/png` and `image/jpeg`.
+
+### `dashboard/app/external-style-previews/[...path]/route.ts`
+
+The same relay for an installed [external style](10-scene-authoring.md#external-styles)'s preview,
+which lives in its package and not in `public/style-previews/`. It accepts only
+`<ext id>/preview.mp4` and `<ext id>/preview.webp`, asks the API's
+[`GET /visual-styles/<id>/preview.<mp4|webp>`](05-http-api.md#get-visual-stylesidpreviewmp4webp) and
+passes through only the matching `video/mp4` or `image/webp`. Its paths hold a dot, so the middleware
+skips them like other static files.
 
 ---
 
@@ -465,8 +474,10 @@ preview, so the picker is a button that opens a listbox in a popover (`@base-ui/
   styles, the 3D styles, then the insert styles. The group comes from the pack's `dimension`, the
   GPU tag from `needs.gpu`, and a style whose `role` is `insert` is listed but cannot be picked. A
   style an older API sends without these fields counts as a 2D main style.
-- Each row carries an EXP tag for an experimental style, a GPU tag for one that needs a GPU, the
-  reason it cannot be made here, and an eye button that opens the style's preview.
+- Each row carries an EXP tag for an experimental style, a GPU tag for one that needs a GPU, an
+  EXTERNAL tag for an installed external style, the reason it cannot be made here, and an eye button
+  that opens the style's preview. An external style's preview plays from its package, through
+  `/external-style-previews/`.
 - The preview window (`StylePreviewDialog`) plays the [preview loop](10-scene-authoring.md#style-previews)
   muted, with Prev and Next over every style and **Use this style** when the style can be picked.
   With reduced motion on it shows the poster and the player's controls instead of playing.

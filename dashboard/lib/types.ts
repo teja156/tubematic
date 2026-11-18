@@ -42,6 +42,9 @@ export interface VisualStyleInfo {
   preview?: string | null;
   /** One line under the preview: what the style is for. */
   tagline?: string;
+  /** True for an installed external style package (TMDEV-252), drawn by code from outside the
+   *  release. Absent from an older API means a built-in style. */
+  external?: boolean;
   /** "insert" for a style used only as scenes inside another style: listed apart and never
    *  offered as a video's style. Absent (an API without inserts) means a main style. */
   role?: "main" | "insert";

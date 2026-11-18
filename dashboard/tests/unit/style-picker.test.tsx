@@ -141,6 +141,27 @@ describe("StylePicker", () => {
   });
 });
 
+describe("external styles (TMDEV-252)", () => {
+  const EXTERNAL: VisualStyleInfo = {
+    id: "ext_paper", label: "Paper Cut", experimental: true, canvas: "light",
+    needs: { openai_key: false, gpu: false }, mascot: false, available: true, unavailable_reason: "",
+    dimension: "2d", preview: "ext_paper", tagline: "A paper-cut look.", role: "main",
+    inserts: { host: false }, external: true,
+  };
+
+  it("marks an installed external style and plays its preview from the package", () => {
+    render(<Harness styles={[...WITH_INSERTS, EXTERNAL]} />);
+    openStyleList("sp");
+    expect(styleOption("sp", "ext_paper").textContent).toContain("EXTERNAL");
+    expect(styleOption("sp", "whiteboard").textContent).not.toContain("EXTERNAL");
+    fireEvent.click(screen.getByTestId("sp-preview-ext_paper"));
+    expect(screen.getByTestId("style-preview-tag-ext")).toBeTruthy();
+    const video = screen.getByTestId("style-preview-video");
+    expect(video.getAttribute("src")).toBe("/external-style-previews/ext_paper/preview.mp4");
+    expect(video.getAttribute("poster")).toBe("/external-style-previews/ext_paper/preview.webp");
+  });
+});
+
 describe("StylePreviewButton", () => {
   it("opens the preview of a frozen style, with no way to pick it", () => {
     render(<StylePreviewButton styleId="whiteboard" styles={PACK_STYLES} testId="eye" />);

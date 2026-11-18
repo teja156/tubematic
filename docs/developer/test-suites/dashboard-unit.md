@@ -795,6 +795,17 @@ the authenticated image relay.
 - Only `image/png` and `image/jpeg` are relayed. A `401` from Flask is a `502`, so the browser is
   not sent to `/login`.
 
+### `external-style-preview-route.test.ts`
+
+Covers [`app/external-style-previews/[...path]/route.ts`](../15-dashboard.md#dashboardappexternal-style-previewspathroutets),
+the authenticated relay of an installed external style's preview.
+
+- No session is a `401`, and Flask is not asked.
+- Only `<ext id>/preview.mp4` and `<ext id>/preview.webp` are served. A built-in style's id, another
+  file, a traversal and a path of the wrong length are a `404` before Flask is asked.
+- The request carries the API token, the file passes through, a `404` from Flask stays a `404`, and a
+  file of another type is a `502`.
+
 ### `auth-routes.test.ts`
 
 Covers the login and logout routes ([Signing in](../15-dashboard.md#signing-in)), on the real
@@ -918,7 +929,7 @@ Covers `lib/visualStyles.ts` ([Visual-style picker](../15-dashboard.md#visual-st
   pack fields `dimension`, `role` and `needs.gpu`. A style whose pack needs an OpenAI key or a GPU,
   and every insert style, cannot be picked, with the reason. A style an older API sends without a
   dimension or role counts as a 2D main style. Low-Poly Skit, a 3D style with `needs.gpu` false, carries no GPU tag and can be picked with no GPU. `previewableRows` is the order the preview window
-  steps through, and `previewUrls` names the served files.
+  steps through, and `previewUrls` names the served files, the relay route for an external style.
 - `videoStyleId` names the style a frozen video's preview plays: the chosen one, Auto's pick or
   Cartoon 3D, and none before Auto has picked or under mixed scenes.
 - `illustratedAvailable` reads the masked `openai_api_key`, where `""` means unset, so the key
@@ -950,6 +961,8 @@ Covers `components/StylePicker.tsx` ([Visual-style picker](../15-dashboard.md#vi
 - The eye opens the preview without picking: the muted loop and poster from `/style-previews/`, Prev
   and Next, and **Use this style**, which picks and closes. An insert or an unavailable style shows
   its preview, says why, and offers no **Use this style**.
+- An installed external style carries the EXTERNAL tag, and its preview plays from
+  `/external-style-previews/`.
 - The arrows step through styles, except while the player's own controls have focus.
 - `StylePreviewButton` opens a frozen style's preview without a way to pick it, and renders nothing
   for a style with no preview.

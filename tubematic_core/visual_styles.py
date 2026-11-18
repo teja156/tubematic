@@ -605,7 +605,8 @@ def _external_public_rows(openai_key_set: bool, gpu_status: str) -> list[dict]:
                      "canvas": p["canvas"], "needs": dict(p["needs"]), "mascot": False,
                      "role": "main", "inserts": {"host": False},
                      "available": not reason, "unavailable_reason": reason,
-                     "dimension": p["dimension"], "preview": p["preview"], "tagline": p["tagline"],
+                     # the dashboard asks the API for a package's previews by the style id
+                     "dimension": p["dimension"], "preview": sid, "tagline": p["tagline"],
                      "external": True})
     return sorted(rows, key=lambda r: r["label"].lower())
 
