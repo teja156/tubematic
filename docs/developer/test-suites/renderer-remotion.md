@@ -65,6 +65,15 @@ Trap: an installed package compiles against these names. Removing or renaming on
 already installed, so a breaking change is a new `v2.ts` and a new `SCENE_API` in
 `tubematic_core/external_styles.py`, never an edit to this list.
 
+### `src/sceneApi/createStyleTemplate.test.ts`
+
+Type-checks the `tubematic-create-style` skill's template package under this project's
+`tsconfig.json`, with bare imports resolved as they are once a package is installed.
+
+Trap: `validate_job` runs the same type check before every render, and the skill copies the template
+into every package it builds. A template error (an unused import under `noUnusedLocals`) passes the
+install scan and then fails every video in the new style.
+
 ## Caption looks
 
 ### `src/scenes/installed/subtitleLooks.test.ts`

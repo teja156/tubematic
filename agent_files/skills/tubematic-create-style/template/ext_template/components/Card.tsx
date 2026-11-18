@@ -13,7 +13,6 @@
  * - Import the rest of the renderer only through "@tubematic/scene-api", plus
  *   react and remotion.
  */
-import React from "react";
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { fitFontSize, WATERMARK_BOTTOM } from "@tubematic/scene-api";
 import { PALETTES, type CardProps } from "./card/contract";

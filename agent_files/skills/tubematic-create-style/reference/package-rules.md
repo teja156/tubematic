@@ -69,6 +69,9 @@ not validate is a broken package).
   `three` (and `three/examples/jsm/…`), `@react-three/fiber`, `postprocessing`, `d3-geo`,
   `topojson-client`, `@dagrejs/dagre`, `zod`. Anything else is refused. Relative imports must stay
   inside the package.
+- The renderer type-checks every package (TypeScript `strict`, `noUnusedLocals`, JSX `react-jsx`)
+  before each render, and one error fails every video in the style. Import nothing you do not use:
+  `react-jsx` needs no `import React` for JSX, so import React only when you name it (`React.FC`).
 - `@tubematic/scene-api` (version 1) exports: the `TimelineWord` and `SubtitleConfig` types;
   `FRAME_WIDTH`, `KEEP_OUT_GAP`, `KEEP_OUT_X`, `WATERMARK_BOTTOM`, `WATERMARK_HEIGHT`,
   `WATERMARK_LEFT`, `WATERMARK_RIGHT`, `WATERMARK_TOP`, `WATERMARK_WIDTH`; `estimateWidth`,
