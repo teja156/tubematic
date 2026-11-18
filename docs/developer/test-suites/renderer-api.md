@@ -297,6 +297,17 @@ without testing the race.
 
 ## Style, voice and mascot choices
 
+### `test_external_style_routes.py`
+
+Covers external styles over HTTP:
+
+- An installed external style with a valid package can be chosen for a video and as a domain
+  default, and a domain default seeds curriculum videos. A broken package is refused on `PATCH`, on
+  `POST /videos` and as a domain default.
+- `GET /visual-styles` lists installed styles with `external` set, and a broken one as unavailable.
+- `external_styles_in_auto` accepts only installed external styles with a valid package, and is
+  checked on change only, so a list whose style broke since still saves with an unrelated key.
+
 ### `test_visual_style.py`
 
 Covers the visual style over HTTP and the style contract of the AI review prompt

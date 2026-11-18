@@ -205,6 +205,13 @@ data folder:
 - One broken package leaves the others available.
 - The registry sees a package added or rewritten without a restart, and the fingerprint changes with
   any file.
+- The style lookups see installed styles: `pack`, `is_known_style`, `is_main_style`,
+  `is_world_style`, `fixed_canvas`, `hosts_inserts`, `public_list` (with `external` set and a broken
+  package unavailable with its reason) and `agent_view` (the generic authoring skill and the
+  `props_key`).
+- Auto routes to an installed style only once it is opted in, and never to a broken one.
+- A world style that needs a GPU is gated like Cartoon 3D, and every external style takes no
+  mascot, including in the SQL clash condition.
 
 Trap: a package comes from outside the release, so the loader never raises. A broken built-in pack
 stops the process at start-up; a broken package must leave every other style working.

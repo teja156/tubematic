@@ -46,13 +46,19 @@ MASCOT_NOT_ON_CARTOON_3D = ("Mascots are not available in the Cartoon 3D style (
                             "has no place for a flat watercolour character). Choose another "
                             "visual style, or no mascot.")
 
-# Every style a video with a mascot may not have (visual_styles.NO_MASCOT_STYLES).
+# Every style a video with a mascot may not have (visual_styles.NO_MASCOT_STYLES),
+# plus every external style: their packs say "mascot": false (external_styles).
 NO_MASCOT_STYLES = tvs.NO_MASCOT_STYLES
+EXTERNAL_TAKES_NO_MASCOT = ("External visual styles take no mascot. Choose another visual style, "
+                            "or no mascot.")
 
 
 def no_mascot_error(style: str) -> str:
     """Why a video of `style` may not carry a mascot, or "" when it may."""
     style = (style or "").strip()
+    if tvs.is_external(style):
+        p = tvs.pack(style)
+        return p["messages"]["mascot"] if p else EXTERNAL_TAKES_NO_MASCOT
     if style not in NO_MASCOT_STYLES:
         return ""
     if style == "cartoon_3d":
@@ -121,7 +127,11 @@ def cartoon_mascot_clash_sql(style: str = "COALESCE(videos.visual_style, '')",
     renderer, mascot). Guarded UPDATEs add `AND NOT (...)`, so a concurrent
     write cannot leave the pair behind a check made on an earlier read."""
     styles = ", ".join(f"'{s}'" for s in NO_MASCOT_STYLES)
-    return f"(({style} IN ({styles}) OR {renderer} = 'cartoon_3d') AND {mascot} != '')"
+    # The style expression appears once (a "?" is bound once): the subquery
+    # names it so both tests read the same value.
+    no_mascot = (f"(SELECT v IN ({styles}) OR v LIKE 'ext\\_%' ESCAPE '\\' "
+                 f"FROM (SELECT {style} AS v))")
+    return f"(({no_mascot} OR {renderer} = 'cartoon_3d') AND {mascot} != '')"
 
 
 def resolve_default(con, project_default: str, install_default: str) -> str:

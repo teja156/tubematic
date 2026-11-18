@@ -207,6 +207,15 @@ def get(sid: str) -> ExternalStyle | None:
     return registry().get((sid or "").strip())
 
 
+def write_manifest(d: pathlib.Path) -> None:
+    """Write `MANIFEST.json` for a package folder: every other file's sha256."""
+    d = pathlib.Path(d)
+    files = {name: hashlib.sha256(path.read_bytes()).hexdigest()
+             for name, path in _files(d).items() if name != MANIFEST}
+    (d / MANIFEST).write_text(json.dumps({"files": files}, indent=1, sort_keys=True) + "\n",
+                              encoding="utf-8")
+
+
 def fingerprint(sid: str) -> str:
     """A short hash of one installed package's files, as the render compares them."""
     return jobfiles.source_fingerprint(STYLES_DIR / sid)

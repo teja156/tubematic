@@ -5,7 +5,6 @@ package into "unavailable, with a reason" and never into an exception: one
 broken package must not stop the API, the MCP server or the worker at start-up,
 the way a broken built-in pack does on purpose.
 """
-import hashlib
 import json
 import os
 import pathlib
@@ -39,12 +38,7 @@ def base_pack(sid, renderer="dom", gpu=False):
     return p
 
 
-def write_manifest(d):
-    files = {}
-    for path in sorted(d.rglob("*")):
-        if path.is_file() and path.name != "MANIFEST.json":
-            files[path.relative_to(d).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
-    (d / "MANIFEST.json").write_text(json.dumps({"files": files}))
+write_manifest = ext.write_manifest
 
 
 def make_package(root, sid="ext_test", renderer="dom", gpu=False, pack=None, manifest=True):
@@ -249,3 +243,92 @@ def test_the_fingerprint_changes_with_any_file(tmp_path, monkeypatch):
     before = ext.fingerprint("ext_test")
     (d / "guide" / "guide.md").write_text("# Changed\n")
     assert ext.fingerprint("ext_test") != before
+
+
+# ── How the style lookups see installed packages ─────────────────────────────
+
+@pytest.fixture
+def installed(tmp_path, monkeypatch):
+    monkeypatch.setattr(ext, "STYLES_DIR", tmp_path)
+    make_package(tmp_path, sid="ext_dom")
+    make_package(tmp_path, sid="ext_world", renderer="cartoon_3d", gpu=True)
+    make_package(tmp_path, sid="ext_broken", manifest=False)
+    return tmp_path
+
+
+def test_an_installed_style_has_a_pack_and_a_broken_one_has_none(installed):
+    assert tvs.pack("ext_dom")["label"] == "Test ext_dom"
+    assert tvs.pack("ext_broken") is None
+    assert tvs.is_external("ext_dom") and tvs.is_external("ext_broken")
+    assert not tvs.is_external("night_signal") and not tvs.is_external("auto")
+
+
+@pytest.mark.parametrize("style, known, main, world", [
+    ("ext_dom", True, True, False),
+    ("ext_world", True, True, True),
+    ("ext_broken", False, False, False),
+    ("ext_absent", False, False, False),
+    ("auto", True, True, False),
+    ("night_signal", True, True, False),
+    ("cartoon_3d", True, True, True),
+    ("system_flow", True, False, False),
+])
+def test_style_membership_includes_installed_styles(installed, style, known, main, world):
+    assert tvs.is_known_style(style) is known
+    assert tvs.is_main_style(style) is main
+    assert tvs.is_world_style(style) is world
+
+
+def test_an_installed_style_fixes_its_canvas(installed):
+    assert tvs.fixed_canvas("ext_dom") == "dark"
+    assert tvs.effective_canvas("ext_dom", "") == "dark"
+    assert tvs.fixed_canvas("auto") is None
+
+
+def test_an_installed_style_hosts_no_inserts(installed):
+    assert tvs.hosts_inserts("ext_dom") == {"host": False}
+
+
+def test_the_public_list_marks_installed_styles(installed):
+    rows = {r["id"]: r for r in tvs.public_list(openai_key_set=False, gpu_status="not_usable")}
+    assert rows["ext_dom"]["external"] is True and rows["ext_dom"]["available"] is True
+    assert rows["night_signal"]["external"] is False
+    assert rows["ext_world"]["available"] is False and rows["ext_world"]["unavailable_reason"] == "needs a working GPU"
+    assert rows["ext_broken"]["available"] is False
+    assert "MANIFEST.json" in rows["ext_broken"]["unavailable_reason"]
+    assert rows["ext_dom"]["mascot"] is False
+
+
+def test_the_agent_view_of_an_installed_style(installed):
+    view = tvs.agent_view("ext_dom")
+    assert view["authoring_skill"] == ext.AUTHORING_SKILL
+    assert view["external"] is True and view["props_key"] == "testStyle"
+    assert tvs.agent_view("night_signal")["external"] is False
+
+
+def test_auto_routes_to_an_installed_style_only_once_opted_in(installed):
+    ids = [c["id"] for c in tvs.routing_candidates(False, "working", False)]
+    assert "ext_dom" not in ids
+    ids = [c["id"] for c in tvs.routing_candidates(False, "working", False, auto_externals=["ext_dom", "ext_broken"])]
+    assert "ext_dom" in ids and "ext_broken" not in ids
+    assert ids[-1] == tvs.SCENES
+    assert "ext_dom" in tvs.route_choices(["ext_dom"]) and "ext_dom" not in tvs.route_choices([])
+
+
+def test_an_installed_world_style_that_needs_a_gpu_is_gated(installed):
+    from tubematic_core import renderers
+    assert renderers.requires_gpu({"visual_style": "ext_world"}) is True
+    assert renderers.requires_gpu({"visual_style": "ext_dom"}) is False
+    assert tvs.cartoon_3d_gpu_error("ext_world", "not_usable") == "needs a GPU"
+
+
+def test_an_installed_style_takes_no_mascot(installed):
+    import sqlite3
+    from tubematic_core import mascots
+    assert mascots.no_mascot_error("ext_dom")
+    assert mascots.no_mascot_error("ext_broken")
+    con = sqlite3.connect(":memory:")
+    cond = mascots.cartoon_mascot_clash_sql("?", "?", "?")
+    assert con.execute(f"SELECT {cond}", ("ext_dom", "", "m1")).fetchone()[0] == 1
+    assert con.execute(f"SELECT {cond}", ("night_signal", "", "m1")).fetchone()[0] == 1
+    assert con.execute(f"SELECT {cond}", ("whiteboard", "", "m1")).fetchone()[0] == 0

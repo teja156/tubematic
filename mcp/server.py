@@ -1053,6 +1053,16 @@ def _response_json(resp) -> dict:
     return body if isinstance(body, dict) else {}
 
 
+def _auto_externals() -> list:
+    """The external styles a person opted into Auto (settings key
+    external_styles_in_auto). A malformed value opts none in."""
+    try:
+        value = json.loads(_get_setting("external_styles_in_auto", "[]") or "[]")
+    except ValueError:
+        return []
+    return [v for v in value if isinstance(v, str)] if isinstance(value, list) else []
+
+
 def _get_setting(key: str, default: str = "") -> str:
     with _conn() as con:
         row = con.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
@@ -1433,7 +1443,8 @@ def _style_routing(video: dict) -> dict:
         "runner_up": video.get("style_runner_up") or "",
         "reason": video.get("style_reason") or "",
         "candidates": tvs.routing_candidates(bool(_openai_key()), _gpu_probe_status(),
-                                             bool(video.get("mascot_id"))),
+                                             bool(video.get("mascot_id")),
+                                             auto_externals=_auto_externals()),
         "domain": domain,
     }
 
@@ -2061,7 +2072,7 @@ def create_video(
         visual_style = DEFAULT_VISUAL_STYLE
         if strategy == "curriculum":
             visual_style = (row["default_visual_style"] or "").strip() or DEFAULT_VISUAL_STYLE
-            if visual_style not in tvs.MAIN_STYLES:
+            if not tvs.is_main_style(visual_style):
                 visual_style = DEFAULT_VISUAL_STYLE
         # Unlike the visual style, a project's default voice seeds EVERY video
         # filed into it (TMDEV-121) — it is the domain's narrator, not a series
@@ -3304,7 +3315,7 @@ def update_video(
                              "script profile"}
     if visual_style is not None:
         visual_style = visual_style.strip()
-        if visual_style not in VISUAL_STYLES:
+        if not tvs.is_known_style(visual_style):
             return {"error": f"Invalid visual_style '{visual_style}'. "
                              f"Must be one of: {sorted(tvs.MAIN_STYLES)}"}
         # An insert style is never a video's style (TMDEV-224). Refused on a
@@ -3544,10 +3555,10 @@ def update_video(
                 (video_id,)).fetchone()
         if not row:
             return {"error": f"Video not found: {video_id}"}
-        if (row["visual_style"] or "") in CANVAS_BY_STYLE:
+        if tvs.fixed_canvas(row["visual_style"]):
             return {"error": f"resolved_visual_style records the canvas the agent settled on, but "
                              f"this video's visual_style is {row['visual_style']!r}, which fixes "
-                             f"the canvas at {CANVAS_BY_STYLE[row['visual_style']]!r} — there is "
+                             f"the canvas at {tvs.fixed_canvas(row['visual_style'])!r} — there is "
                              "nothing to resolve"}
         already = row["resolved_visual_style"] or ""
         if already and already != fields["resolved_visual_style"]:
@@ -3704,7 +3715,7 @@ def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str =
     style = (style or "").strip()
     runner_up = (runner_up or "").strip()
     reason = " ".join((reason or "").split())
-    choices = tvs.ROUTE_CHOICES
+    choices = tvs.route_choices(_auto_externals())
     if style not in choices:
         return {"error": f"Invalid style {style!r}. Must be one of: {', '.join(choices)}"}
     if runner_up and runner_up not in choices:
@@ -3742,7 +3753,8 @@ def choose_visual_style(video_id: str, style: str, reason: str, runner_up: str =
         # style or mascot written since the read finds nothing to overwrite.
         con.execute("BEGIN IMMEDIATE")
         candidates = {c["id"]: c for c in tvs.routing_candidates(
-            bool(_openai_key()), _gpu_probe_status(), bool(row["mascot_id"]))}
+            bool(_openai_key()), _gpu_probe_status(), bool(row["mascot_id"]),
+            auto_externals=_auto_externals())}
         for role, sid in (("style", style), ("runner_up", runner_up)):
             if sid and not candidates[sid]["available"]:
                 return {"error": f"{role} {sid!r} ({candidates[sid]['label']}) is not available "
@@ -4216,7 +4228,7 @@ def upsert_project(
     now = _now()
     if default_visual_style is not None:
         default_visual_style = default_visual_style.strip()
-        if default_visual_style and default_visual_style not in VISUAL_STYLES:
+        if default_visual_style and not tvs.is_known_style(default_visual_style):
             return {"error": f"Invalid default_visual_style '{default_visual_style}'. Must be one "
                              f"of: {sorted(tvs.MAIN_STYLES)}, or \"\" for no default"}
     if default_voice_id is not None:
@@ -9536,7 +9548,7 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
     # handback. Recording the canvas rather than a register name is what keeps
     # this sound: there is exactly one canvas per video, whatever mix of
     # figures, diagrams and imagery sits on it.
-    if (row["visual_style"] or "") not in CANVAS_BY_STYLE and not (row["resolved_visual_style"] or ""):
+    if not tvs.fixed_canvas(row["visual_style"]) and not (row["resolved_visual_style"] or ""):
         _update_fields(video_id, resolved_visual_style=canvas)
         settled = canvas
 
@@ -10186,7 +10198,7 @@ def _check_cartoon_renderer(row, scenes) -> tuple[str, str]:
     style = row["visual_style"] or ""
     resolved = row["resolved_renderer"] or ""
     unresolved_auto = style == "auto" and not resolved
-    world_style = style in tvs.WORLD_STYLES   # Cartoon 3D and every other pack that renders a generated 3D world
+    world_style = tvs.is_world_style(style)   # Cartoon 3D and every other pack that renders a generated 3D world
     if is_cartoon:
         if style != "auto" and not world_style:
             return (f"this video's visual_style is {style!r}, which renders DOM scenes; a Cartoon 3D scene "
