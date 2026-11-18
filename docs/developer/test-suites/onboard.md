@@ -275,7 +275,8 @@ Covers the three lists that name a data folder: the bind volumes in `docker-comp
 
 - Every bind volume of the Compose file has its folder in `DATA_SUBDIRS` and its device in the
   reconcile map.
-- The directories step creates the sandbox folder on a data root from a release that has none.
+- The directories step creates the sandbox and styles folders on a data root from a release that
+  has none.
 
 Trap: Docker does not create the device folder of a `local` bind volume, so an upgrade from a release
 without the folder fails to start unless the directories step runs first. `upgrade.py` reaches it through
@@ -400,6 +401,9 @@ Covers `docker-compose.yml` and the test stack's renderer, parsed as YAML
   only the six it needs added, `no-new-privileges`, CPU, memory and process ceilings, the daemon
   command with no entrypoint, and the spool shared with the MCP server and nobody else. No service
   mounts the Docker socket.
+- The styles folder is bound from the data root and mounted read-only at
+  `/app/remotion/src/scenes/external` in the API, the MCP server, the worker and the renderer, and
+  nowhere else.
 
 Trap: the mounts of the MCP server, the worker and the renderer are each asserted as an exact
 set, so a new mount is a decision. The sandbox's capability list is an exact set for the same

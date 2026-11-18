@@ -42,3 +42,13 @@ def test_the_directories_step_creates_the_sandbox_spool_on_an_upgrade(tmp_path, 
     assert not (tmp_path / "sandbox").exists()
     actions.apply_directories(None, Executor(dry_run=False), NullReporter())
     assert (tmp_path / "sandbox").is_dir()
+
+
+def test_the_directories_step_creates_the_styles_folder_on_an_upgrade(tmp_path, monkeypatch):
+    """A v2.3 data root has no styles/ folder, and compose cannot bind one that is missing."""
+    import onboard.config as config
+    monkeypatch.setattr(config, "DATA_ROOT", tmp_path)
+    for d in ("jobs", "data", "output_videos", "scenes/generated", "logs", "backups", "sandbox"):
+        (tmp_path / d).mkdir(parents=True)
+    actions.apply_directories(None, Executor(dry_run=False), NullReporter())
+    assert (tmp_path / "styles").is_dir()

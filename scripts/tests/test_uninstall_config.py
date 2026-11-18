@@ -220,6 +220,23 @@ def test_a_kept_data_root_names_the_published_renderers_port(uninstall, populate
     assert "compose.renderers.json" in capsys.readouterr().out
 
 
+def test_an_empty_styles_folder_is_pruned_when_declined(uninstall, populated, monkeypatch):
+    (populated / "styles").mkdir()
+    _answer(uninstall, monkeypatch, False)
+    uninstall.remove_data_root()
+    assert not (populated / "styles").exists()
+
+
+def test_a_kept_data_root_names_the_installed_styles(uninstall, populated, monkeypatch, capsys):
+    """A reinstall over a kept data root would list them again (TMDEV-252), so
+    the folder that holds them is named."""
+    (populated / "styles" / "ext_test").mkdir(parents=True)
+    _answer(uninstall, monkeypatch, False)
+    uninstall.remove_data_root()
+    out = capsys.readouterr().out
+    assert "styles" in out and "ext_test" in out
+
+
 def test_data_root_step_with_no_root_is_not_an_error(uninstall, tmp_path, monkeypatch):
     monkeypatch.setattr(uninstall, "DATA_ROOT", tmp_path / "gone")
     uninstall.remove_data_root()  # must not raise

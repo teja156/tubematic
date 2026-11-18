@@ -355,7 +355,9 @@ step.
 - The install scope and the agent workspace are read once, before anything is deleted, and the
   values survive the deletion of the database. `--force` never stops at the scope prompt.
 - A kept data root names the GPU choice and the remote-renderers override in it, since a reinstall
-  over it would hand the GPU to the new renderer and publish the render gateway's port again.
+  over it would hand the GPU to the new renderer and publish the render gateway's port again. It
+  names the installed visual styles too, which a reinstall lists again, and an empty styles folder
+  is pruned.
 - The agent sweep goes through one adapter-keyed entry point. It removes each deployed and each
   retired skill, the commands and the MCP registration, sweeps a project-scope install from its
   workspace, and ignores a config-root override on every path. A config document that cannot be
