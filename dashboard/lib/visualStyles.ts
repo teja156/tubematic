@@ -49,6 +49,10 @@ function unavailableReason(
   canUseOpenAI: boolean,
   gpu: Pick<GpuStatus, "status"> | null | undefined,
 ): string {
+  // An installed external style's package problems are known to the API alone (TMDEV-252).
+  if (s.external && s.available === false && !s.needs.openai_key && !s.needs.gpu) {
+    return s.unavailable_reason || "unavailable";
+  }
   if (s.needs.openai_key && !canUseOpenAI) return "needs an OpenAI key";
   if (s.needs.gpu && !cartoon3dAvailable(gpu)) {
     return gpu?.status === "unknown" ? "GPU not tested yet" : "needs a working GPU";

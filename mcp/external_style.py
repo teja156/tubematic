@@ -12,6 +12,8 @@ import json
 import re
 
 import jsonschema
+from referencing import Registry
+from referencing.exceptions import NoSuchResource
 
 from tubematic_core import external_styles as ext
 
@@ -53,6 +55,13 @@ def check_scene_use(style: str, scenes) -> str:
     return ""
 
 
+def _no_retrieval(uri: str):
+    """A package's schema is checked in the MCP container, which holds the
+    database and the tokens: a $ref outside the schema (a URL, a file) is never
+    fetched."""
+    raise NoSuchResource(ref=uri)
+
+
 def _where(path) -> str:
     return "".join(f"[{p}]" if isinstance(p, int) else f".{p}" for p in path)
 
@@ -64,8 +73,8 @@ def check(config: dict, style: str) -> list[str]:
     key = found.pack["external"]["props_key"]
     try:
         schema = json.loads((found.path / "schema.json").read_text(encoding="utf-8"))
-        validator = jsonschema.Draft202012Validator(schema)
-        validator.check_schema(schema)
+        jsonschema.Draft202012Validator.check_schema(schema)
+        validator = jsonschema.Draft202012Validator(schema, registry=Registry(retrieve=_no_retrieval))
     except (OSError, ValueError, jsonschema.SchemaError) as e:
         return [f"the {style} package's schema.json is not a valid JSON Schema ({e}); the package needs fixing"]
     problems = []
@@ -74,8 +83,12 @@ def check(config: dict, style: str) -> list[str]:
         if key not in props:
             problems.append(f"scenes[{i}].props.{key} is missing: the {style} scenes take their data there")
             continue
-        for err in sorted(validator.iter_errors(props[key]), key=lambda e: list(map(str, e.path))):
-            problems.append(f"scenes[{i}].props.{key}{_where(err.path)}: {err.message}")
+        try:
+            errors = sorted(validator.iter_errors(props[key]), key=lambda e: list(map(str, e.path)))
+        except Exception as e:  # noqa: BLE001 — an unresolvable $ref surfaces here, as a wrapped referencing error
+            return [f"the {style} package's schema.json has a reference that cannot be resolved: only references "
+                    f"inside the schema are followed ({e}); the package needs fixing"]
+        problems += [f"scenes[{i}].props.{key}{_where(err.path)}: {err.message}" for err in errors]
     return problems[:MAX_PROBLEMS]
 
 

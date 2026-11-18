@@ -108,7 +108,9 @@ The `external` tree holds the installed [external style](10-scene-authoring.md#e
 packages. Every bundle that compiles the whole project passes through `webpack-override.mjs`, whose
 `ContextReplacementPlugin` narrows that tree to the one package named in `TUBEMATIC_EXTERNAL_STYLE`,
 and to nothing when it is empty, because one package that fails to compile would otherwise fail
-every render on the install. The same override adds Tailwind and the `@tubematic/scene-api` alias
+every render on the install. It narrows the `generated` tree the same way, to the video named in
+`TUBEMATIC_RENDER_VIDEO` and the legacy flat files, so another video's scene (a world video that
+imports a package since removed) cannot fail this one's bundle. The same override adds Tailwind and the `@tubematic/scene-api` alias
 (`src/sceneApi/v1.ts`). `remotion.config.ts`, the stills server, the stills fallback and the
 text-layout audit all use it.
 

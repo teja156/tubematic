@@ -16,3 +16,6 @@ scipy>=1.11
 # The props of an external style's scenes are checked against the package's
 # JSON Schema (TMDEV-252, mcp/external_style.py).
 jsonschema>=4.23,<5
+# Imported directly by mcp/external_style.py (a registry that fetches no remote
+# $ref); installed with jsonschema, unpinned so jsonschema's constraint resolves.
+referencing

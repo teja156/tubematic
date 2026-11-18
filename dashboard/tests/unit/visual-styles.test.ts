@@ -9,6 +9,7 @@
  * set-versus-unset is readable without seeing the key.
  */
 import { describe, expect, it } from "vitest";
+import type { VisualStyleInfo } from "@/lib/types";
 import { cartoon3dAvailable, illustratedAvailable, previewableRows, previewUrls, routeLabel, styleGroups, styleLabel, videoStyleId, videoStyleLabel } from "@/lib/visualStyles";
 import { INSERT_IDS, PACK_STYLES } from "./packStyles";
 
@@ -105,6 +106,21 @@ describe("previewableRows", () => {
     expect(rows.map((r) => r.value)).not.toContain("auto");
     expect(rows[rows.length - 1].value).toBe("system_flow");
     expect(rows).toHaveLength(PACK_STYLES.length - 1);
+  });
+});
+
+describe("an installed external style whose package is broken", () => {
+  it("cannot be picked, and says why the API gave", () => {
+    const broken: VisualStyleInfo = {
+      id: "ext_broken", label: "ext_broken", experimental: true, canvas: null,
+      needs: { openai_key: false, gpu: false }, mascot: false, role: "main", inserts: { host: false },
+      available: false, unavailable_reason: "the style package has a problem: MANIFEST.json is missing",
+      dimension: null, preview: null, tagline: "", external: true,
+    };
+    const rows = styleGroups([...PACK_STYLES, broken], true, { status: "working" }).flatMap((g) => g.rows);
+    const r = rows.find((x) => x.value === "ext_broken")!;
+    expect(r.choosable).toBe(false);
+    expect(r.why).toContain("MANIFEST.json is missing");
   });
 });
 

@@ -541,8 +541,12 @@ Tubematic's rules.
 - A scene style's scenes are `{"type": "generated", "source": "external", "src":
   "<style id>/components/<Name>", "props": {"<props_key>": {…}}}`. `write_scene_config` refuses a
   component of another style or one the package lacks, and props that break `schema.json`, naming the
-  failing path (`mcp/external_style.py`). The pack's captions fill the config, and the video takes
-  the `preview_frames` look before `submit_render`.
+  failing path (`mcp/external_style.py`). A `$ref` is followed only inside the schema: the MCP
+  container holds the database and the tokens, so a package's schema never makes it fetch a URL or
+  read a file. The pack's captions fill the config. `validate_job` checks the props against the
+  schema installed at that moment and typechecks the package's components with the video. The
+  video takes the `preview_frames` look before `submit_render`, and the look covers the package's
+  fingerprint, so an updated package needs a new look.
 - A world style's video is one generated `CartoonShort` scene that imports the package's runner as
   `../../external/<style id>/runner/<file>` and goes through the [beat gate](#cartoon-3d).
 
@@ -551,7 +555,7 @@ Tubematic's rules.
 `submit_render` checks the package from disk and records its fingerprint in
 `<jobs>/<video_id>/style-source.json`. The bundle carries that record and the one package, a remote
 renderer stages it under `src/scenes/external/`, and every renderer compares the package it compiles
-with the record before it renders ([The bundle](11-rendering-and-review.md#the-bundle-staging-and-the-render-call)).
+with the record before it renders and again before it uploads ([The bundle](11-rendering-and-review.md#the-bundle-staging-and-the-render-call)).
 Each bundle compiles that one package and no other
 ([Dynamic import](09-remotion-project.md#dynamic-import-and-why-there-are-three-branches)).
 

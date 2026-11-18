@@ -187,8 +187,10 @@ Before it renders an external-style video, the renderer compares the package it 
 with the fingerprint in `style-source.json` (`render_agent.py::_external_style`). A package
 changed or removed since the video was queued, a scene-config that draws another style, or an
 external scene with no record fails the render back to the agent, as a changed Cartoon 3D source
-does. The render's environment names the style in `TUBEMATIC_EXTERNAL_STYLE`, and
-`webpack-override.mjs` compiles that one package (see
+does. It compares again after the render, before the upload, since a package replaced while webpack
+read it would mix two versions. The render's environment names the style in
+`TUBEMATIC_EXTERNAL_STYLE` and the video in `TUBEMATIC_RENDER_VIDEO`, and `webpack-override.mjs`
+compiles that one package and that video's generated scenes (see
 [External styles](10-scene-authoring.md#external-styles)).
 
 The render command on the CPU path:
@@ -394,9 +396,9 @@ child process. A remote renderer has no `/jobs` volume and runs none.
 - It renders one still at a time and shares the GPU with renders.
 - Before every still it compares a stamp of the generated source tree (each file's path, size and
   mtime) with the one its bundle was made from, and bundles again when they differ. An edit to a
-  video's code costs its next still about twenty seconds. A request names the video's external
-  style (`externalStyle`), and the stamp covers that style's package too, so a still of a video in
-  another external style bundles again with that package only.
+  video's code costs its next still about twenty seconds. A request names its video
+  (`renderVideo`) and the video's external style (`externalStyle`), and the bundle compiles that
+  video's generated scenes and that one package, so a still of another video bundles again.
 
 `_ensure_stills_server` starts it again when it has died (at most once every
 `STILLS_SERVER_RETRY_SECS`, 60) or when a GPU test moved renders between the GPU and the CPU. With

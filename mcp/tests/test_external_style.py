@@ -188,3 +188,60 @@ def test_the_stills_cli_is_told_the_external_style(monkeypatch):
     monkeypatch.setenv("TUBEMATIC_EXTERNAL_STYLE", "ext_stale")
     assert cartoon._env(pathlib.Path("/r"), external_style="ext_dom")["TUBEMATIC_EXTERNAL_STYLE"] == "ext_dom"
     assert cartoon._env(pathlib.Path("/r"))["TUBEMATIC_EXTERNAL_STYLE"] == ""
+    # and the video whose generated scenes it compiles, so another video's cannot break it
+    assert cartoon._env(pathlib.Path("/r"), video_id="vid_a")["TUBEMATIC_RENDER_VIDEO"] == "vid_a"
+
+
+# ── review round 1 ───────────────────────────────────────────────────────────
+
+def _rewrite(env, sid, name, body):
+    d = env["styles"] / sid
+    (d / name).write_text(body)
+    ext.write_manifest(d)
+
+
+def test_a_schema_never_fetches_a_remote_reference(env, monkeypatch):
+    """A package's schema runs in the MCP container, which holds the database and
+    the tokens: a $ref to a URL or a file is refused, never retrieved."""
+    import urllib.request
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: pytest.fail("a schema reference was fetched"))
+    for ref in ("http://127.0.0.1:9/x.json", "file:///etc/hostname"):
+        _rewrite(env, "ext_dom", "schema.json", json.dumps({"$ref": ref}))
+        vid = env["video"](f"vid_ref_{ref[:4]}")
+        result = server.write_scene_config(vid, _config())
+        assert "reference" in result["error"]
+
+
+def test_a_local_reference_inside_the_schema_still_works(env):
+    _rewrite(env, "ext_dom", "schema.json", json.dumps({
+        "$defs": {"t": {"type": "string", "maxLength": 3}}, "type": "object",
+        "properties": {"title": {"$ref": "#/$defs/t"}}}))
+    vid = env["video"]("vid_local_ref")
+    assert "scenes[0].props.testStyle.title" in server.write_scene_config(vid, _config())["error"]
+
+
+def test_validate_job_checks_the_props_against_the_installed_schema(env, monkeypatch):
+    """A package updated after the config was written may take other props."""
+    vid = env["video"]("vid_validate")
+    assert server.write_scene_config(vid, _config()).get("error") is None
+    _rewrite(env, "ext_dom", "schema.json", json.dumps({"type": "object", "required": ["subtitle"]}))
+    errors, _ = server._external_scene_errors(vid, json.loads((server.JOBS_DIR / vid / "scene-config.json").read_text()))
+    assert any("props.testStyle" in e and "subtitle" in e for e in errors)
+
+
+def test_validate_job_typechecks_the_package_component(env, monkeypatch):
+    vid = env["video"]("vid_tsc")
+    assert server.write_scene_config(vid, _config()).get("error") is None
+    _, files = server._external_scene_errors(vid, json.loads((server.JOBS_DIR / vid / "scene-config.json").read_text()))
+    assert files == [env["styles"] / "ext_dom" / "components" / "Main.tsx"]
+
+
+def test_a_package_changed_after_the_look_needs_a_new_look(env):
+    import frame_preview
+    vid = env["video"]("vid_look")
+    assert server.write_scene_config(vid, _config()).get("error") is None
+    job = server.JOBS_DIR / vid
+    (job / "timeline.json").write_text("{}")
+    before = frame_preview._content_hash(job / "scene-config.json", job / "timeline.json")
+    _rewrite(env, "ext_dom", "components/Main.tsx", "export default () => 1;")
+    assert frame_preview._content_hash(job / "scene-config.json", job / "timeline.json") != before

@@ -318,6 +318,19 @@ def _external_style(work: Path) -> tuple[str, str | None]:
     return drawn, None
 
 
+def _external_changed(work: Path) -> str | None:
+    """After a render: why the package compiled may not be the one queued (it was
+    replaced while webpack read it), or None. The check before the render cannot
+    see a change made during it, as the Cartoon 3D source check compares twice."""
+    if not (work / tjobs.STYLE_SOURCE).is_file():
+        return None
+    _, err = _external_style(work)
+    if err and "changed after the video was queued" in err:
+        return (f"the style package changed while the video rendered, so the render may mix two versions; "
+                "submit_render again")
+    return err
+
+
 def _run_ffmpeg(argv: list, timeout: float, **kwargs) -> subprocess.CompletedProcess:
     """One ffmpeg step of a Cartoon 3D render, as a job process: started in a
     process group of its own through _spawn, so it is the job's live process
@@ -1592,7 +1605,8 @@ def _render(job: _Job, claim: dict, work: Path, public: Path) -> dict:
     if external_err:
         log.error(f"[{video_id}] render refused: {external_err}", extra={"video_id": video_id})
         return _failure("failed", f"The style package cannot be rendered: {external_err}", False, "")
-    style_env = {"TUBEMATIC_EXTERNAL_STYLE": external_style}
+    # what the bundle compiles (webpack-override.mjs): that one package, and this video's generated scenes only
+    style_env = {"TUBEMATIC_EXTERNAL_STYLE": external_style, "TUBEMATIC_RENDER_VIDEO": video_id}
 
     render_props = {
         "sceneConfigPath": f"/public/{video_id}/scene-config.json",
@@ -1621,6 +1635,10 @@ def _render(job: _Job, claim: dict, work: Path, public: Path) -> dict:
         if job.stopped:
             raise _Stopped()
         if outcome == "ok":
+            changed = _external_changed(work)
+            if changed:
+                log.error(f"[{video_id}] {changed}", extra={"video_id": video_id})
+                return _failure("failed", f"The style package cannot be rendered: {changed}", on_gpu, "")
             log.info(f"[{video_id}] render complete ({detail})", extra={"video_id": video_id})
             return _succeeded(job, output_path, on_gpu, total_frames, time.monotonic() - t0)
         if outcome == "hung":
@@ -1682,6 +1700,10 @@ def _render(job: _Job, claim: dict, work: Path, public: Path) -> dict:
         raise _Stopped()
 
     if result.returncode == 0:
+        changed = _external_changed(work)
+        if changed:
+            log.error(f"[{video_id}] {changed}", extra={"video_id": video_id})
+            return _failure("failed", f"The style package cannot be rendered: {changed}", on_gpu, "")
         log.info(f"[{video_id}] render complete", extra={"video_id": video_id})
         return _succeeded(job, output_path, on_gpu, total_frames, time.monotonic() - t0)
     error_msg = result.stderr or result.stdout

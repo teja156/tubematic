@@ -6080,6 +6080,10 @@ def validate_job(video_id: str) -> dict:
     # Catches the common mistake of referencing a src that was never write_scene_file'd
     # (source="generated") or that doesn't exist in the curated library (source="installed").
     try:
+        if "scene_config" in dir() and isinstance(scene_config, dict):
+            ext_errors, ext_files = _external_scene_errors(video_id, scene_config)
+            errors.extend(ext_errors)
+            typecheck_files.extend(ext_files)
         if "scene_config" in dir():
             for scene in scene_config.get("scenes", []):
                 if scene.get("type") != "generated":
@@ -6089,13 +6093,7 @@ def validate_job(video_id: str) -> dict:
                 if not src:
                     continue
                 if source == external_style.SOURCE:
-                    # the package's own check (TMDEV-252): its style, its component, a valid package
-                    with _conn() as con:
-                        vrow = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
-                    use_err = external_style.check_scene_use(vrow["visual_style"] if vrow else "", [scene])
-                    if use_err:
-                        errors.append(use_err)
-                    continue
+                    continue   # _external_scene_errors, after this loop
                 if source != "installed":
                     # TMDEV-61 follow-up: src is now either a bare legacy name
                     # or "<video_id>/<scene_name>" (write_scene_file's
@@ -6343,6 +6341,27 @@ def _preview_block(video_id: str) -> dict | None:
     if frame_preview.look_recorded(JOBS_DIR, video_id):
         return None
     return {"error": "preview_not_taken", "detail": PREVIEW_NOT_TAKEN}
+
+
+def _external_scene_errors(video_id: str, scene_config: dict) -> tuple[list[str], list[Path]]:
+    """validate_job's checks of a config's external scenes (TMDEV-252): each
+    names a component of the video's own style in a valid package; the props
+    match the schema installed now (a package updated since the config was
+    written may take other props); and the components to typecheck with the
+    video, since a package that does not compile renders nothing."""
+    scenes = [s for s in scene_config.get("scenes", []) if isinstance(s, dict)]
+    if not external_style.external_scenes(scenes):
+        return [], []
+    with _conn() as con:
+        row = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
+    style = (row["visual_style"] if row else "") or ""
+    use_err = external_style.check_scene_use(style, scenes)
+    if use_err:
+        return [use_err], []
+    found = _external_styles.get(style)
+    files = sorted({found.path / "components" / f"{s['src'].split('/components/', 1)[1]}.tsx"
+                    for _, s in external_style.external_scenes(scenes)})
+    return external_style.check(scene_config, style), files
 
 
 def _external_block(video_id: str) -> dict | None:

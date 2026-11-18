@@ -1517,7 +1517,12 @@ Covers `mcp/external_style.py` and the external-style path through `mcp/server.p
   `style_unavailable` when a file was edited in place after `write_scene_config`, leaving the video
   at `VOICE_READY`.
 - Auto routes to an external style only once `external_styles_in_auto` names it, and a malformed
-  value opts none in. The stills CLI's environment names the video's external style.
+  value opts none in. The stills CLI's environment names the video's external style and the video.
+- A schema's `$ref` to a URL or a file is refused and never fetched, and a reference inside the schema
+  still works.
+- `validate_job`'s external checks (`_external_scene_errors`) check the props against the schema
+  installed now and list the package's components for the typecheck.
+- The look's content hash changes when the package changes.
 
 Trap: the registry cache only notices a new manifest or folder, so `submit_render` checks the
 package from disk. A file edited in place would otherwise reach the render as an approved package.

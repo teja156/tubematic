@@ -22,6 +22,8 @@ import { overrideFromEnv } from "../../../webpack-override.mjs";
 // The external style a still's video is drawn in (TMDEV-252), "" for a built-in style: the server and
 // the bundle here compile that one package only.
 const externalStyle = () => process.env.TUBEMATIC_EXTERNAL_STYLE || "";
+// The video the stills are of: the bundle compiles its generated scenes only.
+const renderVideo = () => process.env.TUBEMATIC_RENDER_VIDEO || "";
 
 export interface StillJob {
   composition: string;
@@ -55,7 +57,7 @@ const viaServer = (jobs: StillJob[], scale: number): boolean => {
   for (const j of jobs) {
     fs.mkdirSync(path.dirname(j.out), { recursive: true });
     const r = curl("/still", JSON.stringify({ composition: j.composition, props: j.props, frame: j.frame, out: j.out, scale,
-      externalStyle: externalStyle() }));
+      externalStyle: externalStyle(), renderVideo: renderVideo() }));
     // a server that could not bundle or open its browser cannot draw: render every still here instead
     if (/"startFailed":true/.test(r.stdout)) return false;
     // no answer at all, and no server any more (it died mid-request, say while bundling): the same

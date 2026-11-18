@@ -800,8 +800,9 @@ path. One test runs enrollment and a heartbeat over real TLS.
   scenes.
 - An external style: a remote renderer stages the video's one package and clears it, and the built-in
   renderer compiles the mounted package. The render's environment names the style, and a built-in
-  style's render names none. A package changed after queueing, or an external scene with no record,
-  is not rendered and the agent is told why.
+  style's render names none, and every render names its video. A package changed after queueing,
+  changed while the video rendered, or an external scene with no record, is not uploaded and the
+  agent is told why.
 
 Trap: after a hung render is killed, the reaper drains orphans without blocking and stops when the
 stills server is the only child left. A blocking wait sits on that long-lived child and the render

@@ -10,6 +10,9 @@
 //   installed package that fails to compile would then break every render, so a
 //   bundle compiles only the external style it was made for, and none for a
 //   built-in style's video.
+// - The generated-scene context the same way: a bundle made for one video
+//   compiles that video's scenes and the legacy flat ones, so another video's
+//   scene (a world video importing a package since removed) cannot break it.
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -40,7 +43,13 @@ export const externalContextRegExp = (style) => {
   return new RegExp(`^\\./${style}/.*\\.tsx$`);
 };
 
-export const overrideFor = (style) => (config) => {
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// The video's own namespaced scenes and the legacy flat files; null leaves the context whole.
+export const generatedContextRegExp = (videoId) =>
+  videoId ? new RegExp(`^\\./(${escapeRe(videoId)}/.*|[^/]+)\\.tsx$`) : null;
+
+export const overrideFor = (style, videoId = "") => (config) => {
   const tailwind = enableTailwind(config);
   return {
     ...tailwind,
@@ -51,9 +60,11 @@ export const overrideFor = (style) => (config) => {
     plugins: [
       ...(tailwind.plugins ?? []),
       new webpack.ContextReplacementPlugin(/[\\/]scenes[\\/]external$/, externalContextRegExp(style)),
+      ...(videoId ? [new webpack.ContextReplacementPlugin(/[\\/]scenes[\\/]generated$/, generatedContextRegExp(videoId))] : []),
     ],
   };
 };
 
-// The style named by the environment, for the processes that bundle once per video.
-export const overrideFromEnv = () => overrideFor(process.env.TUBEMATIC_EXTERNAL_STYLE || "");
+// The style and the video named by the environment, for the processes that bundle once per video.
+export const overrideFromEnv = () =>
+  overrideFor(process.env.TUBEMATIC_EXTERNAL_STYLE || "", process.env.TUBEMATIC_RENDER_VIDEO || "");

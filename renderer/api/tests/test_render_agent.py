@@ -1281,3 +1281,20 @@ def test_a_built_in_style_render_compiles_no_external_style(env, monkeypatch):
     monkeypatch.setenv("TUBEMATIC_EXTERNAL_STYLE", "ext_stale")
     fake = _render(env)
     assert fake.calls[0][1]["env"]["TUBEMATIC_EXTERNAL_STYLE"] == ""
+    # the bundle compiles this video's generated scenes only
+    assert fake.calls[0][1]["env"]["TUBEMATIC_RENDER_VIDEO"] == "vid-1"
+
+
+def test_a_package_changed_while_it_rendered_fails_the_render(env):
+    """The check before the render cannot see a package replaced while webpack
+    compiles it, so the renderer compares again before it uploads."""
+    pkg = _package(env.external)
+    _record(env.seed(visual_style="ext_dom", scenes=EXTERNAL_SCENES), pkg)
+
+    def swap(argv, kw):
+        (pkg / "components" / "Main.tsx").write_text("replaced mid-render")
+    env.start()
+    with mock.patch("subprocess.Popen", side_effect=FakeRemotion(on_start=swap)):
+        render_agent._loop_once()
+    assert not env.video()["render_uploaded_at"]
+    assert any("changed while the video rendered" in c for c in env.comments())

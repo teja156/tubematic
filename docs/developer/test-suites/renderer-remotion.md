@@ -43,6 +43,9 @@ Covers `webpack-override.mjs`, the bundler override of every bundle that compile
 - The override adds the `@tubematic/scene-api` alias and the context rule.
 - A real webpack compile with two packages, one of which does not parse: the broken package's own
   bundle fails, and a bundle for the other style or for no external style still builds.
+- The generated-scene context matches the named video's scenes and the legacy flat files, treats a
+  legacy id's dots and spaces as plain characters, and stays whole when no video is named. A real
+  compile where another video's scene imports a missing package still builds this video's bundle.
 
 Trap: the composition's `import()` of `./scenes/external/${src}.tsx` is a webpack context, which
 compiles every matching file into every bundle. Without the context rule, one installed package that

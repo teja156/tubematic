@@ -1233,7 +1233,8 @@ It refuses a video in a built-in style, and a video whose package is broken or g
 6. Every scene named in the config resolves to a file, in `generated/` or `installed/` per its
    `source`. A stale bare `src` that collides with a newer namespaced file is reported. An
    `external` scene must still name a component of the video's own style, in a package that is
-   installed and valid.
+   installed and valid, its props must match the schema installed now, and the package's
+   components are typechecked with the video.
 7. Every image-shaped string in a scene's props has the form `/public/<video_id>/images/…` and
    exists on disk inside that video's `images/` directory.
 8. Cartoon 3D readiness, for a config with a Cartoon 3D scene: the video's generated source exists
@@ -1286,7 +1287,8 @@ by skipping `validate_job`:
 - A video in an [external style](10-scene-authoring.md#external-styles) whose package fails its
   checks, read from disk at that moment, returns `style_unavailable` with the reason.
 - A video whose current `scene-config.json` and `timeline.json` have no `preview/record.json` of that
-  content returns `preview_not_taken`. A config rewritten after the look, such as in a revision,
+  content returns `preview_not_taken`. For an external style the content includes the package's
+  fingerprint, so an updated package needs a new look. A config rewritten after the look, such as in a revision,
   needs a new look. A record of `unavailable` passes, so a renderer that cannot draw never stops the
   pipeline. A Cartoon 3D video is not asked: its beat gate is its look.
 

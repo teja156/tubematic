@@ -929,7 +929,8 @@ Covers `lib/visualStyles.ts` ([Visual-style picker](../15-dashboard.md#visual-st
   pack fields `dimension`, `role` and `needs.gpu`. A style whose pack needs an OpenAI key or a GPU,
   and every insert style, cannot be picked, with the reason. A style an older API sends without a
   dimension or role counts as a 2D main style. Low-Poly Skit, a 3D style with `needs.gpu` false, carries no GPU tag and can be picked with no GPU. `previewableRows` is the order the preview window
-  steps through, and `previewUrls` names the served files, the relay route for an external style.
+  steps through, and `previewUrls` names the served files, the relay route for an external style. An
+  external style whose package the API reports broken cannot be picked and shows the API's reason.
 - `videoStyleId` names the style a frozen video's preview plays: the chosen one, Auto's pick or
   Cartoon 3D, and none before Auto has picked or under mixed scenes.
 - `illustratedAvailable` reads the masked `openai_api_key`, where `""` means unset, so the key
