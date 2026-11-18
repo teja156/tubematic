@@ -293,7 +293,7 @@ def test_the_page_escapes_what_a_submitter_wrote(tmp_path):
     site = tmp_path / "site"
     assert gallery.main(["build", str(styles), str(site), "--base-url", BASE]) == 0
     page = (site / "index.html").read_text()
-    assert "<script" not in page and "<img" not in page and "javascript:" not in page
+    assert "<script" not in page and "<img src=x" not in page and "javascript:" not in page
     assert "&lt;script&gt;alert(1)&lt;/script&gt; &amp; more" in page and "Evil &quot;Style&quot;" in page
     # only an https homepage becomes a link
     assert 'href="https://example.com/style"' in page
@@ -329,3 +329,18 @@ def test_a_version_that_is_not_a_safe_file_name_fails_scan_and_build(tmp_path, c
     assert gallery.main(["scan", str(styles)]) == 1
     assert gallery.main(["build", str(styles), str(tmp_path / "site"), "--base-url", BASE]) == 1
     assert not list(tmp_path.glob("**/escape*")) and not (tmp_path / "site" / "index.json").exists()
+
+
+def test_the_page_wears_the_dashboards_theme(tmp_path):
+    """The gallery page matches the dashboard (user, 2026-11-18): the same colour tokens, fonts and
+    logo. The tokens are copied, so this pins them to dashboard/app/globals.css."""
+    css = (REPO / "dashboard" / "app" / "globals.css").read_text()
+    root = css[css.index("/* ── TubeMatic CRT Design Tokens"):]
+    tokens = dict(re.findall(r"--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})\s*;", root[:root.index("}")]))
+    page = gallery.render_page([], "")
+    for name in ("bg", "panel", "panel-2", "border", "border-2", "ink", "ink-2", "dim", "mute", "amber"):
+        assert f"--{name}: {tokens[name]};" in page, name
+    assert "Space+Mono" in page and "Inter" in page
+    logo = (REPO / "dashboard" / "public" / "logo-mark.svg").read_text()
+    assert "<rect x=\"36\" y=\"24\" width=\"4\" height=\"24\">" in logo  # the mark, as the dashboard draws it
+    assert "data:image/svg+xml;base64," in page and ">TUBEMATIC<" in page
