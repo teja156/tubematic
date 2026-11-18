@@ -514,7 +514,10 @@ the agent, and Tubematic does not sandbox either, so installing a package means 
   `mascot` false, `authoring_skill` `tubematic-external-style` and the `scene_api` this version
   draws (`external_styles.SCENE_API`);
 - the required files are there, the schema is a JSON object, and the code folder its renderer needs
-  holds a `.tsx` file.
+  holds a `.tsx` file;
+- no relative import in its code leaves the package folder, and no import names an absolute path.
+  The fingerprint covers the folder alone and a remote renderer stages it alone, so a package
+  reaches the rest of the renderer only through `@tubematic/scene-api` and its npm packages.
 
 A package that fails is listed unavailable with the reason, and every other style keeps working.
 A broken built-in pack stops the process at start-up because it ships with the release; a package
@@ -527,7 +530,8 @@ needs no restart.
 so a valid external style can be chosen for a video or as a domain's default like a built-in one.
 `GET /visual-styles` lists them after the built-in styles with `external: true`, and the picker
 tags them EXTERNAL. A `needs.gpu` pack is gated like Cartoon 3D. External styles take no mascot and
-host no inserts.
+host no inserts. While a video's package is broken or gone, `get_video`'s `style` stays external
+and carries `unavailable_reason`, and the skill stops there.
 
 Auto picks an external style only once a person names it in the `external_styles_in_auto` setting,
 because a package's routing text is its author's claim and Auto has never been measured on it.
@@ -541,10 +545,12 @@ Tubematic's rules.
 - A scene style's scenes are `{"type": "generated", "source": "external", "src":
   "<style id>/components/<Name>", "props": {"<props_key>": {…}}}`. `write_scene_config` refuses a
   component of another style or one the package lacks, and props that break `schema.json`, naming the
-  failing path (`mcp/external_style.py`). A `$ref` is followed only inside the schema: the MCP
+  failing path (`mcp/external_style.py`). The video draws at least one of the package's
+  components, and an `external` scene is always of type `generated`. A `$ref` is followed only inside the schema: the MCP
   container holds the database and the tokens, so a package's schema never makes it fetch a URL or
   read a file. The pack's captions fill the config. `validate_job` checks the props against the
-  schema installed at that moment and typechecks the package's components with the video. The
+  schema installed at that moment and typechecks every file of the package's `components/` with the
+video, since webpack compiles each one. The
   video takes the `preview_frames` look before `submit_render`, and the look covers the package's
   fingerprint, so an updated package needs a new look.
 - A world style's video is one generated `CartoonShort` scene that imports the package's runner as

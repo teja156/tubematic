@@ -37,6 +37,9 @@ def check_scene_use(style: str, scenes) -> str:
     is installed and valid."""
     style = (style or "").strip()
     for i, scene in external_scenes(scenes):
+        if scene.get("type") != "generated":
+            return (f"scenes[{i}] has source \"external\", which only a scene of type \"generated\" takes: "
+                    "the renderer loads an external component through a generated scene")
         src = scene.get("src")
         m = _SRC_RE.fullmatch(src) if isinstance(src, str) else None
         if not m:

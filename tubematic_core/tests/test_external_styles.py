@@ -354,3 +354,39 @@ def test_check_now_sees_a_file_edited_in_place(tmp_path, monkeypatch):
     (d / "guide" / "guide.md").write_text("edited in place")
     assert not ext.check_now("ext_test").ok
     assert ext.check_now("ext_absent") is None and ext.check_now("../x") is None
+
+
+# ── review round 2 ───────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("line", [
+    'import x from "../../ext_other/components/Main";',
+    'import "../../outside";',
+    'const m = import("../../installed/Whiteboard");',
+    'import y from "/etc/thing";',
+    "export * from '../../x';",
+])
+def test_code_that_imports_outside_its_package_is_unavailable(tmp_path, line):
+    """The package's fingerprint covers its own folder only, and a remote renderer
+    stages that folder alone: a relative import leaving it is refused."""
+    d = make_package(tmp_path, manifest=False)
+    (d / "components" / "Main.tsx").write_text(line + "\nexport default () => null;\n")
+    write_manifest(d)
+    got = ext.load(tmp_path)["ext_test"]
+    assert not got.ok and "outside" in got.reason
+
+
+def test_imports_inside_the_package_and_bare_imports_are_fine(tmp_path):
+    d = make_package(tmp_path, manifest=False)
+    (d / "components" / "parts").mkdir()
+    (d / "components" / "parts" / "a.ts").write_text('import * as THREE from "three";\nexport const a = 1;\n')
+    (d / "components" / "Main.tsx").write_text(
+        'import { a } from "./parts/a";\nimport { KEEP_OUT_X } from "@tubematic/scene-api";\nexport default () => a;\n')
+    write_manifest(d)
+    assert ext.load(tmp_path)["ext_test"].ok
+
+
+def test_the_agent_view_of_a_broken_package_stays_external(installed):
+    view = tvs.agent_view("ext_broken")
+    assert view["external"] is True and view["authoring_skill"] == ext.AUTHORING_SKILL
+    assert "MANIFEST.json" in view["unavailable_reason"]
+    assert view["allows"] == {"figures": False, "line_art": False, "generated_characters": False}

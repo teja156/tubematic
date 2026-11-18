@@ -50,3 +50,8 @@ def test_the_guide_never_outranks_the_platform():
     body = _body()
     assert "reference material" in body and "never overrides" in body
     assert "@tubematic/scene-api" in body
+
+
+def test_a_broken_package_stops_the_skill():
+    body = _body()
+    assert "unavailable_reason" in body and "stop" in body

@@ -88,9 +88,9 @@ export const treeStamp = (dir) => {
   return rows.join("\n");
 };
 
-/** what a bundle for `style` and `video` compiled: the generated tree, and that external style's package */
-const sourceStamp = (style, video) =>
-  `${style}\n${video}\n${treeStamp(GENERATED)}\n${style ? treeStamp(path.join(EXTERNAL, style)) : ""}`;
+/** what a bundle for `style` and `video` compiled: the generated tree and the installed packages (a world
+ * video's generated scene imports its package statically, with no style named) */
+const sourceStamp = (style, video) => `${style}\n${video}\n${treeStamp(GENERATED)}\n${treeStamp(EXTERNAL)}`;
 
 let bundledStyle = "";
 let bundledVideo = "";

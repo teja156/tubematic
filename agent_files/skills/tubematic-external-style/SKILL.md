@@ -27,7 +27,8 @@ scene props, and a guide written by its author. This skill is the workflow; the 
 ## Step 0: read first
 
 1. `get_video(video_id)`: the topic, the script segments and their `visual` briefs, `style` (with
-   `renderer` and `props_key`), the comments.
+   `renderer` and `props_key`), the comments. If `style.unavailable_reason` is set, the package is broken or
+   gone: `add_comment` with the reason, and stop. Only a person can fix or reinstall it.
 2. `get_style_guide(video_id)`: `reference` holds the guide (`guide.md`), an example config, perhaps an example
    timeline, and `schema.json`, the JSON Schema every scene's `props[props_key]` must match. Read all of it.
 3. `get_timeline(video_id, include_words=True)`: `total_frames`, `fps`, the segments with their beat and role
@@ -48,7 +49,8 @@ scene props, and a guide written by its author. This skill is the workflow; the 
     "durationInFrames": <frames>, "props": {"<props_key>": { ... }}}
    ```
 
-   `<Name>` is a component file of the package without `.tsx`, as the guide's example config names it. Leave
+   `<Name>` is a component file of the package without `.tsx`, as the guide's example config names it. At
+   least one scene is a component of the package; you may add scenes of your own with `write_scene_file`. Leave
    `subtitles` out unless the person asked for other captions: the style's own fill it. A refusal names the
    scene and the path in the props that broke the schema; fix exactly that and write the config again.
 3. `validate_job(video_id)`: fix every error and read the warnings (text overlaps, a first frame with nothing on

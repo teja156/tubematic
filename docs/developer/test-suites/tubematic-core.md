@@ -205,6 +205,10 @@ data folder:
 - One broken package leaves the others available.
 - The registry sees a package added or rewritten without a restart, and the fingerprint changes with
   any file. `check_now` sees a file edited in place, which the registry's cache does not.
+- A package whose code imports outside its folder (a relative path that leaves it, an absolute path,
+  in the `from`, side-effect, `export … from` and `import()` forms) is unavailable; imports inside
+  it, the scene-API alias and npm packages are fine. The agent view of a broken package stays
+  external, with the reason and no permissions.
 - `config_style` reads the external style a scene-config draws from its first external scene, and
   returns `""` for a config with none or with a malformed id.
 - The style lookups see installed styles: `pack`, `is_known_style`, `is_main_style`,

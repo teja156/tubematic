@@ -272,7 +272,9 @@ videos.
 #### The `style` field
 
 `style` is `{id, label, renderer, canvas, authoring_skill, allows, script, picture, role, inserts,
-external}`, plus `props_key` for an [external style](10-scene-authoring.md#external-styles). Under
+external}`, plus `props_key` for an [external style](10-scene-authoring.md#external-styles). An
+external style whose package is broken or gone keeps `external` and its authoring skill, and adds
+`unavailable_reason`. Under
 `auto`, `renderer` and `canvas` are `null`, `authoring_skill` is `tubematic-scene-config`, `script`
 is `""` and `picture` is the mixed scenes' block.
 

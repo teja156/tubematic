@@ -618,6 +618,17 @@ def agent_view(visual_style: str) -> dict:
     (or an unknown value) authors through the scene-config skill, which
     settles the renderer and the canvas itself."""
     p = pack(visual_style)
+    if not p and is_external(visual_style):
+        # an installed style whose package is broken or gone: still external, so the agent takes the
+        # external skill, which stops on unavailable_reason, and never a mixed-scenes video
+        from . import external_styles
+        sid = visual_style.strip()
+        found = external_styles.get(sid)
+        return {"id": sid, "label": sid, "renderer": None, "canvas": None,
+                "authoring_skill": external_styles.AUTHORING_SKILL,
+                "allows": {k: False for k in _ALLOWS}, "script": "", "picture": dict(SCENES_PICTURE),
+                "role": "main", "inserts": {"host": False}, "external": True,
+                "unavailable_reason": found.reason if found else "the style's package is not installed"}
     if not p:
         chosen = (visual_style or "").strip() or AUTO
         return {"id": chosen, "label": "Auto" if chosen == AUTO else chosen,

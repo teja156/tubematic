@@ -398,7 +398,9 @@ child process. A remote renderer has no `/jobs` volume and runs none.
   mtime) with the one its bundle was made from, and bundles again when they differ. An edit to a
   video's code costs its next still about twenty seconds. A request names its video
   (`renderVideo`) and the video's external style (`externalStyle`), and the bundle compiles that
-  video's generated scenes and that one package, so a still of another video bundles again.
+  video's generated scenes and that one package, so a still of another video bundles again. The
+  stamp covers every installed package, because a world video's scene imports its package with no
+  style named.
 
 `_ensure_stills_server` starts it again when it has died (at most once every
 `STILLS_SERVER_RETRY_SECS`, 60) or when a GPU test moved renders between the GPU and the CPU. With

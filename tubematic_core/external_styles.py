@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import pathlib
+import posixpath
 import re
 import stat
 
@@ -37,6 +38,8 @@ _EXTERNAL_KEYS = {"version": str, "author": str, "source": str, "licence": str,
                   "scene_api": int, "props_key": str}
 _REQUIRED = ("schema.json", "guide/guide.md", "guide/example-config.json", "preview.mp4", "preview.webp")
 _CODE_DIR = {"dom": "components", "cartoon_3d": "runner"}
+# The module specifiers of a TypeScript file: `from "x"`, `import "x"`, `import("x")`, `require("x")`.
+_SPECIFIER_RE = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["']([^"'\n]+)["']""")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -131,6 +134,15 @@ def _check_files(pack: dict, files: dict[str, pathlib.Path]) -> None:
     code = _CODE_DIR[pack["renderer"]]
     if not any(n.startswith(f"{code}/") and n.endswith(".tsx") for n in files):
         raise _Bad(f"a {pack['renderer']} style needs its code in {code}/ (at least one .tsx file)")
+    for name in sorted(n for n in files if n.endswith((".ts", ".tsx"))):
+        for spec in _SPECIFIER_RE.findall(files[name].read_text(encoding="utf-8", errors="replace")):
+            if spec.startswith("/"):
+                raise _Bad(f"{name} imports {spec!r}, a path outside the package")
+            if spec.startswith("."):
+                target = posixpath.normpath(posixpath.join(posixpath.dirname(name), spec))
+                if target == ".." or target.startswith("../"):
+                    raise _Bad(f"{name} imports {spec!r}, outside the package: a package reaches the rest "
+                               "of the renderer through @tubematic/scene-api")
     fonts = [n for n in files if n.startswith("fonts/")]
     if fonts and not any(re.match(r"fonts/(OFL|LICEN[CS]E)", n, re.I) for n in fonts):
         raise _Bad("fonts/ needs a licence file (fonts/OFL.txt or fonts/LICENSE)")

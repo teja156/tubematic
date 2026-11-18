@@ -245,3 +245,35 @@ def test_a_package_changed_after_the_look_needs_a_new_look(env):
     before = frame_preview._content_hash(job / "scene-config.json", job / "timeline.json")
     _rewrite(env, "ext_dom", "components/Main.tsx", "export default () => 1;")
     assert frame_preview._content_hash(job / "scene-config.json", job / "timeline.json") != before
+
+
+# ── review round 2 ───────────────────────────────────────────────────────────
+
+def test_a_scene_style_video_draws_at_least_one_component(env):
+    vid = env["video"]("vid_none")
+    config = _config()
+    config["scenes"][0] = {"type": "generated", "src": f"{vid}/Intro", "startFrame": 0, "durationInFrames": 300}
+    assert "component" in server.write_scene_config(vid, config)["error"]
+
+
+def test_an_external_source_on_a_scene_that_is_not_generated_is_refused(env):
+    vid = env["video"]("vid_type")
+    config = _config()
+    config["scenes"][0]["type"] = "TextReveal"
+    assert "generated" in server.write_scene_config(vid, config)["error"]
+
+
+def test_validate_job_typechecks_every_file_of_the_package(env):
+    """Webpack compiles every .tsx of the package, used or not."""
+    vid = env["video"]("vid_all_files")
+    assert server.write_scene_config(vid, _config()).get("error") is None
+    (env["styles"] / "ext_dom" / "components" / "Unused.tsx").write_text("export default (;")
+    ext.write_manifest(env["styles"] / "ext_dom")
+    _, files = server._external_scene_errors(vid, json.loads((server.JOBS_DIR / vid / "scene-config.json").read_text()))
+    assert env["styles"] / "ext_dom" / "components" / "Unused.tsx" in files
+
+
+def test_a_style_that_takes_no_generated_images_refuses_them_for_an_external_style(env):
+    vid = env["video"]("vid_img")
+    plan = server._image_plan("ext_dom", vid, "a", "a prompt", "9:16", "")
+    assert "takes no generated images" in plan["error"]

@@ -6359,8 +6359,8 @@ def _external_scene_errors(video_id: str, scene_config: dict) -> tuple[list[str]
     if use_err:
         return [use_err], []
     found = _external_styles.get(style)
-    files = sorted({found.path / "components" / f"{s['src'].split('/components/', 1)[1]}.tsx"
-                    for _, s in external_style.external_scenes(scenes)})
+    # every file webpack may compile, used by this config or not: one that does not compile fails the bundle
+    files = sorted(p for p in (found.path / "components").rglob("*") if p.suffix in (".ts", ".tsx") and p.is_file())
     return external_style.check(scene_config, style), files
 
 
@@ -7311,11 +7311,11 @@ def _image_plan(style: str, video_id: str, image_name: str, prompt: str,
     ref_path None. Nothing here spends money."""
     # A style that draws every picture itself (routing.images 0) never sends a
     # paid request: its skill says so, and this refuses it before any spend.
-    if style in tvs.PACKS and tvs.pack(style)["routing"]["images"] == 0:
+    if tvs.pack(style) and tvs.pack(style)["routing"]["images"] == 0:
         return {"error": f"{tvs.pack(style)['label']} draws every picture in code and takes no "
                          f"generated images (this video's visual_style is {style!r}). Use the "
                          "style's own parts instead."}
-    pics = tvs.PACKS[style].get("pictures") if style in tvs.PACKS else None
+    pics = (tvs.pack(style) or {}).get("pictures")
     sheet = (pics or {}).get("sheet")
     if not sheet and reference:
         return {"error": "reference is only for a style painted from a reference sheet "
@@ -7402,7 +7402,7 @@ def _image_cap_error(video_id: str, image_name: str, images_dir) -> str:
     with _conn() as con:
         vrow = con.execute("SELECT visual_style FROM videos WHERE id = ?", (video_id,)).fetchone()
     style = ((vrow["visual_style"] if vrow else "") or "").strip()
-    pics = tvs.PACKS[style].get("pictures") if style in tvs.PACKS else None
+    pics = (tvs.pack(style) or {}).get("pictures")
     if not pics:
         return ""
     # A reference sheet has a slot of its own: it is not a still, and a video
@@ -7672,7 +7672,7 @@ def treat_image(video_id: str, image_name: str, treatment: str) -> dict:
     if not row:
         return {"error": f"Video not found: {video_id}"}
     style = (row["visual_style"] or "").strip()
-    allowed = (tvs.PACKS[style].get("pictures", {}).get("treatments", []) if style in tvs.PACKS else [])
+    allowed = ((tvs.pack(style) or {}).get("pictures") or {}).get("treatments", [])
     if treatment not in allowed:
         if not allowed:
             return {"error": f"This video's visual_style ({style or 'auto'!r}) takes no treatments."}
@@ -9301,6 +9301,10 @@ def _write_scene_config_locked(video_id: str, config: dict) -> dict:
             found = _external_styles.get(row["visual_style"])
             return {"error": f"this video's external style {row['visual_style']!r} cannot be used: "
                              + (found.reason if found else "its package is not installed")}
+        if ext_pack["renderer"] == "dom" and not external_style.external_scenes(scenes):
+            return {"error": f"The {ext_pack['label']} video draws none of its style's components: at least one "
+                             "scene is {\"type\": \"generated\", \"source\": \"external\", \"src\": "
+                             f"\"{row['visual_style']}/components/<Name>\"}} (see get_style_guide)"}
         problems = external_style.check(config, row["visual_style"])
         if problems:
             return {"error": f"The {ext_pack['label']} video has problems: " + " ".join(problems)}

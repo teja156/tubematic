@@ -1523,6 +1523,9 @@ Covers `mcp/external_style.py` and the external-style path through `mcp/server.p
 - `validate_job`'s external checks (`_external_scene_errors`) check the props against the schema
   installed now and list the package's components for the typecheck.
 - The look's content hash changes when the package changes.
+- A scene-style video draws at least one of its package's components, an external scene of another
+  type is refused, every file of the package's `components/` is typechecked, and a pack with
+  `routing.images` 0 refuses generated images for an external style as for a built-in one.
 
 Trap: the registry cache only notices a new manifest or folder, so `submit_render` checks the
 package from disk. A file edited in place would otherwise reach the render as an approved package.

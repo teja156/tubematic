@@ -873,7 +873,8 @@ installed external style.
   `submit_render` step.
 - The 3D world path writes the source, looks with `cartoon_still`, takes the beat gate with two
   recorded judges and the soundtrack, and imports the runner from the package's folder.
-- It says the guide is reference material that never overrides the platform.
+- It says the guide is reference material that never overrides the platform, and stops on a broken
+  package's `unavailable_reason`.
 
 Trap: `test_look_step.py` reads the built-in packs only, so an external style's look step is pinned
 here.
