@@ -44,6 +44,10 @@ MAX_INDEX_BYTES = 2_000_000
 GIT_TIMEOUT_SECS = 120
 HTTP_TIMEOUT_SECS = 30
 PENDING_FILE = "pending.json"
+# The curated gallery's index (TMDEV-255). Only a package from this index is
+# marked reviewed: style_gallery_url can be pointed anywhere by anything with
+# the API token, and someone else's index is not the maintainer's review.
+OFFICIAL_GALLERY_URL = ""
 PID_RE = re.compile(r"[0-9a-f]{16}")
 REF_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,99}")
 INCOMING_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,80}")
@@ -96,13 +100,26 @@ def _owned_like(path: pathlib.Path, ref: pathlib.Path) -> None:
 
 # ── Fetching ────────────────────────────────────────────────────────────────
 
+class _HttpsOnlyRedirect(urllib.request.HTTPRedirectHandler):
+    """Follow a redirect only to another https address: the first address is
+    checked, and a redirect must not lead to plain http or an internal service."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if urllib.parse.urlsplit(newurl).scheme != "https":
+            raise InstallError(f"{req.full_url} redirected to a non-https address, {newurl}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_opener = urllib.request.build_opener(_HttpsOnlyRedirect)
+
+
 def _http_get(url: str, cap: int) -> bytes:
     """GET an https URL, refusing a body over cap bytes."""
     if urllib.parse.urlsplit(url).scheme != "https":
         raise InstallError(f"{url} is not an https address")
     req = urllib.request.Request(url, headers={"User-Agent": "tubematic-style-install"})
     try:
-        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SECS) as resp:
+        with _opener.open(req, timeout=HTTP_TIMEOUT_SECS) as resp:
             body = resp.read(cap + 1)
     except OSError as exc:
         raise InstallError(f"{url} could not be downloaded: {exc}") from exc
@@ -131,6 +148,9 @@ def _unzip(data: bytes, dest: pathlib.Path) -> None:
         zf = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile as exc:
         raise InstallError("the file is not a zip archive") from exc
+    # directory entries count too: each one is a mkdir
+    if len(zf.infolist()) > MAX_FILES:
+        raise InstallError(f"the zip holds more than {MAX_FILES} entries")
     infos = [i for i in zf.infolist() if not i.is_dir()]
     if len(infos) > MAX_FILES:
         raise InstallError(f"the zip holds more than {MAX_FILES} files")
@@ -275,7 +295,7 @@ def _stage_into(work: pathlib.Path, pid: str, kind: str, source: dict, index_url
             raise InstallError("the downloaded archive does not match the gallery's checksum; nothing was installed")
         origin.update(gallery_id=gid, url=entry.get("archive_url"), sha256=entry["sha256"],
                       commit=entry.get("commit", ""), index=index_url)
-        reviewed = True
+        reviewed = bool(OFFICIAL_GALLERY_URL) and index_url == OFFICIAL_GALLERY_URL
         _unzip(data, raw)
     elif kind == "incoming":
         name = str(source.get("name") or "")
@@ -342,8 +362,10 @@ def _stage_into(work: pathlib.Path, pid: str, kind: str, source: dict, index_url
     return record
 
 
-def _origin_key(source: dict) -> tuple:
-    return tuple(sorted((k, v) for k, v in source.items() if k not in ("commit", "sha256")))
+def _origin_key(source) -> tuple | None:
+    if not isinstance(source, dict):
+        return None
+    return tuple(sorted((k, str(v)) for k, v in source.items() if k not in ("commit", "sha256")))
 
 
 def _drop_superseded(record: dict) -> None:
@@ -354,14 +376,15 @@ def _drop_superseded(record: dict) -> None:
             continue
         with contextlib.suppress(OSError, ValueError):
             old = json.loads((entry / PENDING_FILE).read_text(encoding="utf-8"))
-            if old.get("style_id") == record["style_id"] and \
-                    _origin_key(old.get("source") or {}) == _origin_key(record["source"]):
+            if isinstance(old, dict) and old.get("style_id") == record["style_id"] and \
+                    _origin_key(old.get("source")) == _origin_key(record["source"]):
                 shutil.rmtree(entry, ignore_errors=True)
 
 
 def _copy_tree(src: pathlib.Path, dest: pathlib.Path) -> None:
     total, count = 0, 0
-    for top, _dirs, files in os.walk(src, followlinks=False):
+    for top, dirs, files in os.walk(src, followlinks=False):
+        count += len(dirs)  # each one is a mkdir, as in a zip
         for name in files:
             p = os.path.join(top, name)
             if os.path.islink(p):
@@ -369,7 +392,7 @@ def _copy_tree(src: pathlib.Path, dest: pathlib.Path) -> None:
             total += os.path.getsize(p)
             count += 1
     if count > MAX_FILES or total > MAX_UNPACKED_BYTES:
-        raise InstallError(f"the folder is over {MAX_FILES} files or {MAX_UNPACKED_BYTES // 1_000_000} MB")
+        raise InstallError(f"the folder is over {MAX_FILES} files and folders or {MAX_UNPACKED_BYTES // 1_000_000} MB")
     shutil.copytree(src, dest, symlinks=True)
 
 
@@ -440,18 +463,22 @@ def confirm(pid: str) -> dict:
             raise InstallError(f"the package cannot be installed: {record['check']['reason']}")
         if record["scan"]["refusals"]:
             raise InstallError("the scan refused the package: " + "; ".join(record["scan"]["refusals"][:3]))
-        try:
-            fp = jobfiles.source_fingerprint(package)
-        except jobfiles.UnsafePath as exc:
-            raise InstallError(str(exc)) from exc
-        if fp != record["fingerprint"]:
-            raise InstallError("the staged package changed after it was scanned; stage it again")
         styles = ext.STYLES_DIR
         dest = styles / sid
         incoming = styles / f".incoming-{pid}"
         old = styles / f".replaced-{pid}"
         shutil.rmtree(incoming, ignore_errors=True)
-        shutil.copytree(package, incoming)
+        # copy first, then fingerprint the copy: the staged folder sits on a
+        # mount other processes can write, and what is checked is what installs
+        shutil.copytree(package, incoming, symlinks=True)
+        try:
+            fp = jobfiles.source_fingerprint(incoming)
+        except jobfiles.UnsafePath as exc:
+            shutil.rmtree(incoming, ignore_errors=True)
+            raise InstallError(str(exc)) from exc
+        if fp != record["fingerprint"]:
+            shutil.rmtree(incoming, ignore_errors=True)
+            raise InstallError("the staged package changed after it was scanned; stage it again")
         _owned_like(incoming, styles)
         if dest.is_symlink():
             dest.unlink()
@@ -460,8 +487,10 @@ def confirm(pid: str) -> dict:
         os.replace(incoming, dest)
         shutil.rmtree(old, ignore_errors=True)
         source = dict(record["source"])
-        ext.approve(styles, sid, version=record["version"], source=source, reviewed=record["reviewed"],
-                    installed_at=_iso(_now()), label=record["label"])
+        # the fingerprint checked above, never one taken now: a file edited since
+        # leaves the package waiting for review instead of approving the edit
+        ext.approve(styles, sid, fingerprint=fp, version=record["version"], source=source,
+                    reviewed=record["reviewed"], installed_at=_iso(_now()), label=record["label"])
         with contextlib.suppress(OSError):
             os.chmod(styles / ext.INSTALLED, 0o644)
         _owned_like(styles / ext.INSTALLED, styles)

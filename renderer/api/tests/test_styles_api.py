@@ -20,6 +20,7 @@ os.environ.setdefault("TUBEMATIC_DB", ":memory:")
 import pipeline
 from api_auth import LoginThrottle, create_auth_blueprint
 from pipeline import create_pipeline_blueprint
+import styles_api
 from styles_api import create_styles_blueprint
 from tubematic_core import auth as core_auth
 from tubematic_core import external_styles as ext
@@ -84,8 +85,11 @@ def test_staging_a_zip_shows_the_scan_and_installs_nothing(env):
 def test_confirm_needs_the_dashboard_password_and_the_token_alone_cannot_install(env):
     rec = _stage(env)
     url = f"/external-styles/pending/{rec['id']}/confirm"
-    assert env.client.post(url, json={}).status_code == 401
-    assert env.client.post(url, json={"password": "wrong"}).status_code == 401
+    # never 401: the dashboard's proxy reads a 401 as "the API refused my token" and
+    # would hide "wrong password" behind that (found by styles.spec.ts)
+    assert env.client.post(url, json={}).status_code == 400
+    r = env.client.post(url, json={"password": "wrong"})
+    assert r.status_code == 403 and r.get_json()["error"] == "wrong password"
     assert not (env.styles / "ext_test").exists()
     r = env.client.post(url, json={"password": PASSWORD})
     assert r.status_code == 200, r.get_json()
@@ -185,7 +189,25 @@ def test_a_gallery_install_is_marked_reviewed(env, monkeypatch):
         "id": "ext_test", "archive_url": "https://g.invalid/a.zip", "sha256": hashlib.sha256(data).hexdigest()}]}).encode(),
         "https://g.invalid/a.zip": data}
     monkeypatch.setattr(si, "_http_get", lambda url, cap: served[url])
+    monkeypatch.setattr(si, "OFFICIAL_GALLERY_URL", "https://g.invalid/i.json")
     rec = env.client.post("/external-styles/pending", json={"kind": "gallery", "id": "ext_test"}).get_json()
     assert rec["reviewed"] is True
     env.client.post(f"/external-styles/pending/{rec['id']}/confirm", json={"password": PASSWORD})
     assert env.client.get("/external-styles").get_json()["styles"][0]["reviewed"] is True
+
+
+def test_an_oversized_upload_is_refused_before_it_is_read(env):
+    """The body was parsed and decoded before the zip cap applied."""
+    r = env.client.post("/external-styles/pending", data="x" * 10, content_type="application/json",
+                        environ_overrides={"CONTENT_LENGTH": str(styles_api.MAX_BODY_BYTES + 1)})
+    assert r.status_code == 413
+
+
+def test_a_chunked_upload_over_the_cap_is_refused(env, monkeypatch):
+    """A chunked body has no Content-Length, so the length check alone let it
+    through to be parsed whole."""
+    monkeypatch.setattr(styles_api, "MAX_BODY_BYTES", 100)
+    body = json.dumps({"kind": "zip", "data": "A" * 400})
+    r = env.client.post("/external-styles/pending", data=body, content_type="application/json",
+                        environ_overrides={"CONTENT_LENGTH": "", "wsgi.input_terminated": True})
+    assert r.status_code == 413

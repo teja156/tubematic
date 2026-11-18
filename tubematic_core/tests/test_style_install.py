@@ -164,7 +164,7 @@ def test_an_incoming_folder_and_zip_stage(dirs):
 
 def test_an_installed_package_waiting_for_review_stages_and_confirms(dirs):
     make_package(dirs.styles, approve=False)
-    assert ext.load(dirs.styles)["ext_test"].needs_review
+    assert not ext.load(dirs.styles)["ext_test"].ok
     rec = si.stage({"kind": "installed", "id": "ext_test"})
     si.confirm(rec["id"])
     assert ext.load(dirs.styles)["ext_test"].ok
@@ -177,6 +177,7 @@ def test_the_gallery_verifies_the_archive_checksum_and_marks_reviewed(dirs, monk
                          "sha256": hashlib.sha256(data).hexdigest(), "commit": "abc"}]}
     served = {"https://g.invalid/index.json": json.dumps(index).encode(), "https://g.invalid/ext_test.zip": data}
     monkeypatch.setattr(si, "_http_get", lambda url, cap: served[url])
+    monkeypatch.setattr(si, "OFFICIAL_GALLERY_URL", "https://g.invalid/index.json")
     rec = si.stage({"kind": "gallery", "id": "ext_test"}, index_url="https://g.invalid/index.json")
     assert rec["reviewed"] is True and rec["source"]["commit"] == "abc"
     served["https://g.invalid/ext_test.zip"] = data + b"tampered"
@@ -299,3 +300,101 @@ def test_staging_the_same_style_from_the_same_source_replaces_the_older_pending_
     pkg = make_package(dirs.src, approve=False)
     third = si.stage({"kind": "zip", "data": _zip(pkg)})
     assert {r["id"] for r in si.list_pending()} == {second["id"], third["id"]}
+
+
+# ── review round 1 ───────────────────────────────────────────────────────────
+
+def test_a_redirect_to_plain_http_is_refused():
+    """Only the first address was checked for https; urlopen followed a
+    redirect anywhere, including an internal http address."""
+    import urllib.request
+    handler = si._HttpsOnlyRedirect()
+    req = urllib.request.Request("https://g.invalid/a")
+    with pytest.raises(si.InstallError, match="redirected to a non-https"):
+        handler.redirect_request(req, None, 302, "Found", {}, "http://127.0.0.1:8080/secret")
+    assert handler.redirect_request(req, None, 302, "Found", {}, "https://cdn.invalid/b") is not None
+
+
+def test_directory_entries_count_against_the_file_cap(dirs, monkeypatch):
+    monkeypatch.setattr(si, "MAX_FILES", 3)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for i in range(5):
+            zf.writestr(f"d{i}/", "")
+    with pytest.raises(si.InstallError, match="more than 3"):
+        si.stage({"kind": "zip", "data": buf.getvalue()})
+
+
+def test_bytes_changed_while_confirming_are_not_installed(dirs, monkeypatch):
+    """The fingerprint was taken before the copy, so a file edited between the
+    two was installed and approved. The copy is what is checked now."""
+    pkg = make_package(dirs.src, approve=False)
+    rec = si.stage({"kind": "zip", "data": _zip(pkg)})
+    real = si.shutil.copytree
+    staged = dirs.pending / rec["id"] / "package"
+
+    def tamper(src, dst, *a, **kw):
+        if pathlib.Path(src) == staged:
+            (staged / "guide" / "guide.md").write_text("# swapped mid-copy\n")
+        return real(src, dst, *a, **kw)
+
+    monkeypatch.setattr(si.shutil, "copytree", tamper)
+    with pytest.raises(si.InstallError, match="changed after it was scanned"):
+        si.confirm(rec["id"])
+    assert not (dirs.styles / "ext_test").exists()
+    assert not [p for p in dirs.styles.iterdir() if p.name.startswith(".incoming")]
+
+
+def test_only_the_official_gallery_marks_a_package_reviewed(dirs, monkeypatch):
+    """style_gallery_url can be set by anything with the API token: a gallery
+    of someone's own choosing is not the maintainer's review."""
+    pkg = make_package(dirs.src, approve=False)
+    data = _zip(pkg)
+    index = {"styles": [{"id": "ext_test", "archive_url": "https://g.invalid/a.zip",
+                         "sha256": hashlib.sha256(data).hexdigest()}]}
+    monkeypatch.setattr(si, "_http_get", lambda url, cap: json.dumps(index).encode() if url.endswith(".json") else data)
+    monkeypatch.setattr(si, "OFFICIAL_GALLERY_URL", "https://official.invalid/index.json")
+    rec = si.stage({"kind": "gallery", "id": "ext_test"}, index_url="https://other.invalid/index.json")
+    assert rec["reviewed"] is False
+    rec = si.stage({"kind": "gallery", "id": "ext_test"}, index_url="https://official.invalid/index.json")
+    assert rec["reviewed"] is True
+
+
+# ── review round 2 ───────────────────────────────────────────────────────────
+
+def test_bytes_changed_after_the_copy_is_checked_are_not_approved(dirs, monkeypatch):
+    """The approval recorded a fingerprint taken after the swap, so a file
+    edited between the check and the swap was approved. The record now holds
+    the checked fingerprint, and the edited package waits for review."""
+    pkg = make_package(dirs.src, approve=False)
+    rec = si.stage({"kind": "zip", "data": _zip(pkg)})
+    real = si._owned_like
+
+    def tamper(path, ref):
+        if pathlib.Path(path).name.startswith(".incoming-"):
+            (pathlib.Path(path) / "guide" / "guide.md").write_text("# edited after the check\n")
+        return real(path, ref)
+
+    monkeypatch.setattr(si, "_owned_like", tamper)
+    si.confirm(rec["id"])
+    assert ext.approvals(dirs.styles)["ext_test"]["fingerprint"] == rec["fingerprint"]
+    assert not ext.load(dirs.styles)["ext_test"].ok
+
+
+def test_a_malformed_pending_record_does_not_break_staging(dirs):
+    bad = dirs.pending / ("0" * 16)
+    bad.mkdir()
+    (bad / si.PENDING_FILE).write_text(json.dumps({"style_id": "ext_test", "source": "x", "expires_at": "2999-01-01T00:00:00Z"}))
+    pkg = make_package(dirs.src, approve=False)
+    assert si.stage({"kind": "zip", "data": _zip(pkg)})["check"]["ok"]
+
+
+# ── review round 3 ───────────────────────────────────────────────────────────
+
+def test_an_incoming_folder_with_too_many_directories_is_refused(dirs, monkeypatch):
+    monkeypatch.setattr(si, "MAX_FILES", 5)
+    d = dirs.incoming / "many"
+    for i in range(8):
+        (d / f"d{i}").mkdir(parents=True)
+    with pytest.raises(si.InstallError, match="over 5 files and folders"):
+        si.stage({"kind": "incoming", "name": "many"})

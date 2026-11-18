@@ -36,3 +36,14 @@ describe("the beat gate's key", () => {
     expect(keyMaterial(src, ext, {})).not.toBe(before);
   });
 });
+
+describe("the beat gate's key over binary package files", () => {
+  it("changes when a binary asset of the package changes", () => {
+    const ext = tree({ "ext_lp/runner/Run.tsx": "v1" });
+    fs.writeFileSync(path.join(ext, "ext_lp/runner/model.glb"), Buffer.from([0xff]));
+    const src = tree({ "Short.tsx": 'import R from "../../external/ext_lp/runner/Run";' });
+    const before = keyMaterial(src, ext, {});
+    fs.writeFileSync(path.join(ext, "ext_lp/runner/model.glb"), Buffer.from([0xfe]));
+    expect(keyMaterial(src, ext, {})).not.toBe(before);
+  });
+});

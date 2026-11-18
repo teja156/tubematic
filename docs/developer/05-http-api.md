@@ -930,7 +930,8 @@ Reads the index at `style_gallery_url` and returns `{gallery_url, styles}`, each
 
 Stages a package and returns its record, `201`. The body is `{"kind": "zip", "filename", "data":
 <base64>}`, `{"kind": "git", "url", "ref"}`, `{"kind": "gallery", "id"}` or `{"kind": "installed",
-"id"}`. An `incoming` source is MCP-only. A refusal (a bad archive, an unpinned or non-https
+"id"}`. An `incoming` source is MCP-only. A body over the zip cap, base64-encoded, is `413` before
+it is read. A refusal (a bad archive, an unpinned or non-https
 repository, a checksum that does not match the gallery, too many installs waiting) is `400`. The
 record holds `id`, `style_id`, `label`, `version`, `author`, `licence`, `homepage`, `renderer`,
 `needs_gpu`, `source`, `reviewed`, `created_at`, `expires_at`, `fingerprint`, `check` (`{ok,
@@ -949,7 +950,8 @@ outside the package, a binary file or one over 1 MB is `404`.
 ### `POST /external-styles/pending/<id>/confirm`
 
 Installs the staged package. The body must carry `{"password": <the dashboard password>}`: a
-missing or wrong one is `401`, and the check shares the login's throttle (`429` with `Retry-After`).
+missing one is `400` and a wrong one `403` (never `401`, which the dashboard's proxy reads as its own
+token being refused), and the check shares the login's throttle (`429` with `Retry-After`).
 A package that fails its check or the scan's refusals, or whose files changed after the scan, is
 `409`. Returns `{style_id, version, fingerprint}`.
 

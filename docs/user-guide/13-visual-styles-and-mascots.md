@@ -330,8 +330,9 @@ other styles. It takes no mascot and no insert scenes.
 
 A style package is code. It runs in the renderer's browser whenever a video in that style renders,
 and your agent reads its guide while it writes the video. Tubematic does not sandbox it, so install
-a style only from someone you trust. Gallery styles were reviewed by a person before they were
-published; a zip or a repository was not.
+a style only from someone you trust. Styles in the Tubematic gallery were reviewed by a person before
+they were published, and their install screen says **REVIEWED**; a zip, a repository or another
+gallery address was not.
 
 ### Installing a style
 

@@ -56,6 +56,10 @@ describe("the helpers", () => {
     expect(sourceLabel({ kind: "git", url: "https://x/y", commit: "0123456789abcdef0123" })).toBe(
       "Git repository https://x/y at 0123456789ab");
     expect(sourceLabel(null)).toMatch(/by hand/);
+    // only the curated gallery is Tubematic's; another gallery address is someone else's index
+    expect(sourceLabel({ kind: "gallery", gallery_id: "ext_a" }, true)).toBe("Tubematic gallery (ext_a)");
+    expect(sourceLabel({ kind: "gallery", gallery_id: "ext_a", index: "https://other.invalid/i.json" }, false))
+      .toBe("Gallery at https://other.invalid/i.json (ext_a), not reviewed");
   });
 
   it("blocks the install of a package that fails its check or the scan", () => {

@@ -163,7 +163,7 @@ export default function StylesPage() {
               padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
               <span style={{ flex: 1 }}>
                 {p.label} <span style={{ ...mono, color: "var(--dim)" }}>{p.style_id} {p.version}</span>
-                <span style={{ color: "var(--dim)" }}> · {sourceLabel(p.source)}</span>
+                <span style={{ color: "var(--dim)" }}> · {sourceLabel(p.source, p.reviewed)}</span>
               </span>
               <Link href={`/styles/install/${p.id}`} style={btn("var(--amber)")}>Review</Link>
             </div>
@@ -189,7 +189,7 @@ export default function StylesPage() {
                     border: "1px solid var(--green)", padding: "1px 4px", letterSpacing: "0.1em" }}>REVIEWED</span>}
                 </div>
                 <div style={{ ...mono, color: "var(--dim)", fontSize: 11 }}>
-                  {s.id} · {s.version || "no version"} · {s.author || "unknown author"} · {sourceLabel(s.source)}
+                  {s.id} · {s.version || "no version"} · {s.author || "unknown author"} · {sourceLabel(s.source, s.reviewed)}
                   {s.needs_gpu ? " · needs a GPU" : ""}
                 </div>
                 {!s.ok && (
@@ -227,8 +227,9 @@ export default function StylesPage() {
         <>
           <SectionLabel label="Gallery" />
           <p style={{ color: "var(--dim)", fontSize: 13, maxWidth: 760 }}>
-            Styles a Tubematic maintainer reviewed before publishing them. The download is checked against the
-            gallery&apos;s checksum.
+            The styles listed at the gallery address below. The Tubematic gallery&apos;s styles were reviewed by a
+            person before they were published; a gallery at another address was not. Every download is checked
+            against its gallery&apos;s checksum.
           </p>
           <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "6px 0 14px", maxWidth: 760 }}>
             <input aria-label="Gallery address" data-testid="gallery-url" style={inputStyle}

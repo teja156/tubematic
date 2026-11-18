@@ -21,6 +21,9 @@ from tubematic_core import external_styles as texternal
 from tubematic_core import style_install as tinstall
 from tubematic_core import visual_styles as tvs
 
+# A zip of style_install.MAX_ZIP_BYTES, base64-encoded in JSON, with room for the other fields.
+MAX_BODY_BYTES = tinstall.MAX_ZIP_BYTES * 4 // 3 + 64_000
+
 # A video in these statuses (or archived) no longer needs its style's package.
 FINISHED_STATUSES = ("PUBLISHED", "PARTIALLY_PUBLISHED", "FAILED", "TOPIC_REJECTED")
 
@@ -96,7 +99,19 @@ def create_styles_blueprint(db_path: str, throttle) -> Blueprint:
 
     @bp.post("/external-styles/pending")
     def stage():
-        body = request.get_json(silent=True) or {}
+        # refused before the body is read: a huge one would be parsed and decoded first
+        too_big = _err(f"the upload is larger than {tinstall.MAX_ZIP_BYTES // 1_000_000} MB", 413)
+        if (request.content_length or 0) > MAX_BODY_BYTES:
+            return too_big
+        # a chunked body has no Content-Length: read at most one byte past the cap
+        raw = request.stream.read(MAX_BODY_BYTES + 1)
+        if len(raw) > MAX_BODY_BYTES:
+            return too_big
+        try:
+            body = json.loads(raw or b"{}")
+        except ValueError:
+            return _err("the body must be JSON")
+        body = body if isinstance(body, dict) else {}
         kind = body.get("kind")
         source = {k: body.get(k) for k in ("kind", "url", "ref", "id", "name", "filename")}
         if kind == "zip":
@@ -145,7 +160,7 @@ def create_styles_blueprint(db_path: str, throttle) -> Blueprint:
         """The human yes. Needs the dashboard password; see the module docstring."""
         password = (request.get_json(silent=True) or {}).get("password")
         if not isinstance(password, str) or not password or len(password) > 1024:
-            return _err("Enter your dashboard password to install a style.", 401)
+            return _err("Enter your dashboard password to install a style.", 400)
         wait = throttle.begin()
         if wait:
             return (jsonify({"error": f"too many password attempts; try again in {wait}s"}),
@@ -157,7 +172,8 @@ def create_styles_blueprint(db_path: str, throttle) -> Blueprint:
         finally:
             throttle.finish(ok)
         if not ok:
-            return _err("wrong password", 401)
+            # 403, never 401: the dashboard's proxy reads a 401 as its own token being refused
+            return _err("wrong password", 403)
         try:
             result = tinstall.confirm(pid)
         except tinstall.InstallError as exc:

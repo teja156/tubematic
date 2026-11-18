@@ -237,6 +237,22 @@ Covers the Mascots page against the real API.
   which refuses a path that is not a sheet and a request with no session.
 - A new mascot is filed as `PENDING` and can be archived.
 - The Profiles tab stays active on `/mascots` and fits the one-row top bar at 1640px.
+
+### `styles.spec.ts`
+
+Covers external styles against the real API, with `fixtures/ext_e2e_cards.zip`, a minimal valid
+package.
+
+- **Install from file** stages the zip and opens the install screen, which shows the unreviewed
+  warning, a passing check and the guide.
+- A wrong password is refused on the screen; the dashboard password installs the style, which the
+  Styles page lists with the EXTERNAL tag and `GET /visual-styles` lists as available.
+- **Remove** deletes it.
+- An install that is not waiting says so.
+
+Trap: the fixture zip is a real package, so a change to the loader's rules can break it. Rebuild it
+from `tubematic_core/tests/test_external_styles.py::make_package` (with a component that imports only
+`react` and `remotion`) when the rules change.
 - `/settings?tab=rendering` opens the Rendering tab with the default-mascot picker.
 
 Needs: a unique mascot name per run and per retry. The id is a slug of the name, so a retry would

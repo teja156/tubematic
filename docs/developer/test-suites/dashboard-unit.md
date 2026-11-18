@@ -184,7 +184,8 @@ Covers the Styles page (`app/styles/page.tsx`), the install screen
 (`app/styles/install/[id]/page.tsx`) and `dashboard/lib/externalStyles.ts`.
 
 - The warning depends on whether a person reviewed the package (gallery) or not, and the source is
-  named for each kind.
+  named for each kind. Only the curated gallery is named as Tubematic's; another gallery address is
+  named with its address and "not reviewed".
 - The install screen shows the warning, the scan's flags with file and line, the agent's audit, the
   guide and a file's text, and installs only with a password, which it sends in the confirm's body
   and clears afterwards. A wrong password keeps the person on the screen. A refused package offers no
