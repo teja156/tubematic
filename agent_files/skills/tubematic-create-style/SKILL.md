@@ -164,7 +164,8 @@ before you build.
 Tubematic's own check is the one that counts:
 
 ```bash
-rm -rf ~/.tubematic-data/styles-incoming/<id> && cp -r "$W/package/<id>" ~/.tubematic-data/styles-incoming/<id>
+test -f "$W/package/<id>/style.json" && rm -rf ~/.tubematic-data/styles-incoming/<id> \
+  && cp -r "$W/package/<id>" ~/.tubematic-data/styles-incoming/<id>
 ```
 
 Then call `tubematic:stage_style_install("incoming:<id>")`. Read `check`, `refusals` and `flags`:
