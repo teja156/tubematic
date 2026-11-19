@@ -388,6 +388,9 @@ def test_the_page_lays_styles_out_as_the_mockup_does(tmp_path):
     assert ">Download zip</a>" in page and 'aria-label="Copy the sha256"' in page
     assert '<dialog id="player"' in page
     assert 'href="https://github.com/teja156/tubematic-styles/blob/main/SUBMITTING.md">Submit a style →</a>' in page
+    # a touch screen has no hover to reveal the play button; a 39-character login must wrap
+    assert "@media (hover: none) { .thumb .play { opacity: 1; } }" in page
+    assert ".by > span:last-child { min-width: 0; overflow-wrap: anywhere; }" in page
     # search reads one lower-case field per style
     search = re.search(r'data-search="([^"]*)"', page).group(1)
     for value in (entry["name"], entry["author"], entry["tagline"], entry["id"]):

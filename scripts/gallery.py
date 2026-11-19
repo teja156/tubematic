@@ -226,12 +226,15 @@ h1 { font: 700 22px var(--mono); margin: 0 0 10px; letter-spacing: 0.01em; }
   background: rgba(0, 0, 0, 0.35); }
 .thumb .play svg { width: 54px; height: 54px; }
 .thumb:hover .play, .thumb:focus-visible .play { opacity: 1; }
+/* a touch screen has no hover: the play button always shows there */
+@media (hover: none) { .thumb .play { opacity: 1; } }
 .thumb:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
 .body { padding: 32px 36px; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 14px;
   min-width: 0; }
 .body h2 { font: 700 30px/1.15 var(--sans); margin: 0; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .ver { font: 400 12px var(--mono); color: var(--mute); margin-left: 6px; letter-spacing: 0.02em; vertical-align: middle; }
 .by { display: flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: 15px; }
+.by > span:last-child { min-width: 0; overflow-wrap: anywhere; }
 .by b { color: var(--ink); font-weight: 600; }
 .by a { color: inherit; text-decoration: none; }
 .by a:hover { text-decoration: underline; }
