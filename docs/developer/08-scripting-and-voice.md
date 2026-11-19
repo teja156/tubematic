@@ -141,8 +141,10 @@ there and an opening switch clears it, so the video moves on only after a rewrit
 ```mermaid
 flowchart TD
     A["TOPIC_APPROVED, style decided"] --> B["get_video: formula_routing.candidates"]
-    B --> C["Skill: describe the topic, rule out, score"]
-    C --> D{"Best fit used by the domain's previous two videos?"}
+    B --> C["Skill: describe the topic, rule out (with what the domain's description excludes), score"]
+    C --> R{"The domain's description asks for a formula that is a clear fit?"}
+    R -- "yes" --> G
+    R -- "no" --> D{"Best fit used by the domain's previous two videos?"}
     D -- "no" --> G["choose_script_formula"]
     D -- "yes, another formula fits" --> E["Take the other formula"]
     D -- "yes, nothing else fits" --> F["Keep it and pass repeat_reason"]
@@ -193,7 +195,7 @@ other session.
   when the two differ, and starts the reason with "Auto would have picked". The agent cannot
   replace a person's choice.
 - A `recent` formula is refused unless the call carries `repeat_reason`, one sentence on why no
-  other formula fits. A domain whose videos share one structure reads as templated. The rule is
+  other formula fits, or that the domain's description asks for this formula. A domain whose videos share one structure reads as templated. The rule is
   skipped on a video with a `formula_choice`, where the agent's formula is only the runner-up.
 - An unavailable `formula` or `runner_up` is refused.
 

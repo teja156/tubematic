@@ -3,6 +3,8 @@ Add a curriculum seed domain for scheduled topic research.
 User's input: $ARGUMENTS
 
 Format: "NAME — DESCRIPTION" or just "NAME"
+The description is the domain's scope and its standing instructions to the agent: what to cover or
+leave out, the audience, the tone, a look. Pass the person's words as they wrote them.
 Examples:
   /tubematic-add-topic Python Internals — CPython memory management, GIL, bytecode
   /tubematic-add-topic Networking Fundamentals

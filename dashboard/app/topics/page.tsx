@@ -163,6 +163,184 @@ const MAX_TOPIC_CAP = 750;
 // research run, so the server refuses anything longer.
 const MAX_DOMAIN_DESCRIPTION_CHARS = 2000;
 
+// Tallest the description box grows to on its own; past it the box scrolls,
+// and the corner handle still drags it taller.
+const DESCRIPTION_MAX_AUTO_HEIGHT = 320;
+
+// What the agent does with a domain's description. The skills read it as the
+// domain's standing instructions (TMDEV-256): keep this in step with
+// tubematic-operator, tubematic-topic-research and the script-writing skill.
+const DESCRIPTION_NOTE =
+  "Research works from this description, and the agent follows what it says about this " +
+  "domain's topics, scripts and look on every video here: what to cover or leave out, the " +
+  "audience, the tone. It cannot skip a step that waits for your approval.";
+
+// The edit `next` makes to `prev`, with what it inserts cut so the text holds at
+// most `limit` code points. Only the inserted run is cut: a paste or a letter
+// typed into the middle of a full text must not push the end of it out.
+// `caret` is where the browser put the caret after the edit, the end of what
+// was inserted: the text after it is what the edit left in place. Comparing
+// the two strings alone cannot tell where a paste over a selection ends when
+// the pasted text repeats what it replaced.
+function clampEdit(prev: string, next: string, limit: number, caret = next.length): string {
+  const total = codePoints(next).length;
+  if (total <= limit) return next;
+  const end = Math.min(Math.max(caret, 0), next.length);
+  const kept = next.slice(end);
+  // Not an edit this function can read: refuse it rather than guess.
+  if (!prev.endsWith(kept)) return prev;
+  let start = 0;
+  const maxStart = Math.min(end, prev.length - kept.length);
+  while (start < maxStart && prev[start] === next[start]) start++;
+  // Never split a surrogate pair: back up to its first half.
+  if (start > 0 && /[\uD800-\uDBFF]/.test(next[start - 1])) start--;
+  const inserted = codePoints(next.slice(start, end));
+  const room = Math.max(0, limit - (total - inserted.length));
+  return next.slice(0, start) + inserted.slice(0, room).join("") + kept;
+}
+
+// The description box on the add form and on a domain's open row: one
+// component so the cap, the counter and the note cannot drift apart. It grows
+// with its text, so a scope written in paragraphs is read without scrolling.
+function DomainDescriptionField({ testId, countTestId, value, onChange, onFocus, onBlur }: {
+  testId: string; countTestId: string; value: string;
+  onChange: (next: string) => void; onFocus?: () => void; onBlur?: () => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight + 2, DESCRIPTION_MAX_AUTO_HEIGHT)}px`;
+  }, [value]);
+  const count = codePoints(value).length;
+  return (
+    <div style={{ width: "100%" }}>
+      <textarea
+        ref={ref}
+        data-testid={testId}
+        aria-label="Description"
+        value={value}
+        rows={3}
+        onChange={(e) => {
+          // The cap stops the text growing; it never cuts one stored longer
+          // before the cap existed, which the API keeps until it changes.
+          onChange(clampEdit(value, e.target.value, Math.max(MAX_DOMAIN_DESCRIPTION_CHARS, count),
+                             e.target.selectionEnd ?? undefined));
+        }}
+        placeholder="Description: what this domain covers, and any instructions for the agent (optional)"
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          resize: "vertical",
+          lineHeight: 1.5,
+          fontFamily: "var(--mono)",
+          fontSize: 12,
+          background: "var(--bg)",
+          border: "1px solid var(--border)",
+          color: "var(--ink)",
+          padding: "8px 12px",
+          outline: "none",
+        }}
+        onFocus={(e) => { e.currentTarget.style.borderColor = "var(--indigo)"; onFocus?.(); }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border)"; onBlur?.(); }}
+      />
+      <div style={{ display: "flex", gap: 16, alignItems: "baseline", marginTop: 4 }}>
+        <div data-testid={`${testId}-note`} style={{ ...noteStyle, flex: 1, minWidth: 0 }}>
+          {DESCRIPTION_NOTE}
+        </div>
+        <div
+          data-testid={countTestId}
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 10.5,
+            whiteSpace: "nowrap",
+            color: count >= MAX_DOMAIN_DESCRIPTION_CHARS * 0.9 ? "var(--amber)" : "var(--mute)",
+          }}
+        >
+          {count} / {MAX_DOMAIN_DESCRIPTION_CHARS}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// A domain's description on its open row, saved on blur like the topic cap:
+// a save per keystroke would re-send the whole row for every letter. Trailing
+// space is trimmed as the add form trims it. A refused save keeps the text in
+// the box so it can be corrected; the row says why. The stored text is copied
+// in only while the box is not being edited and no newer text is still being
+// saved: an older save that lands after you typed again must not put the older
+// text back, nor leave it there if the newer save is then refused.
+//
+// The draft is kept on the page, by domain id, because the box and its row
+// can both unmount while a save is in flight: Close blurs the box (starting a
+// save) and unmounts the panel in one click, and Pause or Resume moves the row
+// between the active and paused lists, which mounts it anew. A draft whose
+// save was then refused must be in the box when it shows again.
+type DraftEntry = { local: string; pending: string | null };
+type DraftStore = Map<string, DraftEntry>;
+
+type DescriptionDraft = {
+  local: string; setLocal: (next: string) => void; focus: () => void; commit: () => void;
+};
+
+function useDescriptionDraft(id: string, value: string, store: DraftStore,
+                             onCommit: (next: string) => Promise<boolean>): DescriptionDraft {
+  // One entry per domain for the page's life; a remounted row picks it up.
+  const [entry] = useState<DraftEntry>(() => {
+    const kept = store.get(id) ?? { local: value, pending: null };
+    store.set(id, kept);
+    return kept;
+  });
+  const [local, setLocalState] = useState(entry.local);
+  const editing = useRef(false);
+  const lastValue = useRef(value);
+  function setLocal(next: string) {
+    entry.local = next;
+    setLocalState(next);
+  }
+  // Runs when the stored text changes, never on mount: on mount the entry
+  // already holds what the box should show, a refused draft included.
+  useEffect(() => {
+    if (value === lastValue.current) return;
+    lastValue.current = value;
+    if (editing.current) return;
+    // The last text sent, until its save answers.
+    if (entry.pending !== null && value !== entry.pending) return;
+    entry.pending = null;
+    setLocal(value);
+  }, [value]);
+  function commit() {
+    editing.current = false;
+    const next = local.trim();
+    if (next === value) {
+      // A save landing while the box was focused was not copied in: show it
+      // now that nothing is left to send.
+      if (entry.pending === null) setLocal(value);
+      return;
+    }
+    entry.pending = next;
+    // Settles the entry even after the row unmounted: the closure holds it.
+    const settle = () => { if (entry.pending === next) entry.pending = null; };
+    onCommit(next).then(settle, settle);
+  }
+  return { local, setLocal, focus: () => { editing.current = true; }, commit };
+}
+
+function DomainDescriptionInput({ testId, draft }: { testId: string; draft: DescriptionDraft }) {
+  return (
+    <DomainDescriptionField
+      testId={testId}
+      countTestId={`${testId}-count`}
+      value={draft.local}
+      onChange={draft.setLocal}
+      onFocus={draft.focus}
+      onBlur={draft.commit}
+    />
+  );
+}
+
 // Commits on blur or Enter, like Settings' number fields, so typing "300" is
 // one save rather than three. An entry outside the bounds is kept, with the
 // reason on the domain's line, so it can be corrected.
@@ -370,11 +548,13 @@ const badgeStyle = {
 } as const;
 
 // One line per domain: what it is, what it overrides, how full it is, and its
-// status. The defaults themselves sit in a panel under the line, opened by
-// "Edit defaults". Seven pickers and a cap on the line itself left no room
+// status. The description and the defaults sit in a panel under the line,
+// opened by "Edit domain". Seven pickers and a cap on the line itself left no room
 // for the name, and nowhere to say which videos each default applies to.
-function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, onInvalid, lists, canIllustrate, gpu }: {
+function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, onInvalid, lists, canIllustrate, gpu, drafts }: {
   project: Project;
+  /** The page's description drafts, by domain id (see useDescriptionDraft). */
+  drafts: DraftStore;
   videoCounts: Record<string, number>;
   /** How the last change to this domain went: shown on the line itself, so a
    *  refusal is seen with the panel closed too. */
@@ -392,6 +572,8 @@ function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, o
 }) {
   // Each row keeps its own state, so two domains can be open side by side.
   const [open, setOpen] = useState(false);
+  const description = useDescriptionDraft(project.id, project.description ?? "", drafts,
+                                          (next) => onSave(project.id, { description: next }));
   const isPaused = project.status === "paused";
   const isExpired = project.expired === true;
   const isSeed = project.is_curriculum_seed === 1;
@@ -439,7 +621,7 @@ function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, o
               {project.name}
             </span>
             {project.description && (
-              <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--dim)", letterSpacing: "0.06em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+              <span data-testid={`domain-description-${project.id}`} title={project.description} style={{ fontFamily: "var(--mono)", fontSize: 10, color: "var(--dim)", letterSpacing: "0.06em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
                 {project.description}
               </span>
             )}
@@ -582,7 +764,7 @@ function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, o
             flexShrink: 0,
           }}
         >
-          {open ? "Close" : "Edit defaults"}
+          {open ? "Close" : "Edit domain"}
         </button>
       </div>
 
@@ -594,6 +776,15 @@ function DomainRow({ project, videoCounts, status, onToggle, onDelete, onSave, o
           data-testid={panelId}
           style={{ display: "flex", flexWrap: "wrap", gap: "20px 28px", padding: "16px 16px 18px 35px", borderTop: "1px solid var(--border)", background: "var(--panel-2)" }}
         >
+          {/* The description is the domain's standing instructions to the
+              agent (TMDEV-256), so it opens the panel, across its full width. */}
+          <DomainGroup title="Description" flex="1 1 100%"
+                       note="Saved when you click away from the box.">
+            <DomainDescriptionInput
+              testId={`domain-description-input-${project.id}`}
+              draft={description}
+            />
+          </DomainGroup>
           <DomainDefaults
             values={values}
             onChange={(patch) => { void onSave(project.id, patch as Partial<Project>); }}
@@ -710,48 +901,12 @@ function AddDomainForm({ onAdded, lists, canIllustrate, gpu }: {
 
       {/* Its own row: a scope statement wants paragraphs, and a tall box beside
           the one-line name made the row ragged. */}
-      <div>
-        <textarea
-          data-testid="domain-description-input"
-          value={description}
-          rows={3}
-          onChange={(e) => {
-            const chars = codePoints(e.target.value);
-            setDescription(chars.length > MAX_DOMAIN_DESCRIPTION_CHARS
-              ? chars.slice(0, MAX_DOMAIN_DESCRIPTION_CHARS).join("")
-              : e.target.value);
-          }}
-          placeholder="Description / scope (optional)"
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            resize: "vertical",
-            lineHeight: 1.5,
-            fontFamily: "var(--mono)",
-            fontSize: 12,
-            background: "var(--bg)",
-            border: "1px solid var(--border)",
-            color: "var(--ink)",
-            padding: "8px 12px",
-            outline: "none",
-          }}
-          onFocus={(e) => { e.currentTarget.style.borderColor = "var(--indigo)"; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-        />
-        <div
-          data-testid="domain-description-count"
-          style={{
-            fontFamily: "var(--mono)",
-            fontSize: 10.5,
-            textAlign: "right",
-            marginTop: 4,
-            color: codePoints(description).length >= MAX_DOMAIN_DESCRIPTION_CHARS * 0.9
-              ? "var(--amber)" : "var(--mute)",
-          }}
-        >
-          {codePoints(description).length} / {MAX_DOMAIN_DESCRIPTION_CHARS}
-        </div>
-      </div>
+      <DomainDescriptionField
+        testId="domain-description-input"
+        countTestId="domain-description-count"
+        value={description}
+        onChange={setDescription}
+      />
 
       {/* The same groups a domain's row opens, so what you choose here is
           what you find there. All optional. */}
@@ -883,6 +1038,7 @@ function ModeToggles({
 // What the message beside the domain calls the field a refused save was about, when the API gave
 // no reason of its own.
 const SAVED_FIELD: Record<string, string> = {
+  description: "description",
   default_visual_style: "style",
   default_voice_id: "default voice",
   default_script_profile_id: "script profile",
@@ -910,6 +1066,7 @@ export default function TopicsPage() {
   // before it finishes. State alone is too late for that: it reaches a closure
   // only on the next render. Every write to the list goes through setProjects.
   const projectsRef = useRef<Project[]>([]);
+  const descriptionDrafts = useRef<DraftStore>(new Map());
   function setProjects(next: (prev: Project[]) => Project[]) {
     projectsRef.current = next(projectsRef.current);
     setProjectsState(projectsRef.current);
@@ -1267,7 +1424,7 @@ export default function TopicsPage() {
         <>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 24 }}>
             {activeSeeds.map((p) => (
-              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
+              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} drafts={descriptionDrafts.current} />
             ))}
           </div>
 
@@ -1292,7 +1449,7 @@ export default function TopicsPage() {
               {pausedOpen && (
                 <div id="paused-domains-list" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {pausedSeeds.map((p) => (
-                    <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
+                    <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} drafts={descriptionDrafts.current} />
                   ))}
                 </div>
               )}
@@ -1309,7 +1466,7 @@ export default function TopicsPage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {otherDomains.map((p) => (
-              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} />
+              <DomainRow key={p.id} project={p} videoCounts={videoCounts} status={statuses.get(p.id)} onToggle={handleToggleDomain} onDelete={setDeleting} onSave={saveDomain} onInvalid={statuses.fail} lists={lists} canIllustrate={canIllustrate} gpu={gpu} drafts={descriptionDrafts.current} />
             ))}
           </div>
         </section>

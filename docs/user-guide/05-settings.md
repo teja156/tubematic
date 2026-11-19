@@ -279,7 +279,10 @@ Visuals: prefer diagrams over stock-style photos.
 ```
 
 The agent receives the text on every run and applies the parts that fit what it is doing. A
-preference cannot make the agent skip one of your approvals.
+preference cannot make the agent skip one of your approvals. To give instructions for one domain
+alone, write them in that domain's description on the **Topics** page
+([Domain instructions](03-using-tubematic.md#domain-instructions)); where the two disagree, the
+domain's description wins.
 
 **Experimental formulas**, below the text box, lets Auto pick the
 [script formulas](03-using-tubematic.md#the-formulas) marked experimental. It is off by default.

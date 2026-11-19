@@ -278,9 +278,10 @@ The Mascots page's create form uses the same agent, model and effort controls
 
 ### The Topics page
 
-- The dashboard has no edit form for a domain. `POST /projects` is an upsert, so a domain's defaults
-  are controls in a panel under its row, opened by **Edit defaults**, and each change is saved at
-  once. The route replaces the whole row, so every edit sends every field again.
+- The dashboard has no edit form for a domain. `POST /projects` is an upsert, so a domain's
+  description and defaults are controls in a panel under its row, opened by **Edit domain**, and
+  each change is saved at once. The description is saved on blur, trimmed, and only when it
+  differs from the stored text, because one save per keystroke would re-send the whole row. The route replaces the whole row, so every edit sends every field again.
   `lib/domains.ts::domainDefaults` is the list of defaults.
 - Writes to one domain run one at a time: each change on its row, and a pause or resume. Each is
   built from the row as the write before it left it, because the route replaces the whole row. Two
@@ -306,8 +307,21 @@ The Mascots page's create form uses the same agent, model and effort controls
   clears the model in the same save, because the API refuses a model from another agent's list. A
   blank model follows the agent's default at the time each video is filed. An agent that is
   uninstalled, or a model the agent dropped, stays selected and cannot be picked again.
-- The add form's description is a textarea whose counter stops at the API's 2000-character limit
-  and counts code points. On a domain row the description stays on one truncated line.
+- The description box is one component, `DomainDescriptionField`, on the add form and in the
+  panel. It grows with its text up to 320px, counts code points against the API's 2000-character
+  limit, and stops the text growing past it. At the limit only the inserted text is cut
+  (`clampEdit`), located by the caret the browser reports after the edit, so a paste in the middle
+  never pushes out the end. A description stored longer than the limit is shown whole and can only
+  shrink, since the API keeps such a text until it changes. On a domain's row the stored text is
+  copied into the box only while the box is not focused and no newer text is still being saved,
+  so a save that answers late neither overwrites newer typing nor replaces a text whose own save
+  was then refused. The page keeps that draft by domain id (`useDescriptionDraft`), because the box
+  and its row can unmount while a save is in flight: **Close** starts the save and unmounts the
+  panel in one click, and **Pause topic generation** moves the row into the **Paused** group.
+  Under the box, a note
+  says the agent follows the description; `scripts/tests/test_domain_instructions_skills.py` keeps
+  that note and the skills in step. The domain's line shows the description on one truncated line
+  with the full text on hover.
 - A deleted default profile shows as "Unavailable profile", because the profile list omits deleted
   profiles.
 - The **Formula** select offers Auto and every formula from

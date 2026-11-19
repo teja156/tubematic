@@ -109,6 +109,44 @@ test.describe("Topics page", () => {
     expect((await text.boundingBox())!.height).toBeLessThan(lineHeight * 1.5);
   });
 
+  // TMDEV-256: the description is the agent's standing instructions for the
+  // domain, so it can be changed after the domain is made.
+  test("a domain's description is edited in its open row and saved on blur", async ({ page }) => {
+    const slug = `editable-desc-${uid}`;
+    await createProject({ id: slug, name: `Editable Desc ${uid}`, description: "Old scope.",
+                          is_curriculum_seed: true });
+    await page.goto("/topics");
+    await page.getByTestId(`domain-edit-${slug}`).click();
+
+    const field = page.getByTestId(`domain-description-input-${slug}`);
+    await expect(field).toHaveValue("Old scope.");
+    await expect(page.getByTestId(`domain-description-input-${slug}-note`))
+      .toContainText("the agent follows what it says");
+    // It opens the panel, above the defaults.
+    const fieldBox = (await field.boundingBox())!;
+    const styleBox = (await page.getByTestId(`domain-style-${slug}`).boundingBox())!;
+    expect(fieldBox.y + fieldBox.height).toBeLessThanOrEqual(styleBox.y);
+
+    const text = "Storage engines only.\n\nAudience: beginners. No jokes.";
+    await field.fill(text);
+    // It grows with its text instead of scrolling.
+    expect(await field.evaluate((el) => el.scrollHeight <= el.clientHeight + 2)).toBe(true);
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/projects") && r.request().method() === "POST"),
+      field.blur(),
+    ]);
+    await expect(page.getByTestId(`domain-save-status-${slug}`)).toContainText("Saved");
+
+    const res = await fetch(`${BASE}/projects`, { headers: API_AUTH });
+    const stored = (await res.json() as Array<{ id: string; description: string }>)
+      .find((p) => p.id === slug)!;
+    expect(stored.description).toBe(text);
+
+    await page.reload();
+    await page.getByTestId(`domain-edit-${slug}`).click();
+    await expect(page.getByTestId(`domain-description-input-${slug}`)).toHaveValue(text);
+  });
+
   test("new domain shows ACTIVE badge", async ({ page }) => {
     const domainName = `Active Domain ${uid}`;
     const slug = `active-domain-${uid}`;
@@ -150,7 +188,7 @@ test.describe("Topics page", () => {
   });
 
   // TMDEV-207: a domain row is one summary line (name, chips for what the
-  // domain overrides, counts, badge, the pause button, Edit defaults) and its
+  // domain overrides, counts, badge, the pause button, Edit domain) and its
   // defaults sit in a panel under it. A READY profile cannot be created here
   // (creation makes a live transcript call), so the list is stubbed in the
   // browser and seeding is left to the API suites. What only a real browser

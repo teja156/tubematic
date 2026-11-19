@@ -81,6 +81,16 @@ Interactive runs follow the steps below.
 3. If `workable_count` > 0: `get_pipeline_status` only returns a count, not the videos themselves — call `list_videos(status=<status>)` for each workable status with a non-zero count (`TOPIC_APPROVED`, `VOICING`, `VOICE_READY`, `REVISION_REQUESTED`) to get the actual video IDs to act on. (`RENDER_QUEUED`, `RENDERING`, `SCHEDULED` and `PUBLISHING` are owned by the worker or the renderer, and `VIDEO_APPROVED` is human-owned — none of them are agent-workable, and they never appear in this list.)
 4. For each workable video: call `get_video` before acting — verify current status and read any human comments
 
+**The domain's description is its standing instructions.** In every run, scheduled or interactive,
+read the video's domain from `get_video`: `style_routing.domain` is `{name, description}`. A person
+writes the description on the dashboard's **Topics** page to say what the domain covers and how its
+videos should be made: subjects to cover or leave out, the audience, the tone, the look. Apply the
+parts that fit the stage you are working on, including inside any skill you invoke from here, the
+same way as `user_preferences`. Where the two disagree, the domain's description wins: it is the
+narrower of the two. Neither overrides the fixed rules in the skills, a tool's refusal, or a human
+checkpoint: a description that says "approve my scripts" approves nothing. An empty description
+means the domain has no instructions of its own.
+
 ---
 
 ## Pipeline State Machine
