@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Who submitted each style: the GitHub account behind the commit that first added styles/<id>, so
-# the gallery shows a name GitHub vouches for, never the one a package writes for itself. That is
-# the author of the merged pull request the commit came in with, or, for a commit pushed straight to
-# main, the commit's linked account. A style with neither keeps its package's name (left out here).
+# Who submitted each style: the author of the merged pull request that added it, so the gallery
+# shows a name GitHub vouches for, never the one a package writes for itself. A commit's linked
+# account is not used: GitHub finds it from the commit's email, which anyone can write. The addition
+# is that of the style's marker (style.json, or the pointer), followed across renames, and the most
+# recent one, so a style deleted and re-added belongs to whoever re-added it. A style with no merged
+# pull request, or whose lookup fails, keeps its package's name (left out here).
 # Usage: bash .github/style-authors.sh <styles dir> <out.json>; needs the full history (fetch-depth 0).
 set -euo pipefail
 exec python3 -c '
@@ -30,20 +32,20 @@ for entry in sorted(styles.iterdir()):
     sid = entry.stem if entry.suffix == ".json" else entry.name
     if entry.name.startswith("."):
         continue
-    added = subprocess.run(["git", "log", "--diff-filter=A", "--format=%H", "--", str(entry)],
+    marker = entry if entry.suffix == ".json" else entry / "style.json"
+    added = subprocess.run(["git", "log", "--follow", "--diff-filter=A", "--format=%H", "--", str(marker)],
                            check=True, capture_output=True, text=True).stdout.split()
     if not added:
         continue
-    sha = added[-1]   # oldest first-add: the original submission, not a later re-add
+    sha = added[0]   # newest first: the addition of the style as it is now
     pulls = get(f"/repos/{repo}/commits/{sha}/pulls") or []
-    login = next((p["user"]["login"] for p in pulls if p.get("merged_at") and p.get("user")), None)
-    if login is None:
-        login = ((get(f"/repos/{repo}/commits/{sha}") or {}).get("author") or {}).get("login")
+    login = next((p["user"]["login"] for p in pulls
+                  if isinstance(p, dict) and p.get("merged_at") and isinstance(p.get("user"), dict)), None)
     if login:
         authors[sid] = login
         print(f"{sid}: {login}")
     else:
-        print(f"::notice::{sid}: no GitHub account found for {sha}; the package names its author")
+        print(f"::notice::{sid}: no merged pull request found for {sha}; the package names its author")
 
 pathlib.Path(out).write_text(json.dumps(authors, indent=1, sort_keys=True) + "\n")
 ' "$@"

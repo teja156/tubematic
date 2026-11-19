@@ -677,9 +677,10 @@ deploys the site.
 
 The author the gallery shows is the GitHub account that submitted the style, linked to its profile,
 since a package can write any name in `external.author`. Before `build`, the publish workflow runs
-`.github/style-authors.sh`, which finds the commit that first added each style and asks the GitHub API
-for the merged pull request it came in with (or, for a commit pushed to `main`, the commit's linked
-account). A style with neither keeps its package's name.
+`.github/style-authors.sh`, which finds the commit that added each style's `style.json` or pointer
+(following renames, the most recent addition) and asks the GitHub API for the merged pull request it
+came in with. A commit's own linked account is not used, since GitHub matches it by an email anyone can
+write. A style with no merged pull request, or whose lookup fails, keeps its package's name.
 
 The third workflow, `claude-review.yml`, runs when a maintainer adds the `claude-review` label to a
 pull request. Claude Code (`anthropics/claude-code-action`, logged in with the secret

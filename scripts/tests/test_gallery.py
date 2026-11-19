@@ -644,32 +644,43 @@ def _git(repo, *args, **env):
                           text=True).stdout.strip()
 
 
-def test_style_authors_reads_the_pull_request_or_the_commit_that_added_each_style(tmp_path):
+def test_style_authors_reads_the_pull_request_that_added_each_style(tmp_path):
+    """Only a merged pull request's author counts: a commit's linked account comes from an email
+    anyone can write. A rename keeps the original submitter; a delete and re-add takes the new one."""
     import http.server
     import threading
 
     repo = tmp_path / "gallery"
     (repo / "styles").mkdir(parents=True)
     _git(repo, "init", "-q")
-    (repo / "styles" / ".gitkeep").write_text("")
-    for sid in ("ext_pr", "ext_push", "ext_none"):
+
+    def add(sid, msg):
         (repo / "styles" / sid).mkdir()
-        (repo / "styles" / sid / "style.json").write_text("{}")
+        (repo / "styles" / sid / "style.json").write_text(f'{{"id": "{sid}"}}')
         _git(repo, "add", "-A")
-        _git(repo, "commit", "-q", "-m", f"add {sid}")
+        _git(repo, "commit", "-q", "-m", msg)
+        return _git(repo, "rev-parse", "HEAD")
+
+    sha = {"pr": add("ext_pr", "pr"), "push": add("ext_push", "push"), "err": add("ext_err", "err"),
+           "old": add("ext_old", "old"), "renamed": add("ext_before", "renamed")}
     (repo / "styles" / "ext_pr" / "style.json").write_text('{"v": 2}')
-    _git(repo, "commit", "-q", "-am", "a later update by the maintainer")
-    added = {sid: _git(repo, "log", "--diff-filter=A", "--format=%H", "--", f"styles/{sid}")
-             for sid in ("ext_pr", "ext_push", "ext_none")}
+    _git(repo, "commit", "-q", "-am", "a later update by someone else")
+    _git(repo, "rm", "-rq", "styles/ext_old")
+    _git(repo, "commit", "-q", "-m", "removed")
+    sha["readd"] = add("ext_old", "re-added by a new submitter")
+    _git(repo, "mv", "styles/ext_before", "styles/ext_after")
+    _git(repo, "commit", "-q", "-m", "renamed by the maintainer")
+    merged = "2026-11-18T00:00:00Z"
     responses = {
-        f"/repos/o/g/commits/{added['ext_pr']}/pulls": [
+        f"/repos/o/g/commits/{sha['pr']}/pulls": [
             {"merged_at": None, "user": {"login": "closed-pr"}},
-            {"merged_at": "2026-11-18T00:00:00Z", "user": {"login": "submitter"}}],
-        f"/repos/o/g/commits/{added['ext_push']}/pulls": [],
-        f"/repos/o/g/commits/{added['ext_push']}": {"author": {"login": "maintainer"}},
-        f"/repos/o/g/commits/{added['ext_none']}/pulls": [],
-        f"/repos/o/g/commits/{added['ext_none']}": {"author": None},
-    }
+            {"merged_at": merged, "user": {"login": "submitter"}}],
+        f"/repos/o/g/commits/{sha['push']}/pulls": [],
+        f"/repos/o/g/commits/{sha['push']}": {"author": {"login": "spoofed-by-email"}},
+        f"/repos/o/g/commits/{sha['old']}/pulls": [{"merged_at": merged, "user": {"login": "first-owner"}}],
+        f"/repos/o/g/commits/{sha['readd']}/pulls": [{"merged_at": merged, "user": {"login": "new-owner"}}],
+        f"/repos/o/g/commits/{sha['renamed']}/pulls": [{"merged_at": merged, "user": {"login": "original"}}],
+    }   # ext_err's lookup answers 404
 
     class Api(http.server.BaseHTTPRequestHandler):
         def do_GET(self):  # noqa: N802
@@ -689,7 +700,8 @@ def test_style_authors_reads_the_pull_request_or_the_commit_that_added_each_styl
         env.pop("GH_TOKEN", None)
         subprocess.run(["bash", str(AUTHORS_SCRIPT), "styles", str(out)], cwd=repo, check=True, env=env,
                        capture_output=True, text=True)
-        assert json.loads(out.read_text()) == {"ext_pr": "submitter", "ext_push": "maintainer"}
+        assert json.loads(out.read_text()) == {"ext_pr": "submitter", "ext_old": "new-owner",
+                                               "ext_after": "original"}
     finally:
         server.shutdown()
 

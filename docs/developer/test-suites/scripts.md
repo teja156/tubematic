@@ -885,9 +885,10 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
   workflows diff `-- styles`, which lists a `styles` entry replaced by a symlink (`styles/` does not).
 - With `--authors`, `build` shows each style's GitHub login as its author, linked to the profile, and
   keeps the package's own name for a style with no login or one that is not a valid login.
-  `style-authors.sh` (against a local API) takes the merged pull request behind the commit that first
-  added a style, skipping unmerged ones and later updates, falls back to the commit's account, and
-  leaves out a style with neither. The publish workflow fetches the whole history, runs it before
+  `style-authors.sh` (against a local API) takes the author of the merged pull request behind the
+  commit that added a style, skipping unmerged ones and later updates, keeps the original submitter
+  across a rename and the new one after a delete and re-add, and leaves out a style pushed without a
+  pull request (a commit's linked account comes from an email anyone can write) or whose lookup fails. The publish workflow fetches the whole history, runs it before
   `build` and can read pull requests.
 - The Claude review workflow runs only on `pull_request_target` `labeled` with the `claude-review`
   label, with no default permissions. Only `prepare` checks out the pull request's commit, and it has

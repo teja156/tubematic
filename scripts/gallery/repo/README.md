@@ -22,7 +22,7 @@ one; it does not remove it.
   released no published image renders external styles: the render job then passes with a notice,
   and the reviewer renders the example on their own install.
 - Merging to `main` publishes: `.github/style-authors.sh` finds the GitHub account that submitted
-  each style (the author of the pull request that added it), which the gallery shows as its author,
+  each style (the author of the merged pull request that added it), which the gallery shows as its author,
   and `build` writes a deterministic zip of each package, its sha256, its
   previews, `index.json` and the browsable page `index.html`, and the workflow deploys them to GitHub
   Pages.
