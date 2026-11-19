@@ -170,13 +170,14 @@ jobs:
             summary first, then for each package a table of checklist item, verdict and evidence,
             then anything else a reviewer should look at. Write no other file. You cannot approve
             or merge; the maintainer decides.
+          # Edit is left out by --tools, never denied: a deny of Edit would beat Edit(./review.md)
           claude_args: >-
             --model opus
             --max-turns 80
             --permission-mode default
             --tools "Read,Glob,Grep,Write"
             --allowedTools "Read,Glob,Grep,Edit(./review.md)"
-            --disallowedTools "Bash,WebFetch,WebSearch,Edit,MultiEdit,NotebookEdit,Agent,Task,mcp__*"
+            --disallowedTools "Bash,WebFetch,WebSearch,NotebookEdit,Agent,Task,mcp__*"
       - name: Refuse a review that quotes a credential
         if: always()
         env:

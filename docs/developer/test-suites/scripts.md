@@ -877,9 +877,10 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
 - `stage` copies each submission's package as plain files, fetches a pointer, reports one it cannot
   fetch, leaves symlinks out (the review uploads the folder as an artifact), renames a dot-file,
   `CLAUDE.md` or `AGENTS.md` to `*.submitted` (Claude Code loads a `CLAUDE.md` in any folder it
-  reads), refuses two files that would stage under one name (one could hide the other), refuses an
-  id submitted both as a folder and a pointer, and notes an id the pull request removed. Every command
-  refuses a submission that is itself a symlink, to a folder, a file or nothing.
+  reads), refuses two files that would stage under one name or a file staged where another needs a
+  folder (one could hide the other), refuses an id submitted both as a folder and a pointer, and notes
+  an id the pull request removed. Every command refuses a submission that is a symlink (to a folder, a
+  file or nothing) or a stray file, so neither passes for a removal.
 - The Claude review workflow runs only on `pull_request_target` `labeled` with the `claude-review`
   label, with no default permissions. Only `prepare` checks out the pull request's commit, and it has
   no secret; every checkout drops its credentials. The Claude job reads the repository and the pull
@@ -888,7 +889,7 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
   pre-approves) and `Bash`, the web tools and MCP tools refused, reads nothing outside the workspace
   (`/proc/self/environ` holds the token), loads no `CLAUDE.md` from the submission, and has one write
   approved, `Edit(./review.md)` (a write elsewhere could change an action that runs later in the job;
-  a `Write(path)` rule matches nothing). A refusal from `stage` is recorded for the review, since
+  a `Write(path)` rule matches nothing). `Edit` is never denied, since a deny beats that allow. A refusal from `stage` is recorded for the review, since
   Actions runs bash with `-e`. Its prompt names
   the checklist and calls the submission untrusted, and the next step withholds a review that quotes
   the token or a credential-shaped string. Only the pull request's checkout opts in to

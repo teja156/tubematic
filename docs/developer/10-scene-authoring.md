@@ -668,8 +668,8 @@ and render nothing:
 
 A submission is a package folder `styles/<id>/` or a pointer `styles/<id>.json`,
 `{"repo": <https url>, "commit": <40-hex commit>}`, fetched with the installer's own pinned git
-fetch. Every command refuses a submission that is itself a symlink, since git checks
-symlinks out and one could point the scan at the runner's files. The archive is written with fixed times and order, so a rebuild of the same package gives the
+fetch. Every command refuses a submission that is a symlink, since git checks symlinks
+out and one could point the scan at the runner's files, and a stray file that is neither. The archive is written with fixed times and order, so a rebuild of the same package gives the
 same bytes and the same checksum. A pull request runs `scan` and `render` (a 3D world style's example
 needs generated source, so the maintainer renders it by hand); a merge to `main` runs `build` and
 deploys the site.

@@ -427,6 +427,30 @@ def test_stage_refuses_two_files_that_would_stage_under_one_name(tmp_path, capsy
     assert not (out / "ext_one").exists()
 
 
+def test_stage_refuses_a_file_staged_where_another_needs_a_folder(tmp_path, capsys):
+    styles = _styles(tmp_path, "ext_one")
+    comps = styles / "ext_one" / "components"
+    (comps / "CLAUDE.md").write_text("x")
+    (comps / "CLAUDE.md.submitted").mkdir()
+    (comps / "CLAUDE.md.submitted" / "Hidden.tsx").write_text("x")
+    out = tmp_path / "out"
+    assert gallery.main(["stage", str(styles), str(out)]) == 1
+    assert "ext_one: components/CLAUDE.md and components/CLAUDE.md.submitted/Hidden.tsx would both be " \
+           "staged under components/CLAUDE.md.submitted" in capsys.readouterr().err
+    assert not (out / "ext_one").exists()
+
+
+def test_a_stray_file_named_like_a_style_is_refused_not_taken_for_a_removal(tmp_path, capsys):
+    styles = tmp_path / "styles"
+    styles.mkdir()
+    (styles / "ext_stray").write_text("x")
+    assert gallery.main(["stage", str(styles), str(tmp_path / "out"), "--only", "ext_stray"]) == 1
+    captured = capsys.readouterr()
+    assert "ext_stray: styles/ext_stray is neither a package folder nor a .json pointer" in captured.err
+    assert "removed" not in captured.out
+    assert gallery.main(["scan", str(styles)]) == 1
+
+
 def test_a_symlink_to_a_file_is_refused_too(tmp_path, capsys):
     styles = tmp_path / "styles"
     styles.mkdir()
@@ -522,6 +546,8 @@ def test_claude_can_read_and_write_its_review_but_run_nothing():
     assert allowed == ["Read", "Glob", "Grep", "Edit(./review.md)"]
     denied = re.search(r'--disallowedTools "([^"]+)"', args).group(1).split(",")
     assert {"Bash", "WebFetch", "WebSearch", "mcp__*"} <= set(denied)
+    # a bare Edit deny would beat Edit(./review.md) and block the review itself; --tools leaves Edit out
+    assert not {"Edit", "MultiEdit", "Write"} & set(denied)
     settings = json.loads(claude["with"]["settings"])
     # /proc/self/environ holds the token: no read outside the workspace
     assert settings["permissions"]["blockReadsOutsideWorkingDirectories"] is True

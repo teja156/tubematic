@@ -72,9 +72,8 @@ def submissions(styles_dir: pathlib.Path, only: set[str] | None = None) -> list[
         sid = entry.stem if entry.suffix == ".json" else entry.name
         if entry.name.startswith(".") or (only and sid not in only):
             continue
-        # a symlink of any kind is listed so that materialise refuses it
-        if entry.is_symlink() or entry.is_dir() or entry.suffix == ".json":
-            out.append((sid, entry))
+        # every visible entry is listed, so materialise refuses a symlink or a stray file by name
+        out.append((sid, entry))
     return out
 
 
@@ -86,6 +85,8 @@ def materialise(sid: str, entry: pathlib.Path, work: pathlib.Path) -> tuple[path
         raise GalleryError(f"styles/{entry.name} is a symlink; submit the folder or pointer itself")
     if entry.is_dir():
         return entry, {"kind": "folder"}
+    if entry.suffix != ".json":
+        raise GalleryError(f"styles/{entry.name} is neither a package folder nor a .json pointer")
     try:
         pointer = json.loads(entry.read_text(encoding="utf-8"))
     except ValueError as exc:
@@ -401,13 +402,18 @@ def stage(args) -> int:
                     continue
                 staged = pathlib.Path(*(_staged_name(part) for part in rel.parts)).as_posix()
                 plan.setdefault(staged, []).append(rel)
-            clashes = {dest: rels for dest, rels in plan.items() if len(rels) > 1}
+            # a rename must never let one submitted file hide another from the review: two files on
+            # one name, or a file on the name another needs as its folder
+            clashes = [f"{' and '.join(sorted(r.as_posix() for r in rels))} would both be staged as {dest}"
+                       for dest, rels in sorted(plan.items()) if len(rels) > 1]
+            clashes += [f"{plan[folder][0].as_posix()} and {rel.as_posix()} would both be staged under {folder}"
+                        for dest, (rel, *_) in sorted(plan.items())
+                        for folder in (p.as_posix() for p in pathlib.PurePosixPath(dest).parents)
+                        if folder in plan]
             if clashes:
-                # a rename must never let one submitted file hide another from the review
                 failed = True
-                for dest, rels in sorted(clashes.items()):
-                    names = " and ".join(sorted(r.as_posix() for r in rels))
-                    print(f"{sid}: {names} would both be staged as {dest}", file=sys.stderr)
+                for clash in clashes:
+                    print(f"{sid}: {clash}", file=sys.stderr)
                 continue
             for dest, (rel,) in sorted(plan.items()):
                 if dest != rel.as_posix():
