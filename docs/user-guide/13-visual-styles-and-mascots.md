@@ -278,7 +278,7 @@ Videos voiced before System Flow and Terminal Doc became inserts keep their whol
 |---|---|
 | A topic waiting for approval, on its Quick Actions row or in its window | That video's style and its **Inserts** setting |
 | The **New Video** page | The style and the **Inserts** setting of the video you are creating |
-| **Edit defaults** on a domain's row on the **Topics** page | The style its curriculum topics arrive with, and the **Inserts** setting every new video in it starts with. You can still change both on each topic |
+| **Edit domain** on a domain's row on the **Topics** page | The style its curriculum topics arrive with, and the **Inserts** setting every new video in it starts with. You can still change both on each topic |
 
 Once you approve the topic, the style and the **Inserts** setting are fixed.
 
@@ -462,7 +462,7 @@ Three places set it. Each overrides the one above.
 | Where | What it sets |
 |---|---|
 | **Settings → Rendering → Default mascot (experimental)** | The default for the whole install. Empty means none |
-| **Mascot (exp.)**, under **Edit defaults** on a domain's row on the **Topics** page | The default for that domain. *Use install default* follows the setting above. *None* means no mascot in this domain |
+| **Mascot (exp.)**, under **Edit domain** on a domain's row on the **Topics** page | The default for that domain. *Use install default* follows the setting above. *None* means no mascot in this domain |
 | The mascot picker on a topic waiting for approval | That one video. Fixed once you approve the topic |
 
 You can set a default only while a renderer's GPU works. A default you set earlier stays stored if

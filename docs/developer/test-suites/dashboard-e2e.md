@@ -273,10 +273,13 @@ Covers [the Topics page](../15-dashboard.md#the-topics-page).
   starts with it. The same holds for an effort, which also survives a reload.
 - A domain at its topic cap shows EXPIRED and refuses a curriculum video with `409`. Raising the cap
   in the panel reopens it.
-- At 1280px a seed row with three chips is one line: the pause and **Edit defaults** buttons sit
+- At 1280px a seed row with three chips is one line: the pause and **Edit domain** buttons sit
   beside the name and chips, and the name keeps its width. The open panel sits under that line,
   each of its nine controls has a caption and stays inside it, and opening it moves nothing on the
   line. At 1024px the line wraps and the buttons and controls stay inside the row.
+- A domain's description is edited in its open panel, above the defaults, with the agent note under
+  it. The box grows to show a multi-line text without scrolling, saves on blur, and the API and a
+  reload both return the new text.
 - A mining source added or removed survives a reload.
 
 Trap: the row case asserts each position separately. A check that the row fits its container still

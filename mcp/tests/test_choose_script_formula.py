@@ -272,6 +272,9 @@ def test_a_formula_the_domain_just_used_is_refused_without_a_repeat_reason(db):
     _video()
     out = server.choose_script_formula("vid_1", "scene-story", REASON)
     assert "repeat_reason" in out["error"] and _row()["formula_pick"] == ""
+    # The refusal names both cases the skill passes one for (TMDEV-256).
+    assert "no other candidate fits this topic" in out["error"]
+    assert "the domain's description asks for this formula" in out["error"]
     # The third video back is outside the window.
     assert "error" not in server.choose_script_formula("vid_1", "incident-file", REASON)
 

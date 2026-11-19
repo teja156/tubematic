@@ -88,7 +88,7 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
   topic count, and **Cancel** sends nothing. A confirmed delete drops the row, and a refusal shows
   on the row and keeps it. Cases that read a paused row open the group first.
 - A closed domain row renders no picker. It shows a chip for each default the domain sets, or
-  "Install defaults for everything", and the topic count against the cap. **Edit defaults** opens
+  "Install defaults for everything", and the topic count against the cap. **Edit domain** opens
   one row's panel and leaves the others closed.
 - The default pickers in a row's panel and in the add form (visual style, voice, script profile,
   formula, mascot) are found by their captions. A default that has left the roster or the profile list stays
@@ -108,6 +108,18 @@ Covers `app/topics/page.tsx`, [the Topics page](../15-dashboard.md#the-topics-pa
   on the domain's line, and nothing is sent. EXPIRED shows on any domain at
   its cap, and an expired seed hides ACTIVE and keeps PAUSED.
 - The add form's description keeps interior newlines and stops at 2000 code points.
+- A domain's open row shows its description in a box that can be dragged taller, with the same
+  agent note as the add form, and the summary line carries the full text on hover. The box saves on
+  blur, trimmed, with every other field of the row, and sends nothing when the text is unchanged.
+  An empty description is saved as empty. A refused save keeps the typed text in the box and shows
+  the reason on the domain's line. A stored text longer than 2000 code points is shown whole and
+  cannot grow, so typing into it never cuts it; once under the limit, the limit holds. At the limit,
+  a letter typed into the middle is refused and a paste is cut to fit, so the end of the text is
+  never pushed out; a paste over a selection that repeats the replaced text is cut where the caret
+  says it went. A save that answers after the box was entered again leaves the newer typing in the
+  box, and a blur then saves it. A newer save refused after an older one landed leaves the newer
+  text in the box with the reason on the line. A draft whose save is refused after **Close**, or in
+  the click that pauses the domain, is in the box again when the row reopens.
 - The formula default offers Auto and every formula with experimental ones marked, a change
   re-sends every other field, another edit keeps it, a new domain is created with the one picked,
   and a stored formula the list does not know stays selected under its id.

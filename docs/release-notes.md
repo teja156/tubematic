@@ -47,6 +47,18 @@ To move an install to a newer version, follow [Upgrading](user-guide/07-upgradin
   repository or the gallery, reads its code, writes its opinion onto the install screen and gives you
   the link. Only you can install it there.
 
+### Changed
+
+- You can now edit a domain's description after you create it. Press **Edit domain** on the
+  domain's row on the **Topics** page (the button was called **Edit defaults**); the description
+  box sits at the top and saves when you click away from it.
+- The agent now follows a domain's description as standing instructions for every video in that
+  domain: what to cover or leave out, the audience, the tone, a look or a structure to use. Where it
+  disagrees with your **Preferences**, the domain's description wins. It cannot skip any of your
+  approvals.
+  [Domain instructions](https://docs.tubematic.ai/user-guide/using-tubematic#domain-instructions)
+  describes it.
+
 ## v2.3.1
 
 ### Upgrade notes

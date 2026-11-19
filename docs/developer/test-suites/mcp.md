@@ -167,6 +167,8 @@ Covers what `mine_youtube_topics` may hand Gemini, and `set_mining_sources`
 - One URL that is not a YouTube video refuses the whole run with no Gemini call. Two spellings
   of one video are asked once.
 - A run makes at most as many calls as the topics it may file, including when every call fails.
+- The domain's description is in the prompt, fenced, and an empty one adds no domain block. Mining
+  files Gemini's answer with no agent reading it, so this is the only place the description acts.
 - A second run while one is in flight is refused, and the lock is released after a run that was
   refused or raised.
 - `set_mining_sources` stores the canonical, deduplicated list and refuses a list with a bad
@@ -1177,7 +1179,9 @@ Covers `choose_script_formula`, `get_video`'s `formula_routing`, the domain's de
   person's choice gets none.
 - `recent` is the domain's previous two videos, newest first, counting a video by its recorded
   formula or else its pick, and rows filed in the same second by insertion order. A formula among
-  them is refused without `repeat_reason` and accepted with it, and the reason is stored. Another domain's videos and a video with no domain have no
+  them is refused without `repeat_reason` and accepted with it, and the reason is stored. The
+  refusal names both cases a `repeat_reason` is for: no other candidate fits, or the domain's
+  description asks for the formula. Another domain's videos and a video with no domain have no
   history.
 - A person's choice becomes the pick, with the agent's formula as the runner-up and "Auto would
   have picked" in the reason. It holds for an experimental formula with the setting off, is exempt

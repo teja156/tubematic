@@ -236,15 +236,19 @@ written for the style: a walk through a system, a story, a list. The
 flowchart TD
     A["TOPIC_APPROVED<br/>visual_style = auto"] --> B["get_video:<br/>style_routing.candidates"]
     B --> C["describe the topic<br/>on fixed axes"]
-    C --> D["rule out: unavailable,<br/>a plain avoid_for match,<br/>cannot_show covers what must be seen"]
+    C --> D["rule out: unavailable,<br/>a plain avoid_for match,<br/>cannot_show covers what must be seen,<br/>a look the domain's description excludes"]
     D --> E["score: best_for 3 or 1,<br/>each signal 1"]
     E --> F{"a clear fit?<br/>3 points or more"}
-    F -->|yes| G["the highest; ties by yielding,<br/>specificity, a person's hint,<br/>mood, images, order"]
+    F -->|yes| G["the clear fit the domain's description<br/>asks for, else the highest; ties by<br/>yielding, specificity, a person's hint,<br/>mood, images, order"]
     F -->|no| H["scenes:<br/>the mixed scene system"]
     G --> I["choose_visual_style"]
     H --> I
     I --> J["script written for<br/>the picked style"]
 ```
+
+The domain's description is the person's standing instructions for the domain
+([Domain instructions](07-agent-layer.md#domain-instructions)): a look it excludes is ruled out, and a
+clear fit it asks for beats a higher score.
 
 The candidates are data: `tubematic_core/visual_styles.py::routing_candidates` lists every main
 style pack in pack order, then `scenes` (insert styles are decided after the main style, by

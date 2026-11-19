@@ -160,23 +160,49 @@ script and records it on the video. When your topic offers none, the agent says 
 and writes the script from the topic alone. The same happens to a topic that was proposed before
 angles existed.
 
-![The Topics page: three research mode switches, a list of mining sources, the form that adds a domain, and one row per domain with its pause button and its Edit defaults button. The second domain is open and shows its style, inserts, voice, formula, agent and topic cap](../images/topics.png)
+![The Topics page: three research mode switches, a list of mining sources, the form that adds a domain with its description box, one row per domain with its pause button and its Edit domain button, and a closed Paused group. The second domain is open and shows its description, style, inserts, voice, formula, agent and topic cap](../images/topics.png)
 
 ### Adding a domain
 
 On the **Topics** page, under **Curriculum Seed Domains**, fill in **Add Domain**:
 
 1. Enter a name, for example "Python Internals".
-2. Describe the scope in up to 2000 characters. Research works from this description, so say what
-   belongs in the domain and what does not.
+2. Describe the domain in up to 2000 characters. Research works from this description, so say what
+   belongs in the domain and what does not. The agent also follows it on every video in the
+   domain, so you can add instructions for this domain alone: the audience, the tone, subjects to
+   leave out, or a look or a structure to use. See [Domain instructions](#domain-instructions).
 3. Leave **Curriculum seed** ticked to have research propose topics for it.
 4. Optionally choose what its videos start with: the visual style, mascot, voice and script
    profile, and the agent with its model and effort.
 5. Press **Add Domain**.
 
-To change the same choices later, press **Edit defaults** on the domain's row. Each change is saved
-as you make it, and the row says **✓ Saved**, or why the change was not saved. The row lists the choices the domain has made, and says "Install defaults for
-everything" when it has made none.
+To change the description or the same choices later, press **Edit domain** on the domain's row.
+Each change is saved as you make it, and the row says **✓ Saved**, or why the change was not saved.
+The description is saved when you click away from its box. The row lists the choices the domain has
+made, and says "Install defaults for everything" when it has made none.
+
+### Domain instructions
+
+The agent reads a domain's description as that domain's standing instructions. Research proposes
+topics inside its scope. When a video's style or formula is left on Auto, the pick follows what it
+says about the look and the structure: a look it rules out is not picked, and a style or formula it
+asks for is picked when it suits the topic. To use one formula whatever the topic, set it as the
+domain's **Formula** under **Edit domain**; every new video in the domain starts with it. The
+domain's **Visual style** works the same way for the topics curriculum research finds for it. The
+script follows what it says about the audience, the tone and the wording.
+
+The [Preferences](05-settings.md#preferences) you write in **Settings** apply to every domain. Where
+a domain's description and your preferences disagree, the agent follows the description. Neither
+can skip a step that waits for your approval, and neither overrides the rules the agent's skills
+set for every script.
+
+An example description:
+
+```
+How the Linux kernel schedules, allocates and isolates. Not: shell commands, distributions.
+Audience: developers who have never read kernel code. Keep the tone calm, no jokes.
+Prefer diagrams to photos.
+```
 
 A domain's agent starts every new video in that domain, whichever research mode found the topic.
 Leave it on **Automatic** to share the domain's videos between your agents
@@ -203,7 +229,7 @@ Five controls bound what research produces, and so what it costs.
 | Research modes | Toggles on the **Topics** page | All on | Turns curriculum, trending or mining off |
 | Pause a domain | **Pause topic generation** on a seed's row on the **Topics** page | Not paused | Stops research filing topics in that domain. A paused domain moves to the **Paused** group |
 | Delete a domain | **Delete** on a paused seed's row, under **Paused** | Not deleted | Removes the domain and every topic and video filed under it |
-| Topic cap | **Topic cap**, under **Edit defaults** on a domain's row | 100 | The most topics a domain may hold over its lifetime, from 25 to 750 |
+| Topic cap | **Topic cap**, under **Edit domain** on a domain's row | 100 | The most topics a domain may hold over its lifetime, from 25 to 750 |
 | Pending-topic limit | **Research pending cap** on **Settings → Research** | 15 | Research does not run while this many topics are waiting for your decision |
 | Research runs per day | **Max research runs per day** on **Settings → Research** | 8 | The most research runs in any 24 hours |
 
@@ -238,7 +264,7 @@ or deleted, so that it does not propose the same thing twice. The cap keeps that
 enough for the agent to read.
 
 A domain at its cap shows **EXPIRED**, and research files nothing more in it. To continue, press
-**Edit defaults** on the domain's row and raise **Topic cap**. The row shows how many topics the
+**Edit domain** on the domain's row and raise **Topic cap**. The row shows how many topics the
 domain has had against its cap, for example "42 / 100 topics".
 
 ### The two research limits
@@ -329,7 +355,7 @@ You can choose the formula yourself in two places:
 
 - For one video, with the **Formula** picker in its window at Topic Proposed, or on the
   **New Video** page.
-- For a domain, with the **Formula** picker under **Edit defaults** on its row on the **Topics**
+- For a domain, with the **Formula** picker under **Edit domain** on its row on the **Topics**
   page. Every new video in
   the domain then starts with that formula, whichever research mode found it.
 

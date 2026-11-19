@@ -1087,7 +1087,7 @@ describe("TopicsPage — add-domain description", () => {
 });
 
 // TMDEV-207: a domain row is one summary line, and its defaults (now with an
-// agent, model and effort) sit in a panel that "Edit defaults" opens.
+// agent, model and effort) sit in a panel that "Edit domain" opens.
 describe("TopicsPage — domain summary and agent defaults", () => {
   afterEach(() => vi.restoreAllMocks());
 
@@ -1184,7 +1184,7 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     const { fireEvent } = await import("@testing-library/react");
     render(<TopicsPage />);
     const edit = await waitFor(() => screen.getByTestId("domain-edit-seed-1"));
-    expect(edit.textContent).toBe("Edit defaults");
+    expect(edit.textContent).toBe("Edit domain");
     expect(edit.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(edit);
     expect(edit.textContent).toBe("Close");
@@ -1195,6 +1195,262 @@ describe("TopicsPage — domain summary and agent defaults", () => {
     expect(screen.getByTestId("domain-chip-agent-seed-1")).toBeTruthy();
     fireEvent.click(edit);
     expect(screen.queryByTestId("domain-panel-seed-1")).toBeNull();
+  });
+
+  // TMDEV-256: the description is the domain's standing instructions to the
+  // agent, so it is editable in the open row, saved on blur.
+  it("shows the stored description in the open row, with the agent note", async () => {
+    mockDomains();
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    expect(field.tagName).toBe("TEXTAREA");
+    expect(field.value).toBe("kernels");
+    expect(field.style.resize).toBe("vertical");
+    expect(screen.getByTestId("domain-description-input-seed-1-count").textContent).toBe("7 / 2000");
+    expect(screen.getByTestId("domain-description-input-seed-1-note").textContent)
+      .toMatch(/the agent follows what it says/);
+    // The add form carries the same note.
+    expect(screen.getByTestId("domain-description-input-note").textContent)
+      .toBe(screen.getByTestId("domain-description-input-seed-1-note").textContent);
+    // The summary line is cut short, so the whole text is on hover.
+    expect(screen.getByTestId("domain-description-seed-1").getAttribute("title")).toBe("kernels");
+  });
+
+  it("saves a changed description on blur, trimmed, with every other field", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1"));
+    fireEvent.change(field, { target: { value: "Kernels.\n\nFor beginners; no jokes.\n" } });
+    // Typing alone sends nothing.
+    expect(projectPosts(spy)).toHaveLength(0);
+    fireEvent.blur(field);
+    await waitFor(() => expect(projectPosts(spy)).toEqual([{
+      id: "seed-1", name: "Linux internals", description: "Kernels.\n\nFor beginners; no jokes.",
+      is_curriculum_seed: true, status: "active", default_visual_style: "stick",
+      default_voice_id: "a1", default_script_profile_id: "", default_mascot_id: "none",
+      default_agent_id: "claude", default_agent_model: "sonnet", default_agent_effort: "max",
+      default_formula_id: "", default_insert_mode: "auto", topic_cap: 300 }]));
+    await waitFor(() => expect(screen.getByTestId("domain-description-seed-1").textContent)
+      .toBe("Kernels.\n\nFor beginners; no jokes."));
+  });
+
+  it("sends nothing when the description is left as it was", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1"));
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "kernels  " } });
+    fireEvent.blur(field);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(projectPosts(spy)).toHaveLength(0);
+  });
+
+  it("can clear a description", async () => {
+    const spy = mockDomains();
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1"));
+    fireEvent.change(field, { target: { value: "" } });
+    fireEvent.blur(field);
+    await waitFor(() => expect(projectPosts(spy)).toHaveLength(1));
+    expect(projectPosts(spy)[0].description).toBe("");
+  });
+
+  it("keeps a refused description in the box and says why", async () => {
+    mockDomains([DOMAIN, PLAIN], AGENTS, "description must be at most 2000 characters, got 2001");
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    fireEvent.change(field, { target: { value: "Something new" } });
+    fireEvent.blur(field);
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-seed-1").textContent)
+      .toMatch(/description must be at most 2000 characters/));
+    expect(field.value).toBe("Something new");
+  });
+
+  it("stops the description at 2000 characters, and never cuts a longer stored one", async () => {
+    const LONG = { ...DOMAIN, description: "y".repeat(2100) };
+    mockDomains([LONG, PLAIN]);
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    // A text stored before the cap existed is shown whole, and cannot grow.
+    expect(field.value).toBe("y".repeat(2100));
+    fireEvent.change(field, { target: { value: "y".repeat(2150) } });
+    expect(field.value).toBe("y".repeat(2100));
+    // Shortening it is allowed.
+    fireEvent.change(field, { target: { value: "y".repeat(1990) } });
+    expect(field.value).toBe("y".repeat(1990));
+    // Once under the cap, the cap holds.
+    fireEvent.change(field, { target: { value: "y".repeat(2050) } });
+    expect(field.value).toBe("y".repeat(2000));
+    expect(screen.getByTestId("domain-description-input-seed-1-count").textContent).toBe("2000 / 2000");
+  });
+
+  it("a letter typed into the middle of a full description never pushes its end out", async () => {
+    const FULL = { ...DOMAIN, description: "a".repeat(1000) + "z".repeat(1000) };
+    mockDomains([FULL, PLAIN]);
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    // The caret after an edit is where the inserted text ends, as a browser
+    // reports it; the text after it is what the edit left in place.
+    const edit = (value: string, caret: number) =>
+      fireEvent.change(field, { target: { value, selectionStart: caret, selectionEnd: caret } });
+    // One letter typed in the middle: refused, the text stays whole.
+    edit("a".repeat(1000) + "X" + "z".repeat(1000), 1001);
+    expect(field.value).toBe("a".repeat(1000) + "z".repeat(1000));
+    // Room made at the start, then a paste in the middle: only the paste is cut.
+    edit("a".repeat(997) + "z".repeat(1000), 0);
+    edit("a".repeat(500) + "PASTE" + "a".repeat(497) + "z".repeat(1000), 505);
+    expect(field.value).toBe("a".repeat(500) + "PAS" + "a".repeat(497) + "z".repeat(1000));
+  });
+
+  it("a paste over a selection that repeats what it replaced is cut where it was pasted", async () => {
+    const FULL = { ...DOMAIN, description: "a".repeat(1000) + "z".repeat(1000) };
+    mockDomains([FULL, PLAIN]);
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    // The first "a" selected and "ba" pasted over it. The strings alone cannot
+    // tell where the paste ends; the caret says it is the first two letters.
+    // Only the paste is cut, and the last "z" stays.
+    fireEvent.change(field, { target: { value: "ba" + "a".repeat(999) + "z".repeat(1000),
+                                        selectionStart: 2, selectionEnd: 2 } });
+    expect(field.value).toBe("b" + "a".repeat(999) + "z".repeat(1000));
+  });
+
+  it("a save that lands while the box is being edited again keeps the newer text", async () => {
+    let release: (() => void) | null = null;
+    const spy = mockDomains();
+    const original = spy.getMockImplementation()!;
+    spy.mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      if (url.toString().endsWith("/projects") && init?.method === "POST" && !release) {
+        const body = JSON.parse(String(init.body));
+        return new Promise((resolve) => {
+          release = () => resolve({ ok: true, json: () => Promise.resolve(
+            { ...DOMAIN, description: body.description }) } as Response);
+        });
+      }
+      return original(url, init);
+    });
+    const { fireEvent, act } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "First draft" } });
+    fireEvent.blur(field);
+    await waitFor(() => expect(release).not.toBeNull());
+    // Back in the box before the first save answers.
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "Second draft" } });
+    await act(async () => { release!(); });
+    await waitFor(() => expect(screen.getByTestId("domain-description-seed-1").textContent).toBe("First draft"));
+    expect(field.value).toBe("Second draft");
+    fireEvent.blur(field);
+    await waitFor(() => expect(projectPosts(spy).map((b) => b.description)).toEqual(["First draft", "Second draft"]));
+  });
+
+  it("a draft whose save is refused after the panel was closed is there on reopen", async () => {
+    let release: (() => void) | null = null;
+    const spy = mockDomains();
+    const original = spy.getMockImplementation()!;
+    spy.mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      if (url.toString().endsWith("/projects") && init?.method === "POST") {
+        return new Promise((resolve) => {
+          release = () => resolve({ ok: false, status: 400,
+            json: () => Promise.resolve({ error: "refused for the test" }) } as Response);
+        });
+      }
+      return original(url, init);
+    });
+    const { fireEvent, act } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "A correction" } });
+    // Pressing Close blurs the box first, which starts the save.
+    fireEvent.blur(field);
+    fireEvent.click(screen.getByTestId("domain-edit-seed-1"));
+    expect(screen.queryByTestId("domain-panel-seed-1")).toBeNull();
+    await waitFor(() => expect(release).not.toBeNull());
+    await act(async () => { release!(); });
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-seed-1").textContent)
+      .toMatch(/refused for the test/));
+    fireEvent.click(screen.getByTestId("domain-edit-seed-1"));
+    expect((screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement).value)
+      .toBe("A correction");
+  });
+
+  it("a draft whose save is refused in the click that pauses the domain is there under Paused", async () => {
+    const spy = mockDomains([DOMAIN, PLAIN], AGENTS, "refused for the test");
+    const { fireEvent } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "A correction" } });
+    // Pressing Pause blurs the box first; the refused save and the pause run
+    // in turn, and the pause moves the row into the Paused group.
+    fireEvent.blur(field);
+    fireEvent.click(screen.getByTestId("toggle-domain-seed-1"));
+    await waitFor(() => expect(spy.mock.calls.some(([u]) => u.toString().endsWith("/projects/seed-1/status")))
+      .toBe(true));
+    await openPaused();
+    await waitFor(() => expect(screen.getByTestId("domain-status-seed-1").textContent).toBe("PAUSED"));
+    await openDefaults();
+    expect((screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement).value)
+      .toBe("A correction");
+  });
+
+  it("a newer save that is refused after an older one lands keeps the newer text", async () => {
+    const releases: Array<() => void> = [];
+    const spy = mockDomains();
+    const original = spy.getMockImplementation()!;
+    spy.mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      if (url.toString().endsWith("/projects") && init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        return new Promise((resolve) => {
+          releases.push(() => resolve(body.description === "First draft"
+            ? { ok: true, json: () => Promise.resolve({ ...DOMAIN, description: body.description }) } as Response
+            : { ok: false, status: 400, json: () => Promise.resolve({ error: "refused for the test" }) } as Response));
+        });
+      }
+      return original(url, init);
+    });
+    const { fireEvent, act } = await import("@testing-library/react");
+    render(<TopicsPage />);
+    await openDefaults();
+    const field = await waitFor(() => screen.getByTestId("domain-description-input-seed-1") as HTMLTextAreaElement);
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "First draft" } });
+    fireEvent.blur(field);
+    await waitFor(() => expect(releases).toHaveLength(1));
+    // Typed again and left before the first save answers; the row's writes
+    // run one at a time, so the second waits behind the first.
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "Second draft" } });
+    fireEvent.blur(field);
+    await act(async () => { releases[0](); });
+    await waitFor(() => expect(screen.getByTestId("domain-description-seed-1").textContent).toBe("First draft"));
+    expect(field.value).toBe("Second draft");
+    await waitFor(() => expect(releases).toHaveLength(2));
+    await act(async () => { releases[1](); });
+    await waitFor(() => expect(screen.getByTestId("domain-save-status-seed-1").textContent)
+      .toMatch(/refused for the test/));
+    expect(field.value).toBe("Second draft");
   });
 
   it("shows the domain's agent, model and effort, and offers only live agents", async () => {

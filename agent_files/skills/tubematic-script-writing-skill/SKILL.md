@@ -34,13 +34,16 @@ needs its script written.
    old one — take `model_id` and `pronunciation_mode` from that voice's entry in
    `get_pipeline_status`'s `elevenlabs_voices` instead. Then call `get_pipeline_status()` once — you need
    `pronunciation_lexicon` before drafting (Steps 5 and 6), and `user_preferences`: apply the parts
-   about scripts (tone, audience, wording, length, a closing line) and ignore the rest. The fixed
-   policy below still wins over a preference that contradicts it.
+   about scripts (tone, audience, wording, length, a closing line) and ignore the rest. Read the
+   domain's description too (`get_video`'s `style_routing.domain.description`): it is the
+   domain's standing instructions, written by a person, and its parts about scripts apply the same
+   way. Where it and `user_preferences` disagree, the description wins. The fixed policy below
+   still wins over a preference or a description that contradicts it.
 4. Read `insert_styles` and `insert_routing` from the `get_video` result: the insert styles this
    script may mark segments with, and why they were chosen (Step 5, *Insert marks*).
 
 **A closing line exists only when the preferences ask for one.** A script ends on its payoff
-(Step 4, rule 10). If `user_preferences` asks for a closing line (a follow ask, a sign-off, a
+(Step 4, rule 10). If `user_preferences` or the domain's description asks for a closing line (a follow ask, a sign-off, a
 question to the viewer), add exactly one sentence after the payoff that does what the preference
 asks, tied to this video's subject, in the voice of the profile or the generic style. Word it
 differently from video to video unless the preference gives the exact words. `update_video` may

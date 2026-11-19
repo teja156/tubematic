@@ -90,7 +90,7 @@ you also set:
 You cannot add or remove a model on that tab, because the dashboard has no CLI to check one with.
 Use `--install-agent` for that.
 
-To give one domain's videos to one agent, press **Edit defaults** on the domain's row on the
+To give one domain's videos to one agent, press **Edit domain** on the domain's row on the
 **Topics** page and choose the **Agent**. You can also choose a **Model** from that agent's list
 and an **Effort**. Every new video in the domain then starts on that agent, and the shares apply
 to the domains you leave on **Automatic**. If you uninstall the agent, the domain's new videos go

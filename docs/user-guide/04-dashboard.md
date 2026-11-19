@@ -180,14 +180,15 @@ and post links. An archived video cannot be played or restored.
 ### Topics
 
 Holds the research mode toggles, the mining sources, and a row for each domain. A row shows the
-domain's name, the defaults it has set, how many topics and videos it holds, and its status. A
+domain's name and the start of its description, the defaults it has set, how many topics and videos it holds, and its status. A
 curriculum seed also has a **Pause topic generation** button. Paused seeds are listed under a
 closed **Paused** group, and each has a **Delete** button.
 
-**Edit defaults** opens the domain's choices under its row:
+**Edit domain** opens the domain's choices under its row:
 
 | Group | Sets |
 |---|---|
+| Description | What the domain covers, and the agent's instructions for its videos ([Domain instructions](03-using-tubematic.md#domain-instructions)) |
 | Look | The visual style and the mascot |
 | Narration | The voice, the script profile and the formula |
 | Agent | The agent, its model and its effort |
