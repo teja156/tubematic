@@ -662,7 +662,7 @@ and render nothing:
 | Command | What it does |
 |---|---|
 | `python3 scripts/gallery.py scan <styles> [--only ids]` | Checks and scans each submission as an install does and prints a Markdown report; exits 1 when one fails its check or the scan refuses it |
-| `python3 scripts/gallery.py build <styles> <site> --base-url <url> [--repo-url <url>] [--authors <json>]` | Writes `archives/<id>-<version>.zip`, `previews/<id>.mp4` and `.webp`, `index.json` (each entry's `sha256` is of its archive's bytes) and `index.html`, the page people browse, and refuses to publish a failing package. `--authors` maps style ids to GitHub logins |
+| `python3 scripts/gallery.py build <styles> <site> --base-url <url> [--repo-url <url>] [--authors <json>]` | Writes `archives/<id>-<version>.zip`, `previews/<id>.mp4` and `.webp`, `index.json` (each entry's `sha256` is of its archive's bytes) and `index.html`, the page people browse (search, a card per style, a preview modal), and refuses to publish a failing package. `--authors` maps style ids to GitHub logins |
 | `python3 scripts/gallery.py render <package> <out.mp4> --image <backend image>` | Renders a scene style's example config, silent, in the backend image. A 3D world style exits 3 (rendered by hand); any other failure exits 1 and fails the pull request |
 | `python3 scripts/gallery.py stage <styles> <out> [--only ids]` | Copies each submission's package to `<out>/<id>/` as plain files for the Claude review, fetching a pointer at its commit; exits 1 when one cannot be fetched or an id is submitted twice |
 

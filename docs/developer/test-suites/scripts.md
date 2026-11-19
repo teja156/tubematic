@@ -858,9 +858,15 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
   and the previews; the official gallery's install from that site stages as reviewed and installs.
   It refuses to publish a package that fails its check.
 - `build` also writes `index.html` from the same entries: a card per style with its own files by
-  relative path, the same bytes on every build, "No styles yet" when empty, no script, every field a
-  submitter wrote escaped, and a homepage linked only when it is an https address. The publish
-  workflow passes the repository, so the page links its submission guide.
+  relative path, the same bytes on every build, "No styles yet" when empty, every field a submitter
+  wrote escaped, and a homepage linked only when it is an https address. The publish workflow passes
+  the repository, so the page links its submission guide.
+- The page follows the maintainer's mockup: a search box over name, author, tagline and id, one wide
+  card per style (preview, name and version, author, tagline, Renders on, License and ID, a
+  **Download zip** button and the sha256 with a copy button), a **Submit a style** link, and a modal
+  that plays the preview. Its one script is the constant `gallery._PAGE_JS` with no submitter text in
+  it, and a Content-Security-Policy allows only that script's and the stylesheet's hashes, so markup a
+  submitter slipped past the escaping could never run.
 - The page wears the dashboard's look: its colour tokens equal `dashboard/app/globals.css`'s (they
   are copied into `scripts/gallery.py`, since the page ships without the dashboard), with the same
   fonts and the dashboard's logo mark.

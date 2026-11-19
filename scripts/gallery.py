@@ -203,30 +203,83 @@ header {
 .brand img { width: 36px; height: 36px; display: block; }
 .divider { width: 1px; height: 18px; background: var(--border-2); }
 .crumb { font: 12px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber); }
-main { max-width: 1240px; margin: 0 auto; padding: 32px max(16px, env(safe-area-inset-left)) 64px; }
-h1 { font: 400 18px var(--mono); margin: 0 0 10px; letter-spacing: 0.02em; }
-.lede { max-width: 78ch; color: var(--dim); margin: 0 0 10px; }
-.how { max-width: 78ch; color: var(--ink-2); margin: 0; padding: 12px 14px; border: 1px solid var(--border); background: var(--panel); }
-.how b { color: var(--ink); font-weight: 600; }
-.label { display: flex; align-items: center; gap: 14px; margin: 32px 0 16px; font: 10.5px var(--mono);
-  letter-spacing: 0.22em; text-transform: uppercase; color: var(--mute); }
-.label .mark { color: var(--amber); margin-right: -8px; }
-.label .rule { flex: 1; height: 1px; background: linear-gradient(to right, var(--border) 0, var(--border) 60%, transparent); }
-.label .count { color: var(--ink-2); letter-spacing: 0.18em; padding: 2px 8px; border: 1px solid var(--border-2); background: var(--panel); }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
-.card { background: var(--panel); border: 1px solid var(--border); display: grid; align-content: start; min-width: 0; }
-.card:hover { border-color: var(--border-2); }
-.card video { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; background: #000; display: block; border-bottom: 1px solid var(--border); }
-.body { padding: 12px 12px 14px; display: grid; gap: 6px; min-width: 0; }
-.body h2 { font: 600 15px var(--sans); margin: 0; }
-.meta, .sum { font: 11.5px/1.55 var(--mono); color: var(--dim); overflow-wrap: anywhere; }
-.sum { color: var(--mute); }
-.body p { margin: 0; font-size: 14px; color: var(--ink-2); }
-.btn { justify-self: start; margin-top: 4px; font: 11px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--amber); border: 1px solid var(--amber); padding: 6px 12px; text-decoration: none; }
-.btn:hover { background: var(--amber-soft); }
+[hidden] { display: none !important; }
+main { max-width: 1120px; margin: 0 auto; padding: 40px max(16px, env(safe-area-inset-left)) 64px; }
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px 32px; flex-wrap: wrap; }
+h1 { font: 700 22px var(--mono); margin: 0 0 10px; letter-spacing: 0.01em; }
+.lede { max-width: 62ch; color: var(--ink-2); margin: 0; font-size: 14px; }
+.submit { font-size: 14px; white-space: nowrap; }
+.search { display: grid; gap: 8px; margin: 28px 0 20px; max-width: 420px; }
+.search span { font: 10.5px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; color: var(--mute); }
+.search input { width: 100%; font: 15px var(--sans); color: var(--ink); background: var(--panel); border: 1px solid var(--border-2);
+  border-radius: 8px; padding: 11px 14px; outline: none; }
+.search input::placeholder { color: var(--mute); }
+.search input:focus { border-color: var(--amber); }
+/* minmax(0, 1fr): an auto column would grow to the widest card's content */
+.styles { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.style { display: grid; grid-template-columns: 216px minmax(0, 1fr); background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden; }
+.style:hover { border-color: var(--border-2); }
+.thumb { position: relative; display: block; padding: 0; border: 0; background: #000; cursor: pointer; aspect-ratio: 9 / 16; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb .play { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; transition: opacity 0.15s;
+  background: rgba(0, 0, 0, 0.35); }
+.thumb .play svg { width: 54px; height: 54px; }
+.thumb:hover .play, .thumb:focus-visible .play { opacity: 1; }
+.thumb:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+.body { padding: 32px 36px; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 14px;
+  min-width: 0; }
+.body h2 { font: 700 30px/1.15 var(--sans); margin: 0; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.ver { font: 400 12px var(--mono); color: var(--mute); margin-left: 6px; letter-spacing: 0.02em; vertical-align: middle; }
+.by { display: flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: 15px; }
+.by b { color: var(--ink); font-weight: 600; }
+.by a { color: inherit; text-decoration: none; }
+.by a:hover { text-decoration: underline; }
+.avatar { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--border-2);
+  color: var(--ink); font: 600 13px var(--sans); flex: none; }
+.tagline { margin: 4px 0 0; max-width: 60ch; font-size: 16px; color: var(--ink-2); overflow-wrap: anywhere; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 24px; margin: 8px 0 0; max-width: 620px; }
+.facts div { min-width: 0; }
+.facts dt { font: 10.5px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--mute); margin-bottom: 4px; }
+.facts dd { margin: 0; font: 500 14px var(--sans); color: var(--ink); overflow-wrap: anywhere; }
+.facts div:nth-child(3) dd { font: 13px var(--mono); }
+.get { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 28px; }
+.dl { display: inline-flex; align-items: center; gap: 10px; background: var(--amber); color: #111; font: 600 14px var(--sans);
+  padding: 12px 20px; border-radius: 6px; text-decoration: none; }
+.dl:hover { filter: brightness(1.08); }
+.dl svg, .copy svg { width: 16px; height: 16px; flex: none; }
+.sha { display: inline-flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; border: 1px solid var(--border-2);
+  border-radius: 8px; padding: 9px 12px; font: 12px var(--mono); color: var(--ink-2); }
+.sha .k { color: var(--mute); }
+.sha code { font: inherit; overflow-wrap: anywhere; }
+.copy { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--dim); cursor: pointer;
+  padding: 2px; font: 11px var(--mono); }
+.copy:hover { color: var(--ink); }
+.copy.done { color: var(--amber); }
+.copy.done::after { content: "Copied"; }
 .empty { color: var(--dim); font-family: var(--mono); }
-footer { margin-top: 40px; color: var(--mute); font: 12px var(--mono); }
+footer { margin-top: 40px; color: var(--mute); font: 12px/1.7 var(--mono); }
+dialog { padding: 0; border: 1px solid var(--border-2); border-radius: 12px; background: var(--panel); color: var(--ink);
+  width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; }
+dialog::backdrop { background: rgba(0, 0, 0, 0.72); }
+dialog .wrap { display: grid; grid-template-columns: auto minmax(0, 1fr); }
+dialog video { height: min(78vh, 720px); aspect-ratio: 9 / 16; background: #000; display: block; }
+dialog .body { padding: 28px 30px; }
+dialog .hint { margin: 0; padding: 0 30px 28px; color: var(--dim); font-size: 13px; }
+dialog .hint b { color: var(--ink-2); font-weight: 600; }
+.close { position: absolute; top: 10px; right: 12px; border: 0; background: none; color: var(--dim); font: 26px/1 var(--sans);
+  cursor: pointer; padding: 4px 8px; }
+.close:hover { color: var(--ink); }
+@media (max-width: 720px) {
+  .style { grid-template-columns: minmax(0, 1fr); }
+  .styles .thumb { aspect-ratio: auto; height: 320px; }
+  .body { padding: 18px 18px 20px; gap: 10px; }
+  .facts { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+  .body h2 { font-size: 22px; }
+  .get { margin-top: 12px; }
+  dialog .wrap { grid-template-columns: 1fr; }
+  dialog video { width: 100%; height: auto; aspect-ratio: auto; max-height: 56vh; }
+}
 """
 
 
@@ -237,59 +290,141 @@ def _logo_uri() -> str:
     return ("data:image/svg+xml;base64," + base64.b64encode(path.read_bytes()).decode()) if path.is_file() else ""
 
 
+# The page's one script: search, the preview modal and the copy buttons. A constant with no
+# submitter text in it, allowed by its hash in the page's Content-Security-Policy.
+_PAGE_JS = r"""
+(() => {
+  const q = document.getElementById("q");
+  const items = Array.from(document.querySelectorAll(".style"));
+  const none = document.getElementById("none");
+  if (q) q.addEventListener("input", () => {
+    const terms = q.value.toLowerCase().split(/\s+/).filter(Boolean);
+    let shown = 0;
+    for (const item of items) {
+      const match = terms.every((t) => item.dataset.search.includes(t));
+      item.hidden = !match;
+      if (match) shown += 1;
+    }
+    if (none) none.hidden = shown > 0;
+  });
+  const player = document.getElementById("player");
+  const video = player.querySelector("video");
+  const info = player.querySelector(".info");
+  document.addEventListener("click", (ev) => {
+    const target = ev.target instanceof Element ? ev.target : null;
+    if (!target) return;
+    const thumb = target.closest(".thumb");
+    if (thumb) {
+      info.replaceChildren(thumb.closest(".style").querySelector(".body").cloneNode(true));
+      video.poster = thumb.querySelector("img").getAttribute("src");
+      video.src = thumb.dataset.video;
+      player.showModal();
+      video.play().catch(() => {});
+      return;
+    }
+    const copy = target.closest(".copy");
+    if (copy) {
+      const done = () => {
+        copy.classList.add("done");
+        setTimeout(() => copy.classList.remove("done"), 1500);
+      };
+      if (navigator.clipboard) navigator.clipboard.writeText(copy.dataset.sha).then(done, () => {});
+      return;
+    }
+    if (target === player || target.closest(".close")) player.close();
+  });
+  player.addEventListener("close", () => {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  });
+})();
+"""
+
+_ICON_DOWNLOAD = ('<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">'
+                  '<path d="M8 2v8m-3.5-3.5L8 10l3.5-3.5M3 13.5h10"/></svg>')
+_ICON_COPY = ('<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">'
+              '<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5A1.5 1.5 0 0 0 9 1.5H4'
+              'A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/></svg>')
+_ICON_PLAY = ('<svg viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="27" fill="rgba(0,0,0,0.55)" '
+              'stroke="#fff" stroke-opacity="0.7"/><path d="M23 18l16 10-16 10z" fill="#fff"/></svg>')
+
+
+def _csp_hash(text: str) -> str:
+    return "'sha256-" + base64.b64encode(hashlib.sha256(text.encode("utf-8")).digest()).decode() + "'"
+
+
 def render_page(entries: list[dict], repo_url: str = "") -> str:
     """The gallery's browsable page (index.html), from the same entries as index.json, in the
-    dashboard's look. Static and script-free. Every package field is a submitter's text, so all of
-    it is escaped, and a homepage is linked only when it is an https address. Paths are relative,
-    so the page works at any address."""
+    dashboard's look: one card per style, a search box, and a modal that plays a preview. Every
+    package field is a submitter's text, so all of it is escaped, a homepage is linked only when
+    it is an https address, and a Content-Security-Policy lets only the page's own script and
+    stylesheet run. Paths are relative, so the page works at any address."""
     e = lambda s: html.escape(str(s), quote=True)  # noqa: E731
+    https = lambda u: bool(re.fullmatch(r"https://[^\s\"'<>]+", u or ""))  # noqa: E731
     cards = []
     for s in entries:
+        sid, name, author, sha = s["id"], s["name"], str(s["author"]), s["sha256"]
         archive = s["archive_url"].rsplit("/", 1)[-1]
         homepage = s.get("homepage") or ""
-        home = (f' · <a href="{e(homepage)}" rel="noopener">homepage</a>'
-                if re.fullmatch(r"https://[^\s\"'<>]+", homepage) else "")
-        needs = "needs a GPU" if s.get("needs_gpu") else "renders on a CPU"
-        author = (f'<a href="{e(s["author_url"])}">{e(s["author"])}</a>' if s.get("author_url")
-                  else e(s["author"]))
+        who = (f'<a href="{e(s["author_url"])}">{e(author)}</a>' if s.get("author_url") else e(author))
+        facts = [("Renders on", "GPU" if s.get("needs_gpu") else "CPU"), ("License", s["licence"]), ("ID", sid)]
+        dl = "".join(f"<div><dt>{label}</dt><dd>{e(value)}</dd></div>" for label, value in facts)
+        if https(homepage):
+            dl += f'<div><dt>Homepage</dt><dd><a href="{e(homepage)}" rel="noopener">{e(homepage)}</a></dd></div>'
+        search = " ".join((name, author, s["tagline"], sid)).lower()
         cards.append(
-            f'<article class="card" id="{e(s["id"])}">'
-            f'<video src="previews/{e(s["id"])}.mp4" poster="previews/{e(s["id"])}.webp" '
-            f'muted loop autoplay playsinline preload="none" aria-label="Preview of {e(s["name"])}"></video>'
-            f'<div class="body"><h2>{e(s["name"])}</h2>'
-            f'<div class="meta">{e(s["id"])} · {e(s["version"])} · {author} · {e(s["licence"])}</div>'
-            f'<p>{e(s["tagline"])}</p>'
-            f'<div class="meta">{e(needs)}{home}</div>'
-            f'<a class="btn" href="archives/{e(archive)}" download>Download zip</a>'
-            f'<div class="sum">sha256 {e(s["sha256"])}</div></div></article>')
-    listing = (f'<div class="grid">{"".join(cards)}</div>' if cards
-               else '<p class="empty">No styles yet.</p>')
-    submit = (f' To add a style, read <a href="{e(repo_url.rstrip("/"))}/blob/main/SUBMITTING.md">the submission guide</a>.'
-              if re.fullmatch(r"https://[^\s\"'<>]+", repo_url or "") else "")
+            f'<article class="style" id="{e(sid)}" data-search="{e(search)}">'
+            f'<button class="thumb" type="button" data-video="previews/{e(sid)}.mp4" '
+            f'aria-label="Play the preview of {e(name)}">'
+            f'<img src="previews/{e(sid)}.webp" alt="" loading="lazy" width="270" height="480">'
+            f'<span class="play">{_ICON_PLAY}</span></button>'
+            f'<div class="body"><h2>{e(name)} <span class="ver">v{e(s["version"])}</span></h2>'
+            f'<div class="by"><span class="avatar" aria-hidden="true">{e(author[:1].upper())}</span>'
+            f'<span>by <b>{who}</b></span></div>'
+            f'<p class="tagline">{e(s["tagline"])}</p>'
+            f'<dl class="facts">{dl}</dl>'
+            f'<div class="get"><a class="dl" href="archives/{e(archive)}" download>{_ICON_DOWNLOAD}Download zip</a>'
+            f'<div class="sha"><span class="k">sha256</span><code title="{e(sha)}">{e(sha[:12])}…{e(sha[-16:])}</code>'
+            f'<button class="copy" type="button" data-sha="{e(sha)}" aria-label="Copy the sha256">{_ICON_COPY}</button>'
+            f'</div></div></div></article>')
+    if cards:
+        listing = (f'<div class="styles">{"".join(cards)}</div>'
+                   '<p class="empty" id="none" hidden>No style matches your search.</p>')
+    else:
+        listing = '<p class="empty">No styles yet.</p>'
+    guide = f'{e(repo_url.rstrip("/"))}/blob/main/SUBMITTING.md' if https(repo_url) else ""
+    submit = f'<a class="submit" href="{guide}">Submit a style →</a>' if guide else ""
     logo = _logo_uri()
     mark = f'<img src="{logo}" alt="">' if logo else ""
+    csp = ("default-src 'none'; base-uri 'none'; form-action 'none'; img-src 'self' data:; media-src 'self'; "
+           f"font-src https://fonts.gstatic.com; style-src {_csp_hash(_PAGE_CSS)} https://fonts.googleapis.com; "
+           f"script-src {_csp_hash(_PAGE_JS)}")
     return (
         "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        f'<meta http-equiv="Content-Security-Policy" content="{csp}">'
         "<title>Tubematic style gallery</title>"
         + (f'<link rel="icon" href="{logo}">' if logo else "")
         + "<link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700"
-        "&amp;family=Inter:wght@400;500;600&amp;display=swap\">"
+        "&amp;family=Inter:wght@400;500;600;700&amp;display=swap\">"
         f"<style>{_PAGE_CSS}</style></head><body>"
         f'<header><div class="brand">{mark}<span>TUBEMATIC</span></div><div class="divider"></div>'
         '<div class="crumb">Style gallery</div></header><main>'
-        "<h1>External styles</h1>"
-        "<p class=\"lede\">Visual styles for Tubematic, each reviewed by a maintainer before it was published. "
-        "A style is code that runs in Tubematic's renderer: a review lowers the risk of installing one, "
-        "it does not remove it.</p>"
-        "<p class=\"how\">To install one, open your Tubematic dashboard and go to <b>Profiles</b> → <b>Styles</b> "
-        "→ <b>Gallery</b>. Or download its zip and use <b>Install from file</b> there. Either way, Tubematic "
-        f"checks the download against its sha256 and shows you the package before it installs.{submit}</p>"
-        f'<div class="label"><span class="mark">▌</span><span>Styles</span><div class="rule"></div>'
-        f'<span class="count">{len(entries)}</span></div>'
+        '<div class="top"><div><h1>External styles</h1>'
+        "<p class=\"lede\">Reviewed by a maintainer before publishing. A style is code that runs in Tubematic's "
+        f"renderer: a review lowers the risk, it does not remove it.</p></div>{submit}</div>"
+        '<label class="search"><span>Search styles</span>'
+        '<input id="q" type="search" placeholder="Name, author or description" autocomplete="off"></label>'
         f"{listing}"
-        "<footer>The machine-readable list is <a href=\"index.json\">index.json</a>.</footer>"
-        "</main></body></html>\n")
+        '<footer>Machine-readable list: <a href="index.json">index.json</a>. To install a style, open your '
+        "Tubematic dashboard and go to Profiles → Styles → Gallery.</footer></main>"
+        '<dialog id="player" aria-label="Style preview"><button class="close" type="button" aria-label="Close">×</button>'
+        '<div class="wrap"><video controls loop playsinline></video><div class="info"></div></div>'
+        '<p class="hint">To install it, open your Tubematic dashboard and go to <b>Profiles</b> → <b>Styles</b> → '
+        "<b>Gallery</b>, or download the zip and use <b>Install from file</b> there. Tubematic checks the download "
+        "against its sha256 and shows you the package before it installs.</p></dialog>"
+        f"<script>{_PAGE_JS}</script></body></html>\n")
 
 
 def build(args) -> int:

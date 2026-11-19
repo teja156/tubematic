@@ -8,6 +8,7 @@ install from it passes the installer's own checks.
 """
 import base64
 import hashlib
+import html
 import json
 import os
 import pathlib
@@ -276,13 +277,15 @@ def test_build_writes_a_page_people_can_browse(tmp_path):
                          "--repo-url", "https://github.com/teja156/tubematic-styles"]) == 0
     page = (site / "index.html").read_text()
     entry = json.loads((site / "index.json").read_text())["styles"][0]
-    assert page.startswith("<!doctype html>") and "<script" not in page
+    assert page.startswith("<!doctype html>")
     for value in (entry["name"], entry["id"], entry["version"], entry["author"], entry["sha256"]):
         assert value in page
     # its own files by relative path, so the page works at any address
     assert 'href="archives/ext_good-1.0.0.zip"' in page
-    assert 'src="previews/ext_good.mp4"' in page and 'poster="previews/ext_good.webp"' in page
+    assert 'data-video="previews/ext_good.mp4"' in page and 'src="previews/ext_good.webp"' in page
     assert 'href="https://github.com/teja156/tubematic-styles/blob/main/SUBMITTING.md"' in page
+    assert 'href="index.json"' in page
+    # how to install is shown in the preview modal
     assert "Profiles" in page and "Install from file" in page
 
 
@@ -294,7 +297,9 @@ def test_the_page_escapes_what_a_submitter_wrote(tmp_path):
     site = tmp_path / "site"
     assert gallery.main(["build", str(styles), str(site), "--base-url", BASE]) == 0
     page = (site / "index.html").read_text()
-    assert "<script" not in page and "<img src=x" not in page and "javascript:" not in page
+    # the page's one script is its own constant; nothing a submitter wrote becomes markup
+    assert page.count("<script") == 1 and "<script>alert" not in page
+    assert "<img src=x" not in page and "javascript:" not in page
     assert "&lt;script&gt;alert(1)&lt;/script&gt; &amp; more" in page and "Evil &quot;Style&quot;" in page
     # only an https homepage becomes a link
     assert 'href="https://example.com/style"' in page
@@ -355,7 +360,56 @@ def test_each_preview_has_an_accessible_name(tmp_path):
     assert gallery.main(["build", str(styles), str(tmp_path / "site"), "--base-url", BASE]) == 0
     page = (tmp_path / "site" / "index.html").read_text()
     name = json.loads((tmp_path / "site" / "index.json").read_text())["styles"][0]["name"]
-    assert f'aria-label="Preview of {name}"' in page
+    assert f'aria-label="Play the preview of {name}"' in page
+
+
+def _page(tmp_path, *ids, **build_args):
+    styles = _styles(tmp_path, *ids)
+    site = tmp_path / "site"
+    extra = [a for k, v in build_args.items() for a in (f"--{k.replace('_', '-')}", v)]
+    assert gallery.main(["build", str(styles), str(site), "--base-url", BASE, *extra]) == 0
+    return (site / "index.html").read_text(), json.loads((site / "index.json").read_text())["styles"]
+
+
+def test_the_page_lays_styles_out_as_the_mockup_does(tmp_path):
+    """User's mockup, 2026-11-18: one wide card per style (preview on the left; name and version, the
+    author, the tagline, Renders on / License / ID, a Download zip button and the sha256 with a copy
+    button), a search box on top and a Submit a style link."""
+    page, (entry,) = _page(tmp_path, "ext_good", repo_url="https://github.com/teja156/tubematic-styles")
+    assert 'placeholder="Name, author or description"' in page and "Search styles" in page
+    assert "Grid" not in page and 'data-view=' not in page
+    assert f'<span class="ver">v{entry["version"]}</span>' in page
+    assert f'>{entry["author"][0].upper()}</span>' in page and f'by <b>{entry["author"]}</b>' in page
+    for label, value in (("Renders on", "GPU" if entry["needs_gpu"] else "CPU"), ("License", entry["licence"]),
+                         ("ID", entry["id"])):
+        assert f"<dt>{label}</dt><dd>{value}</dd>" in page, label
+    sha = entry["sha256"]
+    assert f'data-sha="{sha}"' in page and f"{sha[:12]}…{sha[-16:]}" in page
+    assert ">Download zip</a>" in page and 'aria-label="Copy the sha256"' in page
+    assert '<dialog id="player"' in page
+    assert 'href="https://github.com/teja156/tubematic-styles/blob/main/SUBMITTING.md">Submit a style →</a>' in page
+    # search reads one lower-case field per style
+    search = re.search(r'data-search="([^"]*)"', page).group(1)
+    for value in (entry["name"], entry["author"], entry["tagline"], entry["id"]):
+        assert html.escape(value.lower(), quote=True) in search
+
+
+def test_the_pages_script_is_the_only_one_allowed_to_run(tmp_path):
+    """Every card is a submitter's text: a Content-Security-Policy allows only the page's own
+    script and stylesheet by hash, so injected markup could never run."""
+    page, _ = _page(tmp_path, "ext_good")
+    def digest(text):
+        return "sha256-" + base64.b64encode(hashlib.sha256(text.encode()).digest()).decode()
+    script = re.search(r"<script>(.*?)</script>", page, re.S).group(1)
+    style = re.search(r"<style>(.*?)</style>", page, re.S).group(1)
+    assert script == gallery._PAGE_JS and style == gallery._PAGE_CSS
+    csp = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', page).group(1)
+    directives = dict(d.strip().split(" ", 1) for d in csp.split(";") if d.strip())
+    assert directives["script-src"] == f"'{digest(script)}'"
+    assert f"'{digest(style)}'" in directives["style-src"] and "unsafe-inline" not in csp
+    assert directives["default-src"] == "'none'"
+    # submitter text is never inside the script
+    assert "ext_good" not in script
 
 
 # The Claude review (claude-review.yml). pull_request_target runs the workflow from main WITH the
@@ -634,7 +688,8 @@ def test_build_shows_the_submitters_github_account_as_the_author(tmp_path):
     for sid in ("ext_two", "ext_three"):
         assert entries[sid]["author"] == package_author and "author_url" not in entries[sid]
     page = (site / "index.html").read_text()
-    assert '<a href="https://github.com/octo-cat">octo-cat</a>' in page and "<script>" not in page
+    assert '<a href="https://github.com/octo-cat">octo-cat</a>' in page
+    assert page.count("<script") == 1 and "bad name" not in page
 
 
 def _git(repo, *args, **env):
