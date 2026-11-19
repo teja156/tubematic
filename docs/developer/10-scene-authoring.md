@@ -668,8 +668,9 @@ and render nothing:
 
 A submission is a package folder `styles/<id>/` or a pointer `styles/<id>.json`,
 `{"repo": <https url>, "commit": <40-hex commit>}`, fetched with the installer's own pinned git
-fetch. Every command refuses a submission that is a symlink, since git checks symlinks
-out and one could point the scan at the runner's files, and a stray file that is neither. The archive is written with fixed times and order, so a rebuild of the same package gives the
+fetch. Every command refuses a submission, or a `styles` folder, that is a symlink, since
+git checks symlinks out and one could point the scan at the runner's files, and a stray file that is
+neither. The archive is written with fixed times and order, so a rebuild of the same package gives the
 same bytes and the same checksum. A pull request runs `scan` and `render` (a 3D world style's example
 needs generated source, so the maintainer renders it by hand); a merge to `main` runs `build` and
 deploys the site.
@@ -689,7 +690,8 @@ add a label. The run is split into three jobs:
 | `post` | Comment on the pull request, edit its labels | Posts `review.md` (or why there is none) and removes the label; runs no file from the pull request |
 
 `stage` leaves symlinks out and renames a dot-file, `CLAUDE.md` or `AGENTS.md` to `*.submitted`,
-since Claude Code loads a `CLAUDE.md` from any folder it reads.
+since Claude Code loads a `CLAUDE.md` from any folder it reads. A dot-file also loses its dot, since
+the artifact upload leaves hidden paths out.
 
 ### Making a test package
 

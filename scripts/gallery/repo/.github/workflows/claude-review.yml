@@ -69,8 +69,9 @@ jobs:
               exit 1
             fi
             [ "$id" = .gitkeep ] || ids="$ids${ids:+,}$id"
-          # three dots: the pull request's own changes, even when main has moved on since the fork
-          done < <(git diff --name-only "$BASE_SHA"...HEAD -- styles/)
+          # three dots: the pull request's own changes, even when main has moved on since the fork;
+          # `-- styles`, not `styles/`: a styles entry replaced by a symlink is listed, and refused
+          done < <(git diff --name-only "$BASE_SHA"...HEAD -- styles)
           ids=$(printf '%s' "$ids" | tr , '\n' | sort -u | paste -sd, -)
           echo "ids=$ids" >> "$GITHUB_OUTPUT"
           mkdir -p ../submission
@@ -230,6 +231,8 @@ jobs:
               echo "No review was written (prepare: $PREPARE, review: $REVIEW). See the run."
             fi
           } > comment.md
-          gh pr comment "$PR" --repo "$REPO" --body-file comment.md
+          rc=0
+          gh pr comment "$PR" --repo "$REPO" --body-file comment.md || rc=$?
           # removed so that adding it again runs a new review, for example after the author pushes
           gh pr edit "$PR" --repo "$REPO" --remove-label claude-review
+          exit "$rc"

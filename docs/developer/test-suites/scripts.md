@@ -877,10 +877,12 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
 - `stage` copies each submission's package as plain files, fetches a pointer, reports one it cannot
   fetch, leaves symlinks out (the review uploads the folder as an artifact), renames a dot-file,
   `CLAUDE.md` or `AGENTS.md` to `*.submitted` (Claude Code loads a `CLAUDE.md` in any folder it
-  reads), refuses two files that would stage under one name or a file staged where another needs a
+  reads), a dot-file also losing its dot (upload-artifact leaves hidden paths out), refuses two files that would stage under one name or a file staged where another needs a
   folder (one could hide the other), refuses an id submitted both as a folder and a pointer, and notes
   an id the pull request removed. Every command refuses a submission that is a symlink (to a folder, a
-  file or nothing) or a stray file, so neither passes for a removal.
+  file or nothing) or a stray file, so neither passes for a removal, refuses a `styles` folder that
+  is itself a symlink, and refuses a pointer whose JSON is not an object by name. Both pull request
+  workflows diff `-- styles`, which lists a `styles` entry replaced by a symlink (`styles/` does not).
 - The Claude review workflow runs only on `pull_request_target` `labeled` with the `claude-review`
   label, with no default permissions. Only `prepare` checks out the pull request's commit, and it has
   no secret; every checkout drops its credentials. The Claude job reads the repository and the pull
@@ -895,7 +897,7 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
   the token or a credential-shaped string. Only the pull request's checkout opts in to
   `allow-unsafe-pr-checkout` (checkout v7 refuses a fork's commit otherwise), and the changed files
   come from a three-dot diff, so a base that moved on since the fork adds nothing. `post` always runs, comments
-  with `--body-file`, removes the label and checks nothing out. No `run` expands a `${{ }}` value.
+  with `--body-file`, removes the label even when the comment fails, and checks nothing out. No `run` expands a `${{ }}` value.
 - Opt-in (`TUBEMATIC_GALLERY_RENDER_IMAGE` set to a backend image): `render` makes a video of a scene
   style's example in that image.
 

@@ -26,7 +26,8 @@ gallery's CI checks out Tubematic and runs:
     python3 scripts/gallery.py stage <gallery>/styles <out dir> [--only ext_a,ext_b]
         Copy each submission's package to <out dir>/<id>/ as plain files (a
         pointer is fetched at its pinned commit; symlinks are left out; a dot-file,
-        CLAUDE.md or AGENTS.md is renamed *.submitted so no agent loads it), for
+        CLAUDE.md or AGENTS.md is renamed *.submitted, a dot-file also losing its
+        dot, so no agent loads it), for
         the Claude review to read. Exits 1 when a submission cannot be fetched or
         is submitted twice.
 """
@@ -67,6 +68,8 @@ class GalleryError(Exception):
 
 def submissions(styles_dir: pathlib.Path, only: set[str] | None = None) -> list[tuple[str, pathlib.Path]]:
     """(id, path) of every submission: a folder, or a `.json` pointer."""
+    if pathlib.Path(styles_dir).is_symlink():
+        raise GalleryError(f"{styles_dir} is a symlink; styles/ must be a folder in the repository")
     out = []
     for entry in sorted(pathlib.Path(styles_dir).iterdir()):
         sid = entry.stem if entry.suffix == ".json" else entry.name
@@ -91,6 +94,8 @@ def materialise(sid: str, entry: pathlib.Path, work: pathlib.Path) -> tuple[path
         pointer = json.loads(entry.read_text(encoding="utf-8"))
     except ValueError as exc:
         raise GalleryError(f"{entry.name} is not valid JSON") from exc
+    if not isinstance(pointer, dict):
+        pointer = {}
     repo, commit = pointer.get("repo"), pointer.get("commit")
     if not isinstance(repo, str) or not isinstance(commit, str) or not COMMIT_RE.fullmatch(commit):
         raise GalleryError(f"{entry.name} must be {{\"repo\": <https url>, \"commit\": <40-hex commit>}}")
@@ -368,7 +373,10 @@ AGENT_FILES = {"claude.md", "claude.local.md", "agents.md"}
 
 
 def _staged_name(part: str) -> str:
-    return part + ".submitted" if part.startswith(".") or part.lower() in AGENT_FILES else part
+    # a leading dot is dropped too: upload-artifact leaves hidden paths out of the review's artifact
+    if part.startswith("."):
+        return "dot-" + part[1:] + ".submitted"
+    return part + ".submitted" if part.lower() in AGENT_FILES else part
 
 
 def stage(args) -> int:

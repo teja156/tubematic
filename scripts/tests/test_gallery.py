@@ -396,7 +396,9 @@ def test_stage_renames_files_an_agent_would_load_as_instructions(tmp_path, capsy
     assert gallery.main(["stage", str(styles), str(out)]) == 0
     staged = sorted(str(f.relative_to(out / "ext_one")) for f in (out / "ext_one").rglob("*") if f.is_file())
     assert "CLAUDE.md.submitted" in staged and "guide/AGENTS.md.submitted" in staged
-    assert ".claude.submitted/rules/x.md" in staged and ".mcp.json.submitted" in staged
+    # upload-artifact leaves hidden paths out, so a renamed dot-file loses its dot
+    assert "dot-claude.submitted/rules/x.md" in staged and "dot-mcp.json.submitted" in staged
+    assert not any(part.startswith(".") for n in staged for part in n.split("/"))
     assert not any(n in ("CLAUDE.md", "guide/AGENTS.md", ".mcp.json") or n.startswith(".claude/") for n in staged)
     assert "ext_one: CLAUDE.md staged as CLAUDE.md.submitted" in capsys.readouterr().out
 
@@ -449,6 +451,32 @@ def test_a_stray_file_named_like_a_style_is_refused_not_taken_for_a_removal(tmp_
     assert "ext_stray: styles/ext_stray is neither a package folder nor a .json pointer" in captured.err
     assert "removed" not in captured.out
     assert gallery.main(["scan", str(styles)]) == 1
+
+
+def test_a_symlinked_styles_folder_is_refused(tmp_path, capsys):
+    """A pull request can replace styles/ itself with a link to packages no check looked at."""
+    real = _styles(tmp_path, "ext_one")
+    link = tmp_path / "linked"
+    link.symlink_to(real)
+    for cmd in (["scan", str(link)], ["stage", str(link), str(tmp_path / "out")],
+                ["build", str(link), str(tmp_path / "site"), "--base-url", BASE]):
+        assert gallery.main(cmd) == 1, cmd
+        assert f"{link} is a symlink" in capsys.readouterr().err
+
+
+def test_a_pointer_that_is_not_an_object_is_refused_by_name(tmp_path, capsys):
+    styles = tmp_path / "styles"
+    styles.mkdir()
+    (styles / "ext_list.json").write_text("[]")
+    assert gallery.main(["scan", str(styles)]) == 1
+    assert "ext_list.json must be" in capsys.readouterr().out
+
+
+def test_both_pr_workflows_see_styles_replaced_by_a_symlink():
+    """`git diff -- styles/` leaves out a styles entry that became a symlink; `-- styles` lists it."""
+    for name in ("pr.yml", "claude-review.yml"):
+        text = (SKELETON / ".github" / "workflows" / name).read_text()
+        assert "HEAD -- styles)" in text and "-- styles/)" not in text, name
 
 
 def test_a_symlink_to_a_file_is_refused_too(tmp_path, capsys):
@@ -571,6 +599,8 @@ def test_the_post_job_comments_and_frees_the_label_whatever_happened():
     assert post["permissions"] == {"pull-requests": "write", "issues": "write"}
     run = " ".join(s.get("run", "") for s in post["steps"])
     assert "gh pr comment" in run and "--body-file" in run and "--remove-label claude-review" in run
+    # bash -e would skip the label removal after a failed comment
+    assert '--body-file comment.md || rc=$?' in run and 'exit "$rc"' in run
     assert not any(s.get("uses", "").startswith("actions/checkout") for s in post["steps"])
 
 
