@@ -38,8 +38,9 @@ again to review a newer push. The review advises: the maintainer still reads the
 and a submission written to mislead a reviewer can mislead Claude too.
 
 Only someone with triage access can add a label, so a stranger's pull request never starts a review
-on its own. The pull request's files are checked out only in a job with no secrets, and Claude can
-read files and write its review but run no command.
+on its own. The pull request's files are checked out only in a job with no secrets. Claude can read
+the workspace and write its review but run no command, and a review that quotes a credential is
+withheld.
 
 Setup, once:
 

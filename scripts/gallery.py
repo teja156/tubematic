@@ -25,8 +25,10 @@ gallery's CI checks out Tubematic and runs:
 
     python3 scripts/gallery.py stage <gallery>/styles <out dir> [--only ext_a,ext_b]
         Copy each submission's package to <out dir>/<id>/ as plain files (a
-        pointer is fetched at its pinned commit; symlinks are left out), for the
-        Claude review to read. Exits 1 when a submission cannot be fetched.
+        pointer is fetched at its pinned commit; symlinks are left out; a dot-file,
+        CLAUDE.md or AGENTS.md is renamed *.submitted so no agent loads it), for
+        the Claude review to read. Exits 1 when a submission cannot be fetched or
+        is submitted twice.
 """
 import argparse
 import base64
@@ -78,6 +80,9 @@ def submissions(styles_dir: pathlib.Path, only: set[str] | None = None) -> list[
 def materialise(sid: str, entry: pathlib.Path, work: pathlib.Path) -> tuple[pathlib.Path, dict]:
     """The package folder of a submission, and where it came from. A pointer is
     fetched at its pinned commit with the installer's own git fetch."""
+    if entry.is_symlink():
+        # git checks out symlinks: one could point the scan, or the review's artifact, at the runner
+        raise GalleryError(f"styles/{entry.name} is a symlink; submit the folder or pointer itself")
     if entry.is_dir():
         return entry, {"kind": "folder"}
     try:
@@ -354,15 +359,34 @@ def render(args) -> int:
     return 0
 
 
+# Names Claude Code loads as instructions from a folder it reads (CLAUDE.md, CLAUDE.local.md, rules
+# and settings under .claude/, .mcp.json), plus AGENTS.md: staged under another name so the review
+# reads them as data. A package has no use for a dot-file or these names.
+AGENT_FILES = {"claude.md", "claude.local.md", "agents.md"}
+
+
+def _staged_name(part: str) -> str:
+    return part + ".submitted" if part.startswith(".") or part.lower() in AGENT_FILES else part
+
+
 def stage(args) -> int:
     """Each submission's package as plain files under <out>/<id>/: what the Claude review reads.
-    Symlinks are left out, since the review job uploads the folder as an artifact."""
+    Symlinks are left out (the review uploads the folder as an artifact), and files an agent would
+    load as instructions are renamed."""
     only = set(filter(None, (args.only or "").split(","))) or None
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    found = submissions(pathlib.Path(args.styles), only)
+    ids = [sid for sid, _ in found]
     failed = False
+    for sid in sorted(only - set(ids)) if only else []:
+        print(f"{sid}: not in the pull request's styles/ (removed)")
     with tempfile.TemporaryDirectory() as tmp:
-        for sid, entry in submissions(pathlib.Path(args.styles), only):
+        for sid, entry in found:
+            if ids.count(sid) > 1:
+                failed = True
+                print(f"{sid}: submitted both as a folder and as a pointer", file=sys.stderr)
+                continue
             try:
                 pkg, _ = materialise(sid, entry, pathlib.Path(tmp))
             except (GalleryError, style_install.InstallError) as exc:
@@ -373,7 +397,10 @@ def stage(args) -> int:
                 rel = src.relative_to(pkg)
                 if src.is_symlink() or not src.is_file() or ".git" in rel.parts:
                     continue
-                dest = out / sid / rel
+                staged = pathlib.Path(*(_staged_name(part) for part in rel.parts))
+                if staged != rel:
+                    print(f"{sid}: {rel.as_posix()} staged as {staged.as_posix()}")
+                dest = out / sid / staged
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(src, dest)
     return 1 if failed else 0

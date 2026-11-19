@@ -875,13 +875,21 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
   `--browser-executable` and exits 3 for a 3D world style. The review checklist covers what the
   design asks a reviewer to check.
 - `stage` copies each submission's package as plain files, fetches a pointer, reports one it cannot
-  fetch, and leaves symlinks out, since the review uploads the folder as an artifact.
+  fetch, leaves symlinks out (the review uploads the folder as an artifact), renames a dot-file,
+  `CLAUDE.md` or `AGENTS.md` to `*.submitted` (Claude Code loads a `CLAUDE.md` in any folder it
+  reads), refuses an id submitted both as a folder and a pointer, and notes an id the pull request
+  removed. Every command refuses a submission that is itself a symlink.
 - The Claude review workflow runs only on `pull_request_target` `labeled` with the `claude-review`
   label, with no default permissions. Only `prepare` checks out the pull request's commit, and it has
   no secret; every checkout drops its credentials. The Claude job reads the repository and the pull
   request, runs in the `default` permission mode (the action's auto mode can let a call through that
-  no rule allows) with `Read`, `Glob`, `Grep` and `Write` only and `Bash` and the web tools refused,
-  and its prompt names the checklist and calls the submission untrusted. `post` always runs, comments
+  no rule allows) with `--tools` limited to `Read`, `Glob`, `Grep` and `Write` (`--allowedTools` only
+  pre-approves) and `Bash`, the web tools and MCP tools refused, reads nothing outside the workspace
+  (`/proc/self/environ` holds the token) and loads no `CLAUDE.md` from the submission. Its prompt names
+  the checklist and calls the submission untrusted, and the next step withholds a review that quotes
+  the token or a credential-shaped string. Only the pull request's checkout opts in to
+  `allow-unsafe-pr-checkout` (checkout v7 refuses a fork's commit otherwise), and the changed files
+  come from a three-dot diff, so a base that moved on since the fork adds nothing. `post` always runs, comments
   with `--body-file`, removes the label and checks nothing out. No `run` expands a `${{ }}` value.
 - Opt-in (`TUBEMATIC_GALLERY_RENDER_IMAGE` set to a backend image): `render` makes a video of a scene
   style's example in that image.
