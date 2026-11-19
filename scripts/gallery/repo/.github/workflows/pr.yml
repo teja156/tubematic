@@ -56,7 +56,8 @@ jobs:
               exit 1
             fi
             [ "$id" = .gitkeep ] || ids="$ids${ids:+,}$id"
-          done < <(git diff --name-only "$BASE_SHA" HEAD -- styles/)
+          # `-- styles`, not `styles/`: a styles entry replaced by a symlink is listed, and refused
+          done < <(git diff --name-only "$BASE_SHA" HEAD -- styles)
           ids=$(printf '%s' "$ids" | tr , '\n' | sort -u | paste -sd, -)
           echo "ids=$ids" >> "$GITHUB_OUTPUT"
       - name: Check and scan them as an install does

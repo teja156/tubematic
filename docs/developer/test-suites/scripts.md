@@ -858,9 +858,15 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
   and the previews; the official gallery's install from that site stages as reviewed and installs.
   It refuses to publish a package that fails its check.
 - `build` also writes `index.html` from the same entries: a card per style with its own files by
-  relative path, the same bytes on every build, "No styles yet" when empty, no script, every field a
-  submitter wrote escaped, and a homepage linked only when it is an https address. The publish
-  workflow passes the repository, so the page links its submission guide.
+  relative path, the same bytes on every build, "No styles yet" when empty, every field a submitter
+  wrote escaped, and a homepage linked only when it is an https address. The publish workflow passes
+  the repository, so the page links its submission guide.
+- The page follows the maintainer's mockup: a search box over name, author, tagline and id, one wide
+  card per style (preview, name and version, author, tagline, Renders on, License and ID, a
+  **Download zip** button and the sha256 with a copy button), a **Submit a style** link, and a modal
+  that plays the preview. Its one script is the constant `gallery._PAGE_JS` with no submitter text in
+  it, and a Content-Security-Policy allows only that script's and the stylesheet's hashes, so markup a
+  submitter slipped past the escaping could never run.
 - The page wears the dashboard's look: its colour tokens equal `dashboard/app/globals.css`'s (they
   are copied into `scripts/gallery.py`, since the page ships without the dashboard), with the same
   fonts and the dashboard's logo mark.
@@ -874,11 +880,46 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
   hand edit on every release. `render` names Chromium with
   `--browser-executable` and exits 3 for a 3D world style. The review checklist covers what the
   design asks a reviewer to check.
+- `stage` copies each submission's package as plain files, fetches a pointer, reports one it cannot
+  fetch, leaves symlinks out (the review uploads the folder as an artifact), renames a dot-file,
+  `CLAUDE.md` or `AGENTS.md` to `*.submitted` (Claude Code loads a `CLAUDE.md` in any folder it
+  reads), a dot-file also losing its dot (upload-artifact leaves hidden paths out), refuses two files that would stage under one name or a file staged where another needs a
+  folder (one could hide the other), refuses an id submitted both as a folder and a pointer, and notes
+  an id the pull request removed. Every command refuses a submission that is a symlink (to a folder, a
+  file or nothing) or a stray file, so neither passes for a removal, refuses a `styles` folder that
+  is itself a symlink, and refuses a pointer whose JSON is not an object by name. Both pull request
+  workflows diff `-- styles`, which lists a `styles` entry replaced by a symlink (`styles/` does not).
+- With `--authors`, `build` shows each style's GitHub login as its author, linked to the profile, and
+  keeps the package's own name for a style with no login or one that is not a valid login.
+  `style-authors.sh` (against a local API) takes the author of the merged pull request behind the
+  commit that added a style, skipping unmerged ones and later updates, keeps the original submitter
+  across a rename and the new one after a delete and re-add, and leaves out a style pushed without a
+  pull request (a commit's linked account comes from an email anyone can write) or whose lookup fails. The publish workflow fetches the whole history, runs it before
+  `build` and can read pull requests.
+- The Claude review workflow runs only on `pull_request_target` `labeled` with the `claude-review`
+  label, with no default permissions. Only `prepare` checks out the pull request's commit, and it has
+  no secret; every checkout drops its credentials. The Claude job reads the repository and the pull
+  request, runs in the `default` permission mode (the action's auto mode can let a call through that
+  no rule allows) with `--tools` limited to `Read`, `Glob`, `Grep` and `Write` (`--allowedTools` only
+  pre-approves) and `Bash`, the web tools and MCP tools refused, reads nothing outside the workspace
+  (`/proc/self/environ` holds the token), loads no `CLAUDE.md` from the submission, and has one write
+  approved, `Edit(./review.md)` (a write elsewhere could change an action that runs later in the job;
+  a `Write(path)` rule matches nothing). `Edit` is never denied, since a deny beats that allow. A refusal from `stage` is recorded for the review, since
+  Actions runs bash with `-e`. Its prompt names
+  the checklist and calls the submission untrusted, and the next step withholds a review that quotes
+  the token or a credential-shaped string. Only the pull request's checkout opts in to
+  `allow-unsafe-pr-checkout` (checkout v7 refuses a fork's commit otherwise), and the changed files
+  come from a three-dot diff, so a base that moved on since the fork adds nothing. `post` always runs, comments
+  with `--body-file`, removes the label even when the comment fails, and checks nothing out. No `run` expands a `${{ }}` value.
 - Opt-in (`TUBEMATIC_GALLERY_RENDER_IMAGE` set to a backend image): `render` makes a video of a scene
   style's example in that image.
 
 Trap: an install trusts the index's checksum. A build that wrote different bytes each time would
 publish an index whose checksums a reviewer never saw.
+
+Trap: `pull_request_target` runs the review with the repository's secrets on a stranger's files.
+Moving the pull request's checkout into the job that holds the token, or giving Claude `Bash`, lets
+a submission run code next to that token.
 
 ### `test_create_style_skill.py`
 
