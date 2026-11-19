@@ -685,7 +685,7 @@ add a label. The run is split into three jobs:
 | Job | Can do | Does |
 |---|---|---|
 | `prepare` | Read the repository, no secrets | Checks out the pull request's commit as data, runs `stage` and `scan`, takes a frame per second of each `preview.mp4`, and uploads them |
-| `review` | Read the repository and the pull request, hold the Claude token | Runs Claude with `Read`, `Glob`, `Grep` and `Write` only (`--tools`), in the `default` permission mode, with reads outside the workspace blocked and the submission's `CLAUDE.md` files excluded; writes `review.md`, which is withheld if it quotes the token or anything shaped like a credential |
+| `review` | Read the repository and the pull request, hold the Claude token | Runs Claude with `Read`, `Glob`, `Grep` and `Write` only (`--tools`), in the `default` permission mode, with reads outside the workspace blocked, the submission's `CLAUDE.md` files excluded and `review.md` the only write approved; the review is withheld if it quotes a credential |
 | `post` | Comment on the pull request, edit its labels | Posts `review.md` (or why there is none) and removes the label; runs no file from the pull request |
 
 `stage` leaves symlinks out and renames a dot-file, `CLAUDE.md` or `AGENTS.md` to `*.submitted`,

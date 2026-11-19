@@ -414,6 +414,30 @@ def test_a_symlinked_submission_is_refused_everywhere(tmp_path, capsys):
     assert gallery.main(["scan", str(styles)]) == 1
 
 
+def test_stage_refuses_two_files_that_would_stage_under_one_name(tmp_path, capsys):
+    """Renaming must not let one submitted file hide another from the review."""
+    styles = _styles(tmp_path, "ext_one")
+    for folder in ("CLAUDE.md", "CLAUDE.md.submitted"):
+        (styles / "ext_one" / "components" / folder).mkdir()
+        (styles / "ext_one" / "components" / folder / "Hidden.tsx").write_text(folder)
+    out = tmp_path / "out"
+    assert gallery.main(["stage", str(styles), str(out)]) == 1
+    assert "ext_one: components/CLAUDE.md.submitted/Hidden.tsx and components/CLAUDE.md/Hidden.tsx " \
+           "would both be staged as components/CLAUDE.md.submitted/Hidden.tsx" in capsys.readouterr().err
+    assert not (out / "ext_one").exists()
+
+
+def test_a_symlink_to_a_file_is_refused_too(tmp_path, capsys):
+    styles = tmp_path / "styles"
+    styles.mkdir()
+    (styles / "ext_bad").symlink_to("/etc/hostname")
+    (styles / "ext_gone").symlink_to(tmp_path / "missing")
+    assert gallery.main(["stage", str(styles), str(tmp_path / "out")]) == 1
+    err = capsys.readouterr().err
+    assert "ext_bad: styles/ext_bad is a symlink" in err and "ext_gone: styles/ext_gone is a symlink" in err
+    assert gallery.main(["scan", str(styles)]) == 1
+
+
 def test_stage_refuses_an_id_submitted_twice_and_notes_a_removed_one(tmp_path, capsys):
     styles = _styles(tmp_path, "ext_one")
     (styles / "ext_one.json").write_text("{}")
@@ -474,6 +498,8 @@ def test_only_the_job_without_secrets_touches_the_pull_requests_files():
                 assert step["with"].get("allow-unsafe-pr-checkout", False) is (step in head)
     # the pull request's own changes: base...head, since the base may have moved on since the fork
     runs = " ".join(st.get("run", "") for st in prepare["steps"])
+    # Actions runs bash with -e -o pipefail: a refusal from stage is evidence, not a reason to stop
+    assert '> stage.log 2>&1 || rc=$?' in runs and '"- stage exit $rc"' in runs
     assert runs.count('"$BASE_SHA"...HEAD') == 2 and '"$BASE_SHA" HEAD' not in runs
     for name in ("review", "post"):
         for step in wf["jobs"][name]["steps"]:
@@ -491,13 +517,15 @@ def test_claude_can_read_and_write_its_review_but_run_nothing():
     # --tools is what Claude has at all; --allowedTools only pre-approves
     tools = re.search(r'--tools "([^"]+)"', args).group(1).split(",")
     assert set(tools) == {"Read", "Glob", "Grep", "Write"}
+    # the one write approved is the review; default mode refuses every other (no one to ask)
     allowed = re.search(r'--allowedTools "([^"]+)"', args).group(1).split(",")
-    assert set(allowed) <= set(tools)
+    assert allowed == ["Read", "Glob", "Grep", "Edit(./review.md)"]
     denied = re.search(r'--disallowedTools "([^"]+)"', args).group(1).split(",")
     assert {"Bash", "WebFetch", "WebSearch", "mcp__*"} <= set(denied)
     settings = json.loads(claude["with"]["settings"])
     # /proc/self/environ holds the token: no read outside the workspace
     assert settings["permissions"]["blockReadsOutsideWorkingDirectories"] is True
+    assert settings["permissions"]["blockWritesOutsideWorkingDirectories"] is True
     assert "Read(//proc/**)" in settings["permissions"]["deny"]
     assert settings["claudeMdExcludes"] == ["**/submission/**"]
     # a review that quotes the token is replaced before it is uploaded or posted

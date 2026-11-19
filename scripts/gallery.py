@@ -72,7 +72,8 @@ def submissions(styles_dir: pathlib.Path, only: set[str] | None = None) -> list[
         sid = entry.stem if entry.suffix == ".json" else entry.name
         if entry.name.startswith(".") or (only and sid not in only):
             continue
-        if entry.is_dir() or entry.suffix == ".json":
+        # a symlink of any kind is listed so that materialise refuses it
+        if entry.is_symlink() or entry.is_dir() or entry.suffix == ".json":
             out.append((sid, entry))
     return out
 
@@ -393,16 +394,27 @@ def stage(args) -> int:
                 failed = True
                 print(f"{sid}: {exc}", file=sys.stderr)
                 continue
-            for src in sorted(pkg.rglob("*")):
+            plan: dict[str, list[pathlib.Path]] = {}
+            for src in pkg.rglob("*"):
                 rel = src.relative_to(pkg)
                 if src.is_symlink() or not src.is_file() or ".git" in rel.parts:
                     continue
-                staged = pathlib.Path(*(_staged_name(part) for part in rel.parts))
-                if staged != rel:
-                    print(f"{sid}: {rel.as_posix()} staged as {staged.as_posix()}")
-                dest = out / sid / staged
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(src, dest)
+                staged = pathlib.Path(*(_staged_name(part) for part in rel.parts)).as_posix()
+                plan.setdefault(staged, []).append(rel)
+            clashes = {dest: rels for dest, rels in plan.items() if len(rels) > 1}
+            if clashes:
+                # a rename must never let one submitted file hide another from the review
+                failed = True
+                for dest, rels in sorted(clashes.items()):
+                    names = " and ".join(sorted(r.as_posix() for r in rels))
+                    print(f"{sid}: {names} would both be staged as {dest}", file=sys.stderr)
+                continue
+            for dest, (rel,) in sorted(plan.items()):
+                if dest != rel.as_posix():
+                    print(f"{sid}: {rel.as_posix()} staged as {dest}")
+                target = out / sid / dest
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(pkg / rel, target)
     return 1 if failed else 0
 
 

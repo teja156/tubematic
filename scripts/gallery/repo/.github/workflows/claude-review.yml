@@ -85,9 +85,12 @@ jobs:
         run: |
           printf '# %s\n\nOpened by %s\n\n%s\n' "$TITLE" "$AUTHOR" "$BODY" > submission/pull-request.md
           python3 .tubematic/scripts/gallery.py scan pr/styles --only "$IDS" > submission/scan.md || true
-          { echo; echo "## Staging for this review"; echo
-            python3 .tubematic/scripts/gallery.py stage pr/styles submission/packages --only "$IDS" 2>&1 \
-              | sed 's/^/- /'; echo "- stage exit ${PIPESTATUS[0]}"; } >> submission/scan.md
+          # Actions runs bash with -e: a refusal from stage is evidence for the review, not a stop
+          rc=0
+          python3 .tubematic/scripts/gallery.py stage pr/styles submission/packages --only "$IDS" \
+            > stage.log 2>&1 || rc=$?
+          { echo; echo "## Staging for this review"; echo; sed 's/^/- /' stage.log
+            echo "- stage exit $rc"; } >> submission/scan.md
           command -v ffmpeg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null; }
           for dir in submission/packages/*/; do
             id=$(basename "$dir")
@@ -123,12 +126,15 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
           # the token is in this process's environment (/proc/self/environ): no read outside the
-          # workspace, and no CLAUDE.md from the submission (stage also renames those)
+          # workspace, and no CLAUDE.md from the submission (stage also renames those). A write
+          # could change an action that runs later in this job: the only write approved is
+          # review.md (Edit rules govern Write), and default mode refuses the rest unasked
           settings: |
             {
               "claudeMdExcludes": ["**/submission/**"],
               "permissions": {
                 "blockReadsOutsideWorkingDirectories": true,
+                "blockWritesOutsideWorkingDirectories": true,
                 "deny": ["Read(//proc/**)", "Read(//sys/**)", "Read(//etc/**)", "Read(~/.claude/**)",
                          "Read(//home/runner/work/_temp/**)"]
               }
@@ -169,7 +175,7 @@ jobs:
             --max-turns 80
             --permission-mode default
             --tools "Read,Glob,Grep,Write"
-            --allowedTools "Read,Glob,Grep,Write"
+            --allowedTools "Read,Glob,Grep,Edit(./review.md)"
             --disallowedTools "Bash,WebFetch,WebSearch,Edit,MultiEdit,NotebookEdit,Agent,Task,mcp__*"
       - name: Refuse a review that quotes a credential
         if: always()
