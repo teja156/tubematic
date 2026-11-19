@@ -612,3 +612,94 @@ def test_no_value_from_the_pull_request_is_expanded_inside_a_claude_review_comma
             assert "${{" not in run, step.get("name")
     changed = next(s for s in wf["jobs"]["prepare"]["steps"] if s.get("id") == "changed")["run"]
     assert "ext_[a-z0-9_]{1,40}" in changed and "exit 1" in changed
+
+
+# The author shown in the gallery is the GitHub account that submitted the style
+# (.github/style-authors.sh), so a package cannot claim someone else's name.
+
+AUTHORS_SCRIPT = SKELETON / ".github" / "style-authors.sh"
+
+
+def test_build_shows_the_submitters_github_account_as_the_author(tmp_path):
+    styles = _styles(tmp_path, "ext_one", "ext_two", "ext_three")
+    authors = tmp_path / "authors.json"
+    authors.write_text(json.dumps({"ext_one": "octo-cat", "ext_two": "bad name<script>"}))
+    site = tmp_path / "site"
+    assert gallery.main(["build", str(styles), str(site), "--base-url", BASE, "--authors", str(authors)]) == 0
+    entries = {s["id"]: s for s in json.loads((site / "index.json").read_text())["styles"]}
+    assert entries["ext_one"]["author"] == "octo-cat"
+    assert entries["ext_one"]["author_url"] == "https://github.com/octo-cat"
+    # not a GitHub login, or no lookup: the package's own author, unlinked
+    package_author = json.loads((styles / "ext_two" / "style.json").read_text())["external"]["author"]
+    for sid in ("ext_two", "ext_three"):
+        assert entries[sid]["author"] == package_author and "author_url" not in entries[sid]
+    page = (site / "index.html").read_text()
+    assert '<a href="https://github.com/octo-cat">octo-cat</a>' in page and "<script>" not in page
+
+
+def _git(repo, *args, **env):
+    full = {**os.environ, "GIT_AUTHOR_NAME": "x", "GIT_AUTHOR_EMAIL": "x@example.com",
+            "GIT_COMMITTER_NAME": "x", "GIT_COMMITTER_EMAIL": "x@example.com", **env}
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, env=full, capture_output=True,
+                          text=True).stdout.strip()
+
+
+def test_style_authors_reads_the_pull_request_or_the_commit_that_added_each_style(tmp_path):
+    import http.server
+    import threading
+
+    repo = tmp_path / "gallery"
+    (repo / "styles").mkdir(parents=True)
+    _git(repo, "init", "-q")
+    (repo / "styles" / ".gitkeep").write_text("")
+    for sid in ("ext_pr", "ext_push", "ext_none"):
+        (repo / "styles" / sid).mkdir()
+        (repo / "styles" / sid / "style.json").write_text("{}")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", f"add {sid}")
+    (repo / "styles" / "ext_pr" / "style.json").write_text('{"v": 2}')
+    _git(repo, "commit", "-q", "-am", "a later update by the maintainer")
+    added = {sid: _git(repo, "log", "--diff-filter=A", "--format=%H", "--", f"styles/{sid}")
+             for sid in ("ext_pr", "ext_push", "ext_none")}
+    responses = {
+        f"/repos/o/g/commits/{added['ext_pr']}/pulls": [
+            {"merged_at": None, "user": {"login": "closed-pr"}},
+            {"merged_at": "2026-11-18T00:00:00Z", "user": {"login": "submitter"}}],
+        f"/repos/o/g/commits/{added['ext_push']}/pulls": [],
+        f"/repos/o/g/commits/{added['ext_push']}": {"author": {"login": "maintainer"}},
+        f"/repos/o/g/commits/{added['ext_none']}/pulls": [],
+        f"/repos/o/g/commits/{added['ext_none']}": {"author": None},
+    }
+
+    class Api(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            body = responses.get(self.path)
+            self.send_response(200 if body is not None else 404)
+            self.end_headers()
+            self.wfile.write(json.dumps(body if body is not None else {}).encode())
+
+        def log_message(self, *a):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Api)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        out = tmp_path / "authors.json"
+        env = {**os.environ, "GITHUB_API_URL": f"http://127.0.0.1:{server.server_port}", "GITHUB_REPOSITORY": "o/g"}
+        env.pop("GH_TOKEN", None)
+        subprocess.run(["bash", str(AUTHORS_SCRIPT), "styles", str(out)], cwd=repo, check=True, env=env,
+                       capture_output=True, text=True)
+        assert json.loads(out.read_text()) == {"ext_pr": "submitter", "ext_push": "maintainer"}
+    finally:
+        server.shutdown()
+
+
+def test_the_publish_workflow_builds_with_the_submitters_accounts():
+    pub = yaml.safe_load((SKELETON / ".github" / "workflows" / "publish.yml").read_text())
+    steps = pub["jobs"]["build"]["steps"]
+    assert steps[0]["uses"].startswith("actions/checkout") and steps[0]["with"]["fetch-depth"] == 0
+    who = next(i for i, s in enumerate(steps) if s.get("run", "").strip() == "bash .github/style-authors.sh styles authors.json")
+    build = next(i for i, s in enumerate(steps) if "gallery.py build" in s.get("run", ""))
+    assert who < build and "--authors authors.json" in steps[build]["run"]
+    assert "github.token" in steps[who]["env"]["GH_TOKEN"]
+    assert pub["permissions"]["pull-requests"] == "read"

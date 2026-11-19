@@ -12,11 +12,13 @@ gallery's CI checks out Tubematic and runs:
         report; exits 1 when a package fails its check or the scan refuses it.
 
     python3 scripts/gallery.py build <gallery>/styles <site dir> --base-url https://…/ [--repo-url https://…]
+                                     [--authors authors.json]
         Write the site: archives/<id>-<version>.zip (a deterministic zip of the
         package), previews/<id>.mp4 and .webp, index.json, which Tubematic's
         Gallery tab reads and every gallery install checks against, and
         index.html, a page people browse (it links the repo's submission guide
-        when --repo-url is given).
+        when --repo-url is given). With --authors ({id: GitHub login}), a style's
+        author is the account that submitted it, linked to its profile.
 
     python3 scripts/gallery.py render <package> <out.mp4> --image <tubematic backend image>
         Render a scene style's example config (silent) in the backend image, for
@@ -59,6 +61,8 @@ NOT_RENDERABLE = 3
 COMMIT_RE = re.compile(r"[0-9a-f]{40}")
 # the version names the published archive (archives/<id>-<version>.zip): a safe file name and URL part
 VERSION_RE = re.compile(r"[0-9A-Za-z][0-9A-Za-z.+_-]{0,39}")
+# a GitHub login: letters, digits and single inner hyphens, at most 39 characters
+LOGIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}")
 _ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 
 
@@ -246,12 +250,14 @@ def render_page(entries: list[dict], repo_url: str = "") -> str:
         home = (f' · <a href="{e(homepage)}" rel="noopener">homepage</a>'
                 if re.fullmatch(r"https://[^\s\"'<>]+", homepage) else "")
         needs = "needs a GPU" if s.get("needs_gpu") else "renders on a CPU"
+        author = (f'<a href="{e(s["author_url"])}">{e(s["author"])}</a>' if s.get("author_url")
+                  else e(s["author"]))
         cards.append(
             f'<article class="card" id="{e(s["id"])}">'
             f'<video src="previews/{e(s["id"])}.mp4" poster="previews/{e(s["id"])}.webp" '
             f'muted loop autoplay playsinline preload="none" aria-label="Preview of {e(s["name"])}"></video>'
             f'<div class="body"><h2>{e(s["name"])}</h2>'
-            f'<div class="meta">{e(s["id"])} · {e(s["version"])} · {e(s["author"])} · {e(s["licence"])}</div>'
+            f'<div class="meta">{e(s["id"])} · {e(s["version"])} · {author} · {e(s["licence"])}</div>'
             f'<p>{e(s["tagline"])}</p>'
             f'<div class="meta">{e(needs)}{home}</div>'
             f'<a class="btn" href="archives/{e(archive)}" download>Download zip</a>'
@@ -292,6 +298,9 @@ def build(args) -> int:
     for sub in ("archives", "previews"):
         (site / sub).mkdir(parents=True, exist_ok=True)
     entries = []
+    # the GitHub account that submitted each style (.github/style-authors.sh in the gallery repo):
+    # shown instead of the name a package gives itself, which anyone can write
+    accounts = json.loads(pathlib.Path(args.authors).read_text(encoding="utf-8")) if args.authors else {}
     with tempfile.TemporaryDirectory() as tmp:
         for sid, entry in submissions(pathlib.Path(args.styles)):
             pkg, origin = materialise(sid, entry, pathlib.Path(tmp))
@@ -314,6 +323,9 @@ def build(args) -> int:
                 "archive_url": base + archive, "sha256": hashlib.sha256(data).hexdigest(),
                 "preview_url": f"{base}previews/{sid}.mp4", "poster_url": f"{base}previews/{sid}.webp",
             })
+            login = accounts.get(sid)
+            if isinstance(login, str) and LOGIN_RE.fullmatch(login):
+                entries[-1].update(author=login, author_url=f"https://github.com/{login}")
     index = {"version": INDEX_VERSION, "styles": entries}
     (site / "index.json").write_text(json.dumps(index, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     (site / "index.html").write_text(render_page(entries, args.repo_url or ""), encoding="utf-8")
@@ -444,6 +456,7 @@ def main(argv=None) -> int:
     p.add_argument("--base-url", required=True)
     p.add_argument("--commit", default="", help="the gallery repository's commit, for folder submissions")
     p.add_argument("--repo-url", default="", help="the gallery repository, linked from index.html")
+    p.add_argument("--authors", default="", help="JSON {style id: GitHub login} of who submitted each style")
     p = sub.add_parser("render")
     p.add_argument("package")
     p.add_argument("out")

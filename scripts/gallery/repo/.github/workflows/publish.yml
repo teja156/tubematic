@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: read
+  # style-authors.sh asks which pull request each style came in with
+  pull-requests: read
   pages: write
   id-token: write
 
@@ -18,7 +20,10 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
+      # the whole history: style-authors.sh finds the commit that first added each style
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       # the newest Tubematic release builds the gallery (.github/tubematic-release.sh)
       - id: release
         env:
@@ -32,11 +37,15 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: Who submitted each style
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/style-authors.sh styles authors.json
       - name: Build the index, archives and previews
         run: |
           python3 .tubematic/scripts/gallery.py build styles site \
             --base-url "https://gallery.tubematic.ai/" --commit "$GITHUB_SHA" \
-            --repo-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+            --repo-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --authors authors.json
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site

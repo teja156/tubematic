@@ -360,7 +360,8 @@ The Tubematic gallery is the GitHub repository
 [teja156/tubematic-styles](https://github.com/teja156/tubematic-styles). To submit a style, open a pull
 request there with the package folder, or with a pointer to your own repository at a commit; its
 `SUBMITTING.md` says how. A maintainer reviews the code, the guide and the content against a written
-checklist, and merging publishes it to every Tubematic's **Gallery** tab. The **Gallery** tab reads
+checklist, and merging publishes it to every Tubematic's **Gallery** tab. The gallery names your
+GitHub username as the style's author. The **Gallery** tab reads
 the address in its **Gallery address** field; clear it to turn the gallery off.
 
 ### Making your own style

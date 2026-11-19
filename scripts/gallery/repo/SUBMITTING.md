@@ -16,3 +16,5 @@
    a pointer). A changed package is reviewed again.
 
 A maintainer reviews it against [REVIEW-CHECKLIST.md](REVIEW-CHECKLIST.md). Merging publishes it.
+The gallery shows the GitHub account that opened the pull request adding the style as its author,
+whatever `external.author` says; later update pull requests do not change it.
