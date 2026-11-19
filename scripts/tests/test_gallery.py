@@ -356,3 +356,115 @@ def test_each_preview_has_an_accessible_name(tmp_path):
     page = (tmp_path / "site" / "index.html").read_text()
     name = json.loads((tmp_path / "site" / "index.json").read_text())["styles"][0]["name"]
     assert f'aria-label="Preview of {name}"' in page
+
+
+# The Claude review (claude-review.yml). pull_request_target runs the workflow from main WITH the
+# repository's secrets, on a pull request a stranger wrote. These pin the split that keeps that safe:
+# only `prepare` puts the pull request's files on a runner, and it has no secret; `review` holds the
+# token but can run no command; `post` writes to the pull request but runs nothing from it.
+
+CLAUDE_REVIEW = SKELETON / ".github" / "workflows" / "claude-review.yml"
+
+
+def _claude_review():
+    wf = yaml.safe_load(CLAUDE_REVIEW.read_text())
+    return wf, wf.get("on", wf.get(True))   # PyYAML reads the key `on` as True
+
+
+def test_stage_copies_each_submission_as_plain_files(tmp_path, capsys):
+    styles = _styles(tmp_path, "ext_one", "ext_two")
+    (styles / "ext_one" / "linked").symlink_to("/etc/hostname")
+    out = tmp_path / "out"
+    assert gallery.main(["stage", str(styles), str(out), "--only", "ext_one"]) == 0
+    assert (out / "ext_one" / "style.json").is_file()
+    assert (out / "ext_one" / "components" / "Main.tsx").is_file()
+    assert not (out / "ext_two").exists()
+    # a symlink in a submission could point the uploaded artifact at a runner file
+    assert not os.path.lexists(out / "ext_one" / "linked")
+
+
+def test_stage_fetches_a_pointer_and_reports_one_it_cannot(tmp_path, monkeypatch, capsys):
+    styles = tmp_path / "styles"
+    styles.mkdir()
+    fetched = tmp_path / "fetched"
+    fetched.mkdir()
+    make_package(fetched, sid="ext_ptr", approve=False)
+    (styles / "ext_ptr.json").write_text("{}")
+    (styles / "ext_bad.json").write_text("{}")
+
+    def fake(sid, entry, work):
+        if sid == "ext_bad":
+            raise gallery.GalleryError("ext_bad.json must name a commit")
+        return fetched / "ext_ptr", {"kind": "repo"}
+    monkeypatch.setattr(gallery, "materialise", fake)
+    out = tmp_path / "out"
+    assert gallery.main(["stage", str(styles), str(out)]) == 1
+    assert (out / "ext_ptr" / "style.json").is_file() and not (out / "ext_bad").exists()
+    assert "ext_bad: ext_bad.json must name a commit" in capsys.readouterr().err
+
+
+def test_the_claude_review_runs_only_when_a_maintainer_adds_its_label():
+    wf, on = _claude_review()
+    assert on == {"pull_request_target": {"types": ["labeled"]}}
+    assert wf["permissions"] == {}
+    prepare = wf["jobs"]["prepare"]
+    assert prepare["if"] == "github.event.label.name == 'claude-review'"
+    for name, job in wf["jobs"].items():
+        assert job["runs-on"] == "ubuntu-24.04", name
+        assert name == "prepare" or "prepare" in job["needs"], name
+
+
+def test_only_the_job_without_secrets_touches_the_pull_requests_files():
+    wf, _ = _claude_review()
+    text = CLAUDE_REVIEW.read_text()
+    assert text.count("secrets.") == 1 and "secrets.CLAUDE_CODE_OAUTH_TOKEN" in text
+    prepare = wf["jobs"]["prepare"]
+    assert prepare["permissions"] == {"contents": "read"}
+    assert "secrets." not in yaml.safe_dump(prepare)
+    head = [s for s in prepare["steps"] if "head.sha" in str(s.get("with", {}).get("ref", ""))]
+    assert len(head) == 1 and head[0]["with"]["path"] == "pr"
+    for job in wf["jobs"].values():
+        for step in job["steps"]:
+            if step.get("uses", "").startswith("actions/checkout"):
+                assert step["with"]["persist-credentials"] is False
+    for name in ("review", "post"):
+        for step in wf["jobs"][name]["steps"]:
+            assert "head" not in str(step.get("with", {}).get("ref", "")), name
+
+
+def test_claude_can_read_and_write_its_review_but_run_nothing():
+    wf, _ = _claude_review()
+    review = wf["jobs"]["review"]
+    assert review["permissions"] == {"contents": "read", "pull-requests": "read"}
+    claude = next(s for s in review["steps"] if s.get("uses", "").startswith("anthropics/claude-code-action@"))
+    args = claude["with"]["claude_args"]
+    # auto mode (the action's default) lets a safety review pass calls no rule allows: off
+    assert "--permission-mode default" in args
+    allowed = re.search(r'--allowedTools "([^"]+)"', args).group(1).split(",")
+    assert set(allowed) == {"Read", "Glob", "Grep", "Write"}
+    denied = re.search(r'--disallowedTools "([^"]+)"', args).group(1).split(",")
+    assert {"Bash", "WebFetch", "WebSearch"} <= set(denied)
+    assert claude["with"]["claude_code_oauth_token"] == "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"
+    # the checklist is the base branch's: a pull request cannot edit what it is reviewed against
+    prompt = claude["with"]["prompt"]
+    assert "REVIEW-CHECKLIST.md" in prompt and "untrusted" in prompt
+
+
+def test_the_post_job_comments_and_frees_the_label_whatever_happened():
+    wf, _ = _claude_review()
+    post = wf["jobs"]["post"]
+    assert post["if"].startswith("always()") and "claude-review" in post["if"]
+    assert post["permissions"] == {"pull-requests": "write", "issues": "write"}
+    run = " ".join(s.get("run", "") for s in post["steps"])
+    assert "gh pr comment" in run and "--body-file" in run and "--remove-label claude-review" in run
+    assert not any(s.get("uses", "").startswith("actions/checkout") for s in post["steps"])
+
+
+def test_no_value_from_the_pull_request_is_expanded_inside_a_claude_review_command():
+    wf, _ = _claude_review()
+    for job in wf["jobs"].values():
+        for step in job["steps"]:
+            run = step.get("run", "")
+            assert "${{" not in run, step.get("name")
+    changed = next(s for s in wf["jobs"]["prepare"]["steps"] if s.get("id") == "changed")["run"]
+    assert "ext_[a-z0-9_]{1,40}" in changed and "exit 1" in changed

@@ -874,11 +874,24 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
   hand edit on every release. `render` names Chromium with
   `--browser-executable` and exits 3 for a 3D world style. The review checklist covers what the
   design asks a reviewer to check.
+- `stage` copies each submission's package as plain files, fetches a pointer, reports one it cannot
+  fetch, and leaves symlinks out, since the review uploads the folder as an artifact.
+- The Claude review workflow runs only on `pull_request_target` `labeled` with the `claude-review`
+  label, with no default permissions. Only `prepare` checks out the pull request's commit, and it has
+  no secret; every checkout drops its credentials. The Claude job reads the repository and the pull
+  request, runs in the `default` permission mode (the action's auto mode can let a call through that
+  no rule allows) with `Read`, `Glob`, `Grep` and `Write` only and `Bash` and the web tools refused,
+  and its prompt names the checklist and calls the submission untrusted. `post` always runs, comments
+  with `--body-file`, removes the label and checks nothing out. No `run` expands a `${{ }}` value.
 - Opt-in (`TUBEMATIC_GALLERY_RENDER_IMAGE` set to a backend image): `render` makes a video of a scene
   style's example in that image.
 
 Trap: an install trusts the index's checksum. A build that wrote different bytes each time would
 publish an index whose checksums a reviewer never saw.
+
+Trap: `pull_request_target` runs the review with the repository's secrets on a stranger's files.
+Moving the pull request's checkout into the job that holds the token, or giving Claude `Bash`, lets
+a submission run code next to that token.
 
 ### `test_create_style_skill.py`
 

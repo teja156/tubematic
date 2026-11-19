@@ -22,6 +22,11 @@ gallery's CI checks out Tubematic and runs:
         Render a scene style's example config (silent) in the backend image, for
         the review. A 3D world style's example needs generated source, so it is
         rendered by hand: exit code 3. Any other failure exits 1.
+
+    python3 scripts/gallery.py stage <gallery>/styles <out dir> [--only ext_a,ext_b]
+        Copy each submission's package to <out dir>/<id>/ as plain files (a
+        pointer is fetched at its pinned commit; symlinks are left out), for the
+        Claude review to read. Exits 1 when a submission cannot be fetched.
 """
 import argparse
 import base64
@@ -349,6 +354,31 @@ def render(args) -> int:
     return 0
 
 
+def stage(args) -> int:
+    """Each submission's package as plain files under <out>/<id>/: what the Claude review reads.
+    Symlinks are left out, since the review job uploads the folder as an artifact."""
+    only = set(filter(None, (args.only or "").split(","))) or None
+    out = pathlib.Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    failed = False
+    with tempfile.TemporaryDirectory() as tmp:
+        for sid, entry in submissions(pathlib.Path(args.styles), only):
+            try:
+                pkg, _ = materialise(sid, entry, pathlib.Path(tmp))
+            except (GalleryError, style_install.InstallError) as exc:
+                failed = True
+                print(f"{sid}: {exc}", file=sys.stderr)
+                continue
+            for src in sorted(pkg.rglob("*")):
+                rel = src.relative_to(pkg)
+                if src.is_symlink() or not src.is_file() or ".git" in rel.parts:
+                    continue
+                dest = out / sid / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, dest)
+    return 1 if failed else 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -365,9 +395,13 @@ def main(argv=None) -> int:
     p.add_argument("package")
     p.add_argument("out")
     p.add_argument("--image", required=True)
+    p = sub.add_parser("stage")
+    p.add_argument("styles")
+    p.add_argument("out")
+    p.add_argument("--only", default="")
     args = ap.parse_args(argv)
     try:
-        return {"scan": scan, "build": build, "render": render}[args.cmd](args)
+        return {"scan": scan, "build": build, "render": render, "stage": stage}[args.cmd](args)
     except (GalleryError, style_install.InstallError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

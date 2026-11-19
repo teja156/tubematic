@@ -28,3 +28,21 @@ one; it does not remove it.
 The tools are `scripts/gallery.py` in the Tubematic repository. The workflows use the newest
 Tubematic release, found when they run (`.github/tubematic-release.sh`), so nothing here changes
 when Tubematic releases.
+
+## Claude review
+
+Add the `claude-review` label to a pull request to have Claude read the submission against
+[REVIEW-CHECKLIST.md](REVIEW-CHECKLIST.md) (`.github/workflows/claude-review.yml`). It posts one
+comment with a verdict per checklist item (PASS, FLAG or HUMAN) and removes the label; add the label
+again to review a newer push. The review advises: the maintainer still reads the flags and decides,
+and a submission written to mislead a reviewer can mislead Claude too.
+
+Only someone with triage access can add a label, so a stranger's pull request never starts a review
+on its own. The pull request's files are checked out only in a job with no secrets, and Claude can
+read files and write its review but run no command.
+
+Setup, once:
+
+1. Run `claude setup-token` and add the token as the repository secret `CLAUDE_CODE_OAUTH_TOKEN`
+   (Settings → Secrets and variables → Actions). Reviews count against that Claude subscription.
+2. Create the label `claude-review` (Issues → Labels).

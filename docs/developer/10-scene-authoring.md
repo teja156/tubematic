@@ -653,7 +653,7 @@ session (`/tubematic-create-style`), never in a pipeline run. Its order is the c
 The curated gallery is its own repository, published on GitHub Pages at
 `https://gallery.tubematic.ai/index.json`, the default of `style_gallery_url` and
 `style_install.OFFICIAL_GALLERY_URL`. Its skeleton (README, submission guide, review checklist and
-two workflows) is in `scripts/gallery/repo/`, and its tools are `scripts/gallery.py` in this
+three workflows) is in `scripts/gallery/repo/`, and its tools are `scripts/gallery.py` in this
 repository. Its workflows check out the newest published release and render examples with that
 release's backend image (`.github/tubematic-release.sh` in the gallery repository), so a Tubematic
 release needs no edit there. Before 2.4.0, the first release with these tools, they use `develop`
@@ -664,6 +664,7 @@ and render nothing:
 | `python3 scripts/gallery.py scan <styles> [--only ids]` | Checks and scans each submission as an install does and prints a Markdown report; exits 1 when one fails its check or the scan refuses it |
 | `python3 scripts/gallery.py build <styles> <site> --base-url <url> [--repo-url <url>]` | Writes `archives/<id>-<version>.zip`, `previews/<id>.mp4` and `.webp`, `index.json` (each entry's `sha256` is of its archive's bytes) and `index.html`, the page people browse, and refuses to publish a failing package |
 | `python3 scripts/gallery.py render <package> <out.mp4> --image <backend image>` | Renders a scene style's example config, silent, in the backend image. A 3D world style exits 3 (rendered by hand); any other failure exits 1 and fails the pull request |
+| `python3 scripts/gallery.py stage <styles> <out> [--only ids]` | Copies each submission's package to `<out>/<id>/` as plain files (a pointer fetched at its commit, symlinks left out) for the Claude review; exits 1 when one cannot be fetched |
 
 A submission is a package folder `styles/<id>/` or a pointer `styles/<id>.json`,
 `{"repo": <https url>, "commit": <40-hex commit>}`, fetched with the installer's own pinned git
@@ -671,6 +672,20 @@ fetch. The archive is written with fixed times and order, so a rebuild of the sa
 same bytes and the same checksum. A pull request runs `scan` and `render` (a 3D world style's example
 needs generated source, so the maintainer renders it by hand); a merge to `main` runs `build` and
 deploys the site.
+
+The third workflow, `claude-review.yml`, runs when a maintainer adds the `claude-review` label to a
+pull request. Claude Code (`anthropics/claude-code-action`, logged in with the secret
+`CLAUDE_CODE_OAUTH_TOKEN`) reads the submission against the base branch's review checklist and posts
+one comment with a verdict per item; the workflow then removes the label, so adding it again runs a
+new review. The review advises the maintainer and cannot approve or merge. A label starts it because
+`pull_request_target` gives a run the repository's secrets, and only people with triage access can
+add a label. The run is split into three jobs:
+
+| Job | Can do | Does |
+|---|---|---|
+| `prepare` | Read the repository, no secrets | Checks out the pull request's commit as data, runs `stage` and `scan`, takes a frame per second of each `preview.mp4`, and uploads them |
+| `review` | Read the repository and the pull request, hold the Claude token | Runs Claude with `Read`, `Glob`, `Grep` and `Write` only, in the `default` permission mode, which refuses every other tool; writes `review.md` |
+| `post` | Comment on the pull request, edit its labels | Posts `review.md` (or why there is none) and removes the label; runs no file from the pull request |
 
 ### Making a test package
 
