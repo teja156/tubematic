@@ -397,6 +397,85 @@ def test_the_page_lays_styles_out_as_the_mockup_does(tmp_path):
         assert html.escape(value.lower(), quote=True) in search
 
 
+def _panel(page, kind):
+    start = page.index(f'<section class="panel" id="panel-{kind}"')
+    return page[start:page.index("</section>", start)]
+
+
+def test_the_page_opens_on_external_styles_with_a_tab_for_pre_built_ones(tmp_path):
+    """User, 2026-11-20: a second tab lists the styles Tubematic ships; the page opens on External."""
+    page, _ = _page(tmp_path, "ext_good")
+    assert 'role="tablist"' in page
+    assert re.search(r'<button class="tab" type="button" role="tab" id="tab-external" aria-controls="panel-external" '
+                     r'aria-selected="true">External styles', page)
+    assert re.search(r'<button class="tab" type="button" role="tab" id="tab-builtin" aria-controls="panel-builtin" '
+                     r'aria-selected="false" tabindex="-1">Pre-built styles', page)
+    assert '<section class="panel" id="panel-external" role="tabpanel" aria-labelledby="tab-external">' in page
+    assert '<section class="panel" id="panel-builtin" role="tabpanel" aria-labelledby="tab-builtin" hidden>' in page
+    assert 'id="ext_good"' in _panel(page, "external") and 'id="ext_good"' not in _panel(page, "builtin")
+
+
+def test_the_pre_built_tab_lists_every_style_tubematic_ships(tmp_path):
+    from tubematic_core import visual_styles as vs
+    page, entries = _page(tmp_path, "ext_good")
+    panel = _panel(page, "builtin")
+    previews = REPO / "dashboard" / "public" / "style-previews"
+    for sid, pack in vs.PACKS.items():
+        assert f'<article class="style" id="{sid}" data-kind="builtin"' in panel, sid
+        assert html.escape(pack["label"], quote=True) in panel and html.escape(pack["tagline"], quote=True) in panel
+        assert f'data-video="builtin/{sid}.mp4"' in panel and f'src="builtin/{sid}.webp"' in panel
+        for suffix in ("mp4", "webp"):
+            copied = tmp_path / "site" / "builtin" / f"{sid}.{suffix}"
+            assert copied.read_bytes() == (previews / f"{pack['preview']}.{suffix}").read_bytes()
+    assert 'id="auto"' not in panel
+    # nothing to download or check: they come with Tubematic
+    assert "Download zip" not in panel and "sha256" not in panel and "Included with <b>Tubematic</b>" in panel
+    # index.json is what installs read: it lists only the gallery's own styles
+    assert [e["id"] for e in entries] == ["ext_good"]
+
+
+def test_a_pre_built_card_says_what_the_style_needs_and_how_it_is_used(tmp_path):
+    page, _ = _page(tmp_path, "ext_good")
+    panel = _panel(page, "builtin")
+
+    def card(sid):
+        start = panel.index(f'<article class="style" id="{sid}"')
+        return panel[start:panel.index("</article>", start)]
+    assert "<dt>Renders on</dt><dd>GPU</dd>" in card("cartoon_3d")
+    assert "<dt>Renders on</dt><dd>CPU</dd>" in card("whiteboard")
+    assert "<dt>Used as</dt><dd>Whole video</dd>" in card("whiteboard")
+    assert "<dt>Used as</dt><dd>Scenes inside another style</dd>" in card("system_flow")
+    assert "<dt>Needs</dt><dd>OpenAI key</dd>" in card("illustrated")
+    assert "<dt>Needs</dt>" not in card("whiteboard")
+    assert '<span class="ver">experimental</span>' in card("cartoon_3d")
+    assert '<span class="ver">' not in card("whiteboard")
+
+
+def test_the_preview_modal_tells_each_kind_how_to_use_it(tmp_path):
+    page, _ = _page(tmp_path, "ext_good")
+    dialog = page[page.index('<dialog id="player"'):page.index("</dialog>")]
+    external = re.search(r'<p class="hint" data-kind="external">(.*?)</p>', dialog).group(1)
+    builtin = re.search(r'<p class="hint" data-kind="builtin" hidden>(.*?)</p>', dialog).group(1)
+    assert "Install from file" in external
+    assert "<b>Visual style</b>" in builtin and "Install" not in builtin
+
+
+def test_an_empty_gallery_still_shows_the_pre_built_styles(tmp_path):
+    styles = tmp_path / "styles"
+    styles.mkdir()
+    assert gallery.main(["build", str(styles), str(tmp_path / "site"), "--base-url", BASE]) == 0
+    page = (tmp_path / "site" / "index.html").read_text()
+    assert "No styles yet" in _panel(page, "external") and 'id="whiteboard"' in _panel(page, "builtin")
+
+
+def test_build_fails_when_a_pre_built_style_has_no_preview(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(gallery, "BUILTIN_PREVIEWS", tmp_path / "nothing")
+    styles = _styles(tmp_path, "ext_good")
+    assert gallery.main(["build", str(styles), str(tmp_path / "site"), "--base-url", BASE]) == 1
+    assert "no preview" in capsys.readouterr().err
+    assert not (tmp_path / "site" / "index.html").exists()
+
+
 def test_the_pages_script_is_the_only_one_allowed_to_run(tmp_path):
     """Every card is a submitter's text: a Content-Security-Policy allows only the page's own
     script and stylesheet by hash, so injected markup could never run."""
