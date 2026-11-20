@@ -864,7 +864,11 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
 - The page follows the maintainer's mockup: a search box over name, author, tagline and id, one wide
   card per style (preview, name and version, author, tagline, Renders on, License and ID, a
   **Download zip** button and the sha256 with a copy button), a **Submit a style** link, and a modal
-  that plays the preview. Its one script is the constant `gallery._PAGE_JS` with no submitter text in
+  that plays the preview. The page opens on **External styles**; a **Pre-built styles** tab lists every
+  pack in `visual_styles.PACKS` with the preview the dashboard plays (copied to `builtin/`), what it
+  renders on, whether it is a whole video or scenes inside another style, and whether it needs an
+  OpenAI key, with no download. Those stay out of `index.json`, which installs read. A pack with no
+  preview fails the build. Its one script is the constant `gallery._PAGE_JS` with no submitter text in
   it, and a Content-Security-Policy allows only that script's and the stylesheet's hashes, so markup a
   submitter slipped past the escaping could never run.
 - The page wears the dashboard's look: its colour tokens equal `dashboard/app/globals.css`'s (they

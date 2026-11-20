@@ -17,8 +17,10 @@ gallery's CI checks out Tubematic and runs:
         package), previews/<id>.mp4 and .webp, index.json, which Tubematic's
         Gallery tab reads and every gallery install checks against, and
         index.html, a page people browse (it links the repo's submission guide
-        when --repo-url is given). With --authors ({id: GitHub login}), a style's
-        author is the account that submitted it, linked to its profile.
+        when --repo-url is given) with a second tab for the styles that come with
+        Tubematic (their previews under builtin/). With --authors ({id: GitHub
+        login}), a style's author is the account that submitted it, linked to its
+        profile.
 
     python3 scripts/gallery.py render <package> <out.mp4> --image <tubematic backend image>
         Render a scene style's example config (silent) in the backend image, for
@@ -54,6 +56,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from tubematic_core import external_styles as ext  # noqa: E402
 from tubematic_core import style_install  # noqa: E402
 from tubematic_core import style_scan  # noqa: E402
+from tubematic_core import visual_styles  # noqa: E402
 
 INDEX_VERSION = 1
 # render's exit code for a style CI cannot render (a 3D world): a notice, never a pass for a failed render
@@ -64,6 +67,8 @@ VERSION_RE = re.compile(r"[0-9A-Za-z][0-9A-Za-z.+_-]{0,39}")
 # a GitHub login: letters, digits and single inner hyphens, at most 39 characters
 LOGIN_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}")
 _ZIP_TIME = (1980, 1, 1, 0, 0, 0)
+# the built-in styles' previews, which the dashboard's style picker plays too
+BUILTIN_PREVIEWS = REPO_ROOT / "dashboard" / "public" / "style-previews"
 
 
 class GalleryError(Exception):
@@ -206,10 +211,18 @@ header {
 [hidden] { display: none !important; }
 main { max-width: 1120px; margin: 0 auto; padding: 40px max(16px, env(safe-area-inset-left)) 64px; }
 .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px 32px; flex-wrap: wrap; }
-h1 { font: 700 22px var(--mono); margin: 0 0 10px; letter-spacing: 0.01em; }
+h1 { font: 700 22px var(--mono); margin: 0; letter-spacing: 0.01em; }
 .lede { max-width: 62ch; color: var(--ink-2); margin: 0; font-size: 14px; }
 .submit { font-size: 14px; white-space: nowrap; }
-.search { display: grid; gap: 8px; margin: 28px 0 20px; max-width: 420px; }
+.tabs { display: flex; gap: 4px; margin: 28px 0 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.tab { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; color: var(--dim);
+  font: 600 14px var(--sans); padding: 10px 14px; cursor: pointer; white-space: nowrap; }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--amber); }
+.tab:focus-visible { outline: 1px solid var(--amber); outline-offset: -2px; }
+.tab .n { font: 11px var(--mono); color: var(--mute); margin-left: 8px; }
+.panel > .lede { margin: 0 0 20px; }
+.search { display: grid; gap: 8px; margin: 20px 0 24px; max-width: 420px; }
 .search span { font: 10.5px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; color: var(--mute); }
 .search input { width: 100%; font: 15px var(--sans); color: var(--ink); background: var(--panel); border: 1px solid var(--border-2);
   border-radius: 8px; padding: 11px 14px; outline: none; }
@@ -297,18 +310,39 @@ def _logo_uri() -> str:
 # submitter text in it, allowed by its hash in the page's Content-Security-Policy.
 _PAGE_JS = r"""
 (() => {
+  const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
+  const select = (tab) => {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute("aria-selected", String(on));
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+    }
+  };
+  for (const tab of tabs) {
+    tab.addEventListener("click", () => select(tab));
+    tab.addEventListener("keydown", (ev) => {
+      const step = { ArrowRight: 1, ArrowLeft: -1 }[ev.key];
+      if (!step) return;
+      const next = tabs[(tabs.indexOf(tab) + step + tabs.length) % tabs.length];
+      select(next);
+      next.focus();
+      ev.preventDefault();
+    });
+  }
   const q = document.getElementById("q");
-  const items = Array.from(document.querySelectorAll(".style"));
-  const none = document.getElementById("none");
   if (q) q.addEventListener("input", () => {
     const terms = q.value.toLowerCase().split(/\s+/).filter(Boolean);
-    let shown = 0;
-    for (const item of items) {
-      const match = terms.every((t) => item.dataset.search.includes(t));
-      item.hidden = !match;
-      if (match) shown += 1;
+    for (const panel of document.querySelectorAll('[role="tabpanel"]')) {
+      let shown = 0;
+      for (const item of panel.querySelectorAll(".style")) {
+        const match = terms.every((t) => item.dataset.search.includes(t));
+        item.hidden = !match;
+        if (match) shown += 1;
+      }
+      const none = panel.querySelector(".none");
+      if (none) none.hidden = shown > 0;
     }
-    if (none) none.hidden = shown > 0;
   });
   const player = document.getElementById("player");
   const video = player.querySelector("video");
@@ -318,7 +352,9 @@ _PAGE_JS = r"""
     if (!target) return;
     const thumb = target.closest(".thumb");
     if (thumb) {
-      info.replaceChildren(thumb.closest(".style").querySelector(".body").cloneNode(true));
+      const card = thumb.closest(".style");
+      info.replaceChildren(card.querySelector(".body").cloneNode(true));
+      for (const hint of player.querySelectorAll(".hint")) hint.hidden = hint.dataset.kind !== card.dataset.kind;
       video.poster = thumb.querySelector("img").getAttribute("src");
       video.src = thumb.dataset.video;
       player.showModal();
@@ -357,45 +393,68 @@ def _csp_hash(text: str) -> str:
     return "'sha256-" + base64.b64encode(hashlib.sha256(text.encode("utf-8")).digest()).decode() + "'"
 
 
-def render_page(entries: list[dict], repo_url: str = "") -> str:
+def _card(kind: str, sid: str, name: str, video: str, poster: str, title_tag: str, byline: str, tagline: str,
+          facts: str, get: str, search: str) -> str:
+    """One style's card. Every argument is escaped markup already."""
+    return (f'<article class="style" id="{sid}" data-kind="{kind}" data-search="{search}">'
+            f'<button class="thumb" type="button" data-video="{video}" '
+            f'aria-label="Play the preview of {name}">'
+            f'<img src="{poster}" alt="" loading="lazy" width="270" height="480">'
+            f'<span class="play">{_ICON_PLAY}</span></button>'
+            f'<div class="body"><h2>{name}{title_tag}</h2>'
+            f'<div class="by">{byline}</div>'
+            f'<p class="tagline">{tagline}</p>'
+            f'<dl class="facts">{facts}</dl>{get}</div></article>')
+
+
+def _listing(cards: list[str], empty: str) -> str:
+    if not cards:
+        return f'<p class="empty">{empty}</p>'
+    return f'<div class="styles">{"".join(cards)}</div><p class="empty none" hidden>No style matches your search.</p>'
+
+
+def render_page(entries: list[dict], repo_url: str = "", builtins: list[dict] = ()) -> str:
     """The gallery's browsable page (index.html), from the same entries as index.json, in the
-    dashboard's look: one card per style, a search box, and a modal that plays a preview. Every
+    dashboard's look: one card per style, a search box, and a modal that plays a preview. A second
+    tab lists the styles that come with Tubematic (builtins: rows from builtin_styles). Every
     package field is a submitter's text, so all of it is escaped, a homepage is linked only when
     it is an https address, and a Content-Security-Policy lets only the page's own script and
     stylesheet run. Paths are relative, so the page works at any address."""
     e = lambda s: html.escape(str(s), quote=True)  # noqa: E731
     https = lambda u: bool(re.fullmatch(r"https://[^\s\"'<>]+", u or ""))  # noqa: E731
+    facts_html = lambda pairs: "".join(f"<div><dt>{k}</dt><dd>{e(v)}</dd></div>" for k, v in pairs)  # noqa: E731
     cards = []
     for s in entries:
         sid, name, author, sha = s["id"], s["name"], str(s["author"]), s["sha256"]
         archive = s["archive_url"].rsplit("/", 1)[-1]
         homepage = s.get("homepage") or ""
         who = (f'<a href="{e(s["author_url"])}">{e(author)}</a>' if s.get("author_url") else e(author))
-        facts = [("Renders on", "GPU" if s.get("needs_gpu") else "CPU"), ("License", s["licence"]), ("ID", sid)]
-        dl = "".join(f"<div><dt>{label}</dt><dd>{e(value)}</dd></div>" for label, value in facts)
+        dl = facts_html([("Renders on", "GPU" if s.get("needs_gpu") else "CPU"), ("License", s["licence"]),
+                         ("ID", sid)])
         if https(homepage):
             dl += f'<div><dt>Homepage</dt><dd><a href="{e(homepage)}" rel="noopener">{e(homepage)}</a></dd></div>'
-        search = " ".join((name, author, s["tagline"], sid)).lower()
-        cards.append(
-            f'<article class="style" id="{e(sid)}" data-search="{e(search)}">'
-            f'<button class="thumb" type="button" data-video="previews/{e(sid)}.mp4" '
-            f'aria-label="Play the preview of {e(name)}">'
-            f'<img src="previews/{e(sid)}.webp" alt="" loading="lazy" width="270" height="480">'
-            f'<span class="play">{_ICON_PLAY}</span></button>'
-            f'<div class="body"><h2>{e(name)} <span class="ver">v{e(s["version"])}</span></h2>'
-            f'<div class="by"><span class="avatar" aria-hidden="true">{e(author[:1].upper())}</span>'
-            f'<span>by <b>{who}</b></span></div>'
-            f'<p class="tagline">{e(s["tagline"])}</p>'
-            f'<dl class="facts">{dl}</dl>'
+        cards.append(_card(
+            "external", e(sid), e(name), f"previews/{e(sid)}.mp4", f"previews/{e(sid)}.webp",
+            f' <span class="ver">v{e(s["version"])}</span>',
+            f'<span class="avatar" aria-hidden="true">{e(author[:1].upper())}</span><span>by <b>{who}</b></span>',
+            e(s["tagline"]), dl,
             f'<div class="get"><a class="dl" href="archives/{e(archive)}" download>{_ICON_DOWNLOAD}Download zip</a>'
             f'<div class="sha"><span class="k">sha256</span><code title="{e(sha)}">{e(sha[:12])}…{e(sha[-16:])}</code>'
             f'<button class="copy" type="button" data-sha="{e(sha)}" aria-label="Copy the sha256">{_ICON_COPY}</button>'
-            f'</div></div></div></article>')
-    if cards:
-        listing = (f'<div class="styles">{"".join(cards)}</div>'
-                   '<p class="empty" id="none" hidden>No style matches your search.</p>')
-    else:
-        listing = '<p class="empty">No styles yet.</p>'
+            f'</div></div>',
+            e(" ".join((name, author, s["tagline"], sid)).lower())))
+    shipped = []
+    for b in builtins:
+        pairs = [("Renders on", "GPU" if b["needs_gpu"] else "CPU"),
+                 ("Used as", "Whole video" if b["role"] == "main" else "Scenes inside another style")]
+        if b["needs_openai_key"]:
+            pairs.append(("Needs", "OpenAI key"))
+        shipped.append(_card(
+            "builtin", e(b["id"]), e(b["name"]), f"builtin/{e(b['id'])}.mp4", f"builtin/{e(b['id'])}.webp",
+            ' <span class="ver">experimental</span>' if b["experimental"] else "",
+            '<span class="avatar" aria-hidden="true">T</span><span>Included with <b>Tubematic</b></span>',
+            e(b["tagline"]), facts_html(pairs + [("ID", b["id"])]), "",
+            e(" ".join((b["name"], b["tagline"], b["id"])).lower())))
     guide = f'{e(repo_url.rstrip("/"))}/blob/main/SUBMITTING.md' if https(repo_url) else ""
     submit = f'<a class="submit" href="{guide}">Submit a style →</a>' if guide else ""
     logo = _logo_uri()
@@ -414,20 +473,50 @@ def render_page(entries: list[dict], repo_url: str = "") -> str:
         f"<style>{_PAGE_CSS}</style></head><body>"
         f'<header><div class="brand">{mark}<span>TUBEMATIC</span></div><div class="divider"></div>'
         '<div class="crumb">Style gallery</div></header><main>'
-        '<div class="top"><div><h1>External styles</h1>'
-        "<p class=\"lede\">Reviewed by a maintainer before publishing. A style is code that runs in Tubematic's "
-        f"renderer: a review lowers the risk, it does not remove it.</p></div>{submit}</div>"
+        f'<div class="top"><h1>Visual styles</h1>{submit}</div>'
+        '<div class="tabs" role="tablist" aria-label="Kind of style">'
+        '<button class="tab" type="button" role="tab" id="tab-external" aria-controls="panel-external" '
+        f'aria-selected="true">External styles<span class="n">{len(cards)}</span></button>'
+        '<button class="tab" type="button" role="tab" id="tab-builtin" aria-controls="panel-builtin" '
+        f'aria-selected="false" tabindex="-1">Pre-built styles<span class="n">{len(shipped)}</span></button></div>'
         '<label class="search"><span>Search styles</span>'
         '<input id="q" type="search" placeholder="Name, author or description" autocomplete="off"></label>'
-        f"{listing}"
-        '<footer>Machine-readable list: <a href="index.json">index.json</a>. To install a style, open your '
-        "Tubematic dashboard and go to Profiles → Styles → Gallery.</footer></main>"
+        '<section class="panel" id="panel-external" role="tabpanel" aria-labelledby="tab-external">'
+        "<p class=\"lede\">Made by people outside the project and reviewed by a maintainer before publishing. A "
+        "style is code that runs in Tubematic's renderer: a review lowers the risk, it does not remove it.</p>"
+        f'{_listing(cards, "No styles yet.")}</section>'
+        '<section class="panel" id="panel-builtin" role="tabpanel" aria-labelledby="tab-builtin" hidden>'
+        '<p class="lede">These come with Tubematic, so there is nothing to install. Pick one under Visual style '
+        "when you add a video or edit a domain.</p>"
+        f'{_listing(shipped, "No pre-built styles.")}</section>'
+        '<footer>Machine-readable list of the external styles: <a href="index.json">index.json</a>. To install '
+        "one, open your Tubematic dashboard and go to Profiles → Styles → Gallery.</footer></main>"
         '<dialog id="player" aria-label="Style preview"><button class="close" type="button" aria-label="Close">×</button>'
         '<div class="wrap"><video controls loop playsinline></video><div class="info"></div></div>'
-        '<p class="hint">To install it, open your Tubematic dashboard and go to <b>Profiles</b> → <b>Styles</b> → '
-        "<b>Gallery</b>, or download the zip and use <b>Install from file</b> there. Tubematic checks the download "
-        "against its sha256 and shows you the package before it installs.</p></dialog>"
+        '<p class="hint" data-kind="external">To install it, open your Tubematic dashboard and go to <b>Profiles</b> '
+        "→ <b>Styles</b> → <b>Gallery</b>, or download the zip and use <b>Install from file</b> there. Tubematic "
+        "checks the download against its sha256 and shows you the package before it installs.</p>"
+        '<p class="hint" data-kind="builtin" hidden>It comes with Tubematic: pick it under <b>Visual style</b> when '
+        "you add a video or edit a domain.</p></dialog>"
         f"<script>{_PAGE_JS}</script></body></html>\n")
+
+
+def builtin_styles(site: pathlib.Path) -> list[dict]:
+    """The styles this Tubematic checkout ships, in the dashboard's order, for the page's Pre-built
+    tab. Copies each one's preview to <site>/builtin/<id>.mp4 and .webp."""
+    out = site / "builtin"
+    out.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for sid, pack in visual_styles.PACKS.items():
+        for suffix in ("mp4", "webp"):
+            src = BUILTIN_PREVIEWS / f"{pack['preview']}.{suffix}"
+            if not src.is_file():
+                raise GalleryError(f"built-in style {sid} has no preview {src.name} in {BUILTIN_PREVIEWS}")
+            shutil.copyfile(src, out / f"{sid}.{suffix}")
+        rows.append({"id": sid, "name": pack["label"], "tagline": pack["tagline"], "role": pack["role"],
+                     "experimental": bool(pack["experimental"]), "needs_gpu": bool(pack["needs"]["gpu"]),
+                     "needs_openai_key": bool(pack["needs"]["openai_key"])})
+    return rows
 
 
 def build(args) -> int:
@@ -465,9 +554,11 @@ def build(args) -> int:
             if isinstance(login, str) and LOGIN_RE.fullmatch(login):
                 entries[-1].update(author=login, author_url=f"https://github.com/{login}")
     index = {"version": INDEX_VERSION, "styles": entries}
+    builtins = builtin_styles(site)
     (site / "index.json").write_text(json.dumps(index, indent=1, sort_keys=True) + "\n", encoding="utf-8")
-    (site / "index.html").write_text(render_page(entries, args.repo_url or ""), encoding="utf-8")
-    print(f"index.json and index.html list {len(entries)} style(s)")
+    (site / "index.html").write_text(render_page(entries, args.repo_url or "", builtins), encoding="utf-8")
+    print(f"index.json and index.html list {len(entries)} style(s); index.html also lists "
+          f"{len(builtins)} pre-built style(s)")
     return 0
 
 

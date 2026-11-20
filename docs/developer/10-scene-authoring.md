@@ -666,7 +666,7 @@ and render nothing:
 | Command | What it does |
 |---|---|
 | `python3 scripts/gallery.py scan <styles> [--only ids]` | Checks and scans each submission as an install does and prints a Markdown report; exits 1 when one fails its check or the scan refuses it |
-| `python3 scripts/gallery.py build <styles> <site> --base-url <url> [--repo-url <url>] [--authors <json>]` | Writes `archives/<id>-<version>.zip`, `previews/<id>.mp4` and `.webp`, `index.json` (each entry's `sha256` is of its archive's bytes) and `index.html`, the page people browse (search, a card per style, a preview modal), and refuses to publish a failing package. `--authors` maps style ids to GitHub logins |
+| `python3 scripts/gallery.py build <styles> <site> --base-url <url> [--repo-url <url>] [--authors <json>]` | Writes `archives/<id>-<version>.zip`, `previews/<id>.mp4` and `.webp`, `index.json` (each entry's `sha256` is of its archive's bytes) and `index.html`, the page people browse, and refuses to publish a failing package. `--authors` maps style ids to GitHub logins |
 | `python3 scripts/gallery.py render <package> <out.mp4> --image <backend image>` | Renders a scene style's example config, silent, in the backend image. A 3D world style exits 3 (rendered by hand); any other failure exits 1 and fails the pull request |
 | `python3 scripts/gallery.py stage <styles> <out> [--only ids]` | Copies each submission's package to `<out>/<id>/` as plain files for the Claude review, fetching a pointer at its commit; exits 1 when one cannot be fetched or an id is submitted twice |
 
@@ -678,6 +678,11 @@ neither. The archive is written with fixed times and order, so a rebuild of the 
 same bytes and the same checksum. A pull request runs `scan` and `render` (a 3D world style's example
 needs generated source, so the maintainer renders it by hand); a merge to `main` runs `build` and
 deploys the site.
+
+The page has a search box, a card per style and a modal that plays its preview. It opens on the
+**External styles** tab. A **Pre-built styles** tab lists every style in `visual_styles.PACKS` with the
+preview the dashboard plays, copied to `builtin/`. Those styles stay out of `index.json`, since
+installs read it.
 
 The author the gallery shows is the GitHub account that submitted the style, linked to its profile,
 since a package can write any name in `external.author`. Before `build`, the publish workflow runs

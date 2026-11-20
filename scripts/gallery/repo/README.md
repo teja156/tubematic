@@ -24,8 +24,8 @@ one; it does not remove it.
 - Merging to `main` publishes: `.github/style-authors.sh` finds the GitHub account that submitted
   each style (the author of the merged pull request that added it), which the gallery shows as its author,
   and `build` writes a deterministic zip of each package, its sha256, its
-  previews, `index.json` and the browsable page `index.html`, and the workflow deploys them to GitHub
-  Pages.
+  previews, `index.json` and the browsable page `index.html` (it also has a tab for the styles that
+  come with Tubematic), and the workflow deploys them to GitHub Pages.
 
 The tools are `scripts/gallery.py` in the Tubematic repository. The workflows use the newest
 Tubematic release, found when they run (`.github/tubematic-release.sh`), so nothing here changes
