@@ -868,7 +868,8 @@ Covers `scripts/gallery.py` and the gallery repository skeleton in `scripts/gall
   pack in `visual_styles.PACKS` with the preview the dashboard plays (copied to `builtin/`), what it
   renders on, whether it is a whole video or scenes inside another style, and whether it needs an
   OpenAI key, with no download. Those stay out of `index.json`, which installs read. A pack with no
-  preview fails the build. Its one script is the constant `gallery._PAGE_JS` with no submitter text in
+  preview fails the build. The tab bar scrolls sideways on a narrow phone, so no tab may reach below
+  it: 1px of overflow there draws a vertical scrollbar on Windows. Its one script is the constant `gallery._PAGE_JS` with no submitter text in
   it, and a Content-Security-Policy allows only that script's and the stylesheet's hashes, so markup a
   submitter slipped past the escaping could never run.
 - The page wears the dashboard's look: its colour tokens equal `dashboard/app/globals.css`'s (they

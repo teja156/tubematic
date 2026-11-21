@@ -214,8 +214,8 @@ main { max-width: 1120px; margin: 0 auto; padding: 40px max(16px, env(safe-area-
 h1 { font: 700 22px var(--mono); margin: 0; letter-spacing: 0.01em; }
 .lede { max-width: 62ch; color: var(--ink-2); margin: 0; font-size: 14px; }
 .submit { font-size: 14px; white-space: nowrap; }
-.tabs { display: flex; gap: 4px; margin: 28px 0 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
-.tab { border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; color: var(--dim);
+.tabs { display: flex; gap: 4px; margin: 28px 0 0; box-shadow: inset 0 -1px 0 var(--border); overflow-x: auto; }
+.tab { border: 0; border-bottom: 2px solid transparent; background: none; color: var(--dim);
   font: 600 14px var(--sans); padding: 10px 14px; cursor: pointer; white-space: nowrap; }
 .tab:hover { color: var(--ink); }
 .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--amber); }
