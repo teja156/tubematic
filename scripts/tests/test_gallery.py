@@ -415,6 +415,17 @@ def test_the_page_opens_on_external_styles_with_a_tab_for_pre_built_ones(tmp_pat
     assert 'id="ext_good"' in _panel(page, "external") and 'id="ext_good"' not in _panel(page, "builtin")
 
 
+def test_the_tab_bar_never_overflows_down_into_a_scrollbar():
+    """The bar scrolls sideways on a narrow phone, which makes vertical overflow `auto` too. A tab
+    pushed 1px past it (the old `margin-bottom: -1px` underline overlap) drew a vertical scrollbar
+    on Windows (user, 2026-11-20)."""
+    css = gallery._PAGE_CSS
+    tabs = re.search(r"\.tabs \{([^}]*)\}", css).group(1)
+    tab = re.search(r"\.tab \{([^}]*)\}", css).group(1)
+    assert "overflow-x: auto" in tabs
+    assert "border-bottom" not in tabs and "margin-bottom: -" not in tab
+
+
 def test_the_pre_built_tab_lists_every_style_tubematic_ships(tmp_path):
     from tubematic_core import visual_styles as vs
     page, entries = _page(tmp_path, "ext_good")
